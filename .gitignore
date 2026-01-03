@@ -1,0 +1,67 @@
+# Forge V3 Root .gitignore
+
+# CRITICAL: Environment files with secrets - NEVER COMMIT THESE
+.env
+.env.local
+.env.*.local
+*.env
+!.env.example
+!.env.production.example
+
+# Neo4j credentials files - NEVER COMMIT
+Neo4j-*.txt
+*-credentials.txt
+*-Created-*.txt
+credentials/
+aura-credentials.txt
+
+# Secrets and keys
+secrets/
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+*password*.txt
+*secret*.txt
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+ehthumbs.db
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+ENV/
+env/
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+*~
+
+# Compiled files
+*.pyc
+*.pyo
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/

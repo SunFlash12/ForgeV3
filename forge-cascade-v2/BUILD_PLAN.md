@@ -236,9 +236,11 @@ npm run build    # Production
 ## Neo4j Configuration
 
 ```
-URI: neo4j+s://ca55858c.databases.neo4j.io
-Username: neo4j
-Database: neo4j
+# Set these in your .env file
+NEO4J_URI=neo4j+s://your-instance-id.databases.neo4j.io
+NEO4J_USER=neo4j
+NEO4J_PASSWORD=your-password-here
+NEO4J_DATABASE=neo4j
 ```
 
 ---
