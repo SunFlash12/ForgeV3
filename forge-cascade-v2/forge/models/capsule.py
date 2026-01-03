@@ -1,0 +1,212 @@
+"""
+Capsule Models
+
+The Capsule is the atomic unit of knowledge in Forge.
+Capsules support versioning, symbolic inheritance (lineage),
+and semantic search via embeddings.
+"""
+
+from datetime import datetime
+from typing import Any
+
+from pydantic import Field, field_validator
+
+from forge.models.base import (
+    ForgeModel,
+    TimestampMixin,
+    TrustLevel,
+    CapsuleType,
+    generate_id,
+)
+
+
+class ContentBlock(ForgeModel):
+    """
+    A block of content within a capsule.
+    
+    ContentBlocks allow for structured content with different types.
+    """
+    
+    content: str = Field(description="The content text")
+    content_type: str = Field(default="text", description="Type of content (text, code, markdown, etc.)")
+    language: str | None = Field(default=None, description="Programming language for code blocks")
+    metadata: dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
+
+
+class CapsuleBase(ForgeModel):
+    """Base fields shared across capsule schemas."""
+
+    content: str = Field(
+        min_length=1,
+        max_length=100000,
+        description="The actual knowledge content",
+    )
+    type: CapsuleType = Field(
+        default=CapsuleType.KNOWLEDGE,
+        description="Type of capsule",
+    )
+    title: str | None = Field(
+        default=None,
+        max_length=500,
+        description="Optional title",
+    )
+    summary: str | None = Field(
+        default=None,
+        max_length=2000,
+        description="Brief summary of content",
+    )
+    tags: list[str] = Field(
+        default_factory=list,
+        max_length=20,
+        description="Tags for categorization",
+    )
+    metadata: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Extensible properties",
+    )
+
+    @field_validator("tags")
+    @classmethod
+    def validate_tags(cls, v: list[str]) -> list[str]:
+        """Normalize and validate tags."""
+        return [tag.lower().strip() for tag in v if tag.strip()][:20]
+
+
+class CapsuleCreate(CapsuleBase):
+    """Schema for creating a new capsule."""
+
+    parent_id: str | None = Field(
+        default=None,
+        description="Parent capsule ID for symbolic inheritance",
+    )
+    evolution_reason: str | None = Field(
+        default=None,
+        max_length=1000,
+        description="Reason for deriving from parent",
+    )
+
+
+class CapsuleUpdate(ForgeModel):
+    """Schema for updating an existing capsule."""
+
+    content: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=100000,
+    )
+    title: str | None = Field(default=None, max_length=500)
+    summary: str | None = Field(default=None, max_length=2000)
+    tags: list[str] | None = None
+    metadata: dict[str, Any] | None = None
+
+
+class Capsule(CapsuleBase, TimestampMixin):
+    """Complete capsule schema for API responses."""
+
+    id: str = Field(description="Unique identifier")
+    version: str = Field(default="1.0.0", description="Semantic version")
+    owner_id: str = Field(description="Owner user ID")
+    trust_level: TrustLevel = Field(
+        default=TrustLevel.STANDARD,
+        description="Trust level for this capsule",
+    )
+    parent_id: str | None = Field(
+        default=None,
+        description="Parent capsule ID",
+    )
+    is_archived: bool = Field(default=False, description="Archive status")
+    view_count: int = Field(default=0, ge=0, description="View counter")
+    fork_count: int = Field(default=0, ge=0, description="Fork counter")
+
+
+class CapsuleInDB(Capsule):
+    """Capsule with database-specific fields."""
+
+    embedding: list[float] | None = Field(
+        default=None,
+        description="Vector embedding for semantic search",
+    )
+
+
+class LineageNode(ForgeModel):
+    """A node in the lineage tree."""
+
+    id: str
+    version: str
+    title: str | None = None
+    type: CapsuleType
+    created_at: datetime
+    trust_level: TrustLevel
+    depth: int = Field(
+        ge=0,
+        description="Distance from the queried capsule (0 = self)",
+    )
+
+
+class DerivedFromRelation(ForgeModel):
+    """Metadata about a DERIVED_FROM relationship."""
+
+    parent_id: str
+    child_id: str
+    reason: str | None = None
+    timestamp: datetime
+    changes: dict[str, Any] | None = None
+
+
+class CapsuleWithLineage(Capsule):
+    """Capsule with full lineage information."""
+
+    lineage: list[LineageNode] = Field(
+        default_factory=list,
+        description="Ancestry chain (oldest first)",
+    )
+    children: list[LineageNode] = Field(
+        default_factory=list,
+        description="Direct child capsules",
+    )
+    lineage_depth: int = Field(
+        default=0,
+        ge=0,
+        description="Total depth of ancestry",
+    )
+
+
+class CapsuleSearchResult(ForgeModel):
+    """Result from semantic search."""
+
+    capsule: Capsule
+    score: float = Field(ge=0.0, le=1.0, description="Similarity score")
+    highlights: list[str] = Field(
+        default_factory=list,
+        description="Matching text snippets",
+    )
+
+
+class CapsuleFork(ForgeModel):
+    """Request to fork (derive from) a capsule."""
+
+    parent_id: str = Field(description="Capsule to fork from")
+    content: str | None = Field(
+        default=None,
+        description="New content (if different from parent)",
+    )
+    evolution_reason: str = Field(
+        min_length=1,
+        max_length=1000,
+        description="Reason for forking",
+    )
+    inherit_metadata: bool = Field(
+        default=True,
+        description="Copy parent metadata",
+    )
+
+
+class CapsuleStats(ForgeModel):
+    """Statistics about capsules."""
+
+    total_count: int = 0
+    by_type: dict[str, int] = Field(default_factory=dict)
+    by_trust_level: dict[str, int] = Field(default_factory=dict)
+    average_lineage_depth: float = 0.0
+    total_views: int = 0
+    total_forks: int = 0

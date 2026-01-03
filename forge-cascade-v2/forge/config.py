@@ -1,0 +1,197 @@
+"""
+Forge Cascade Configuration Management
+
+Centralized configuration using Pydantic Settings for type-safe environment
+variable loading with validation.
+"""
+
+from functools import lru_cache
+from typing import Literal
+
+from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    """Application settings loaded from environment variables."""
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+    # ═══════════════════════════════════════════════════════════════
+    # APPLICATION
+    # ═══════════════════════════════════════════════════════════════
+    app_name: str = Field(default="forge-cascade", description="Application name")
+    app_env: Literal["development", "staging", "production"] = Field(
+        default="development", description="Environment"
+    )
+    debug: bool = Field(default=False, description="Debug mode")
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = Field(
+        default="INFO", description="Logging level"
+    )
+
+    # API Server
+    api_host: str = Field(default="0.0.0.0", description="API host")
+    api_port: int = Field(default=8000, ge=1, le=65535, description="API port")
+    api_workers: int = Field(default=4, ge=1, description="Number of workers")
+
+    # CORS
+    cors_origins: str = Field(
+        default="http://localhost:3000,http://localhost:8000",
+        description="Comma-separated CORS origins",
+    )
+
+    @property
+    def cors_origins_list(self) -> list[str]:
+        """Parse CORS origins string into list."""
+        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+
+    # ═══════════════════════════════════════════════════════════════
+    # NEO4J DATABASE
+    # ═══════════════════════════════════════════════════════════════
+    neo4j_uri: str = Field(description="Neo4j connection URI")
+    neo4j_user: str = Field(default="neo4j", description="Neo4j username")
+    neo4j_password: str = Field(description="Neo4j password")
+    neo4j_database: str = Field(default="neo4j", description="Neo4j database name")
+
+    # Connection Pool
+    neo4j_max_connection_lifetime: int = Field(
+        default=3600, description="Max connection lifetime in seconds"
+    )
+    neo4j_max_connection_pool_size: int = Field(
+        default=50, ge=1, description="Max connection pool size"
+    )
+    neo4j_connection_timeout: int = Field(
+        default=30, ge=1, description="Connection timeout in seconds"
+    )
+
+    # ═══════════════════════════════════════════════════════════════
+    # REDIS CACHE (Optional)
+    # ═══════════════════════════════════════════════════════════════
+    redis_url: str | None = Field(default=None, description="Redis URL")
+    redis_password: str | None = Field(default=None, description="Redis password")
+    cache_ttl_seconds: int = Field(default=3600, ge=0, description="Cache TTL")
+
+    # ═══════════════════════════════════════════════════════════════
+    # SECURITY
+    # ═══════════════════════════════════════════════════════════════
+    jwt_secret_key: str = Field(description="JWT secret key")
+    jwt_algorithm: str = Field(default="HS256", description="JWT algorithm")
+    jwt_access_token_expire_minutes: int = Field(
+        default=60, ge=1, description="Access token expiry"
+    )
+    jwt_refresh_token_expire_days: int = Field(
+        default=7, ge=1, description="Refresh token expiry"
+    )
+    password_bcrypt_rounds: int = Field(
+        default=12, ge=4, le=31, description="Bcrypt rounds"
+    )
+
+    @field_validator("jwt_secret_key")
+    @classmethod
+    def validate_jwt_secret(cls, v: str) -> str:
+        if len(v) < 32:
+            raise ValueError("JWT secret key must be at least 32 characters")
+        return v
+
+    # ═══════════════════════════════════════════════════════════════
+    # AI/ML CONFIGURATION
+    # ═══════════════════════════════════════════════════════════════
+    llm_provider: Literal["anthropic", "openai", "ollama", "mock"] = Field(
+        default="mock", description="LLM provider"
+    )
+    llm_api_key: str | None = Field(default=None, description="LLM API key")
+    llm_model: str = Field(
+        default="claude-sonnet-4-20250514", description="LLM model name"
+    )
+    llm_max_tokens: int = Field(default=4096, ge=1, description="Max LLM output tokens")
+    llm_temperature: float = Field(default=0.7, ge=0.0, le=2.0, description="LLM temperature")
+
+    # Embeddings
+    embedding_provider: Literal["openai", "sentence_transformers", "mock"] = Field(
+        default="mock", description="Embedding provider"
+    )
+    embedding_api_key: str | None = Field(default=None, description="Embedding API key (for OpenAI)")
+    embedding_model: str = Field(
+        default="text-embedding-3-small", description="Embedding model"
+    )
+    embedding_dimensions: int = Field(
+        default=1536, ge=1, description="Embedding dimensions"
+    )
+    embedding_cache_enabled: bool = Field(default=True, description="Cache embeddings")
+    embedding_batch_size: int = Field(default=100, ge=1, description="Batch size for embedding")
+
+    # ═══════════════════════════════════════════════════════════════
+    # IMMUNE SYSTEM
+    # ═══════════════════════════════════════════════════════════════
+    # Circuit Breaker
+    circuit_breaker_failure_threshold: int = Field(
+        default=3, ge=1, description="Failures before opening"
+    )
+    circuit_breaker_success_threshold: int = Field(
+        default=2, ge=1, description="Successes to close"
+    )
+    circuit_breaker_timeout_seconds: int = Field(
+        default=30, ge=1, description="Timeout in open state"
+    )
+
+    # Canary Deployments
+    canary_initial_traffic_percent: float = Field(
+        default=0.05, ge=0.0, le=1.0, description="Initial canary traffic"
+    )
+    canary_min_requests: int = Field(
+        default=100, ge=1, description="Min requests before decision"
+    )
+    canary_max_error_rate: float = Field(
+        default=0.01, ge=0.0, le=1.0, description="Max error rate"
+    )
+    canary_max_latency_ratio: float = Field(
+        default=2.0, ge=1.0, description="Max latency ratio"
+    )
+
+    # Health Checks
+    health_check_interval_seconds: int = Field(
+        default=30, ge=1, description="Health check interval"
+    )
+    auto_quarantine_threshold: int = Field(
+        default=3, ge=1, description="Failures before quarantine"
+    )
+
+    # ═══════════════════════════════════════════════════════════════
+    # PIPELINE
+    # ═══════════════════════════════════════════════════════════════
+    pipeline_timeout_seconds: int = Field(
+        default=30, ge=1, description="Pipeline timeout"
+    )
+    pipeline_max_concurrent: int = Field(
+        default=10, ge=1, description="Max concurrent pipelines"
+    )
+    pipeline_cache_enabled: bool = Field(
+        default=True, description="Enable pipeline caching"
+    )
+
+    # ═══════════════════════════════════════════════════════════════
+    # MONITORING
+    # ═══════════════════════════════════════════════════════════════
+    prometheus_enabled: bool = Field(default=False, description="Enable Prometheus")
+    prometheus_port: int = Field(default=9090, description="Prometheus port")
+
+    jaeger_enabled: bool = Field(default=False, description="Enable Jaeger")
+    jaeger_host: str = Field(default="localhost", description="Jaeger host")
+    jaeger_port: int = Field(default=6831, description="Jaeger port")
+
+    sentry_dsn: str | None = Field(default=None, description="Sentry DSN")
+
+
+@lru_cache
+def get_settings() -> Settings:
+    """Get cached settings instance."""
+    return Settings()
+
+
+# Singleton settings instance
+settings = get_settings()
