@@ -40,18 +40,19 @@ Forge V3 has been successfully pushed to GitHub with all critical security issue
 
 ---
 
-## NEW CREDENTIALS (SECURED)
+## CREDENTIALS (SECURED)
 
-The following credentials are now properly secured in the local `.env` file:
+All credentials are properly secured in the local `.env` file:
 
 ```
-NEO4J_URI=neo4j+s://e1b0c943.databases.neo4j.io
+NEO4J_URI=neo4j+s://[your-instance-id].databases.neo4j.io
 NEO4J_USERNAME=neo4j
+NEO4J_PASSWORD=[secured-in-env-file]
 NEO4J_DATABASE=neo4j
-AURA_INSTANCEID=e1b0c943
+AURA_INSTANCEID=[your-instance-id]
 ```
 
-**Note**: Password is securely stored in `.env` file (not committed to git)
+**Note**: All sensitive values are stored in `.env` file (gitignored, not committed)
 
 ---
 
@@ -199,7 +200,7 @@ Implemented overlays:
 ### ✅ Key Settings
 
 ```
-neo4j_uri: neo4j+s://e1b0c943.databases.neo4j.io
+neo4j_uri: neo4j+s://[your-instance-id].databases.neo4j.io
 neo4j_database: neo4j
 jwt_algorithm: HS256
 password_bcrypt_rounds: 12
