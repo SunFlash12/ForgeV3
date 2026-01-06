@@ -203,12 +203,12 @@ class TokenPayload(ForgeModel):
     """JWT token payload (claims)."""
 
     sub: str = Field(description="Subject (user ID)")
-    username: str
-    role: UserRole
-    trust_flame: int
-    exp: datetime = Field(description="Expiration timestamp")
-    iat: datetime = Field(description="Issued at timestamp")
-    type: str = Field(description="Token type: access or refresh")
+    username: str | None = None
+    role: UserRole | None = None  # Optional for refresh tokens
+    trust_flame: int | None = None  # Optional for refresh tokens
+    exp: datetime | None = Field(default=None, description="Expiration timestamp")
+    iat: datetime | None = Field(default=None, description="Issued at timestamp")
+    type: str = Field(default="access", description="Token type: access or refresh")
 
 
 class RefreshTokenRequest(ForgeModel):

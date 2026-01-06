@@ -48,7 +48,17 @@ class Settings(BaseSettings):
     @property
     def cors_origins_list(self) -> list[str]:
         """Parse CORS origins string into list."""
-        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+        origins = [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+        # Security: Never allow wildcard with credentials in production
+        if self.app_env == "production" and "*" in origins:
+            raise ValueError("Wildcard CORS origin not allowed in production")
+        return origins
+
+    # Expose as CORS_ORIGINS for backwards compatibility
+    @property
+    def CORS_ORIGINS(self) -> list[str]:
+        """CORS origins as list (alias for cors_origins_list)."""
+        return self.cors_origins_list
 
     # ═══════════════════════════════════════════════════════════════
     # NEO4J DATABASE
@@ -96,6 +106,13 @@ class Settings(BaseSettings):
     def validate_jwt_secret(cls, v: str) -> str:
         if len(v) < 32:
             raise ValueError("JWT secret key must be at least 32 characters")
+        # Check for sufficient entropy (not just repeated characters)
+        unique_chars = len(set(v))
+        if unique_chars < 10:
+            raise ValueError("JWT secret key must have at least 10 unique characters for sufficient entropy")
+        # Check it's not a simple pattern
+        if v == v[0] * len(v):
+            raise ValueError("JWT secret key cannot be a repeated character")
         return v
 
     # ═══════════════════════════════════════════════════════════════

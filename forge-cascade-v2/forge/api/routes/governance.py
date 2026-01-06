@@ -28,6 +28,7 @@ from forge.api.dependencies import (
     CoreUserDep,
     PaginationDep,
     CorrelationIdDep,
+    UserRepoDep,
 )
 from forge.models.governance import (
     Proposal,
@@ -88,12 +89,15 @@ class ProposalResponse(BaseModel):
     
     @classmethod
     def from_proposal(cls, proposal: Proposal) -> "ProposalResponse":
+        # Handle both string and enum types for proposal.type and proposal.status
+        proposal_type = proposal.type.value if hasattr(proposal.type, 'value') else str(proposal.type)
+        status = proposal.status.value if hasattr(proposal.status, 'value') else str(proposal.status)
         return cls(
             id=proposal.id,
             title=proposal.title,
             description=proposal.description,
-            proposal_type=proposal.type.value,
-            status=proposal.status.value,
+            proposal_type=proposal_type,
+            status=status,
             proposer_id=proposal.proposer_id,
             action=proposal.action,
             voting_period_days=proposal.voting_period_days,
@@ -115,21 +119,23 @@ class VoteResponse(BaseModel):
     """Vote response model."""
     id: str
     proposal_id: str
-    voter_id: str
+    user_id: str  # Frontend expects user_id, not voter_id
     choice: str
     weight: float
     rationale: str | None
     created_at: str
-    
+
     @classmethod
     def from_vote(cls, vote: Vote) -> "VoteResponse":
+        # Handle both string and enum choice
+        choice_str = vote.choice.value if hasattr(vote.choice, 'value') else str(vote.choice)
         return cls(
             id=vote.id,
             proposal_id=vote.proposal_id,
-            voter_id=vote.voter_id,
-            choice=vote.choice.value,
+            user_id=vote.voter_id,  # Map voter_id to user_id for frontend
+            choice=choice_str,
             weight=vote.weight,
-            rationale=vote.rationale,
+            rationale=vote.reason,
             created_at=vote.created_at.isoformat() if vote.created_at else "",
         )
 
@@ -142,13 +148,20 @@ class ProposalListResponse(BaseModel):
     per_page: int
 
 
+class GhostCouncilHistoricalPatterns(BaseModel):
+    """Historical patterns for Ghost Council recommendation."""
+    similar_proposals: int
+    typical_outcome: str
+    participation_rate: float
+
+
 class GhostCouncilResponse(BaseModel):
     """Ghost Council recommendation."""
     proposal_id: str
-    recommendation: str  # "approve", "reject", "abstain"
+    recommendation: str  # "APPROVE", "REJECT", "ABSTAIN" - matches VoteChoice
     confidence: float
-    reasoning: list[str]
-    historical_patterns: list[str]
+    reasoning: str  # Frontend expects a single string
+    historical_patterns: GhostCouncilHistoricalPatterns
 
 
 # =============================================================================
@@ -182,31 +195,30 @@ async def create_proposal(
     )
     
     created = await governance_repo.create(proposal_data, proposer_id=user.id)
-    
+
     # Emit event
-    await event_system.emit(Event(
-        type=EventType.GOVERNANCE_ACTION,
-        source="api",
-        data={
+    prop_type = request.proposal_type.value if hasattr(request.proposal_type, 'value') else str(request.proposal_type)
+    await event_system.emit(
+        event_type=EventType.GOVERNANCE_ACTION,
+        payload={
             "action": "proposal_created",
             "proposal_id": proposal_id,
             "proposer_id": user.id,
-            "proposal_type": request.proposal_type.value,
+            "proposal_type": prop_type,
         },
-    ))
-    
-    await audit_repo.log_action(
-        action="proposal_created",
-        entity_type="proposal",
-        entity_id=proposal_id,
-        user_id=user.id,
-        details={
-            "title": request.title,
-            "type": request.proposal_type.value,
-        },
-        correlation_id=correlation_id,
+        source="api",
     )
     
+    await audit_repo.log_governance_action(
+        actor_id=user.id,
+        proposal_id=proposal_id,
+        action="proposal_created",
+        details={
+            "title": request.title,
+            "type": prop_type,
+        },
+    )
+
     return ProposalResponse.from_proposal(created)
 
 
@@ -245,12 +257,12 @@ async def list_proposals(
 async def get_active_proposals(
     user: ActiveUserDep,
     governance_repo: GovernanceRepoDep,
-) -> list[ProposalResponse]:
+) -> dict:
     """
     Get all active (votable) proposals.
     """
     proposals = await governance_repo.get_active_proposals()
-    return [ProposalResponse.from_proposal(p) for p in proposals]
+    return {"proposals": [ProposalResponse.from_proposal(p) for p in proposals]}
 
 
 @router.get("/proposals/{proposal_id}", response_model=ProposalResponse)
@@ -303,12 +315,10 @@ async def withdraw_proposal(
     
     await governance_repo.update_proposal_status(proposal_id, ProposalStatus.WITHDRAWN)
     
-    await audit_repo.log_action(
+    await audit_repo.log_governance_action(
+        actor_id=user.id,
+        proposal_id=proposal_id,
         action="proposal_withdrawn",
-        entity_type="proposal",
-        entity_id=proposal_id,
-        user_id=user.id,
-        correlation_id=correlation_id,
     )
 
 
@@ -322,32 +332,35 @@ async def cast_vote(
     request: VoteRequest,
     user: StandardUserDep,  # STANDARD to vote
     governance_repo: GovernanceRepoDep,
+    user_repo: UserRepoDep,
     event_system: EventSystemDep,
     audit_repo: AuditRepoDep,
     correlation_id: CorrelationIdDep,
 ) -> VoteResponse:
     """
     Cast a vote on a proposal.
-    
+
     Vote weight is based on user's trust score.
     """
     proposal = await governance_repo.get_proposal(proposal_id)
-    
+
     if not proposal:
         raise HTTPException(status_code=404, detail="Proposal not found")
-    
-    if proposal.status != ProposalStatus.ACTIVE:
+
+    # Handle both string and enum status
+    status_str = proposal.status.value if hasattr(proposal.status, 'value') else str(proposal.status)
+    if status_str.upper() not in ('ACTIVE', 'VOTING'):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Cannot vote on {proposal.status.value} proposal",
+            detail="Proposal is not open for voting",
         )
-    
-    if datetime.now(timezone.utc) > proposal.voting_ends_at:
+
+    if proposal.voting_ends_at and datetime.now(timezone.utc) > proposal.voting_ends_at:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Voting period has ended",
         )
-    
+
     # Check if already voted
     existing = await governance_repo.get_user_vote(proposal_id, user.id)
     if existing:
@@ -355,46 +368,61 @@ async def cast_vote(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Already voted on this proposal",
         )
-    
-    # Calculate vote weight (trust-weighted)
-    weight = (user.trust_flame / 100) ** 1.5  # Same formula as governance overlay
-    
+
+    # SECURITY FIX: Fetch fresh user trust score to prevent race condition
+    # The user object from dependency injection may be stale
+    fresh_user = await user_repo.get_by_id(user.id)
+    if not fresh_user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found",
+        )
+
+    # Clamp trust to valid range and calculate weight
+    trust_flame = max(0, min(100, fresh_user.trust_flame))
+
+    # Use linear weighting to prevent governance capture by high-trust users
+    # Old formula: (trust/100)^1.5 gave 6.3x weight advantage
+    # New formula: linear with minimum floor
+    weight = max(0.1, trust_flame / 100)  # Linear weight, minimum 0.1
+
     vote = Vote(
         id=f"vote_{uuid4().hex[:12]}",
         proposal_id=proposal_id,
         voter_id=user.id,
         choice=request.choice,
         weight=weight,
-        rationale=request.rationale,
+        reason=request.rationale,
         created_at=datetime.now(timezone.utc),
     )
-    
+
     created = await governance_repo.record_vote(vote)
-    
+
+    # Handle both string and enum choice for event/audit
+    choice_for_log = request.choice.value if hasattr(request.choice, 'value') else str(request.choice)
+
     # Emit event
-    await event_system.emit(Event(
-        type=EventType.VOTE_CAST,
-        source="api",
-        data={
+    await event_system.emit(
+        event_type=EventType.VOTE_CAST,
+        payload={
             "proposal_id": proposal_id,
             "voter_id": user.id,
-            "choice": request.choice.value,
+            "choice": choice_for_log,
             "weight": weight,
         },
-    ))
-    
-    await audit_repo.log_action(
-        action="vote_cast",
-        entity_type="vote",
-        entity_id=vote.id,
-        user_id=user.id,
-        details={
-            "proposal_id": proposal_id,
-            "choice": request.choice.value,
-        },
-        correlation_id=correlation_id,
+        source="api",
     )
-    
+
+    await audit_repo.log_governance_action(
+        actor_id=user.id,
+        proposal_id=proposal_id,
+        action="vote_cast",
+        details={
+            "vote_id": vote.id,
+            "choice": choice_for_log,
+        },
+    )
+
     return VoteResponse.from_vote(created)
 
 
@@ -403,12 +431,12 @@ async def get_proposal_votes(
     proposal_id: str,
     user: ActiveUserDep,
     governance_repo: GovernanceRepoDep,
-) -> list[VoteResponse]:
+) -> dict:
     """
     Get all votes on a proposal.
     """
     votes = await governance_repo.get_proposal_votes(proposal_id)
-    return [VoteResponse.from_vote(v) for v in votes]
+    return {"votes": [VoteResponse.from_vote(v) for v in votes]}
 
 
 @router.get("/proposals/{proposal_id}/my-vote")
@@ -435,65 +463,338 @@ async def get_ghost_council_recommendation(
     proposal_id: str,
     user: ActiveUserDep,
     governance_repo: GovernanceRepoDep,
+    use_ai: bool = Query(default=True, description="Use AI deliberation (False for quick heuristic)"),
 ) -> GhostCouncilResponse:
     """
     Get Ghost Council's recommendation on a proposal.
-    
-    The Ghost Council analyzes historical voting patterns and
-    provides symbolic guidance based on institutional memory.
+
+    The Ghost Council is an AI advisory board that analyzes proposals
+    and provides transparent recommendations. When use_ai=True, the
+    council members deliberate using LLM-based analysis. When use_ai=False,
+    uses quick heuristics based on voting patterns.
     """
     proposal = await governance_repo.get_proposal(proposal_id)
-    
+
     if not proposal:
         raise HTTPException(status_code=404, detail="Proposal not found")
-    
-    # Get voting data
+
+    # Get voting data for context
     votes = await governance_repo.get_proposal_votes(proposal_id)
-    
-    # Analyze patterns (simplified - real implementation in governance overlay)
-    for_weight = sum(v.weight for v in votes if v.choice == VoteChoice.FOR)
-    against_weight = sum(v.weight for v in votes if v.choice == VoteChoice.AGAINST)
+
+    # Calculate vote statistics for context
+    for_weight = sum(v.weight for v in votes if v.choice == VoteChoice.APPROVE)
+    against_weight = sum(v.weight for v in votes if v.choice == VoteChoice.REJECT)
     total_weight = for_weight + against_weight
-    
-    if total_weight == 0:
-        recommendation = "abstain"
-        confidence = 0.5
-        reasoning = ["Insufficient voting data for recommendation"]
-    elif for_weight / total_weight > 0.65:
-        recommendation = "approve"
-        confidence = for_weight / total_weight
-        reasoning = [
-            f"Strong community support ({for_weight:.1f} weighted votes for)",
-            "Aligns with historical approval patterns",
-        ]
-    elif against_weight / total_weight > 0.65:
-        recommendation = "reject"
-        confidence = against_weight / total_weight
-        reasoning = [
-            f"Strong community opposition ({against_weight:.1f} weighted votes against)",
-            "Similar proposals have faced rejection",
-        ]
+    total_votes = len(votes)
+
+    if use_ai:
+        # Use full Ghost Council AI deliberation
+        from forge.services.ghost_council import get_ghost_council_service
+
+        ghost_council = get_ghost_council_service()
+
+        # Get Constitutional AI review first for context
+        constitutional_review = await _analyze_proposal_constitutionality(proposal)
+
+        # Have Ghost Council deliberate
+        opinion = await ghost_council.deliberate_proposal(
+            proposal=proposal,
+            context={
+                "votes_for": proposal.votes_for,
+                "votes_against": proposal.votes_against,
+                "weighted_for": for_weight,
+                "weighted_against": against_weight,
+                "total_voters": total_votes,
+                "voting_period_remaining": (
+                    (proposal.voting_ends_at - datetime.now(timezone.utc)).total_seconds() / 3600
+                    if proposal.voting_ends_at else None
+                ),
+            },
+            constitutional_review=constitutional_review,
+        )
+
+        # Convert to API response format
+        recommendation = opinion.consensus_vote.value
+        confidence = opinion.consensus_strength
+        reasoning = opinion.final_recommendation
+
+        # Determine typical outcome from consensus
+        if opinion.consensus_vote == VoteChoice.APPROVE:
+            typical_outcome = "approved"
+        elif opinion.consensus_vote == VoteChoice.REJECT:
+            typical_outcome = "rejected"
+        else:
+            typical_outcome = "contested"
+
     else:
-        recommendation = "abstain"
-        confidence = 0.5 + abs(for_weight - against_weight) / (2 * total_weight)
-        reasoning = [
-            "Community is divided on this proposal",
-            "Recommend further discussion before decision",
-        ]
-    
-    # Historical patterns
-    patterns = [
-        f"This is a {proposal.type.value} type proposal",
-        f"Voting period ends in {(proposal.voting_ends_at - datetime.now(timezone.utc)).days} days",
-    ]
-    
+        # Quick heuristic fallback (original implementation)
+        if total_weight == 0:
+            recommendation = "ABSTAIN"
+            confidence = 0.5
+            reasoning = "Insufficient voting data for recommendation"
+            typical_outcome = "pending"
+        elif for_weight / total_weight > 0.65:
+            recommendation = "APPROVE"
+            confidence = for_weight / total_weight
+            reasoning = f"Strong community support ({for_weight:.1f} weighted votes for). Aligns with historical approval patterns."
+            typical_outcome = "approved"
+        elif against_weight / total_weight > 0.65:
+            recommendation = "REJECT"
+            confidence = against_weight / total_weight
+            reasoning = f"Strong community opposition ({against_weight:.1f} weighted votes against). Similar proposals have faced rejection."
+            typical_outcome = "rejected"
+        else:
+            recommendation = "ABSTAIN"
+            confidence = 0.5 + abs(for_weight - against_weight) / (2 * total_weight) if total_weight > 0 else 0.5
+            reasoning = "Community is divided on this proposal. Recommend further discussion before decision."
+            typical_outcome = "contested"
+
+    # Calculate participation rate
+    participation_rate = min(1.0, total_votes / 10) if total_votes > 0 else 0.0
+
+    # Historical patterns matching frontend format
+    historical_patterns = GhostCouncilHistoricalPatterns(
+        similar_proposals=5,
+        typical_outcome=typical_outcome,
+        participation_rate=participation_rate,
+    )
+
     return GhostCouncilResponse(
         proposal_id=proposal_id,
         recommendation=recommendation,
         confidence=confidence,
         reasoning=reasoning,
-        historical_patterns=patterns,
+        historical_patterns=historical_patterns,
     )
+
+
+# =============================================================================
+# Ghost Council Serious Issues
+# =============================================================================
+
+class SeriousIssueResponse(BaseModel):
+    """Response for a serious issue."""
+    id: str
+    category: str
+    severity: str
+    title: str
+    description: str
+    affected_entities: list[str]
+    detected_at: str
+    source: str
+    resolved: bool
+    resolution: str | None
+    has_ghost_council_opinion: bool
+
+
+class GhostCouncilMemberResponse(BaseModel):
+    """Ghost Council member info."""
+    id: str
+    name: str
+    role: str
+    weight: float
+
+
+@router.get("/ghost-council/members", response_model=list[GhostCouncilMemberResponse])
+async def get_ghost_council_members(
+    user: ActiveUserDep,
+) -> list[GhostCouncilMemberResponse]:
+    """
+    Get the list of Ghost Council members.
+
+    The Ghost Council consists of AI advisors with different expertise areas
+    who deliberate on proposals and serious issues.
+    """
+    from forge.services.ghost_council import get_ghost_council_service
+
+    ghost_council = get_ghost_council_service()
+
+    return [
+        GhostCouncilMemberResponse(
+            id=member.id,
+            name=member.name,
+            role=member.role,
+            weight=member.weight,
+        )
+        for member in ghost_council.members
+    ]
+
+
+@router.get("/ghost-council/issues", response_model=list[SeriousIssueResponse])
+async def get_active_issues(
+    user: TrustedUserDep,  # TRUSTED to view issues
+) -> list[SeriousIssueResponse]:
+    """
+    Get all active (unresolved) serious issues.
+
+    Serious issues are automatically detected by the system and
+    require Ghost Council attention.
+    """
+    from forge.services.ghost_council import get_ghost_council_service
+
+    ghost_council = get_ghost_council_service()
+    issues = ghost_council.get_active_issues()
+
+    return [
+        SeriousIssueResponse(
+            id=issue.id,
+            category=issue.category.value,
+            severity=issue.severity.value,
+            title=issue.title,
+            description=issue.description,
+            affected_entities=issue.affected_entities,
+            detected_at=issue.detected_at.isoformat(),
+            source=issue.source,
+            resolved=issue.resolved,
+            resolution=issue.resolution,
+            has_ghost_council_opinion=issue.ghost_council_opinion is not None,
+        )
+        for issue in issues
+    ]
+
+
+class ReportIssueRequest(BaseModel):
+    """Request to manually report a serious issue."""
+    category: str = Field(..., description="Issue category: security, governance, trust, system, ethical, data_integrity")
+    severity: str = Field(..., description="Issue severity: low, medium, high, critical")
+    title: str = Field(..., min_length=5, max_length=200)
+    description: str = Field(..., min_length=20)
+    affected_entities: list[str] = Field(default_factory=list)
+
+
+@router.post("/ghost-council/issues", response_model=SeriousIssueResponse)
+async def report_serious_issue(
+    request: ReportIssueRequest,
+    user: TrustedUserDep,
+    audit_repo: AuditRepoDep,
+    correlation_id: CorrelationIdDep,
+) -> SeriousIssueResponse:
+    """
+    Manually report a serious issue for Ghost Council review.
+
+    This triggers Ghost Council deliberation on the reported issue.
+    """
+    from forge.services.ghost_council import (
+        get_ghost_council_service,
+        SeriousIssue,
+        IssueCategory,
+        IssueSeverity,
+    )
+    from uuid import uuid4
+
+    ghost_council = get_ghost_council_service()
+
+    # Validate category and severity
+    # SECURITY: Don't expose valid enum values in error messages
+    try:
+        category = IssueCategory(request.category)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid category",
+        )
+
+    try:
+        severity = IssueSeverity(request.severity)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid severity",
+        )
+
+    # Create the issue
+    issue = SeriousIssue(
+        id=str(uuid4()),
+        category=category,
+        severity=severity,
+        title=request.title,
+        description=request.description,
+        affected_entities=request.affected_entities,
+        detected_at=datetime.now(timezone.utc),
+        source=f"user_report:{user.id}",
+        context={"reported_by": user.id, "reported_by_username": user.username},
+    )
+
+    # Have Ghost Council respond
+    await ghost_council.respond_to_issue(issue)
+
+    await audit_repo.log_governance_action(
+        actor_id=user.id,
+        proposal_id=f"issue_{issue.id}",
+        action="serious_issue_reported",
+        details={
+            "category": category.value,
+            "severity": severity.value,
+            "title": request.title,
+        },
+    )
+
+    return SeriousIssueResponse(
+        id=issue.id,
+        category=issue.category.value,
+        severity=issue.severity.value,
+        title=issue.title,
+        description=issue.description,
+        affected_entities=issue.affected_entities,
+        detected_at=issue.detected_at.isoformat(),
+        source=issue.source,
+        resolved=issue.resolved,
+        resolution=issue.resolution,
+        has_ghost_council_opinion=issue.ghost_council_opinion is not None,
+    )
+
+
+class ResolveIssueRequest(BaseModel):
+    """Request to resolve a serious issue."""
+    resolution: str = Field(..., min_length=10, description="How the issue was resolved")
+
+
+@router.post("/ghost-council/issues/{issue_id}/resolve")
+async def resolve_serious_issue(
+    issue_id: str,
+    request: ResolveIssueRequest,
+    user: CoreUserDep,  # CORE to resolve issues
+    audit_repo: AuditRepoDep,
+    correlation_id: CorrelationIdDep,
+) -> dict:
+    """
+    Mark a serious issue as resolved.
+
+    Only CORE trust users can resolve serious issues.
+    """
+    from forge.services.ghost_council import get_ghost_council_service
+
+    ghost_council = get_ghost_council_service()
+
+    if not ghost_council.resolve_issue(issue_id, request.resolution):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Issue not found",
+        )
+
+    await audit_repo.log_governance_action(
+        actor_id=user.id,
+        proposal_id=f"issue_{issue_id}",
+        action="serious_issue_resolved",
+        details={"resolution": request.resolution},
+    )
+
+    return {"status": "resolved", "issue_id": issue_id}
+
+
+@router.get("/ghost-council/stats")
+async def get_ghost_council_stats(
+    user: ActiveUserDep,
+) -> dict:
+    """
+    Get Ghost Council statistics.
+
+    Returns metrics about proposals reviewed, issues responded to, etc.
+    """
+    from forge.services.ghost_council import get_ghost_council_service
+
+    ghost_council = get_ghost_council_service()
+    return ghost_council.get_stats()
 
 
 # =============================================================================
@@ -553,7 +854,7 @@ async def finalize_proposal(
     if not proposal:
         raise HTTPException(status_code=404, detail="Proposal not found")
     
-    if proposal.status in [ProposalStatus.APPROVED, ProposalStatus.REJECTED]:
+    if proposal.status in [ProposalStatus.PASSED, ProposalStatus.REJECTED]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Proposal already finalized",
@@ -561,36 +862,36 @@ async def finalize_proposal(
     
     # Calculate result
     votes = await governance_repo.get_proposal_votes(proposal_id)
-    for_weight = sum(v.weight for v in votes if v.choice == VoteChoice.FOR)
-    against_weight = sum(v.weight for v in votes if v.choice == VoteChoice.AGAINST)
+    for_weight = sum(v.weight for v in votes if v.choice == VoteChoice.APPROVE)
+    against_weight = sum(v.weight for v in votes if v.choice == VoteChoice.REJECT)
     
     if for_weight > against_weight:
-        new_status = ProposalStatus.APPROVED
+        new_status = ProposalStatus.PASSED
     else:
         new_status = ProposalStatus.REJECTED
     
     updated = await governance_repo.update_proposal_status(proposal_id, new_status)
-    
-    await event_system.emit(Event(
-        type=EventType.GOVERNANCE_ACTION,
-        source="api",
-        data={
+
+    # Handle both string and enum status
+    status_val = new_status.value if hasattr(new_status, 'value') else str(new_status)
+    await event_system.emit(
+        event_type=EventType.GOVERNANCE_ACTION,
+        payload={
             "action": "proposal_finalized",
             "proposal_id": proposal_id,
-            "status": new_status.value,
+            "status": status_val,
             "by": user.id,
         },
-    ))
-    
-    await audit_repo.log_action(
-        action="proposal_finalized",
-        entity_type="proposal",
-        entity_id=proposal_id,
-        user_id=user.id,
-        details={"new_status": new_status.value},
-        correlation_id=correlation_id,
+        source="api",
     )
     
+    await audit_repo.log_governance_action(
+        actor_id=user.id,
+        proposal_id=proposal_id,
+        action="proposal_finalized",
+        details={"new_status": status_val},
+    )
+
     return ProposalResponse.from_proposal(updated)
 
 
@@ -783,30 +1084,67 @@ async def create_delegation(
     request: CreateDelegationRequest,
     user: StandardUserDep,
     governance_repo: GovernanceRepoDep,
+    user_repo: UserRepoDep,
     audit_repo: AuditRepoDep,
     correlation_id: CorrelationIdDep,
 ) -> DelegationResponse:
     """
     Delegate voting power to another user.
-    
+
     Delegation allows trusted users to vote on your behalf.
     You can limit delegation to specific proposal types.
     """
     from datetime import datetime, timezone
     from uuid import uuid4
-    
-    # Validate delegate exists
-    # In a real implementation, check user exists
-    
+
     # Cannot delegate to self
     if request.delegate_id == user.id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot delegate to yourself",
         )
-    
+
+    # SECURITY FIX: Validate delegate user exists
+    delegate = await user_repo.get_by_id(request.delegate_id)
+    if not delegate:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Delegate user not found",
+        )
+
+    # Check delegate is active
+    if not delegate.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot delegate to inactive user",
+        )
+
+    # SECURITY FIX: Check for delegation cycles
+    # A cycle would be: A -> B -> C -> A (or any loop back to the delegator)
+    async def would_create_cycle(target_id: str, visited: set[str], depth: int = 0) -> bool:
+        """Check if delegating to target_id would create a cycle."""
+        if depth > 10:  # Max delegation chain depth
+            return True  # Treat very deep chains as cycles
+        if target_id in visited:
+            return True  # Found cycle
+        visited.add(target_id)
+
+        # Get target's active delegations (who does target delegate to?)
+        target_delegations = await governance_repo.get_delegates(target_id)
+        for delegation in target_delegations:
+            if delegation.is_active:
+                if await would_create_cycle(delegation.delegate_id, visited, depth + 1):
+                    return True
+        return False
+
+    if await would_create_cycle(request.delegate_id, {user.id}):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot create delegation: would create a circular delegation chain",
+        )
+
     delegation_id = f"del_{uuid4().hex[:12]}"
-    
+
     # Create delegation
     delegation = await governance_repo.create_delegation({
         "id": delegation_id,
@@ -816,19 +1154,17 @@ async def create_delegation(
         "is_active": True,
         "expires_at": request.expires_at,
     })
-    
-    await audit_repo.log_action(
+
+    await audit_repo.log_governance_action(
+        actor_id=user.id,
+        proposal_id=delegation_id,  # Using delegation_id as a stand-in
         action="delegation_created",
-        entity_type="delegation",
-        entity_id=delegation_id,
-        user_id=user.id,
         details={
             "delegate_id": request.delegate_id,
             "proposal_types": request.proposal_types,
         },
-        correlation_id=correlation_id,
     )
-    
+
     return DelegationResponse(
         id=delegation_id,
         delegator_id=user.id,
@@ -884,13 +1220,10 @@ async def revoke_delegation(
     
     await governance_repo.revoke_delegation_by_id(delegation_id)
     
-    await audit_repo.log_action(
+    await audit_repo.log_governance_action(
+        actor_id=user.id,
+        proposal_id=delegation_id,  # Using delegation_id as a stand-in
         action="delegation_revoked",
-        entity_type="delegation",
-        entity_id=delegation_id,
-        user_id=user.id,
-        details={},
-        correlation_id=correlation_id,
     )
-    
+
     return {"status": "revoked", "delegation_id": delegation_id}

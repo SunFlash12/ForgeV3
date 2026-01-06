@@ -12,7 +12,8 @@ import asyncio
 import sys
 
 # Add parent directory to path
-sys.path.insert(0, str(__file__).rsplit('/', 2)[0])
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from forge.config import get_settings
 from forge.database.client import Neo4jClient
@@ -90,16 +91,16 @@ async def create_constraints(client: Neo4jClient):
             FOR (n:{label})
             REQUIRE n.{property_name} IS UNIQUE
             """
-            await client.execute_query(query)
-            print(f"  ✓ {name}")
+            await client.execute(query)
+            print(f"  [OK] {name}")
         except Exception as e:
-            print(f"  ✗ {name}: {e}")
+            print(f"  [FAIL] {name}: {e}")
 
 
 async def create_indexes(client: Neo4jClient):
     """Create performance indexes."""
     print("\nCreating indexes...")
-    
+
     for name, label, property_name in INDEXES:
         try:
             query = f"""
@@ -107,19 +108,19 @@ async def create_indexes(client: Neo4jClient):
             FOR (n:{label})
             ON (n.{property_name})
             """
-            await client.execute_query(query)
-            print(f"  ✓ {name}")
+            await client.execute(query)
+            print(f"  [OK] {name}")
         except Exception as e:
-            print(f"  ✗ {name}: {e}")
+            print(f"  [FAIL] {name}: {e}")
 
 
 async def create_vector_index(client: Neo4jClient):
     """Create vector index for embeddings (Neo4j 5.11+)."""
     print("\nCreating vector index...")
-    
+
     try:
         # Check Neo4j version first
-        result = await client.execute_query("CALL dbms.components() YIELD versions RETURN versions[0] as version")
+        result = await client.execute("CALL dbms.components() YIELD versions RETURN versions[0] as version")
         if result:
             version = result[0]["version"]
             print(f"  Neo4j version: {version}")
@@ -136,41 +137,41 @@ async def create_vector_index(client: Neo4jClient):
                     `vector.similarity_function`: 'cosine'
                 }}
                 """
-                await client.execute_query(query)
-                print("  ✓ Vector index created")
+                await client.execute(query)
+                print("  [OK] Vector index created")
             else:
-                print("  ⚠ Vector indexes require Neo4j 5.11+")
+                print("  [WARN] Vector indexes require Neo4j 5.11+")
     except Exception as e:
-        print(f"  ⚠ Could not create vector index: {e}")
+        print(f"  [WARN] Could not create vector index: {e}")
 
 
 async def create_fulltext_index(client: Neo4jClient):
     """Create full-text search index for capsule content."""
     print("\nCreating full-text search index...")
-    
+
     try:
         query = """
         CREATE FULLTEXT INDEX capsule_content_search IF NOT EXISTS
         FOR (c:Capsule)
         ON EACH [c.title, c.content]
         """
-        await client.execute_query(query)
-        print("  ✓ Full-text index created")
+        await client.execute(query)
+        print("  [OK] Full-text index created")
     except Exception as e:
-        print(f"  ⚠ Could not create full-text index: {e}")
+        print(f"  [WARN] Could not create full-text index: {e}")
 
 
 async def verify_schema(client: Neo4jClient):
     """Verify the schema was created correctly."""
     print("\nVerifying schema...")
-    
+
     # Count constraints
-    result = await client.execute_query("SHOW CONSTRAINTS")
+    result = await client.execute("SHOW CONSTRAINTS")
     constraint_count = len(result) if result else 0
     print(f"  Constraints: {constraint_count}")
-    
+
     # Count indexes
-    result = await client.execute_query("SHOW INDEXES")
+    result = await client.execute("SHOW INDEXES")
     index_count = len(result) if result else 0
     print(f"  Indexes: {index_count}")
 
@@ -213,7 +214,7 @@ async def main():
         print(f"\nError: {e}")
         raise
     finally:
-        await client.disconnect()
+        await client.close()
 
 
 if __name__ == "__main__":

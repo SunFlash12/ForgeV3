@@ -211,11 +211,11 @@ class EventBus:
         """
         event = Event(
             id=str(uuid4()),
-            event_type=event_type,
+            type=event_type,
             payload=payload,
             source=source,
             priority=priority,
-            target=target,
+            target_overlays=[target] if target else None,
             correlation_id=correlation_id or str(uuid4()),
             metadata=metadata or {},
             timestamp=datetime.utcnow()
@@ -233,95 +233,279 @@ class EventBus:
         )
         
         return event
-    
+
+    async def emit(
+        self,
+        event_type: EventType,
+        payload: dict[str, Any],
+        source: str = "system",
+        priority: EventPriority = EventPriority.NORMAL
+    ) -> Event:
+        """
+        Convenience method to emit an event (alias for publish).
+
+        Args:
+            event_type: Type of event
+            payload: Event data
+            source: Source identifier
+            priority: Event priority
+
+        Returns:
+            Created Event
+        """
+        return await self.publish(
+            event_type=event_type,
+            payload=payload,
+            source=source,
+            priority=priority
+        )
+
     async def publish_cascade(
         self,
-        initial_event_type: EventType,
-        payload: dict[str, Any],
-        source: str,
-        chain_id: Optional[str] = None
+        source_overlay: str,
+        insight_type: str,
+        insight_data: dict[str, Any],
+        cascade_id: Optional[str] = None,
+        max_hops: int = 5
     ) -> CascadeChain:
         """
         Publish an event that initiates a cascade chain.
-        
+
         Cascade chains allow tracking of events that trigger other events.
-        
+        This is the core mechanism for the Cascade Effect where insights
+        propagate across the overlay ecosystem.
+
         Args:
-            initial_event_type: Type of triggering event
-            payload: Event data
-            source: Source identifier
-            chain_id: Optional existing chain ID to continue
-            
+            source_overlay: The overlay that generated the insight
+            insight_type: Type of insight being cascaded
+            insight_data: The insight payload
+            cascade_id: Optional existing chain ID to continue
+            max_hops: Maximum cascade depth (default 5)
+
         Returns:
             CascadeChain tracking the propagation
         """
-        chain_id = chain_id or str(uuid4())
-        
+        cascade_id = cascade_id or str(uuid4())
+
         # Create or get existing chain
-        if chain_id not in self._cascade_chains:
-            self._cascade_chains[chain_id] = CascadeChain(
-                id=chain_id,
-                root_event_id="",  # Will be set below
+        if cascade_id not in self._cascade_chains:
+            self._cascade_chains[cascade_id] = CascadeChain(
+                cascade_id=cascade_id,
+                initiated_by=source_overlay,
+                initiated_at=datetime.utcnow(),
                 events=[],
-                started_at=datetime.utcnow()
+                total_hops=0,
+                overlays_affected=[source_overlay],
+                insights_generated=0,
+                actions_triggered=0,
+                errors_encountered=0
             )
             self._metrics.cascade_chains += 1
-        
-        chain = self._cascade_chains[chain_id]
-        
-        # Create cascade event
+
+        chain = self._cascade_chains[cascade_id]
+
+        # Calculate hop count from previous events
+        hop_count = len(chain.events)
+
+        # Get visited overlays from chain
+        visited = list(chain.overlays_affected)
+
+        # Create cascade event matching the CascadeEvent model
         cascade_event = CascadeEvent(
             id=str(uuid4()),
-            event_type=initial_event_type,
-            payload=payload,
-            source=source,
-            chain_id=chain_id,
-            depth=len(chain.events),
-            parent_event_id=chain.events[-1].id if chain.events else None,
-            timestamp=datetime.utcnow()
+            source_overlay=source_overlay,
+            insight_type=insight_type,
+            insight_data=insight_data,
+            hop_count=hop_count,
+            max_hops=max_hops,
+            visited_overlays=visited,
+            impact_score=0.0,  # Will be calculated by overlays
+            timestamp=datetime.utcnow(),
+            correlation_id=cascade_id
         )
-        
+
         # Update chain
-        if not chain.root_event_id:
-            chain.root_event_id = cascade_event.id
         chain.events.append(cascade_event)
-        
-        # Publish as regular event
-        await self.publish(
-            event_type=initial_event_type,
-            payload={**payload, "_cascade_chain_id": chain_id, "_cascade_depth": cascade_event.depth},
-            source=source,
-            priority=EventPriority.HIGH,
-            correlation_id=chain_id
-        )
-        
+        chain.total_hops = hop_count + 1
+        chain.insights_generated += 1
+
+        # Check if cascade can continue propagating
+        if cascade_event.can_propagate:
+            # Publish CASCADE_INITIATED for the first event, CASCADE_PROPAGATED for subsequent
+            event_type = EventType.CASCADE_INITIATED if hop_count == 0 else EventType.CASCADE_PROPAGATED
+
+            await self.publish(
+                event_type=event_type,
+                payload={
+                    "cascade_id": cascade_id,
+                    "insight_type": insight_type,
+                    "insight_data": insight_data,
+                    "hop_count": hop_count,
+                    "max_hops": max_hops,
+                    "visited_overlays": visited,
+                    "source_overlay": source_overlay
+                },
+                source=f"cascade:{source_overlay}",
+                priority=EventPriority.HIGH,
+                correlation_id=cascade_id
+            )
+
         return chain
     
-    async def complete_cascade(self, chain_id: str) -> Optional[CascadeChain]:
+    async def complete_cascade(self, cascade_id: str) -> Optional[CascadeChain]:
         """
         Mark a cascade chain as complete.
-        
+
         Args:
-            chain_id: ID of the cascade chain
-            
+            cascade_id: ID of the cascade chain
+
         Returns:
             Completed CascadeChain or None if not found
         """
-        if chain_id not in self._cascade_chains:
+        if cascade_id not in self._cascade_chains:
             return None
-        
-        chain = self._cascade_chains.pop(chain_id)
+
+        chain = self._cascade_chains.pop(cascade_id)
         chain.completed_at = datetime.utcnow()
-        chain.total_events = len(chain.events)
-        
+
         logger.info(
             "cascade_completed",
-            chain_id=chain_id,
-            total_events=chain.total_events,
-            duration_ms=(chain.completed_at - chain.started_at).total_seconds() * 1000
+            cascade_id=cascade_id,
+            total_hops=chain.total_hops,
+            overlays_affected=len(chain.overlays_affected),
+            insights_generated=chain.insights_generated,
+            duration_ms=(chain.completed_at - chain.initiated_at).total_seconds() * 1000
         )
-        
+
+        # Publish CASCADE_COMPLETE event
+        await self.publish(
+            event_type=EventType.CASCADE_COMPLETE,
+            payload={
+                "cascade_id": cascade_id,
+                "total_hops": chain.total_hops,
+                "overlays_affected": chain.overlays_affected,
+                "insights_generated": chain.insights_generated,
+                "actions_triggered": chain.actions_triggered,
+                "errors_encountered": chain.errors_encountered
+            },
+            source="cascade_system",
+            priority=EventPriority.NORMAL,
+            correlation_id=cascade_id
+        )
+
         return chain
+
+    async def propagate_cascade(
+        self,
+        cascade_id: str,
+        target_overlay: str,
+        insight_type: str,
+        insight_data: dict[str, Any],
+        impact_score: float = 0.0
+    ) -> Optional[CascadeEvent]:
+        """
+        Propagate an existing cascade to a new overlay.
+
+        This is called when an overlay processes a cascade event and wants
+        to continue the cascade to another overlay. It checks hop limits
+        and visited overlays to prevent infinite loops.
+
+        Args:
+            cascade_id: ID of the existing cascade chain
+            target_overlay: The overlay receiving the propagated insight
+            insight_type: Type of insight being propagated
+            insight_data: The insight payload
+            impact_score: Calculated impact of this propagation
+
+        Returns:
+            CascadeEvent if propagation succeeded, None if at max hops or cycle detected
+        """
+        if cascade_id not in self._cascade_chains:
+            logger.warning("propagate_cascade_unknown_chain", cascade_id=cascade_id)
+            return None
+
+        chain = self._cascade_chains[cascade_id]
+
+        # Check if target overlay was already visited (prevent cycles)
+        if target_overlay in chain.overlays_affected:
+            logger.debug(
+                "cascade_cycle_prevented",
+                cascade_id=cascade_id,
+                target_overlay=target_overlay
+            )
+            return None
+
+        # Check hop limit from the last event
+        last_event = chain.events[-1] if chain.events else None
+        if last_event and not last_event.can_propagate:
+            logger.debug(
+                "cascade_max_hops_reached",
+                cascade_id=cascade_id,
+                max_hops=last_event.max_hops
+            )
+            return None
+
+        # Calculate new hop count
+        hop_count = (last_event.hop_count + 1) if last_event else 0
+        max_hops = last_event.max_hops if last_event else 5
+
+        # Add target overlay to affected list
+        chain.overlays_affected.append(target_overlay)
+
+        # Create the propagation event
+        cascade_event = CascadeEvent(
+            id=str(uuid4()),
+            source_overlay=target_overlay,
+            insight_type=insight_type,
+            insight_data=insight_data,
+            hop_count=hop_count,
+            max_hops=max_hops,
+            visited_overlays=list(chain.overlays_affected),
+            impact_score=impact_score,
+            timestamp=datetime.utcnow(),
+            correlation_id=cascade_id
+        )
+
+        # Update chain
+        chain.events.append(cascade_event)
+        chain.total_hops = hop_count + 1
+        chain.actions_triggered += 1
+
+        # Publish propagation event if can continue
+        if cascade_event.can_propagate:
+            await self.publish(
+                event_type=EventType.CASCADE_PROPAGATED,
+                payload={
+                    "cascade_id": cascade_id,
+                    "insight_type": insight_type,
+                    "insight_data": insight_data,
+                    "hop_count": hop_count,
+                    "max_hops": max_hops,
+                    "visited_overlays": cascade_event.visited_overlays,
+                    "source_overlay": target_overlay,
+                    "impact_score": impact_score
+                },
+                source=f"cascade:{target_overlay}",
+                priority=EventPriority.HIGH,
+                correlation_id=cascade_id
+            )
+
+        logger.debug(
+            "cascade_propagated",
+            cascade_id=cascade_id,
+            target_overlay=target_overlay,
+            hop_count=hop_count
+        )
+
+        return cascade_event
+
+    def get_cascade_chain(self, cascade_id: str) -> Optional[CascadeChain]:
+        """Get a cascade chain by ID."""
+        return self._cascade_chains.get(cascade_id)
+
+    def get_active_cascades(self) -> list[CascadeChain]:
+        """Get all active (incomplete) cascade chains."""
+        return list(self._cascade_chains.values())
     
     # =========================================================================
     # Event Processing

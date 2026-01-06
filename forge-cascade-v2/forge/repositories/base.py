@@ -7,6 +7,7 @@ and Neo4j query patterns.
 
 from abc import ABC, abstractmethod
 from datetime import datetime
+import re
 from typing import Any, Generic, TypeVar
 from uuid import uuid4
 
@@ -16,6 +17,34 @@ from pydantic import BaseModel
 from forge.database.client import Neo4jClient
 
 logger = structlog.get_logger(__name__)
+
+# Regex for valid Cypher identifiers (property names, etc.)
+VALID_IDENTIFIER_PATTERN = re.compile(r'^[a-zA-Z_][a-zA-Z0-9_]*$')
+
+
+def validate_identifier(name: str, param_name: str = "identifier") -> str:
+    """
+    Validate that a string is a safe Cypher identifier.
+
+    Prevents Cypher injection through field/property names.
+
+    Args:
+        name: The identifier to validate
+        param_name: Name of the parameter (for error messages)
+
+    Returns:
+        The validated identifier
+
+    Raises:
+        ValueError: If the identifier is invalid
+    """
+    if not name:
+        raise ValueError(f"{param_name} cannot be empty")
+    if not VALID_IDENTIFIER_PATTERN.match(name):
+        raise ValueError(f"Invalid {param_name}: must be alphanumeric with underscores, starting with letter or underscore")
+    if len(name) > 64:
+        raise ValueError(f"{param_name} too long (max 64 characters)")
+    return name
 
 # Type variables for generic repository
 T = TypeVar("T", bound=BaseModel)  # Model type
@@ -125,16 +154,28 @@ class BaseRepository(ABC, Generic[T, CreateT, UpdateT]):
     ) -> list[T]:
         """
         Get all entities with pagination.
-        
+
         Args:
             skip: Number of records to skip
-            limit: Maximum records to return
-            order_by: Field to order by
+            limit: Maximum records to return (capped at 1000)
+            order_by: Field to order by (validated for safety)
             order_dir: Order direction (ASC or DESC)
-            
+
         Returns:
             List of entity models
         """
+        # Validate order_by to prevent Cypher injection
+        order_by = validate_identifier(order_by, "order_by")
+
+        # Validate order direction
+        order_dir = order_dir.upper()
+        if order_dir not in ("ASC", "DESC"):
+            order_dir = "DESC"
+
+        # Cap limit to prevent memory exhaustion
+        limit = min(max(1, limit), 1000)
+        skip = max(0, skip)
+
         query = f"""
         MATCH (n:{self.node_label})
         RETURN n {{.*}} AS entity
@@ -142,12 +183,12 @@ class BaseRepository(ABC, Generic[T, CreateT, UpdateT]):
         SKIP $skip
         LIMIT $limit
         """
-        
+
         results = await self.client.execute(
             query,
             {"skip": skip, "limit": limit},
         )
-        
+
         return self._to_models([r["entity"] for r in results if r.get("entity")])
 
     async def count(self) -> int:
@@ -215,21 +256,24 @@ class BaseRepository(ABC, Generic[T, CreateT, UpdateT]):
     ) -> T | None:
         """
         Update a single field on an entity.
-        
+
         Args:
             entity_id: The entity's ID
-            field: Field name to update
+            field: Field name to update (validated for safety)
             value: New value
-            
+
         Returns:
             Updated entity or None
         """
+        # Validate field name to prevent Cypher injection
+        field = validate_identifier(field, "field")
+
         query = f"""
         MATCH (n:{self.node_label} {{id: $id}})
         SET n.{field} = $value, n.updated_at = $now
         RETURN n {{.*}} AS entity
         """
-        
+
         result = await self.client.execute_single(
             query,
             {
@@ -238,7 +282,7 @@ class BaseRepository(ABC, Generic[T, CreateT, UpdateT]):
                 "now": self._now().isoformat(),
             },
         )
-        
+
         if result and result.get("entity"):
             return self._to_model(result["entity"])
         return None
@@ -251,26 +295,32 @@ class BaseRepository(ABC, Generic[T, CreateT, UpdateT]):
     ) -> list[T]:
         """
         Find entities by a field value.
-        
+
         Args:
-            field: Field name to search
+            field: Field name to search (validated for safety)
             value: Value to match
-            limit: Maximum results
-            
+            limit: Maximum results (capped at 1000)
+
         Returns:
             List of matching entities
         """
+        # Validate field name to prevent Cypher injection
+        field = validate_identifier(field, "field")
+
+        # Cap limit
+        limit = min(max(1, limit), 1000)
+
         query = f"""
         MATCH (n:{self.node_label} {{{field}: $value}})
         RETURN n {{.*}} AS entity
         LIMIT $limit
         """
-        
+
         results = await self.client.execute(
             query,
             {"value": value, "limit": limit},
         )
-        
+
         return self._to_models([r["entity"] for r in results if r.get("entity")])
 
     @abstractmethod

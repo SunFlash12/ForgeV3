@@ -115,7 +115,7 @@ class OverlayManager:
         self._running = True
         
         # Subscribe to all events to route to overlays
-        await self._event_bus.subscribe_all(self._handle_event)
+        self._event_bus.subscribe_all(self._handle_event)
         
         self._logger.info("overlay_manager_started")
     
@@ -244,13 +244,72 @@ class OverlayManager:
         
         return overlay.id
     
+    async def activate(self, overlay_id: str) -> bool:
+        """
+        Activate an overlay (set state to ACTIVE).
+
+        Args:
+            overlay_id: ID of overlay to activate
+
+        Returns:
+            True if overlay was found and activated
+        """
+        overlay = self.get_by_id(overlay_id)
+        if not overlay:
+            return False
+
+        if overlay.state == OverlayState.ACTIVE:
+            return True  # Already active
+
+        # If not initialized, initialize it
+        if not overlay._initialized:
+            success = await overlay.initialize()
+            if not success:
+                self._logger.error(
+                    "overlay_activation_failed",
+                    overlay_id=overlay_id,
+                    reason="initialization_failed"
+                )
+                return False
+        else:
+            # Just set state to active
+            overlay.state = OverlayState.ACTIVE
+
+        # Reset circuit breaker
+        self.reset_circuit(overlay_id)
+
+        self._logger.info("overlay_activated", overlay_id=overlay_id, name=overlay.NAME)
+        return True
+
+    async def deactivate(self, overlay_id: str) -> bool:
+        """
+        Deactivate an overlay (set state to INACTIVE).
+
+        Args:
+            overlay_id: ID of overlay to deactivate
+
+        Returns:
+            True if overlay was found and deactivated
+        """
+        overlay = self.get_by_id(overlay_id)
+        if not overlay:
+            return False
+
+        if overlay.state != OverlayState.ACTIVE:
+            return True  # Already not active
+
+        overlay.state = OverlayState.INACTIVE
+
+        self._logger.info("overlay_deactivated", overlay_id=overlay_id, name=overlay.NAME)
+        return True
+
     async def unregister(self, overlay_id: str) -> bool:
         """
         Unregister an overlay.
-        
+
         Args:
             overlay_id: ID of overlay to unregister
-            
+
         Returns:
             True if overlay was found and unregistered
         """
@@ -310,14 +369,33 @@ class OverlayManager:
     def list_all(self) -> list[BaseOverlay]:
         """List all registered overlays."""
         return list(self._registry.instances.values())
-    
+
     def list_active(self) -> list[BaseOverlay]:
         """List all active overlays."""
         return [
             o for o in self._registry.instances.values()
             if o.state == OverlayState.ACTIVE
         ]
-    
+
+    def get_overlays_for_phase(self, phase: int) -> list[BaseOverlay]:
+        """List overlays for a specific pipeline phase."""
+        return [
+            o for o in self._registry.instances.values()
+            if getattr(o, 'phase', None) == phase or
+               (hasattr(o, 'phase') and hasattr(o.phase, 'value') and
+                self._phase_to_int(o.phase) == phase)
+        ]
+
+    def _phase_to_int(self, phase) -> int:
+        """Convert phase enum to integer."""
+        phase_map = {
+            "intake": 1, "validation": 2, "analysis": 3, "governance": 4,
+            "integration": 5, "distribution": 6, "feedback": 7
+        }
+        if hasattr(phase, 'value'):
+            return phase_map.get(phase.value.lower(), 0)
+        return phase_map.get(str(phase).lower(), 0)
+
     def get_registry_info(self) -> dict:
         """Get registry summary information."""
         return {

@@ -75,7 +75,7 @@ class ForgeApp:
         
         self.pipeline = CascadePipeline(
             overlay_manager=self.overlay_manager,
-            event_system=self.event_system,
+            event_bus=self.event_system,
         )
         
         # Immune system
@@ -108,7 +108,7 @@ class ForgeApp:
         
         logger.info(
             "forge_initialized",
-            overlays=len(self.overlay_manager._overlays) if self.overlay_manager else 0,
+            overlays=len(self.overlay_manager._registry.instances) if self.overlay_manager else 0,
         )
     
     async def _register_core_overlays(self) -> None:
@@ -119,25 +119,22 @@ class ForgeApp:
             create_governance_overlay,
             create_lineage_tracker,
         )
+
+        # Use environment-based configuration for overlay strict mode
+        is_production = self.settings.app_env == "production"
+
+        # Create overlays - enable strict mode in production
+        security = create_security_validator(strict_mode=is_production)
+        ml = create_ml_intelligence(production_mode=is_production)
+        governance = create_governance_overlay(strict_mode=is_production)
+        lineage = create_lineage_tracker(strict_mode=is_production)
         
-        # Create overlays
-        security = create_security_validator(strict_mode=False)
-        ml = create_ml_intelligence(production_mode=False)
-        governance = create_governance_overlay(strict_mode=False)
-        lineage = create_lineage_tracker(strict_mode=False)
-        
-        # Register with manager
+        # Register with manager (auto-initializes by default)
         if self.overlay_manager:
-            await self.overlay_manager.register(security)
-            await self.overlay_manager.register(ml)
-            await self.overlay_manager.register(governance)
-            await self.overlay_manager.register(lineage)
-            
-            # Activate all
-            await self.overlay_manager.activate(security.overlay_id)
-            await self.overlay_manager.activate(ml.overlay_id)
-            await self.overlay_manager.activate(governance.overlay_id)
-            await self.overlay_manager.activate(lineage.overlay_id)
+            await self.overlay_manager.register_instance(security)
+            await self.overlay_manager.register_instance(ml)
+            await self.overlay_manager.register_instance(governance)
+            await self.overlay_manager.register_instance(lineage)
     
     async def shutdown(self) -> None:
         """Gracefully shutdown all components."""
@@ -168,7 +165,7 @@ class ForgeApp:
             ),
             "database": "connected" if self.db_client and self.db_client._driver else "disconnected",
             "overlays": (
-                len(self.overlay_manager._overlays)
+                len(self.overlay_manager._registry.instances)
                 if self.overlay_manager else 0
             ),
         }
@@ -236,6 +233,10 @@ def create_app(
                 "description": "Knowledge capsule management",
             },
             {
+                "name": "cascade",
+                "description": "Cascade Effect - insight propagation across overlays",
+            },
+            {
                 "name": "governance",
                 "description": "Symbolic governance and voting",
             },
@@ -253,27 +254,41 @@ def create_app(
     # Store forge_app reference
     app.state.forge = forge_app
     
-    # CORS
+    # CORS - Use explicit origins, never allow wildcard with credentials
+    cors_origins = settings.CORS_ORIGINS
+    if not cors_origins:
+        # Default to localhost only, never wildcard
+        cors_origins = ["http://localhost:3000", "http://localhost:8000"]
+
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.CORS_ORIGINS if hasattr(settings, 'CORS_ORIGINS') else ["*"],
+        allow_origins=cors_origins,
         allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type", "X-Correlation-ID", "X-Idempotency-Key", "X-CSRF-Token"],
     )
-    
+
     # Add custom middleware
     from forge.api.middleware import (
         CorrelationIdMiddleware,
         RequestLoggingMiddleware,
         AuthenticationMiddleware,
         RateLimitMiddleware,
+        SecurityHeadersMiddleware,
+        RequestSizeLimitMiddleware,
+        IdempotencyMiddleware,
+        CSRFProtectionMiddleware,
     )
-    
+
+    # Order matters: outer middleware runs first
+    app.add_middleware(SecurityHeadersMiddleware, enable_hsts=(settings.app_env == "production"))
     app.add_middleware(CorrelationIdMiddleware)
     app.add_middleware(RequestLoggingMiddleware)
+    app.add_middleware(RequestSizeLimitMiddleware, max_content_length=10 * 1024 * 1024)  # 10MB limit
+    app.add_middleware(CSRFProtectionMiddleware, enabled=(settings.app_env != "development"))  # CSRF protection
+    app.add_middleware(IdempotencyMiddleware)  # Idempotency support
     app.add_middleware(AuthenticationMiddleware)
-    app.add_middleware(RateLimitMiddleware)
+    app.add_middleware(RateLimitMiddleware, redis_url=settings.redis_url)
     
     # Exception handlers
     @app.exception_handler(StarletteHTTPException)
@@ -314,10 +329,11 @@ def create_app(
         )
     
     # Include routers
-    from forge.api.routes import auth, capsules, governance, overlays, system
-    
+    from forge.api.routes import auth, capsules, cascade, governance, overlays, system
+
     app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
     app.include_router(capsules.router, prefix="/api/v1/capsules", tags=["capsules"])
+    app.include_router(cascade.router, prefix="/api/v1/cascade", tags=["cascade"])
     app.include_router(governance.router, prefix="/api/v1/governance", tags=["governance"])
     app.include_router(overlays.router, prefix="/api/v1/overlays", tags=["overlays"])
     app.include_router(system.router, prefix="/api/v1/system", tags=["system"])

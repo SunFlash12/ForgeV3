@@ -26,6 +26,11 @@ from forge.services.search import (
     init_search_service,
     shutdown_search_service,
 )
+from forge.services.ghost_council import (
+    init_ghost_council_service,
+    shutdown_ghost_council_service,
+    get_ghost_council_service,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -103,22 +108,97 @@ def init_all_services(
         db_client=db_client,
     )
     logger.info("search_service_ready")
-    
+
+    # Initialize Ghost Council service
+    ghost_council = init_ghost_council_service()
+    logger.info(
+        "ghost_council_service_ready",
+        members=len(ghost_council.members),
+    )
+
+    # Set up serious issue detection if event_bus is available
+    if event_bus:
+        _setup_ghost_council_event_handlers(ghost_council, event_bus)
+
     logger.info("all_services_initialized")
+
+
+def _setup_ghost_council_event_handlers(ghost_council, event_bus) -> None:
+    """
+    Set up event handlers for Ghost Council serious issue detection.
+
+    Args:
+        ghost_council: The Ghost Council service instance
+        event_bus: The event system to subscribe to
+    """
+    from forge.models.events import EventType
+    import asyncio
+
+    # Events that may indicate serious issues
+    serious_event_types = {
+        EventType.SECURITY_ALERT,
+        EventType.SECURITY_THREAT,
+        EventType.TRUST_UPDATED,
+        EventType.GOVERNANCE_ACTION,
+        EventType.SYSTEM_ERROR,
+        EventType.PIPELINE_ERROR,
+        EventType.IMMUNE_ALERT,
+    }
+
+    async def handle_potential_serious_issue(event):
+        """Handle events that might be serious issues."""
+        try:
+            issue = ghost_council.detect_serious_issue(
+                event_type=event.event_type,
+                payload=event.payload or {},
+                source=event.source or "unknown",
+            )
+
+            if issue:
+                # Automatically respond to serious issues
+                logger.warning(
+                    "ghost_council_auto_responding",
+                    issue_id=issue.id,
+                    category=issue.category.value,
+                    severity=issue.severity.value,
+                )
+
+                # Run deliberation in background to not block event processing
+                asyncio.create_task(ghost_council.respond_to_issue(issue))
+
+        except Exception as e:
+            logger.error(
+                "ghost_council_event_handler_error",
+                error=str(e),
+                event_type=event.event_type.value if hasattr(event.event_type, 'value') else str(event.event_type),
+            )
+
+    # Subscribe to serious event types using correct EventBus API
+    subscription_id = event_bus.subscribe(
+        handler=handle_potential_serious_issue,
+        event_types=serious_event_types,
+    )
+
+    logger.info(
+        "ghost_council_event_handlers_registered",
+        subscription_id=subscription_id,
+        event_types=[e.value for e in serious_event_types],
+    )
 
 
 def shutdown_all_services() -> None:
     """
     Shutdown all services gracefully.
-    
+
     Called during application shutdown.
     """
     logger.info("shutting_down_services")
-    
+
     shutdown_search_service()
     shutdown_llm_service()
     shutdown_embedding_service()
-    
+    shutdown_ghost_council_service()
+
     logger.info("all_services_shutdown")
 
 

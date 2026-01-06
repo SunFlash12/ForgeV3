@@ -768,19 +768,18 @@ class Pipeline:
             else EventType.SYSTEM_EVENT
         )
         
-        await event_bus.publish(Event(
-            id=str(uuid4()),
+        await event_bus.publish(
             event_type=event_type,
-            source="pipeline",
-            correlation_id=result.correlation_id,
             payload={
                 "pipeline_id": result.pipeline_id,
                 "status": result.status.value,
                 "duration_ms": result.duration_ms,
                 "phases_completed": len(result.phases),
                 "success": result.success
-            }
-        ))
+            },
+            source="pipeline",
+            correlation_id=result.correlation_id,
+        )
     
     # =========================================================================
     # Control

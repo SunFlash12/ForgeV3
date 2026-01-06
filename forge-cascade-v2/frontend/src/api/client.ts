@@ -1,7 +1,6 @@
 import axios from 'axios';
 import type { AxiosError, AxiosInstance, InternalAxiosRequestConfig } from 'axios';
 import type {
-  AuthTokens,
   User,
   TrustInfo,
   Capsule,
@@ -31,6 +30,42 @@ import type {
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
 
+// New login response type (tokens are in httpOnly cookies)
+interface LoginResponse {
+  csrf_token: string;
+  expires_in: number;
+  user: User;
+}
+
+interface RefreshResponse {
+  csrf_token: string;
+  expires_in: number;
+}
+
+// CSRF token storage (in memory only - not localStorage!)
+let csrfToken: string | null = null;
+
+// Helper to get CSRF token from cookie (fallback)
+function getCsrfTokenFromCookie(): string | null {
+  const match = document.cookie.match(/csrf_token=([^;]+)/);
+  return match ? match[1] : null;
+}
+
+// Get current CSRF token
+function getCSRFToken(): string | null {
+  return csrfToken || getCsrfTokenFromCookie();
+}
+
+// Set CSRF token (called after login/refresh)
+function setCSRFToken(token: string | null): void {
+  csrfToken = token;
+}
+
+// Clear CSRF token (called on logout)
+function clearCSRFToken(): void {
+  csrfToken = null;
+}
+
 class ForgeApiClient {
   private client: AxiosInstance;
   private refreshPromise: Promise<string> | null = null;
@@ -41,18 +76,24 @@ class ForgeApiClient {
       headers: {
         'Content-Type': 'application/json',
       },
+      // CRITICAL: Enable credentials for cookie-based auth
+      withCredentials: true,
     });
 
     this.setupInterceptors();
   }
 
   private setupInterceptors() {
-    // Request interceptor - add auth token
+    // Request interceptor - add CSRF token for state-changing requests
     this.client.interceptors.request.use(
       (config: InternalAxiosRequestConfig) => {
-        const token = localStorage.getItem('access_token');
-        if (token && config.headers) {
-          config.headers.Authorization = `Bearer ${token}`;
+        // Add CSRF token for state-changing methods
+        const statefulMethods = ['POST', 'PUT', 'PATCH', 'DELETE'];
+        if (statefulMethods.includes(config.method?.toUpperCase() || '')) {
+          const token = getCSRFToken();
+          if (token && config.headers) {
+            config.headers['X-CSRF-Token'] = token;
+          }
         }
         return config;
       },
@@ -69,17 +110,32 @@ class ForgeApiClient {
           originalRequest._retry = true;
 
           try {
-            const newToken = await this.refreshToken();
-            if (originalRequest.headers) {
-              originalRequest.headers.Authorization = `Bearer ${newToken}`;
-            }
+            await this.refreshToken();
+            // Retry the original request (cookies are automatically included)
             return this.client(originalRequest);
           } catch (refreshError) {
-            // Refresh failed, clear tokens and redirect to login
-            localStorage.removeItem('access_token');
-            localStorage.removeItem('refresh_token');
+            // Refresh failed - redirect to login
+            clearCSRFToken();
             window.location.href = '/login';
             return Promise.reject(refreshError);
+          }
+        }
+
+        // Handle CSRF errors
+        if (error.response?.status === 403) {
+          const data = error.response.data as { error?: string };
+          if (data?.error?.includes('CSRF')) {
+            // CSRF token expired/invalid - try to refresh
+            try {
+              await this.refreshToken();
+              // Retry with new CSRF token
+              if (originalRequest) {
+                return this.client(originalRequest);
+              }
+            } catch {
+              clearCSRFToken();
+              window.location.href = '/login';
+            }
           }
         }
 
@@ -88,34 +144,32 @@ class ForgeApiClient {
     );
   }
 
-  private async refreshToken(): Promise<string> {
+  private async refreshToken(): Promise<void> {
     // Prevent multiple simultaneous refresh calls
     if (this.refreshPromise) {
-      return this.refreshPromise;
-    }
-
-    const refreshToken = localStorage.getItem('refresh_token');
-    if (!refreshToken) {
-      throw new Error('No refresh token available');
+      await this.refreshPromise;
+      return;
     }
 
     this.refreshPromise = (async () => {
       try {
-        const response = await axios.post<AuthTokens>(`${API_BASE_URL}/auth/refresh`, {
-          refresh_token: refreshToken,
-        });
-        
-        const { access_token, refresh_token: newRefresh } = response.data;
-        localStorage.setItem('access_token', access_token);
-        localStorage.setItem('refresh_token', newRefresh);
-        
-        return access_token;
+        // Refresh token is in httpOnly cookie, sent automatically
+        const response = await axios.post<RefreshResponse>(
+          `${API_BASE_URL}/auth/refresh`,
+          {},
+          { withCredentials: true }
+        );
+
+        // Update CSRF token
+        setCSRFToken(response.data.csrf_token);
+
+        return response.data.csrf_token;
       } finally {
         this.refreshPromise = null;
       }
     })();
 
-    return this.refreshPromise;
+    await this.refreshPromise;
   }
 
   // ============================================================================
@@ -131,16 +185,15 @@ class ForgeApiClient {
     return response.data;
   }
 
-  async login(username: string, password: string): Promise<AuthTokens> {
-    const response = await this.client.post<AuthTokens>('/auth/login', {
+  async login(username: string, password: string): Promise<LoginResponse> {
+    const response = await this.client.post<LoginResponse>('/auth/login', {
       username,
       password,
     });
-    
-    const { access_token, refresh_token } = response.data;
-    localStorage.setItem('access_token', access_token);
-    localStorage.setItem('refresh_token', refresh_token);
-    
+
+    // Store CSRF token in memory (NOT localStorage!)
+    setCSRFToken(response.data.csrf_token);
+
     return response.data;
   }
 
@@ -148,8 +201,8 @@ class ForgeApiClient {
     try {
       await this.client.post('/auth/logout');
     } finally {
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('refresh_token');
+      // Clear CSRF token
+      clearCSRFToken();
     }
   }
 
@@ -173,6 +226,16 @@ class ForgeApiClient {
   async getTrustInfo(): Promise<TrustInfo> {
     const response = await this.client.get<TrustInfo>('/auth/me/trust');
     return response.data;
+  }
+
+  // Check if user is authenticated (has valid session)
+  async checkAuth(): Promise<boolean> {
+    try {
+      await this.getCurrentUser();
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   // ============================================================================
@@ -406,6 +469,9 @@ class ForgeApiClient {
 // Export singleton instance
 export const api = new ForgeApiClient();
 export default api;
+
+// Export CSRF helper for components that need it
+export { getCSRFToken, setCSRFToken, clearCSRFToken };
 
 // Type augmentation for axios
 declare module 'axios' {

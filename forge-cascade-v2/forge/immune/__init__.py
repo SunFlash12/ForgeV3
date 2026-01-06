@@ -82,7 +82,7 @@ def create_immune_system(
     circuit_registry = get_circuit_registry()
     
     health_checker = create_forge_health_checker(
-        db_client=db_client,
+        neo4j_client=db_client,
         overlay_manager=overlay_manager,
         event_system=event_system,
         circuit_registry=circuit_registry,

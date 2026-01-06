@@ -95,7 +95,7 @@ class AdminUpdateUserRequest(BaseModel):
 async def list_users(
     admin: AdminUserDep,
     user_repo: UserRepoDep,
-    page: int = Query(default=1, ge=1),
+    page: int = Query(default=1, ge=1, le=10000),  # Max page limit to prevent DoS
     per_page: int = Query(default=20, ge=1, le=100),
     role: UserRole | None = None,
     is_active: bool | None = None,
@@ -131,12 +131,14 @@ async def get_user(
 ) -> UserResponse:
     """
     Get user by ID.
-    
+
     Regular users can only view their own profile.
     Admins can view any user.
     """
-    # Check permissions
-    if current_user.id != user_id and current_user.role != UserRole.ADMIN:
+    from forge.security.authorization import is_admin
+
+    # Check permissions - use consistent role comparison
+    if current_user.id != user_id and not is_admin(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Can only view your own profile",
@@ -254,11 +256,13 @@ async def get_user_activity(
 ) -> UserActivityResponse:
     """
     Get user's activity timeline.
-    
+
     Regular users can only view their own activity.
     """
-    # Check permissions
-    if current_user.id != user_id and current_user.role != UserRole.ADMIN:
+    from forge.security.authorization import is_admin
+
+    # Check permissions - use consistent role comparison
+    if current_user.id != user_id and not is_admin(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Can only view your own activity",

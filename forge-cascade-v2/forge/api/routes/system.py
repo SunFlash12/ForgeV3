@@ -481,8 +481,8 @@ async def list_anomalies(
     else:
         anomalies = anomaly_system.get_recent_anomalies(
             since=since,
-            min_severity=severity_filter,
-            anomaly_type=type_filter
+            severity=severity_filter,
+            type_filter=type_filter
         )
     
     # Apply additional filters
@@ -524,6 +524,7 @@ async def list_anomalies(
 
 @router.post(
     "/anomalies/{anomaly_id}/acknowledge",
+    response_model=AnomalyResponse,
     summary="Acknowledge an anomaly",
     description="Mark an anomaly as acknowledged"
 )
@@ -533,17 +534,17 @@ async def acknowledge_anomaly(
     user: TrustedUserDep,
     anomaly_system: AnomalySystemDep,
     event_system: EventSystemDep,
-) -> dict[str, Any]:
+) -> AnomalyResponse:
     """Acknowledge an anomaly."""
-    
+
     success = anomaly_system.acknowledge(anomaly_id, str(user.id))
-    
+
     if not success:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Anomaly '{anomaly_id}' not found"
         )
-    
+
     await event_system.emit(
         "ANOMALY_ACKNOWLEDGED",
         {
@@ -552,16 +553,31 @@ async def acknowledge_anomaly(
             "notes": request.notes
         }
     )
-    
-    return {
-        "status": "acknowledged",
-        "anomaly_id": anomaly_id,
-        "acknowledged_by": str(user.id)
-    }
+
+    # Get the updated anomaly to return
+    anomaly = anomaly_system.get_anomaly(anomaly_id)
+    return AnomalyResponse(
+        id=anomaly.id,
+        metric_name=anomaly.metric_name,
+        anomaly_type=anomaly.anomaly_type.name,
+        severity=anomaly.severity.name,
+        anomaly_score=anomaly.anomaly_score,
+        value=anomaly.value,
+        expected_value=anomaly.expected_value,
+        detected_at=anomaly.detected_at,
+        acknowledged=anomaly.acknowledged,
+        acknowledged_at=anomaly.acknowledged_at,
+        acknowledged_by=anomaly.acknowledged_by,
+        resolved=anomaly.resolved,
+        resolved_at=anomaly.resolved_at,
+        resolved_by=anomaly.resolved_by,
+        context=anomaly.context
+    )
 
 
 @router.post(
     "/anomalies/{anomaly_id}/resolve",
+    response_model=AnomalyResponse,
     summary="Resolve an anomaly",
     description="Mark an anomaly as resolved"
 )
@@ -570,17 +586,17 @@ async def resolve_anomaly(
     user: TrustedUserDep,
     anomaly_system: AnomalySystemDep,
     event_system: EventSystemDep,
-) -> dict[str, Any]:
+) -> AnomalyResponse:
     """Resolve an anomaly."""
-    
+
     success = anomaly_system.resolve(anomaly_id, str(user.id))
-    
+
     if not success:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Anomaly '{anomaly_id}' not found"
         )
-    
+
     await event_system.emit(
         "ANOMALY_RESOLVED",
         {
@@ -588,12 +604,26 @@ async def resolve_anomaly(
             "resolved_by": str(user.id)
         }
     )
-    
-    return {
-        "status": "resolved",
-        "anomaly_id": anomaly_id,
-        "resolved_by": str(user.id)
-    }
+
+    # Get the updated anomaly to return
+    anomaly = anomaly_system.get_anomaly(anomaly_id)
+    return AnomalyResponse(
+        id=anomaly.id,
+        metric_name=anomaly.metric_name,
+        anomaly_type=anomaly.anomaly_type.name,
+        severity=anomaly.severity.name,
+        anomaly_score=anomaly.anomaly_score,
+        value=anomaly.value,
+        expected_value=anomaly.expected_value,
+        detected_at=anomaly.detected_at,
+        acknowledged=anomaly.acknowledged,
+        acknowledged_at=anomaly.acknowledged_at,
+        acknowledged_by=anomaly.acknowledged_by,
+        resolved=anomaly.resolved,
+        resolved_at=anomaly.resolved_at,
+        resolved_by=anomaly.resolved_by,
+        context=anomaly.context
+    )
 
 
 @router.post(

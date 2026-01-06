@@ -34,6 +34,16 @@ from .search import (
     get_search_service,
     init_search_service,
 )
+from .ghost_council import (
+    GhostCouncilService,
+    GhostCouncilConfig,
+    SeriousIssue,
+    IssueSeverity,
+    IssueCategory,
+    get_ghost_council_service,
+    init_ghost_council_service,
+    DEFAULT_COUNCIL_MEMBERS,
+)
 
 __all__ = [
     # Embedding
@@ -60,4 +70,13 @@ __all__ = [
     "SearchResultItem",
     "get_search_service",
     "init_search_service",
+    # Ghost Council
+    "GhostCouncilService",
+    "GhostCouncilConfig",
+    "SeriousIssue",
+    "IssueSeverity",
+    "IssueCategory",
+    "get_ghost_council_service",
+    "init_ghost_council_service",
+    "DEFAULT_COUNCIL_MEMBERS",
 ]

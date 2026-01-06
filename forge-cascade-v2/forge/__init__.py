@@ -11,3 +11,4 @@ __author__ = "Idean"
 from forge.config import settings
 
 __all__ = ["settings", "__version__"]
+# Trigger reload

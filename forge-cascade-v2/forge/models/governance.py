@@ -30,11 +30,15 @@ class ProposalType(str, Enum):
 
 
 class VoteChoice(str, Enum):
-    """Vote options."""
+    """Vote options - matches frontend VoteChoice type."""
 
-    FOR = "for"
-    AGAINST = "against"
-    ABSTAIN = "abstain"
+    APPROVE = "APPROVE"  # Frontend expects uppercase
+    REJECT = "REJECT"
+    ABSTAIN = "ABSTAIN"
+
+    # Aliases for backwards compatibility
+    FOR = "APPROVE"
+    AGAINST = "REJECT"
 
 
 class ProposalBase(ForgeModel):
@@ -43,12 +47,24 @@ class ProposalBase(ForgeModel):
     title: str = Field(min_length=5, max_length=200)
     description: str = Field(min_length=20, max_length=10000)
     type: ProposalType = Field(default=ProposalType.POLICY)
-    
+
     # Execution details
     action: dict[str, Any] = Field(
         default_factory=dict,
         description="Action to execute if passed",
     )
+
+    @field_validator("action", mode="before")
+    @classmethod
+    def parse_action(cls, v: Any) -> dict[str, Any]:
+        """Handle action being stored as JSON string in database."""
+        import json
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except json.JSONDecodeError:
+                return {}
+        return v if v else {}
 
 
 class ProposalCreate(ProposalBase):
@@ -168,12 +184,14 @@ class Vote(ForgeModel, TimestampMixin):
 class VoteDelegation(ForgeModel):
     """Vote delegation to another user."""
 
+    id: str = Field(default="", description="Delegation ID")
     delegator_id: str
     delegate_id: str
     proposal_types: list[ProposalType] | None = Field(
         default=None,
         description="Types to delegate (None = all)",
     )
+    is_active: bool = Field(default=True, description="Whether delegation is active")
     expires_at: datetime | None = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
 

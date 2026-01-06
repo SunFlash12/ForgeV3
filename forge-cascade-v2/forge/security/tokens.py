@@ -3,11 +3,18 @@ JWT Token Management for Forge Cascade V2
 
 Handles creation, validation, and refresh of JWT tokens
 for user authentication.
+
+Includes:
+- Token creation (access and refresh)
+- Token validation
+- Token blacklisting for revocation
 """
 
 from datetime import datetime, timedelta
-from typing import Any, Optional
+from typing import Any, Optional, Set
 from uuid import uuid4
+import threading
+import time
 
 from jose import JWTError, jwt
 from pydantic import ValidationError
@@ -16,6 +23,79 @@ from ..config import get_settings
 from ..models.user import TokenPayload, Token
 
 settings = get_settings()
+
+
+class TokenBlacklist:
+    """
+    In-memory token blacklist for revocation.
+
+    In production, this should be backed by Redis for distributed deployments.
+    Tokens are identified by their JTI (JWT ID) claim.
+    """
+
+    _blacklist: Set[str] = set()
+    _expiry_times: dict[str, float] = {}
+    _lock = threading.Lock()
+    _last_cleanup: float = 0
+    _cleanup_interval: float = 300  # 5 minutes
+
+    @classmethod
+    def add(cls, jti: str, expires_at: Optional[float] = None) -> None:
+        """
+        Add a token to the blacklist.
+
+        Args:
+            jti: JWT ID to blacklist
+            expires_at: Unix timestamp when this entry can be removed
+        """
+        if not jti:
+            return
+
+        with cls._lock:
+            cls._blacklist.add(jti)
+            if expires_at:
+                cls._expiry_times[jti] = expires_at
+            cls._maybe_cleanup()
+
+    @classmethod
+    def is_blacklisted(cls, jti: Optional[str]) -> bool:
+        """Check if a token is blacklisted."""
+        if not jti:
+            return False
+
+        with cls._lock:
+            cls._maybe_cleanup()
+            return jti in cls._blacklist
+
+    @classmethod
+    def remove(cls, jti: str) -> None:
+        """Remove a token from the blacklist."""
+        with cls._lock:
+            cls._blacklist.discard(jti)
+            cls._expiry_times.pop(jti, None)
+
+    @classmethod
+    def _maybe_cleanup(cls) -> None:
+        """Remove expired entries from the blacklist."""
+        now = time.time()
+        if now - cls._last_cleanup < cls._cleanup_interval:
+            return
+
+        cls._last_cleanup = now
+        expired = [
+            jti for jti, exp in cls._expiry_times.items()
+            if exp < now
+        ]
+        for jti in expired:
+            cls._blacklist.discard(jti)
+            del cls._expiry_times[jti]
+
+    @classmethod
+    def clear(cls) -> None:
+        """Clear the entire blacklist (for testing)."""
+        with cls._lock:
+            cls._blacklist.clear()
+            cls._expiry_times.clear()
 
 
 class TokenError(Exception):
@@ -88,7 +168,7 @@ def create_refresh_token(
     Returns:
         Encoded JWT refresh token
     """
-    expire = datetime.utcnow() + timedelta(days=settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS)
+    expire = datetime.utcnow() + timedelta(days=settings.jwt_refresh_token_expire_days)
     
     payload = {
         "sub": user_id,
@@ -175,22 +255,60 @@ def decode_token(token: str, verify_exp: bool = True) -> TokenPayload:
 def verify_access_token(token: str) -> TokenPayload:
     """
     Verify an access token.
-    
+
     Args:
         token: JWT access token
-        
+
     Returns:
         TokenPayload if valid
-        
+
     Raises:
         TokenError: If token is invalid or not an access token
     """
     payload = decode_token(token)
-    
+
     if payload.type != "access":
         raise TokenInvalidError("Not an access token")
-    
+
+    # SECURITY FIX: Require trust_flame to be present and valid
+    # This prevents attacks where trust_flame is removed from token
+    if payload.trust_flame is None:
+        raise TokenInvalidError("Token missing required trust_flame claim")
+
+    # Clamp trust_flame to valid range
+    if not (0 <= payload.trust_flame <= 100):
+        raise TokenInvalidError("Invalid trust_flame value in token")
+
     return payload
+
+
+def get_token_claims(token: str) -> dict[str, Any]:
+    """
+    Extract claims from a token without full validation.
+
+    Used for blacklisting/logging purposes where we need JTI even from
+    potentially invalid tokens.
+
+    Args:
+        token: JWT token string
+
+    Returns:
+        Dictionary of claims
+
+    Raises:
+        TokenInvalidError: If token cannot be decoded at all
+    """
+    try:
+        # Decode without verification to extract claims
+        payload = jwt.decode(
+            token,
+            settings.jwt_secret_key,
+            algorithms=[settings.jwt_algorithm],
+            options={"verify_exp": False}
+        )
+        return payload
+    except JWTError as e:
+        raise TokenInvalidError(f"Cannot decode token: {str(e)}")
 
 
 def verify_refresh_token(token: str) -> TokenPayload:
@@ -278,30 +396,6 @@ def extract_token_from_header(authorization: str) -> str:
         raise TokenInvalidError("Invalid authentication scheme")
     
     return token
-
-
-def get_token_claims(token: str) -> dict[str, Any]:
-    """
-    Get all claims from a token without full validation.
-    
-    Useful for debugging or getting claims from expired tokens.
-    
-    Args:
-        token: JWT token
-        
-    Returns:
-        Dictionary of all token claims
-    """
-    try:
-        payload = jwt.decode(
-            token,
-            settings.jwt_secret_key,
-            algorithms=[settings.jwt_algorithm],
-            options={"verify_exp": False}
-        )
-        return payload
-    except JWTError:
-        return {}
 
 
 def verify_token(token: str, secret_key: str = None, expected_type: str = "access") -> TokenPayload:

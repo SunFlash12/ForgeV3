@@ -10,7 +10,22 @@ from enum import Enum, IntEnum
 from typing import Any
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+
+def convert_neo4j_datetime(value: Any) -> datetime:
+    """Convert Neo4j DateTime to Python datetime."""
+    if value is None:
+        return datetime.utcnow()
+    if isinstance(value, datetime):
+        return value
+    # Handle Neo4j DateTime object
+    if hasattr(value, 'to_native'):
+        return value.to_native()
+    # Handle string format
+    if isinstance(value, str):
+        return datetime.fromisoformat(value.replace('Z', '+00:00'))
+    return value
 
 
 class ForgeModel(BaseModel):
@@ -30,6 +45,12 @@ class TimestampMixin(BaseModel):
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+    @field_validator('created_at', 'updated_at', mode='before')
+    @classmethod
+    def convert_datetime(cls, v: Any) -> datetime:
+        """Convert Neo4j DateTime to Python datetime."""
+        return convert_neo4j_datetime(v)
 
 
 class TrustLevel(IntEnum):
@@ -65,15 +86,22 @@ class TrustLevel(IntEnum):
 
 
 class CapsuleType(str, Enum):
-    """Types of knowledge capsules."""
+    """Types of knowledge capsules - matches frontend CapsuleType."""
 
-    KNOWLEDGE = "knowledge"    # General knowledge/information
-    CODE = "code"              # Code snippets, functions
-    DECISION = "decision"      # Recorded decisions with rationale
-    INSIGHT = "insight"        # AI-generated insights
-    CONFIG = "config"          # Configuration data
-    TEMPLATE = "template"      # Reusable templates
-    DOCUMENT = "document"      # Full documents
+    # Frontend-compatible types
+    INSIGHT = "INSIGHT"        # AI-generated insights
+    DECISION = "DECISION"      # Recorded decisions with rationale
+    LESSON = "LESSON"          # Learned lessons
+    WARNING = "WARNING"        # Warnings and cautions
+    PRINCIPLE = "PRINCIPLE"    # Guiding principles
+    MEMORY = "MEMORY"          # Institutional memory
+
+    # Additional backend types
+    KNOWLEDGE = "KNOWLEDGE"    # General knowledge/information
+    CODE = "CODE"              # Code snippets, functions
+    CONFIG = "CONFIG"          # Configuration data
+    TEMPLATE = "TEMPLATE"      # Reusable templates
+    DOCUMENT = "DOCUMENT"      # Full documents
 
 
 class OverlayState(str, Enum):
@@ -85,6 +113,7 @@ class OverlayState(str, Enum):
     DEGRADED = "degraded"      # Running but with issues
     STOPPING = "stopping"      # Graceful shutdown in progress
     STOPPED = "stopped"        # Stopped but can be restarted
+    INACTIVE = "inactive"      # Not active, available for activation
     QUARANTINED = "quarantined"  # Blocked due to failures
     ERROR = "error"            # Fatal error state
 

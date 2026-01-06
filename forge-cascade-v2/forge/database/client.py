@@ -226,7 +226,7 @@ class Neo4jClient:
     async def health_check(self) -> dict[str, Any]:
         """
         Perform a health check on the database connection.
-        
+
         Returns:
             Health check result
         """
@@ -247,6 +247,19 @@ class Neo4jClient:
                 "database": self._database,
                 "error": str(e),
             }
+
+    async def verify_connection(self) -> bool:
+        """
+        Verify the database connection is working.
+
+        Returns:
+            True if connection is healthy, False otherwise
+        """
+        try:
+            health = await self.health_check()
+            return health.get("status") == "healthy"
+        except Exception:
+            return False
 
 
 # ═══════════════════════════════════════════════════════════════

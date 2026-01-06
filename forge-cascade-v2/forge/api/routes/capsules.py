@@ -17,7 +17,7 @@ from typing import Any
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, status, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from forge.api.dependencies import (
     CapsuleRepoDep,
@@ -30,6 +30,7 @@ from forge.api.dependencies import (
     TrustedUserDep,
     PaginationDep,
     CorrelationIdDep,
+    EmbeddingServiceDep,
 )
 from forge.models.capsule import (
     Capsule,
@@ -51,19 +52,69 @@ router = APIRouter()
 class CreateCapsuleRequest(BaseModel):
     """Request to create a new capsule."""
     title: str | None = Field(default=None, max_length=500)
-    content: str = Field(..., min_length=1)
+    content: str = Field(..., min_length=1, max_length=1_000_000)  # 1MB max
     type: CapsuleType = CapsuleType.KNOWLEDGE
     parent_id: str | None = None
-    tags: list[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list, max_length=50)  # Max 50 tags
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("tags")
+    @classmethod
+    def validate_tags(cls, v: list[str]) -> list[str]:
+        """Validate tag list."""
+        if len(v) > 50:
+            raise ValueError("Maximum 50 tags allowed")
+        for tag in v:
+            if len(tag) > 100:
+                raise ValueError(f"Tag '{tag[:20]}...' too long (max 100 chars)")
+        return v
+
+    @field_validator("metadata")
+    @classmethod
+    def validate_metadata(cls, v: dict[str, Any]) -> dict[str, Any]:
+        """Validate metadata size."""
+        if len(v) > 20:
+            raise ValueError("Maximum 20 metadata keys allowed")
+        import json
+        total_size = len(json.dumps(v))
+        if total_size > 65536:  # 64KB
+            raise ValueError("Metadata too large (max 64KB)")
+        return v
 
 
 class UpdateCapsuleRequest(BaseModel):
     """Request to update a capsule."""
-    title: str | None = None
-    content: str | None = None
+    title: str | None = Field(default=None, max_length=500)
+    content: str | None = Field(default=None, max_length=1_000_000)  # 1MB max
     tags: list[str] | None = None
     metadata: dict[str, Any] | None = None
+
+    @field_validator("tags")
+    @classmethod
+    def validate_tags(cls, v: list[str] | None) -> list[str] | None:
+        """Validate tag list."""
+        if v is None:
+            return v
+        if len(v) > 50:
+            raise ValueError("Maximum 50 tags allowed")
+        for tag in v:
+            if len(tag) > 100:
+                raise ValueError(f"Tag '{tag[:20]}...' too long (max 100 chars)")
+        return v
+
+    @field_validator("metadata")
+    @classmethod
+    def validate_metadata(cls, v: dict[str, Any] | None) -> dict[str, Any] | None:
+        """Validate metadata size."""
+        if v is None:
+            return v
+        if len(v) > 20:
+            raise ValueError("Maximum 20 metadata keys allowed")
+        import json
+        total_size = len(json.dumps(v))
+        if total_size > 65536:  # 64KB
+            raise ValueError("Metadata too large (max 64KB)")
+        return v
 
 
 class CapsuleResponse(BaseModel):
@@ -90,7 +141,7 @@ class CapsuleResponse(BaseModel):
             id=capsule.id,
             title=capsule.title,
             content=capsule.content,
-            type=capsule.type.value,
+            type=capsule.type.value if hasattr(capsule.type, 'value') else str(capsule.type),
             owner_id=capsule.owner_id,
             trust_level=capsule.trust_level.value if hasattr(capsule.trust_level, 'value') else str(capsule.trust_level),
             version=capsule.version,
@@ -111,7 +162,7 @@ class CapsuleListResponse(BaseModel):
     total: int
     page: int
     per_page: int
-    pages: int
+    total_pages: int  # Frontend expects total_pages, not pages
 
 
 class LineageResponse(BaseModel):
@@ -125,9 +176,22 @@ class LineageResponse(BaseModel):
 
 class SearchRequest(BaseModel):
     """Semantic search request."""
-    query: str = Field(..., min_length=1)
+    query: str = Field(..., min_length=1, max_length=2000)  # Prevent DoS via huge queries
     limit: int = Field(default=10, ge=1, le=100)
     filters: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("query")
+    @classmethod
+    def sanitize_query(cls, v: str) -> str:
+        """Sanitize search query to prevent injection and control character issues."""
+        import re
+        # Remove control characters (except standard whitespace)
+        v = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', v)
+        # Normalize whitespace (collapse multiple spaces, strip)
+        v = ' '.join(v.split())
+        if not v:
+            raise ValueError("Search query cannot be empty after sanitization")
+        return v
 
 
 class SearchResponse(BaseModel):
@@ -172,10 +236,10 @@ async def create_capsule(
     
     # Process through pipeline
     result = await pipeline.execute(
-        action="create_capsule",
-        data=capsule_data.model_dump(),
+        input_data=capsule_data.model_dump(),
+        triggered_by="create_capsule",
         user_id=user.id,
-        trust_score=float(user.trust_flame),
+        trust_flame=int(user.trust_flame),
     )
     
     if not result.success:
@@ -185,28 +249,30 @@ async def create_capsule(
         )
     
     # Create in database
-    capsule = await capsule_repo.create(capsule_data)
-    
+    capsule = await capsule_repo.create(capsule_data, owner_id=user.id)
+
+    # Get type value safely (could be enum or string)
+    type_value = capsule.type.value if hasattr(capsule.type, 'value') else str(capsule.type)
+
     # Emit event
-    await event_system.emit(Event(
-        type=EventType.CAPSULE_CREATED,
-        source="api",
-        data={
+    await event_system.emit(
+        event_type=EventType.CAPSULE_CREATED,
+        payload={
             "capsule_id": capsule.id,
             "creator_id": user.id,
             "title": capsule.title,
-            "type": capsule.type.value,
+            "type": type_value,
             "parent_id": capsule.parent_id,
         },
-    ))
-    
+        source="api",
+    )
+
     # Audit log
-    await audit_repo.log_action(
-        action="capsule_created",
-        entity_type="capsule",
-        entity_id=capsule.id,
-        user_id=user.id,
-        details={"title": capsule.title, "type": capsule.type.value},
+    await audit_repo.log_capsule_action(
+        actor_id=user.id,
+        capsule_id=capsule.id,
+        action="create",
+        details={"title": capsule.title, "type": type_value},
         correlation_id=correlation_id,
     )
     
@@ -244,9 +310,91 @@ async def list_capsules(
         total=total,
         page=pagination.page,
         per_page=pagination.per_page,
-        pages=(total + pagination.per_page - 1) // pagination.per_page,
+        total_pages=(total + pagination.per_page - 1) // pagination.per_page,
     )
 
+
+# =============================================================================
+# Search Endpoints (must be before /{capsule_id} routes)
+# =============================================================================
+
+@router.post("/search", response_model=SearchResponse)
+async def search_capsules(
+    request: SearchRequest,
+    user: ActiveUserDep,
+    capsule_repo: CapsuleRepoDep,
+    embedding_service: EmbeddingServiceDep,
+) -> SearchResponse:
+    """
+    Semantic search across capsules.
+    """
+    # Convert text query to embedding vector
+    embedding_result = await embedding_service.embed(request.query)
+
+    # Extract filters
+    owner_id = request.filters.get("owner_id") if request.filters else None
+    capsule_type = request.filters.get("type") if request.filters else None
+
+    # Search with embedding
+    search_results = await capsule_repo.semantic_search(
+        query_embedding=embedding_result.embedding,
+        limit=request.limit,
+        owner_id=owner_id,
+    )
+
+    # Extract capsules and scores from results
+    capsules = [r.capsule for r in search_results]
+    scores = [r.score for r in search_results]
+
+    return SearchResponse(
+        query=request.query,
+        results=[CapsuleResponse.from_capsule(c) for c in capsules],
+        scores=scores,
+        total=len(capsules),
+    )
+
+
+@router.get("/search/recent")
+async def get_recent_capsules(
+    user: ActiveUserDep,
+    capsule_repo: CapsuleRepoDep,
+    limit: int = Query(default=10, ge=1, le=50),
+) -> dict:
+    """
+    Get most recently created capsules.
+    """
+    capsules = await capsule_repo.get_recent(limit=limit)
+    return {"capsules": [CapsuleResponse.from_capsule(c) for c in capsules]}
+
+
+@router.get("/search/by-owner/{owner_id}")
+async def get_capsules_by_owner(
+    owner_id: str,
+    user: ActiveUserDep,
+    capsule_repo: CapsuleRepoDep,
+    pagination: PaginationDep,
+) -> CapsuleListResponse:
+    """
+    Get capsules by a specific owner.
+    """
+    capsules, total = await capsule_repo.list(
+        offset=pagination.offset,
+        limit=pagination.per_page,
+        filters={"owner_id": owner_id},
+    )
+
+    return CapsuleListResponse(
+        items=[CapsuleResponse.from_capsule(c) for c in capsules],
+        total=total,
+        page=pagination.page,
+        per_page=pagination.per_page,
+        total_pages=(total + pagination.per_page - 1) // pagination.per_page,
+    )
+
+
+# =============================================================================
+# Capsule by ID Endpoints
+# =============================================================================
 
 @router.get("/{capsule_id}", response_model=CapsuleResponse)
 async def get_capsule(
@@ -267,11 +415,11 @@ async def get_capsule(
         )
     
     # Emit access event (for tracking)
-    await event_system.emit(Event(
-        type=EventType.CAPSULE_ACCESSED,
+    await event_system.emit(
+        event_type=EventType.CAPSULE_ACCESSED,
+        payload={"capsule_id": capsule_id, "user_id": user.id},
         source="api",
-        data={"capsule_id": capsule_id, "user_id": user.id},
-    ))
+    )
     
     return CapsuleResponse.from_capsule(capsule)
 
@@ -289,23 +437,29 @@ async def update_capsule(
 ) -> CapsuleResponse:
     """
     Update a capsule.
-    
-    Only the creator or users with TRUSTED+ can update.
-    Updates are versioned.
+
+    Only the owner can update their capsules.
+    Admins can update any capsule.
     """
+    from forge.security.authorization import is_admin
+
     capsule = await capsule_repo.get_by_id(capsule_id)
-    
+
     if not capsule:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Capsule not found",
         )
-    
-    # Check permissions
-    if capsule.owner_id != user.id and user.trust_flame < 80:
+
+    # SECURITY FIX: Only owner OR admin can update
+    # Previous code allowed ANY user with trust >= 80 to update ANY capsule
+    is_owner = capsule.owner_id == user.id
+    user_is_admin = is_admin(user)
+
+    if not is_owner and not user_is_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only owner or TRUSTED users can update capsules",
+            detail="Only the capsule owner can update this capsule",
         )
     
     # Build update
@@ -324,10 +478,10 @@ async def update_capsule(
     
     # Process through pipeline
     result = await pipeline.execute(
-        action="update_capsule",
-        data={"capsule_id": capsule_id, "updates": updates},
+        input_data={"capsule_id": capsule_id, "updates": updates},
+        triggered_by="update_capsule",
         user_id=user.id,
-        trust_score=float(user.trust_flame),
+        trust_flame=int(user.trust_flame),
     )
     
     if not result.success:
@@ -340,22 +494,21 @@ async def update_capsule(
     updated = await capsule_repo.update(capsule_id, CapsuleUpdate(**updates))
     
     # Emit event
-    await event_system.emit(Event(
-        type=EventType.CAPSULE_UPDATED,
-        source="api",
-        data={
+    await event_system.emit(
+        event_type=EventType.CAPSULE_UPDATED,
+        payload={
             "capsule_id": capsule_id,
             "user_id": user.id,
             "fields": list(updates.keys()),
         },
-    ))
+        source="api",
+    )
     
     # Audit log
-    await audit_repo.log_action(
-        action="capsule_updated",
-        entity_type="capsule",
-        entity_id=capsule_id,
-        user_id=user.id,
+    await audit_repo.log_capsule_action(
+        actor_id=user.id,
+        capsule_id=capsule_id,
+        action="update",
         details={"fields": list(updates.keys())},
         correlation_id=correlation_id,
     )
@@ -374,33 +527,47 @@ async def delete_capsule(
 ):
     """
     Delete a capsule.
-    
-    Requires TRUSTED trust level. Soft-delete preserves lineage.
+
+    Only the owner can delete their capsules.
+    Admins can delete any capsule.
+    Requires TRUSTED trust level.
     """
+    from forge.security.authorization import is_admin
+
     capsule = await capsule_repo.get_by_id(capsule_id)
-    
+
     if not capsule:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Capsule not found",
         )
-    
+
+    # SECURITY FIX: Only owner OR admin can delete
+    # Previous code allowed ANY trusted user to delete ANY capsule
+    is_owner = capsule.owner_id == user.id
+    user_is_admin = is_admin(user)
+
+    if not is_owner and not user_is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the capsule owner can delete this capsule",
+        )
+
     # Delete
     await capsule_repo.delete(capsule_id)
     
     # Emit event
-    await event_system.emit(Event(
-        type=EventType.CAPSULE_DELETED,
+    await event_system.emit(
+        event_type=EventType.CAPSULE_DELETED,
+        payload={"capsule_id": capsule_id, "user_id": user.id},
         source="api",
-        data={"capsule_id": capsule_id, "user_id": user.id},
-    ))
+    )
     
     # Audit log
-    await audit_repo.log_action(
-        action="capsule_deleted",
-        entity_type="capsule",
-        entity_id=capsule_id,
-        user_id=user.id,
+    await audit_repo.log_capsule_action(
+        actor_id=user.id,
+        capsule_id=capsule_id,
+        action="delete",
         correlation_id=correlation_id,
     )
 
@@ -480,91 +647,25 @@ async def link_capsule(
     updated = await capsule_repo.add_parent(capsule_id, parent_id)
     
     # Emit event
-    await event_system.emit(Event(
-        type=EventType.CAPSULE_LINKED,
-        source="api",
-        data={
+    await event_system.emit(
+        event_type=EventType.CAPSULE_LINKED,
+        payload={
             "capsule_id": capsule_id,
             "parent_id": parent_id,
             "user_id": user.id,
         },
-    ))
+        source="api",
+    )
     
-    await audit_repo.log_action(
-        action="capsule_linked",
-        entity_type="capsule",
-        entity_id=capsule_id,
-        user_id=user.id,
+    await audit_repo.log_capsule_action(
+        actor_id=user.id,
+        capsule_id=capsule_id,
+        action="linked",
         details={"parent_id": parent_id},
         correlation_id=correlation_id,
     )
     
     return CapsuleResponse.from_capsule(updated)
-
-
-# =============================================================================
-# Search Endpoints
-# =============================================================================
-
-@router.post("/search", response_model=SearchResponse)
-async def search_capsules(
-    request: SearchRequest,
-    user: ActiveUserDep,
-    capsule_repo: CapsuleRepoDep,
-) -> SearchResponse:
-    """
-    Semantic search across capsules.
-    """
-    results, scores = await capsule_repo.semantic_search(
-        query=request.query,
-        limit=request.limit,
-        filters=request.filters,
-    )
-    
-    return SearchResponse(
-        query=request.query,
-        results=[CapsuleResponse.from_capsule(c) for c in results],
-        scores=scores,
-        total=len(results),
-    )
-
-
-@router.get("/search/recent")
-async def get_recent_capsules(
-    user: ActiveUserDep,
-    capsule_repo: CapsuleRepoDep,
-    limit: int = Query(default=10, ge=1, le=50),
-) -> list[CapsuleResponse]:
-    """
-    Get most recently created capsules.
-    """
-    capsules = await capsule_repo.get_recent(limit=limit)
-    return [CapsuleResponse.from_capsule(c) for c in capsules]
-
-
-@router.get("/search/by-owner/{owner_id}")
-async def get_capsules_by_owner(
-    owner_id: str,
-    user: ActiveUserDep,
-    capsule_repo: CapsuleRepoDep,
-    pagination: PaginationDep,
-) -> CapsuleListResponse:
-    """
-    Get capsules by a specific owner.
-    """
-    capsules, total = await capsule_repo.list(
-        offset=pagination.offset,
-        limit=pagination.per_page,
-        filters={"owner_id": owner_id},
-    )
-    
-    return CapsuleListResponse(
-        items=[CapsuleResponse.from_capsule(c) for c in capsules],
-        total=total,
-        page=pagination.page,
-        per_page=pagination.per_page,
-        pages=(total + pagination.per_page - 1) // pagination.per_page,
-    )
 
 
 # =============================================================================
@@ -621,24 +722,23 @@ async def fork_capsule(
     forked = await capsule_repo.create(fork_data, owner_id=user.id)
     
     # Emit event
-    await event_system.emit(Event(
-        type=EventType.CAPSULE_CREATED,
-        source="api",
-        data={
+    await event_system.emit(
+        event_type=EventType.CAPSULE_CREATED,
+        payload={
             "capsule_id": forked.id,
             "creator_id": user.id,
             "parent_id": capsule_id,
             "fork": True,
             "evolution_reason": request.evolution_reason,
         },
-    ))
+        source="api",
+    )
     
     # Audit log
-    await audit_repo.log_action(
-        action="capsule_forked",
-        entity_type="capsule",
-        entity_id=forked.id,
-        user_id=user.id,
+    await audit_repo.log_capsule_action(
+        actor_id=user.id,
+        capsule_id=forked.id,
+        action="fork",
         details={
             "parent_id": capsule_id,
             "evolution_reason": request.evolution_reason,
@@ -670,8 +770,9 @@ async def archive_capsule(
             detail="Capsule not found",
         )
     
-    # Check ownership
-    if capsule.owner_id != user.id and user.role != "admin":
+    # Check ownership - use consistent is_admin() check
+    from forge.security.authorization import is_admin
+    if capsule.owner_id != user.id and not is_admin(user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to archive this capsule",
@@ -682,11 +783,10 @@ async def archive_capsule(
     archived = await capsule_repo.update(capsule_id, update_data)
     
     # Audit log
-    await audit_repo.log_action(
-        action="capsule_archived",
-        entity_type="capsule",
-        entity_id=capsule_id,
-        user_id=user.id,
+    await audit_repo.log_capsule_action(
+        actor_id=user.id,
+        capsule_id=capsule_id,
+        action="archive",
         details={"archived": True},
         correlation_id=correlation_id,
     )

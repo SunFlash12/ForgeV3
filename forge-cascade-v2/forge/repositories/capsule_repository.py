@@ -5,6 +5,9 @@ Repository for Capsule CRUD operations, symbolic inheritance (lineage),
 and semantic search using vector embeddings.
 """
 
+from __future__ import annotations
+
+import json
 from datetime import datetime
 from typing import Any
 
@@ -29,7 +32,7 @@ logger = structlog.get_logger(__name__)
 class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
     """
     Repository for Capsule entities.
-    
+
     Provides CRUD operations, symbolic inheritance (lineage tracking),
     and semantic search capabilities.
     """
@@ -41,6 +44,24 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
     @property
     def model_class(self) -> type[Capsule]:
         return Capsule
+
+    def _to_model(self, record: dict[str, Any]) -> Capsule | None:
+        """
+        Convert a Neo4j record to a Capsule model.
+
+        Handles deserialization of metadata from JSON string.
+        """
+        if not record:
+            return None
+
+        # Deserialize metadata from JSON string if needed
+        if "metadata" in record and isinstance(record["metadata"], str):
+            try:
+                record["metadata"] = json.loads(record["metadata"])
+            except json.JSONDecodeError:
+                record["metadata"] = {}
+
+        return super()._to_model(record)
 
     async def create(
         self,
@@ -124,7 +145,7 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
             "title": data.title,
             "summary": data.summary,
             "tags": data.tags,
-            "metadata": data.metadata,
+            "metadata": json.dumps(data.metadata) if data.metadata else "{}",
             "owner_id": owner_id,
             "trust_level": TrustLevel.STANDARD.value,
             "parent_id": data.parent_id,
@@ -422,23 +443,24 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
         max_depth: int = 10,
     ) -> list[LineageNode]:
         """Get all descendants of a capsule up to max depth."""
-        query = """
-        MATCH path = (root:Capsule {id: $id})<-[:DERIVED_FROM*1..$max_depth]-(descendant:Capsule)
-        RETURN DISTINCT {
+        query = f"""
+        MATCH path = (root:Capsule {{id: $id}})<-[:DERIVED_FROM*1..{max_depth}]-(descendant:Capsule)
+        WITH DISTINCT descendant, length(path) as depth
+        RETURN {{
             id: descendant.id,
             version: descendant.version,
             title: descendant.title,
             type: descendant.type,
             created_at: descendant.created_at,
             trust_level: descendant.trust_level,
-            depth: length(path)
-        } AS node
-        ORDER BY node.depth ASC
+            depth: depth
+        }} AS node
+        ORDER BY depth ASC
         """
-        
+
         results = await self.client.execute(
             query,
-            {"id": capsule_id, "max_depth": max_depth},
+            {"id": capsule_id},
         )
         
         return [
@@ -446,3 +468,142 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
             for r in results
             if r.get("node") and r["node"].get("id")
         ]
+
+    async def list(
+        self,
+        offset: int = 0,
+        limit: int = 20,
+        filters: dict[str, Any] | None = None,
+    ) -> tuple[list[Capsule], int]:
+        """
+        List capsules with pagination and filters.
+
+        Args:
+            offset: Number of records to skip
+            limit: Maximum records to return
+            filters: Optional filters (type, owner_id, tag)
+
+        Returns:
+            Tuple of (capsules, total_count)
+        """
+        filters = filters or {}
+        conditions = ["c.is_archived = false"]
+        params: dict[str, Any] = {"offset": offset, "limit": limit}
+
+        if filters.get("type"):
+            conditions.append("c.type = $type")
+            params["type"] = filters["type"]
+
+        if filters.get("owner_id"):
+            conditions.append("c.owner_id = $owner_id")
+            params["owner_id"] = filters["owner_id"]
+
+        if filters.get("tag"):
+            conditions.append("$tag IN c.tags")
+            params["tag"] = filters["tag"]
+
+        where_clause = " AND ".join(conditions)
+
+        # Get count
+        count_query = f"""
+        MATCH (c:Capsule)
+        WHERE {where_clause}
+        RETURN count(c) AS total
+        """
+        count_result = await self.client.execute_single(count_query, params)
+        total = count_result["total"] if count_result else 0
+
+        # Get capsules
+        query = f"""
+        MATCH (c:Capsule)
+        WHERE {where_clause}
+        RETURN c {{.*}} AS capsule
+        ORDER BY c.created_at DESC
+        SKIP $offset
+        LIMIT $limit
+        """
+
+        results = await self.client.execute(query, params)
+        capsules = self._to_models([r["capsule"] for r in results if r.get("capsule")])
+
+        return capsules, total
+
+    async def get_ancestors(
+        self,
+        capsule_id: str,
+        max_depth: int = 10,
+    ) -> list[Capsule]:
+        """
+        Get all ancestors of a capsule up to max depth.
+
+        Args:
+            capsule_id: Capsule ID
+            max_depth: Maximum depth to traverse
+
+        Returns:
+            List of ancestor capsules
+        """
+        query = f"""
+        MATCH (c:Capsule {{id: $id}})-[:DERIVED_FROM*1..{max_depth}]->(ancestor:Capsule)
+        WITH DISTINCT ancestor
+        ORDER BY ancestor.created_at ASC
+        RETURN ancestor {{.*}} AS capsule
+        """
+
+        results = await self.client.execute(query, {"id": capsule_id})
+        return self._to_models([r["capsule"] for r in results if r.get("capsule")])
+
+    async def add_parent(
+        self,
+        capsule_id: str,
+        parent_id: str,
+    ) -> Capsule | None:
+        """
+        Add a parent relationship to a capsule.
+
+        Args:
+            capsule_id: Child capsule ID
+            parent_id: Parent capsule ID
+
+        Returns:
+            Updated capsule or None
+        """
+        query = """
+        MATCH (child:Capsule {id: $capsule_id})
+        MATCH (parent:Capsule {id: $parent_id})
+        CREATE (child)-[:DERIVED_FROM {timestamp: $now}]->(parent)
+        SET child.parent_id = $parent_id,
+            parent.fork_count = parent.fork_count + 1
+        RETURN child {.*} AS capsule
+        """
+
+        result = await self.client.execute_single(query, {
+            "capsule_id": capsule_id,
+            "parent_id": parent_id,
+            "now": self._now().isoformat(),
+        })
+
+        if result and result.get("capsule"):
+            return self._to_model(result["capsule"])
+        return None
+
+    async def get_recent(self, limit: int = 10) -> list[Capsule]:
+        """
+        Get most recently created capsules.
+
+        Args:
+            limit: Maximum number of capsules to return
+
+        Returns:
+            List of recent capsules
+        """
+        query = """
+        MATCH (c:Capsule)
+        WHERE c.is_archived = false
+        RETURN c {.*} AS capsule
+        ORDER BY c.created_at DESC
+        LIMIT $limit
+        """
+
+        results = await self.client.execute(query, {"limit": limit})
+        return self._to_models([r["capsule"] for r in results if r.get("capsule")])

@@ -32,21 +32,33 @@ class EventType(str, Enum):
     CAPSULE_VIEWED = "capsule.viewed"
     CAPSULE_ACCESSED = "capsule.accessed"
     CAPSULE_LINKED = "capsule.linked"
+    CAPSULE_ARCHIVED = "capsule.archived"
+    CAPSULE_UNARCHIVED = "capsule.unarchived"
+    CAPSULE_SEARCHED = "capsule.searched"
 
     # User Events
     USER_REGISTERED = "user.registered"
+    USER_CREATED = "user.created"
+    USER_UPDATED = "user.updated"
     USER_LOGIN = "user.login"
+    USER_LOGIN_FAILED = "user.login_failed"
     USER_LOGOUT = "user.logout"
     USER_TRUST_CHANGED = "user.trust_changed"
+    USER_LOCKED = "user.locked"
+    USER_UNLOCKED = "user.unlocked"
     TRUST_UPDATED = "user.trust_updated"
 
     # Overlay Events
     OVERLAY_LOADED = "overlay.loaded"
+    OVERLAY_REGISTERED = "overlay.registered"
     OVERLAY_ACTIVATED = "overlay.activated"
     OVERLAY_DEACTIVATED = "overlay.deactivated"
+    OVERLAY_EXECUTED = "overlay.executed"
     OVERLAY_ERROR = "overlay.error"
+    OVERLAY_TIMEOUT = "overlay.timeout"
     OVERLAY_QUARANTINED = "overlay.quarantined"
     OVERLAY_RECOVERED = "overlay.recovered"
+    OVERLAY_EVENT = "overlay.event"  # Generic overlay event
 
     # ML/Intelligence Events
     PATTERN_DETECTED = "ml.pattern_detected"
@@ -58,10 +70,17 @@ class EventType(str, Enum):
     SECURITY_THREAT = "security.threat"
     SECURITY_VIOLATION = "security.violation"
     SECURITY_ALERT = "security.alert"
+    SECURITY_EVENT = "security.event"  # Generic security event
     TRUST_VERIFICATION = "security.trust_verification"
+
+    # Immune System Events
+    IMMUNE_EVENT = "immune.event"
+    IMMUNE_ALERT = "immune.alert"
+    IMMUNE_QUARANTINE = "immune.quarantine"
 
     # Governance Events
     PROPOSAL_CREATED = "governance.proposal_created"
+    PROPOSAL_UPDATED = "governance.proposal_updated"
     PROPOSAL_VOTING_STARTED = "governance.voting_started"
     PROPOSAL_VOTE_CAST = "governance.vote_cast"
     PROPOSAL_PASSED = "governance.proposal_passed"
@@ -69,6 +88,7 @@ class EventType(str, Enum):
     PROPOSAL_EXECUTED = "governance.proposal_executed"
     VOTE_CAST = "governance.vote"
     GOVERNANCE_ACTION = "governance.action"
+    GOVERNANCE_EVENT = "governance.event"  # Generic governance event
 
     # Pipeline Events
     PIPELINE_STARTED = "pipeline.started"
@@ -261,15 +281,16 @@ class AuditEvent(ForgeModel):
     """Audit log entry as an event."""
 
     id: str
-    operation: str = Field(description="CREATE, READ, UPDATE, DELETE, etc.")
-    entity_type: str = Field(description="Capsule, User, Proposal, etc.")
-    entity_id: str
-    actor_id: str | None = Field(description="User or system ID")
-    changes: dict[str, Any] = Field(
-        default_factory=dict,
-        description="Before/after values",
-    )
-    correlation_id: str | None = None
+    event_type: EventType = Field(description="Type of event")
+    actor_id: str | None = Field(default=None, description="User or system ID")
+    action: str = Field(description="Action performed")
+    resource_type: str = Field(description="Capsule, User, Proposal, etc.")
+    resource_id: str | None = Field(default=None, description="ID of affected resource")
+    details: dict[str, Any] = Field(default_factory=dict, description="Additional details")
+    old_value: dict[str, Any] | None = Field(default=None, description="Previous value")
+    new_value: dict[str, Any] | None = Field(default=None, description="New value")
     ip_address: str | None = None
     user_agent: str | None = None
+    correlation_id: str | None = None
+    priority: EventPriority = Field(default=EventPriority.NORMAL)
     timestamp: datetime = Field(default_factory=datetime.utcnow)

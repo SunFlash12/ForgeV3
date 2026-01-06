@@ -16,7 +16,8 @@ from datetime import datetime, timedelta
 from uuid import uuid4
 
 # Add parent directory to path
-sys.path.insert(0, str(__file__).rsplit('/', 2)[0])
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from forge.config import get_settings
 from forge.database.client import Neo4jClient
@@ -33,28 +34,28 @@ async def seed_users(client: Neo4jClient) -> dict[str, str]:
     user_data = [
         {
             "username": "admin",
-            "email": "admin@forge.local",
+            "email": "admin@forge.example.com",
             "password": "AdminPass123!",
             "display_name": "System Administrator",
             "trust_level": TrustLevel.CORE,
         },
         {
             "username": "oracle",
-            "email": "oracle@forge.local", 
+            "email": "oracle@forge.example.com",
             "password": "OraclePass123!",
             "display_name": "Oracle (Ghost Council)",
             "trust_level": TrustLevel.TRUSTED,
         },
         {
             "username": "developer",
-            "email": "dev@forge.local",
+            "email": "dev@forge.example.com",
             "password": "DevPass123!",
             "display_name": "Test Developer",
             "trust_level": TrustLevel.STANDARD,
         },
         {
             "username": "analyst",
-            "email": "analyst@forge.local",
+            "email": "analyst@forge.example.com",
             "password": "AnalystPass123!",
             "display_name": "Data Analyst",
             "trust_level": TrustLevel.SANDBOX,
@@ -66,30 +67,33 @@ async def seed_users(client: Neo4jClient) -> dict[str, str]:
         password_hash = hash_password(user["password"])
         
         query = """
-        CREATE (u:User {
-            id: $id,
-            username: $username,
-            email: $email,
-            password_hash: $password_hash,
-            display_name: $display_name,
-            trust_level: $trust_level,
-            trust_score: $trust_score,
-            is_active: true,
-            created_at: datetime(),
-            updated_at: datetime()
-        })
+        MERGE (u:User {username: $username})
+        ON CREATE SET
+            u.id = $id,
+            u.email = $email,
+            u.password_hash = $password_hash,
+            u.display_name = $display_name,
+            u.trust_flame = $trust_flame,
+            u.is_active = true,
+            u.created_at = datetime(),
+            u.updated_at = datetime()
+        ON MATCH SET
+            u.trust_flame = $trust_flame,
+            u.display_name = $display_name,
+            u.updated_at = datetime()
         RETURN u.id as id
         """
-        
-        result = await client.execute_query(
+
+        result = await client.execute(
             query,
-            id=user_id,
-            username=user["username"],
-            email=user["email"],
-            password_hash=password_hash,
-            display_name=user["display_name"],
-            trust_level=user["trust_level"].value,
-            trust_score=user["trust_level"].value * 20 + 10,
+            {
+                "id": user_id,
+                "username": user["username"],
+                "email": user["email"],
+                "password_hash": password_hash,
+                "display_name": user["display_name"],
+                "trust_flame": user["trust_level"].value,
+            }
         )
         
         users[user["username"]] = user_id
@@ -109,7 +113,7 @@ async def seed_capsules(client: Neo4jClient, users: dict[str, str]) -> list[str]
     
     # Root capsule
     root_id = str(uuid4())
-    await client.execute_query(
+    await client.execute(
         """
         CREATE (c:Capsule {
             id: $id,
@@ -128,8 +132,7 @@ async def seed_capsules(client: Neo4jClient, users: dict[str, str]) -> list[str]
         CREATE (u)-[:CREATED]->(c)
         RETURN c.id
         """,
-        id=root_id,
-        user_id=admin_id,
+        {"id": root_id, "user_id": admin_id}
     )
     capsules.append(root_id)
     print(f"  Created root capsule: Forge System Architecture")
@@ -155,7 +158,7 @@ async def seed_capsules(client: Neo4jClient, users: dict[str, str]) -> list[str]
     
     for cap in child_capsules:
         cap_id = str(uuid4())
-        await client.execute_query(
+        await client.execute(
             """
             CREATE (c:Capsule {
                 id: $id,
@@ -180,12 +183,14 @@ async def seed_capsules(client: Neo4jClient, users: dict[str, str]) -> list[str]
             }]->(parent)
             RETURN c.id
             """,
-            id=cap_id,
-            title=cap["title"],
-            content=cap["content"],
-            domain=cap["domain"],
-            user_id=dev_id,
-            parent_id=root_id,
+            {
+                "id": cap_id,
+                "title": cap["title"],
+                "content": cap["content"],
+                "domain": cap["domain"],
+                "user_id": dev_id,
+                "parent_id": root_id,
+            }
         )
         capsules.append(cap_id)
         print(f"  Created child capsule: {cap['title']}")
@@ -203,13 +208,13 @@ async def seed_proposals(client: Neo4jClient, users: dict[str, str]) -> list[str
         {
             "title": "Enable ML Intelligence Overlay by Default",
             "description": "Proposal to activate the ML Intelligence overlay for all new capsules to enable automatic pattern recognition.",
-            "status": "active",
+            "status": "voting",
             "creator": "developer",
         },
         {
             "title": "Increase Trust Score Threshold for TRUSTED Level",
             "description": "Raise the minimum trust score for TRUSTED level from 60 to 75 to ensure higher quality contributions.",
-            "status": "pending",
+            "status": "draft",
             "creator": "admin",
         },
         {
@@ -224,30 +229,40 @@ async def seed_proposals(client: Neo4jClient, users: dict[str, str]) -> list[str
         prop_id = str(uuid4())
         user_id = users[prop["creator"]]
         
-        await client.execute_query(
+        await client.execute(
             """
             CREATE (p:Proposal {
                 id: $id,
                 title: $title,
                 description: $description,
                 status: $status,
-                proposal_type: 'policy',
-                quorum_threshold: 0.5,
-                approval_threshold: 0.6,
-                created_by: $user_id,
+                type: 'policy',
+                proposer_id: $user_id,
+                voting_period_days: 7,
+                quorum_percent: 0.1,
+                pass_threshold: 0.5,
+                votes_for: 0,
+                votes_against: 0,
+                votes_abstain: 0,
+                weight_for: 0.0,
+                weight_against: 0.0,
+                weight_abstain: 0.0,
+                action: '{}',
                 created_at: datetime(),
-                expires_at: datetime() + duration('P7D')
+                updated_at: datetime()
             })
             WITH p
             MATCH (u:User {id: $user_id})
             CREATE (u)-[:PROPOSED]->(p)
             RETURN p.id
             """,
-            id=prop_id,
-            title=prop["title"],
-            description=prop["description"],
-            status=prop["status"],
-            user_id=user_id,
+            {
+                "id": prop_id,
+                "title": prop["title"],
+                "description": prop["description"],
+                "status": prop["status"],
+                "user_id": user_id,
+            }
         )
         proposals.append(prop_id)
         print(f"  Created proposal: {prop['title']}")
@@ -299,7 +314,7 @@ async def seed_overlays(client: Neo4jClient) -> list[str]:
     for overlay in overlay_data:
         overlay_id = str(uuid4())
         
-        await client.execute_query(
+        await client.execute(
             """
             CREATE (o:Overlay {
                 id: $id,
@@ -315,13 +330,15 @@ async def seed_overlays(client: Neo4jClient) -> list[str]:
             })
             RETURN o.id
             """,
-            id=overlay_id,
-            name=overlay["name"],
-            display_name=overlay["display_name"],
-            overlay_type=overlay["overlay_type"],
-            description=overlay["description"],
-            is_active=overlay["is_active"],
-            priority=overlay["priority"],
+            {
+                "id": overlay_id,
+                "name": overlay["name"],
+                "display_name": overlay["display_name"],
+                "overlay_type": overlay["overlay_type"],
+                "description": overlay["description"],
+                "is_active": overlay["is_active"],
+                "priority": overlay["priority"],
+            }
         )
         overlays.append(overlay_id)
         print(f"  Created overlay: {overlay['display_name']}")
@@ -351,15 +368,10 @@ async def main():
         print("Connected successfully!\n")
         
         # Check if data already exists
-        result = await client.execute_query("MATCH (u:User) RETURN count(u) as count")
+        result = await client.execute("MATCH (u:User) RETURN count(u) as count", {})
         if result and result[0]["count"] > 0:
-            response = input("Database already contains data. Clear and reseed? [y/N]: ")
-            if response.lower() != 'y':
-                print("Aborting.")
-                return
-            
-            print("Clearing existing data...")
-            await client.execute_query("MATCH (n) DETACH DELETE n")
+            print("Database already contains data. Clearing and reseeding...")
+            await client.execute("MATCH (n) DETACH DELETE n", {})
         
         # Seed data
         users = await seed_users(client)
@@ -383,7 +395,7 @@ async def main():
         print(f"\nError: {e}")
         raise
     finally:
-        await client.disconnect()
+        await client.close()
 
 
 if __name__ == "__main__":

@@ -172,7 +172,7 @@ class AuditRepository:
         }
         
         event_type = event_type_map.get(action.lower(), EventType.SYSTEM_EVENT)
-        priority = EventPriority.HIGH if "login_failed" in action.lower() else EventPriority.MEDIUM
+        priority = EventPriority.HIGH if "login_failed" in action.lower() else EventPriority.NORMAL
         
         return await self.log(
             event_type=event_type,
@@ -233,7 +233,7 @@ class AuditRepository:
         }
         
         event_type = event_type_map.get(action.lower(), EventType.OVERLAY_EVENT)
-        priority = EventPriority.HIGH if action.lower() in ("error", "timeout") else EventPriority.MEDIUM
+        priority = EventPriority.HIGH if action.lower() in ("error", "timeout") else EventPriority.NORMAL
         
         return await self.log(
             event_type=event_type,
@@ -285,6 +285,98 @@ class AuditRepository:
             priority=EventPriority.HIGH,
             trust_level_required=TrustLevel.TRUSTED
         )
+
+    async def log_cascade_action(
+        self,
+        actor_id: str,
+        cascade_id: str,
+        action: str,
+        details: Optional[dict[str, Any]] = None,
+        correlation_id: Optional[str] = None
+    ) -> AuditEvent:
+        """Log a cascade-related action."""
+        event_type_map = {
+            "triggered": EventType.CASCADE_INITIATED,
+            "propagated": EventType.CASCADE_PROPAGATED,
+            "completed": EventType.CASCADE_COMPLETE
+        }
+
+        event_type = event_type_map.get(action.lower(), EventType.CASCADE_TRIGGERED)
+
+        return await self.log(
+            event_type=event_type,
+            actor_id=actor_id,
+            action=f"Cascade {action}",
+            resource_type="cascade",
+            resource_id=cascade_id,
+            details=details,
+            correlation_id=correlation_id,
+            priority=EventPriority.NORMAL
+        )
+
+    async def log_action(
+        self,
+        action: str,
+        entity_type: str,
+        entity_id: str,
+        user_id: str,
+        details: Optional[dict[str, Any]] = None,
+        correlation_id: Optional[str] = None
+    ) -> AuditEvent:
+        """
+        Generic action logging method.
+
+        This is a convenience wrapper around the specific log methods.
+        Routes to appropriate specialized logging based on entity_type.
+        """
+        if entity_type == "capsule":
+            return await self.log_capsule_action(
+                actor_id=user_id,
+                capsule_id=entity_id,
+                action=action,
+                details=details,
+                correlation_id=correlation_id
+            )
+        elif entity_type == "user":
+            return await self.log_user_action(
+                actor_id=user_id,
+                target_user_id=entity_id,
+                action=action,
+                details=details
+            )
+        elif entity_type == "proposal":
+            return await self.log_governance_action(
+                actor_id=user_id,
+                proposal_id=entity_id,
+                action=action,
+                details=details
+            )
+        elif entity_type == "overlay":
+            return await self.log_overlay_action(
+                actor_id=user_id,
+                overlay_id=entity_id,
+                action=action,
+                details=details
+            )
+        elif entity_type == "cascade":
+            return await self.log_cascade_action(
+                actor_id=user_id,
+                cascade_id=entity_id,
+                action=action,
+                details=details,
+                correlation_id=correlation_id
+            )
+        else:
+            # Generic logging for unknown entity types
+            return await self.log(
+                event_type=EventType.SYSTEM_EVENT,
+                actor_id=user_id,
+                action=action,
+                resource_type=entity_type,
+                resource_id=entity_id,
+                details=details,
+                correlation_id=correlation_id
+            )
     
     # =========================================================================
     # Query Operations

@@ -42,6 +42,7 @@ from forge.immune import (
     ForgeAnomalySystem,
     CanaryManager,
 )
+from forge.services.embedding import EmbeddingService, get_embedding_service
 
 
 # Security scheme
@@ -129,6 +130,18 @@ AuditRepoDep = Annotated[AuditRepository, Depends(get_audit_repository)]
 
 
 # =============================================================================
+# Services
+# =============================================================================
+
+def get_embedding_svc() -> EmbeddingService:
+    """Get embedding service."""
+    return get_embedding_service()
+
+
+EmbeddingServiceDep = Annotated[EmbeddingService, Depends(get_embedding_svc)]
+
+
+# =============================================================================
 # Kernel Components
 # =============================================================================
 
@@ -209,15 +222,43 @@ CanaryManagerDep = Annotated[CanaryManager, Depends(get_canary_manager)]
 # =============================================================================
 
 async def get_token_payload(
+    request: Request,
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(security)],
     settings: SettingsDep,
 ) -> TokenPayload | None:
-    """Extract and verify token payload from Authorization header."""
-    if not credentials:
+    """
+    Extract and verify token payload from cookie or Authorization header.
+
+    Tries cookie first (more secure), then falls back to Authorization header
+    for backwards compatibility and API clients.
+    """
+    from forge.security.tokens import TokenBlacklist
+
+    token = None
+
+    # Priority 1: Check httpOnly cookie
+    access_token_cookie = request.cookies.get("access_token")
+    if access_token_cookie:
+        token = access_token_cookie
+
+    # Priority 2: Fall back to Authorization header
+    if not token and credentials:
+        token = credentials.credentials
+
+    if not token:
         return None
-    
+
     try:
-        payload = verify_token(credentials.credentials, settings.JWT_SECRET_KEY)
+        payload = verify_token(token, settings.jwt_secret_key)
+
+        # Check if token is blacklisted (logout)
+        if payload and hasattr(payload, 'jti') and payload.jti:
+            # Get jti from the raw token claims since TokenPayload might not have it
+            from forge.security.tokens import get_token_claims
+            claims = get_token_claims(token)
+            if TokenBlacklist.is_blacklisted(claims.get("jti")):
+                return None
+
         return payload
     except Exception:
         return None
@@ -330,10 +371,10 @@ ModeratorUserDep = Annotated[User, Depends(require_roles("admin", "moderator"))]
 
 async def get_auth_service(
     user_repo: UserRepoDep,
-    settings: SettingsDep,
+    audit_repo: AuditRepoDep,
 ) -> AuthService:
     """Get authentication service."""
-    return AuthService(user_repo, settings)
+    return AuthService(user_repo, audit_repo)
 
 
 AuthServiceDep = Annotated[AuthService, Depends(get_auth_service)]
@@ -378,6 +419,37 @@ async def get_correlation_id(request: Request) -> str:
 
 
 CorrelationIdDep = Annotated[str, Depends(get_correlation_id)]
+
+
+class ClientInfo:
+    """Client information extracted from request."""
+
+    def __init__(self, ip_address: str, user_agent: str | None):
+        self.ip_address = ip_address
+        self.user_agent = user_agent
+
+
+async def get_client_info(request: Request) -> ClientInfo:
+    """Extract client IP and user agent from request."""
+    # Get IP from various headers (proxy-aware)
+    forwarded_for = request.headers.get("X-Forwarded-For")
+    if forwarded_for:
+        ip_address = forwarded_for.split(",")[0].strip()
+    else:
+        real_ip = request.headers.get("X-Real-IP")
+        if real_ip:
+            ip_address = real_ip
+        elif request.client:
+            ip_address = request.client.host
+        else:
+            ip_address = "unknown"
+
+    user_agent = request.headers.get("User-Agent")
+
+    return ClientInfo(ip_address=ip_address, user_agent=user_agent)
+
+
+ClientInfoDep = Annotated[ClientInfo, Depends(get_client_info)]
 
 
 # =============================================================================
@@ -436,4 +508,6 @@ __all__ = [
     
     # Context
     "CorrelationIdDep",
+    "ClientInfo",
+    "ClientInfoDep",
 ]

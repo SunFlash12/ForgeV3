@@ -52,29 +52,56 @@ class AnomalySeverity(str, Enum):
 @dataclass
 class Anomaly:
     """Represents a detected anomaly."""
-    
+
     id: str
     type: AnomalyType
     severity: AnomalySeverity
-    
+
     # What was detected
     metric_name: str
     observed_value: float
     expected_range: tuple[float, float]
-    
+
     # Scores
     anomaly_score: float  # 0-1, higher = more anomalous
     confidence: float     # 0-1, confidence in detection
-    
+
     # Context
     timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     context: dict[str, Any] = field(default_factory=dict)
     related_anomalies: list[str] = field(default_factory=list)
-    
+
     # Status
     acknowledged: bool = False
+    acknowledged_at: datetime | None = None
+    acknowledged_by: str | None = None
     resolved: bool = False
+    resolved_at: datetime | None = None
+    resolved_by: str | None = None
     resolution_notes: str | None = None
+
+    # Aliases for frontend compatibility
+    @property
+    def value(self) -> float:
+        """Alias for observed_value."""
+        return self.observed_value
+
+    @property
+    def expected_value(self) -> float | None:
+        """Get the midpoint of expected range."""
+        if self.expected_range:
+            return (self.expected_range[0] + self.expected_range[1]) / 2
+        return None
+
+    @property
+    def detected_at(self) -> datetime:
+        """Alias for timestamp."""
+        return self.timestamp
+
+    @property
+    def anomaly_type(self) -> AnomalyType:
+        """Alias for type."""
+        return self.type
     
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -896,20 +923,33 @@ class ForgeAnomalySystem:
     def get_unresolved_anomalies(self) -> list[Anomaly]:
         """Get anomalies that haven't been resolved."""
         return [a for a in self._anomaly_history if not a.resolved]
-    
-    async def acknowledge(self, anomaly_id: str) -> bool:
+
+    def get_anomaly(self, anomaly_id: str) -> Anomaly | None:
+        """Get a specific anomaly by ID."""
+        for anomaly in self._anomaly_history:
+            if anomaly.id == anomaly_id:
+                return anomaly
+        return None
+
+    def acknowledge(self, anomaly_id: str, acknowledged_by: str | None = None) -> bool:
         """Acknowledge an anomaly."""
+        from datetime import datetime, timezone
         for anomaly in self._anomaly_history:
             if anomaly.id == anomaly_id:
                 anomaly.acknowledged = True
+                anomaly.acknowledged_at = datetime.now(timezone.utc)
+                anomaly.acknowledged_by = acknowledged_by
                 return True
         return False
-    
-    async def resolve(self, anomaly_id: str, notes: str | None = None) -> bool:
+
+    def resolve(self, anomaly_id: str, resolved_by: str | None = None, notes: str | None = None) -> bool:
         """Mark an anomaly as resolved."""
+        from datetime import datetime, timezone
         for anomaly in self._anomaly_history:
             if anomaly.id == anomaly_id:
                 anomaly.resolved = True
+                anomaly.resolved_at = datetime.now(timezone.utc)
+                anomaly.resolved_by = resolved_by
                 anomaly.resolution_notes = notes
                 return True
         return False

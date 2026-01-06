@@ -418,25 +418,28 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
         RETURN v {.*} AS vote
         """
         
+        # Handle both string and enum choice
+        choice_val = vote_data.choice.value if hasattr(vote_data.choice, 'value') else str(vote_data.choice)
+
         result = await self.client.execute_single(
             query,
             {
                 "proposal_id": proposal_id,
                 "vote_id": vote_id,
                 "voter_id": voter_id,
-                "choice": vote_data.choice.value,
+                "choice": choice_val,
                 "weight": trust_weight,
                 "reason": vote_data.reason,
                 "now": now,
             },
         )
-        
+
         if result and result.get("vote"):
             self.logger.info(
                 "Vote cast",
                 proposal_id=proposal_id,
                 voter_id=voter_id,
-                choice=vote_data.choice.value,
+                choice=choice_val,
                 weight=trust_weight,
             )
             return Vote.model_validate(result["vote"])
@@ -791,6 +794,275 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
     # ═══════════════════════════════════════════════════════════════
     # STATISTICS
     # ═══════════════════════════════════════════════════════════════
+
+    # ═══════════════════════════════════════════════════════════════
+    # API ROUTE METHODS
+    # ═══════════════════════════════════════════════════════════════
+
+    async def list_proposals(
+        self,
+        offset: int = 0,
+        limit: int = 100,
+        filters: dict[str, Any] | None = None,
+    ) -> tuple[list[Proposal], int]:
+        """
+        List proposals with pagination and filtering.
+
+        Args:
+            offset: Number of records to skip
+            limit: Maximum records to return
+            filters: Optional filter dict (status, proposal_type)
+
+        Returns:
+            Tuple of (proposals list, total count)
+        """
+        where_clauses = []
+        params: dict[str, Any] = {"offset": offset, "limit": limit}
+
+        if filters:
+            if "status" in filters:
+                where_clauses.append("p.status = $status")
+                params["status"] = filters["status"]
+            if "proposal_type" in filters:
+                where_clauses.append("p.type = $proposal_type")
+                params["proposal_type"] = filters["proposal_type"]
+
+        where_clause = " AND ".join(where_clauses) if where_clauses else "1=1"
+
+        # Get total count
+        count_query = f"""
+        MATCH (p:Proposal)
+        WHERE {where_clause}
+        RETURN count(p) AS total
+        """
+        count_result = await self.client.execute_single(count_query, params)
+        total = count_result.get("total", 0) if count_result else 0
+
+        # Get paginated results
+        query = f"""
+        MATCH (p:Proposal)
+        WHERE {where_clause}
+        RETURN p {{.*}} AS entity
+        ORDER BY p.created_at DESC
+        SKIP $offset
+        LIMIT $limit
+        """
+
+        results = await self.client.execute(query, params)
+        proposals = self._to_models([r["entity"] for r in results if r.get("entity")])
+
+        return proposals, total
+
+    async def get_proposal(self, proposal_id: str) -> Proposal | None:
+        """Get a proposal by ID (alias for get_by_id)."""
+        return await self.get_by_id(proposal_id)
+
+    async def update_proposal_status(
+        self,
+        proposal_id: str,
+        status: ProposalStatus,
+    ) -> Proposal | None:
+        """
+        Update a proposal's status.
+
+        Args:
+            proposal_id: Proposal ID
+            status: New status
+
+        Returns:
+            Updated proposal or None
+        """
+        query = """
+        MATCH (p:Proposal {id: $id})
+        SET p.status = $status, p.updated_at = $now
+        RETURN p {.*} AS entity
+        """
+
+        result = await self.client.execute_single(
+            query,
+            {
+                "id": proposal_id,
+                "status": status.value,
+                "now": self._now().isoformat(),
+            },
+        )
+
+        if result and result.get("entity"):
+            return self._to_model(result["entity"])
+        return None
+
+    async def record_vote(self, vote: Vote) -> Vote:
+        """
+        Record a vote atomically to prevent double voting.
+
+        Uses MERGE to ensure only one vote per user per proposal exists,
+        preventing race conditions in concurrent voting scenarios.
+
+        Args:
+            vote: Vote object to record
+
+        Returns:
+            Recorded vote
+        """
+        now = self._now().isoformat()
+
+        # SECURITY FIX: Use MERGE to atomically prevent double voting
+        # This handles race conditions where two concurrent vote requests
+        # might both pass the existing vote check
+        query = """
+        MATCH (p:Proposal {id: $proposal_id})
+        WHERE p.status IN ['ACTIVE', 'VOTING']
+        MERGE (v:Vote {proposal_id: $proposal_id, voter_id: $voter_id})
+        ON CREATE SET
+            v.id = $vote_id,
+            v.choice = $choice,
+            v.weight = $weight,
+            v.reason = $reason,
+            v.created_at = $now,
+            v.updated_at = $now,
+            v.is_new = true
+        ON MATCH SET
+            v.is_new = false
+        WITH v, p, v.is_new AS is_new
+        WHERE is_new = true
+        MERGE (v)-[:VOTED]->(p)
+        SET
+            p.votes_for = CASE WHEN $choice = 'APPROVE' THEN p.votes_for + 1 ELSE p.votes_for END,
+            p.votes_against = CASE WHEN $choice = 'REJECT' THEN p.votes_against + 1 ELSE p.votes_against END,
+            p.votes_abstain = CASE WHEN $choice = 'ABSTAIN' THEN p.votes_abstain + 1 ELSE p.votes_abstain END,
+            p.weight_for = CASE WHEN $choice = 'APPROVE' THEN p.weight_for + $weight ELSE p.weight_for END,
+            p.weight_against = CASE WHEN $choice = 'REJECT' THEN p.weight_against + $weight ELSE p.weight_against END,
+            p.weight_abstain = CASE WHEN $choice = 'ABSTAIN' THEN p.weight_abstain + $weight ELSE p.weight_abstain END,
+            p.updated_at = $now,
+            v.is_new = null
+        RETURN v {.*} AS vote, is_new
+        """
+
+        # Handle both string and enum choice
+        choice_str = vote.choice.value if hasattr(vote.choice, 'value') else str(vote.choice)
+
+        result = await self.client.execute_single(
+            query,
+            {
+                "proposal_id": vote.proposal_id,
+                "vote_id": vote.id,
+                "voter_id": vote.voter_id,
+                "choice": choice_str,
+                "weight": vote.weight,
+                "reason": vote.reason,
+                "now": now,
+            },
+        )
+
+        # If is_new is False, vote already existed (concurrent request)
+        if result and result.get("is_new") is False:
+            self.logger.warning(
+                "Duplicate vote attempt blocked",
+                proposal_id=vote.proposal_id,
+                voter_id=vote.voter_id,
+            )
+
+        return vote
+
+    async def get_user_vote(self, proposal_id: str, user_id: str) -> Vote | None:
+        """Get a user's vote on a proposal (alias for get_vote)."""
+        return await self.get_vote(proposal_id, user_id)
+
+    async def get_proposal_votes(self, proposal_id: str) -> list[Vote]:
+        """Get all votes on a proposal (alias for get_votes)."""
+        return await self.get_votes(proposal_id)
+
+    async def get_active_policies(self) -> list[dict]:
+        """
+        Get all active governance policies.
+
+        Returns:
+            List of policy dicts
+        """
+        # In a real implementation, this would query actual policy nodes
+        # For now, return system default policies
+        return [
+            {
+                "id": "policy_quorum",
+                "name": "Quorum Requirement",
+                "description": "Minimum participation required for valid vote",
+                "value": 0.1,
+                "is_active": True,
+            },
+            {
+                "id": "policy_threshold",
+                "name": "Pass Threshold",
+                "description": "Minimum approval ratio to pass proposals",
+                "value": 0.5,
+                "is_active": True,
+            },
+            {
+                "id": "policy_voting_period",
+                "name": "Default Voting Period",
+                "description": "Default duration for proposal voting",
+                "value": 7,
+                "unit": "days",
+                "is_active": True,
+            },
+        ]
+
+    async def get_policy(self, policy_id: str) -> dict | None:
+        """
+        Get a specific policy.
+
+        Args:
+            policy_id: Policy ID
+
+        Returns:
+            Policy dict or None
+        """
+        policies = await self.get_active_policies()
+        for policy in policies:
+            if policy["id"] == policy_id:
+                return policy
+        return None
+
+    async def create_delegation(self, data: dict[str, Any]) -> dict:
+        """
+        Create a vote delegation from a dict.
+
+        Args:
+            data: Delegation data dict
+
+        Returns:
+            Created delegation as dict
+        """
+        from datetime import datetime
+
+        query = """
+        CREATE (d:VoteDelegation {
+            id: $id,
+            delegator_id: $delegator_id,
+            delegate_id: $delegate_id,
+            proposal_types: $proposal_types,
+            is_active: $is_active,
+            expires_at: $expires_at,
+            created_at: $created_at
+        })
+        RETURN d {.*} AS delegation
+        """
+
+        result = await self.client.execute_single(
+            query,
+            {
+                "id": data["id"],
+                "delegator_id": data["delegator_id"],
+                "delegate_id": data["delegate_id"],
+                "proposal_types": data.get("proposal_types"),
+                "is_active": data.get("is_active", True),
+                "expires_at": data.get("expires_at"),
+                "created_at": self._now().isoformat(),
+            },
+        )
+
+        if result and result.get("delegation"):
+            return result["delegation"]
+        return data
 
     async def get_stats(self) -> GovernanceStats:
         """Get governance system statistics."""

@@ -102,16 +102,17 @@ TRUST_LEVEL_PERMISSIONS = {
 def get_trust_level_from_score(trust_flame: int) -> TrustLevel:
     """
     Convert numeric trust score to TrustLevel enum.
-    
+
     Args:
         trust_flame: Numeric trust score (0-100)
-        
+
     Returns:
         Corresponding TrustLevel
     """
-    if trust_flame <= 0:
-        return TrustLevel.QUARANTINE
-    elif trust_flame < 40:
+    # Clamp trust_flame to valid range [0, 100]
+    trust_flame = max(0, min(100, trust_flame))
+
+    if trust_flame < 40:
         return TrustLevel.QUARANTINE
     elif trust_flame < 60:
         return TrustLevel.SANDBOX
@@ -121,6 +122,47 @@ def get_trust_level_from_score(trust_flame: int) -> TrustLevel:
         return TrustLevel.TRUSTED
     else:
         return TrustLevel.CORE
+
+
+def normalize_role(role: Any) -> UserRole:
+    """
+    Normalize a role to UserRole enum.
+
+    Handles both string and enum inputs consistently.
+
+    Args:
+        role: Role as string or UserRole enum
+
+    Returns:
+        UserRole enum value
+    """
+    if isinstance(role, UserRole):
+        return role
+    if isinstance(role, str):
+        try:
+            return UserRole(role)
+        except ValueError:
+            return UserRole.USER
+    return UserRole.USER
+
+
+def is_admin(user: Any) -> bool:
+    """
+    Check if user has admin role.
+
+    Handles both string and enum role attributes.
+
+    Args:
+        user: User object with role attribute
+
+    Returns:
+        True if user is admin
+    """
+    role = getattr(user, 'role', None)
+    if role is None:
+        return False
+    normalized = normalize_role(role)
+    return normalized == UserRole.ADMIN
 
 
 def check_trust_level(user_trust: int, required_level: TrustLevel) -> bool:

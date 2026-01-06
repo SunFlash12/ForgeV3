@@ -640,16 +640,16 @@ class GovernanceOverlay(BaseOverlay):
         
         # Count votes
         result.total_votes = len(votes)
-        result.approve_votes = sum(1 for v in votes if v.vote_type == VoteChoice.FOR)
-        result.reject_votes = sum(1 for v in votes if v.vote_type == VoteChoice.AGAINST)
+        result.approve_votes = sum(1 for v in votes if v.vote_type == VoteChoice.APPROVE)
+        result.reject_votes = sum(1 for v in votes if v.vote_type == VoteChoice.REJECT)
         result.abstain_votes = sum(1 for v in votes if v.vote_type == VoteChoice.ABSTAIN)
         
         # Calculate weighted scores
         result.weighted_approve = sum(
-            v.weight for v in votes if v.vote_type == VoteChoice.FOR
+            v.weight for v in votes if v.vote_type == VoteChoice.APPROVE
         )
         result.weighted_reject = sum(
-            v.weight for v in votes if v.vote_type == VoteChoice.AGAINST
+            v.weight for v in votes if v.vote_type == VoteChoice.REJECT
         )
         result.weighted_abstain = sum(
             v.weight for v in votes if v.vote_type == VoteChoice.ABSTAIN
@@ -674,8 +674,8 @@ class GovernanceOverlay(BaseOverlay):
         
         # Check core votes
         core_votes = [v for v in votes if v.trust_level >= TrustLevel.CORE.value]
-        result.has_core_approval = any(v.vote_type == VoteChoice.FOR for v in core_votes)
-        result.has_core_rejection = any(v.vote_type == VoteChoice.AGAINST for v in core_votes)
+        result.has_core_approval = any(v.vote_type == VoteChoice.APPROVE for v in core_votes)
+        result.has_core_rejection = any(v.vote_type == VoteChoice.REJECT for v in core_votes)
         
         # Calculate voting end time
         if proposal_created_at:
