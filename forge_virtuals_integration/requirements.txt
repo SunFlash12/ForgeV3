@@ -1,0 +1,39 @@
+# Forge-Virtuals Protocol Integration Dependencies
+# ================================================
+# Install with: pip install -r requirements.txt
+
+# Core Framework
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+httpx>=0.25.0
+fastapi>=0.100.0
+
+# Blockchain - EVM (Base, Ethereum)
+web3>=6.0.0
+eth-account>=0.10.0
+
+# Blockchain - Solana (Optional)
+# Uncomment if Solana support is needed
+# solana>=0.30.0
+# solders>=0.18.0
+
+# Async Support
+asyncio-throttle>=1.0.0
+aiofiles>=23.0.0
+
+# Cryptography
+pycryptodome>=3.18.0
+ecdsa>=0.18.0
+
+# Utilities
+python-dotenv>=1.0.0
+orjson>=3.9.0
+
+# Testing (dev dependencies)
+# pytest>=7.0.0
+# pytest-asyncio>=0.21.0
+# pytest-cov>=4.0.0
+
+# Type Checking (dev dependencies)
+# mypy>=1.0.0
+# types-requests>=2.31.0
