@@ -58,7 +58,7 @@ def check_port_available(port: int) -> bool:
         return s.connect_ex(("localhost", port)) != 0
 
 
-def wait_for_server(url: str, timeout: int = 30) -> bool:
+def wait_for_server(url: str, timeout: int = 60) -> bool:
     """Wait for a server to become healthy."""
     import urllib.request
     import urllib.error
