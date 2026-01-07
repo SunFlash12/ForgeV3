@@ -1,0 +1,25 @@
+"""
+Forge Observability Stack
+=========================
+
+OpenTelemetry integration for distributed tracing, metrics, and logging.
+Provides comprehensive visibility into Forge system behavior.
+"""
+
+from forge.resilience.observability.tracing import (
+    ForgeTracer,
+    trace_operation,
+    get_tracer,
+)
+from forge.resilience.observability.metrics import (
+    ForgeMetrics,
+    get_metrics,
+)
+
+__all__ = [
+    "ForgeTracer",
+    "trace_operation",
+    "get_tracer",
+    "ForgeMetrics",
+    "get_metrics",
+]
