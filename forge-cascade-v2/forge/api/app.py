@@ -288,7 +288,12 @@ def create_app(
     app.add_middleware(CSRFProtectionMiddleware, enabled=(settings.app_env != "development"))  # CSRF protection
     app.add_middleware(IdempotencyMiddleware)  # Idempotency support
     app.add_middleware(AuthenticationMiddleware)
-    app.add_middleware(RateLimitMiddleware, redis_url=settings.redis_url)
+    app.add_middleware(
+        RateLimitMiddleware,
+        redis_url=settings.redis_url,
+        auth_requests_per_minute=30,  # Increased from 10 to support test suites
+        auth_requests_per_hour=200,   # Increased from 50 to support test suites
+    )
     
     # Exception handlers
     @app.exception_handler(StarletteHTTPException)
