@@ -30,6 +30,18 @@ from forge.api.dependencies import (
 )
 from forge.models.overlay import OverlayState, OverlayPhase
 
+# Resilience integration - metrics and caching
+from forge.resilience.integration import (
+    record_overlay_activated,
+    record_overlay_deactivated,
+    record_overlay_config_updated,
+    record_canary_started,
+    record_canary_advanced,
+    record_canary_rolled_back,
+    record_overlays_reloaded,
+    invalidate_overlay_cache,
+)
+
 
 router = APIRouter()
 
@@ -201,7 +213,11 @@ async def activate_overlay(
         )
     
     await overlay_manager.activate(overlay_id)
-    
+
+    # Resilience: Record activation metric and invalidate cache
+    record_overlay_activated(overlay_id)
+    await invalidate_overlay_cache()
+
     await audit_repo.log_action(
         action="overlay_activated",
         entity_type="overlay",
@@ -209,7 +225,7 @@ async def activate_overlay(
         user_id=user.id,
         correlation_id=correlation_id,
     )
-    
+
     return OverlayResponse.from_overlay(overlay)
 
 
@@ -244,7 +260,11 @@ async def deactivate_overlay(
         )
     
     await overlay_manager.deactivate(overlay_id)
-    
+
+    # Resilience: Record deactivation metric and invalidate cache
+    record_overlay_deactivated(overlay_id)
+    await invalidate_overlay_cache()
+
     await audit_repo.log_action(
         action="overlay_deactivated",
         entity_type="overlay",
@@ -252,7 +272,7 @@ async def deactivate_overlay(
         user_id=user.id,
         correlation_id=correlation_id,
     )
-    
+
     return OverlayResponse.from_overlay(overlay)
 
 
@@ -278,7 +298,11 @@ async def update_overlay_config(
     # Merge config
     new_config = {**overlay.config, **request.config}
     overlay.config = new_config
-    
+
+    # Resilience: Record config update metric and invalidate cache
+    record_overlay_config_updated(overlay_id)
+    await invalidate_overlay_cache()
+
     await audit_repo.log_action(
         action="overlay_config_updated",
         entity_type="overlay",
@@ -287,7 +311,7 @@ async def update_overlay_config(
         details={"config_keys": list(request.config.keys())},
         correlation_id=correlation_id,
     )
-    
+
     return OverlayResponse.from_overlay(overlay)
 
 
@@ -463,6 +487,9 @@ async def start_canary_deployment(
         target=overlay.config,
     )
 
+    # Resilience: Record canary start metric
+    record_canary_started(overlay_id)
+
     await audit_repo.log_action(
         action="canary_started",
         entity_type="overlay",
@@ -498,6 +525,9 @@ async def advance_canary_deployment(
     # Re-fetch deployment after advancing
     deployment = canary_manager.get_deployment(overlay_id)
 
+    # Resilience: Record canary advance metric
+    record_canary_advanced(overlay_id, getattr(deployment, 'current_stage', 0))
+
     await audit_repo.log_action(
         action="canary_advanced",
         entity_type="overlay",
@@ -530,7 +560,10 @@ async def rollback_canary_deployment(
         )
     
     await canary_manager.rollback(overlay_id)
-    
+
+    # Resilience: Record canary rollback metric
+    record_canary_rolled_back(overlay_id)
+
     await audit_repo.log_action(
         action="canary_rolled_back",
         entity_type="overlay",
@@ -538,7 +571,7 @@ async def rollback_canary_deployment(
         user_id=user.id,
         correlation_id=correlation_id,
     )
-    
+
     return {"status": "rolled_back", "overlay_id": overlay_id}
 
 
@@ -560,7 +593,13 @@ async def reload_all_overlays(
     """
     await overlay_manager.stop()
     await overlay_manager.start()
-    
+
+    overlay_count = len(overlay_manager.list_all())
+
+    # Resilience: Record reload metric and invalidate cache
+    record_overlays_reloaded(overlay_count)
+    await invalidate_overlay_cache()
+
     await audit_repo.log_action(
         action="overlays_reloaded",
         entity_type="system",
@@ -568,8 +607,8 @@ async def reload_all_overlays(
         user_id=user.id,
         correlation_id=correlation_id,
     )
-    
+
     return {
         "status": "reloaded",
-        "overlay_count": len(overlay_manager.list_all()),
+        "overlay_count": overlay_count,
     }

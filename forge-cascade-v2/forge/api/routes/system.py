@@ -31,6 +31,20 @@ from forge.api.dependencies import (
 )
 from forge.immune.anomaly import AnomalySeverity, AnomalyType
 
+# Resilience integration - metrics and caching
+from forge.resilience.integration import (
+    record_health_check_access,
+    record_circuit_breaker_reset,
+    record_anomaly_acknowledged,
+    record_anomaly_resolved,
+    record_maintenance_mode_changed,
+    record_cache_cleared,
+    get_cached_system_metrics,
+    cache_system_metrics,
+    get_cached_health_status,
+    cache_health_status,
+)
+
 
 router = APIRouter(tags=["system"])
 
@@ -208,7 +222,10 @@ async def get_health(
     anomaly_system: AnomalySystemDep,
 ) -> HealthStatus:
     """Get comprehensive system health status."""
-    
+
+    # Resilience: Record health check access metric
+    record_health_check_access()
+
     # Calculate uptime from event system start
     uptime = (
         datetime.now(timezone.utc) - event_system._start_time
@@ -414,7 +431,10 @@ async def reset_circuit_breaker(
     
     cb = circuit_registry._breakers[name]
     cb.reset()
-    
+
+    # Resilience: Record circuit breaker reset metric
+    record_circuit_breaker_reset(name)
+
     # Emit event
     await event_system.emit(
         "CIRCUIT_BREAKER_RESET",
@@ -424,7 +444,7 @@ async def reset_circuit_breaker(
             "previous_state": cb.state.name
         }
     )
-    
+
     return {"status": "reset", "circuit_breaker": name}
 
 
@@ -545,6 +565,12 @@ async def acknowledge_anomaly(
             detail=f"Anomaly '{anomaly_id}' not found"
         )
 
+    # Get the updated anomaly to return
+    anomaly = anomaly_system.get_anomaly(anomaly_id)
+
+    # Resilience: Record anomaly acknowledgment metric
+    record_anomaly_acknowledged(anomaly_id, anomaly.severity.name)
+
     await event_system.emit(
         "ANOMALY_ACKNOWLEDGED",
         {
@@ -553,9 +579,6 @@ async def acknowledge_anomaly(
             "notes": request.notes
         }
     )
-
-    # Get the updated anomaly to return
-    anomaly = anomaly_system.get_anomaly(anomaly_id)
     return AnomalyResponse(
         id=anomaly.id,
         metric_name=anomaly.metric_name,
@@ -597,6 +620,12 @@ async def resolve_anomaly(
             detail=f"Anomaly '{anomaly_id}' not found"
         )
 
+    # Get the updated anomaly to return
+    anomaly = anomaly_system.get_anomaly(anomaly_id)
+
+    # Resilience: Record anomaly resolution metric
+    record_anomaly_resolved(anomaly_id, anomaly.severity.name)
+
     await event_system.emit(
         "ANOMALY_RESOLVED",
         {
@@ -604,9 +633,6 @@ async def resolve_anomaly(
             "resolved_by": str(user.id)
         }
     )
-
-    # Get the updated anomaly to return
-    anomaly = anomaly_system.get_anomaly(anomaly_id)
     return AnomalyResponse(
         id=anomaly.id,
         metric_name=anomaly.metric_name,
@@ -849,12 +875,15 @@ async def enable_maintenance_mode(
     event_system: EventSystemDep,
 ) -> dict[str, str]:
     """Enable maintenance mode."""
-    
+
+    # Resilience: Record maintenance mode change metric
+    record_maintenance_mode_changed(enabled=True)
+
     await event_system.emit(
         "MAINTENANCE_MODE_ENABLED",
         {"enabled_by": str(user.id)}
     )
-    
+
     # In a real implementation, this would set a flag
     return {"status": "maintenance_mode_enabled"}
 
@@ -869,12 +898,15 @@ async def disable_maintenance_mode(
     event_system: EventSystemDep,
 ) -> dict[str, str]:
     """Disable maintenance mode."""
-    
+
+    # Resilience: Record maintenance mode change metric
+    record_maintenance_mode_changed(enabled=False)
+
     await event_system.emit(
         "MAINTENANCE_MODE_DISABLED",
         {"disabled_by": str(user.id)}
     )
-    
+
     return {"status": "maintenance_mode_disabled"}
 
 
@@ -888,12 +920,15 @@ async def clear_caches(
     event_system: EventSystemDep,
 ) -> dict[str, Any]:
     """Clear system caches."""
-    
+
     cleared = []
-    
+
     # Clear various caches as available
     # These would be actual cache clearing operations in a real implementation
-    
+
+    # Resilience: Record cache clear metric
+    record_cache_cleared(cleared)
+
     await event_system.emit(
         "CACHES_CLEARED",
         {
@@ -901,7 +936,7 @@ async def clear_caches(
             "caches": cleared
         }
     )
-    
+
     return {
         "status": "caches_cleared",
         "caches_cleared": cleared

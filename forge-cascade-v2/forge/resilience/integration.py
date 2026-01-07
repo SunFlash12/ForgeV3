@@ -540,3 +540,178 @@ def record_password_change() -> None:
     """Record password change metric."""
     metrics = get_metrics()
     metrics.increment("auth_password_changes", {})
+
+
+# =============================================================================
+# Overlay Management Metrics Helpers
+# =============================================================================
+
+def record_overlay_activated(overlay_id: str) -> None:
+    """Record overlay activation metric."""
+    metrics = get_metrics()
+    metrics.increment("overlay_activations", {"overlay_id": overlay_id})
+
+
+def record_overlay_deactivated(overlay_id: str) -> None:
+    """Record overlay deactivation metric."""
+    metrics = get_metrics()
+    metrics.increment("overlay_deactivations", {"overlay_id": overlay_id})
+
+
+def record_overlay_config_updated(overlay_id: str) -> None:
+    """Record overlay configuration update metric."""
+    metrics = get_metrics()
+    metrics.increment("overlay_config_updates", {"overlay_id": overlay_id})
+
+
+def record_canary_started(overlay_id: str) -> None:
+    """Record canary deployment start metric."""
+    metrics = get_metrics()
+    metrics.increment("canary_deployments_started", {"overlay_id": overlay_id})
+
+
+def record_canary_advanced(overlay_id: str, stage: int) -> None:
+    """Record canary deployment advancement metric."""
+    metrics = get_metrics()
+    metrics.increment("canary_deployments_advanced", {"overlay_id": overlay_id, "stage": str(stage)})
+
+
+def record_canary_rolled_back(overlay_id: str) -> None:
+    """Record canary deployment rollback metric."""
+    metrics = get_metrics()
+    metrics.increment("canary_deployments_rolled_back", {"overlay_id": overlay_id})
+
+
+def record_overlays_reloaded(count: int) -> None:
+    """Record overlays reload metric."""
+    metrics = get_metrics()
+    metrics.increment("overlays_reloaded", {"count": str(count)})
+
+
+# =============================================================================
+# Overlay Caching Helpers
+# =============================================================================
+
+async def get_cached_overlay_list() -> Optional[list]:
+    """Get overlay list from cache."""
+    state = await get_resilience_state()
+    if not state.cache:
+        return None
+
+    return await state.cache.get("overlays:list")
+
+
+async def cache_overlay_list(overlays: list, ttl: int = 60) -> bool:
+    """Cache overlay list (short TTL as overlays can change)."""
+    state = await get_resilience_state()
+    if not state.cache:
+        return False
+
+    return await state.cache.set(
+        "overlays:list",
+        overlays,
+        ttl=ttl,
+        query_type="overlay_list",
+    )
+
+
+async def invalidate_overlay_cache() -> int:
+    """Invalidate all overlay-related caches."""
+    state = await get_resilience_state()
+    if not state.cache:
+        return 0
+
+    await state.cache.delete("overlays:list")
+    await state.cache.delete("overlays:active")
+    await state.cache.delete("overlays:metrics:*")
+    return 1
+
+
+# =============================================================================
+# System Metrics Helpers
+# =============================================================================
+
+def record_health_check_access() -> None:
+    """Record health check access metric."""
+    metrics = get_metrics()
+    metrics.increment("system_health_checks", {})
+
+
+def record_circuit_breaker_reset(circuit_name: str) -> None:
+    """Record circuit breaker reset metric."""
+    metrics = get_metrics()
+    metrics.increment("circuit_breaker_resets", {"circuit_name": circuit_name})
+
+
+def record_anomaly_acknowledged(anomaly_id: str, severity: str) -> None:
+    """Record anomaly acknowledgment metric."""
+    metrics = get_metrics()
+    metrics.increment("anomalies_acknowledged", {"severity": severity})
+
+
+def record_anomaly_resolved(anomaly_id: str, severity: str) -> None:
+    """Record anomaly resolution metric."""
+    metrics = get_metrics()
+    metrics.increment("anomalies_resolved", {"severity": severity})
+
+
+def record_maintenance_mode_changed(enabled: bool) -> None:
+    """Record maintenance mode change metric."""
+    metrics = get_metrics()
+    metrics.increment("maintenance_mode_changes", {"enabled": str(enabled).lower()})
+
+
+def record_cache_cleared(caches: list[str]) -> None:
+    """Record cache clear metric."""
+    metrics = get_metrics()
+    metrics.increment("system_caches_cleared", {"count": str(len(caches))})
+
+
+# =============================================================================
+# System Caching Helpers
+# =============================================================================
+
+async def get_cached_system_metrics() -> Optional[dict]:
+    """Get system metrics from cache."""
+    state = await get_resilience_state()
+    if not state.cache:
+        return None
+
+    return await state.cache.get("system:metrics")
+
+
+async def cache_system_metrics(metrics_data: dict, ttl: int = 30) -> bool:
+    """Cache system metrics (short TTL for freshness)."""
+    state = await get_resilience_state()
+    if not state.cache:
+        return False
+
+    return await state.cache.set(
+        "system:metrics",
+        metrics_data,
+        ttl=ttl,
+        query_type="system_metrics",
+    )
+
+
+async def get_cached_health_status() -> Optional[dict]:
+    """Get health status from cache."""
+    state = await get_resilience_state()
+    if not state.cache:
+        return None
+
+    return await state.cache.get("system:health")
+
+
+async def cache_health_status(health_data: dict, ttl: int = 15) -> bool:
+    """Cache health status (very short TTL for accuracy)."""
+    state = await get_resilience_state()
+    if not state.cache:
+        return False
+
+    return await state.cache.set(
+        "system:health",
+        health_data,
+        ttl=ttl,
+        query_type="health_status",
+    )
