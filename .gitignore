@@ -25,6 +25,9 @@ secrets/
 *password*.txt
 *secret*.txt
 
+# Claude Code
+.claude/settings.local.json
+
 # IDE
 .idea/
 .vscode/
