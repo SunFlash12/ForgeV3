@@ -8,9 +8,15 @@ and testing purposes. It creates:
 - Sample knowledge capsules with lineage
 - Sample proposals and votes
 - Default overlay configurations
+
+SECURITY: Passwords are read from environment variables. If not set,
+secure random passwords are generated and saved to .seed_credentials
+(which is gitignored).
 """
 
 import asyncio
+import secrets
+import string
 import sys
 from datetime import datetime, timedelta
 from uuid import uuid4
@@ -25,42 +31,83 @@ from forge.security.password import hash_password
 from forge.models.user import TrustLevel
 
 
+def generate_secure_password(length: int = 24) -> str:
+    """Generate a cryptographically secure password."""
+    alphabet = string.ascii_letters + string.digits + "!@#$%^&*"
+    while True:
+        password = ''.join(secrets.choice(alphabet) for _ in range(length))
+        # Ensure password has at least one of each type
+        if (any(c.islower() for c in password) and
+            any(c.isupper() for c in password) and
+            any(c.isdigit() for c in password) and
+            any(c in '!@#$%^&*' for c in password)):
+            return password
+
+
+def get_seed_password(username: str) -> str:
+    """Get password from environment variable or generate one."""
+    env_var = f"SEED_{username.upper()}_PASSWORD"
+    password = os.environ.get(env_var)
+    if password:
+        return password
+    # Generate and return a secure password
+    return generate_secure_password()
+
+
+def save_credentials(credentials: dict[str, str], filepath: str) -> None:
+    """Save generated credentials to a local file (gitignored)."""
+    with open(filepath, 'w') as f:
+        f.write("# Forge Seed User Credentials\n")
+        f.write("# SECURITY: Do not commit this file!\n")
+        f.write("# Add these to your .env file:\n\n")
+        for username, password in credentials.items():
+            f.write(f"SEED_{username.upper()}_PASSWORD={password}\n")
+        f.write("\n# Or use directly:\n")
+        for username, password in credentials.items():
+            f.write(f"# {username}: {password}\n")
+
+
 async def seed_users(client: Neo4jClient) -> dict[str, str]:
     """Create seed users and return their IDs."""
     print("Creating users...")
-    
+
     users = {}
-    
-    user_data = [
+    generated_credentials = {}
+
+    # User configuration - passwords come from environment variables
+    user_configs = [
         {
             "username": "admin",
             "email": "admin@forge.example.com",
-            "password": "AdminPass123!",
             "display_name": "System Administrator",
             "trust_level": TrustLevel.CORE,
         },
         {
             "username": "oracle",
             "email": "oracle@forge.example.com",
-            "password": "OraclePass123!",
             "display_name": "Oracle (Ghost Council)",
             "trust_level": TrustLevel.TRUSTED,
         },
         {
             "username": "developer",
             "email": "dev@forge.example.com",
-            "password": "DevPass123!",
             "display_name": "Test Developer",
             "trust_level": TrustLevel.STANDARD,
         },
         {
             "username": "analyst",
             "email": "analyst@forge.example.com",
-            "password": "AnalystPass123!",
             "display_name": "Data Analyst",
             "trust_level": TrustLevel.SANDBOX,
         },
     ]
+
+    # Build user_data with passwords from environment
+    user_data = []
+    for config in user_configs:
+        password = get_seed_password(config["username"])
+        generated_credentials[config["username"]] = password
+        user_data.append({**config, "password": password})
     
     for user in user_data:
         user_id = str(uuid4())
@@ -98,8 +145,13 @@ async def seed_users(client: Neo4jClient) -> dict[str, str]:
         
         users[user["username"]] = user_id
         print(f"  Created user: {user['username']} ({user['trust_level'].value})")
-    
-    return users
+
+    # Save credentials to file for reference (gitignored)
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    creds_file = os.path.join(script_dir, ".seed_credentials")
+    save_credentials(generated_credentials, creds_file)
+
+    return users, generated_credentials
 
 
 async def seed_capsules(client: Neo4jClient, users: dict[str, str]) -> list[str]:
@@ -127,7 +179,7 @@ async def seed_capsules(client: Neo4jClient, users: dict[str, str]) -> list[str]
             view_count: 0,
             fork_count: 0,
             tags: ['architecture', 'core'],
-            metadata: {},
+            metadata: '{}',
             created_at: datetime(),
             updated_at: datetime()
         })
@@ -180,7 +232,7 @@ async def seed_capsules(client: Neo4jClient, users: dict[str, str]) -> list[str]
                 view_count: 0,
                 fork_count: 0,
                 tags: $tags,
-                metadata: {},
+                metadata: '{}',
                 created_at: datetime(),
                 updated_at: datetime()
             })
@@ -387,11 +439,11 @@ async def main():
             await client.execute("MATCH (n) DETACH DELETE n", {})
         
         # Seed data
-        users = await seed_users(client)
+        users, credentials = await seed_users(client)
         capsules = await seed_capsules(client, users)
         proposals = await seed_proposals(client, users)
         overlays = await seed_overlays(client)
-        
+
         print("\n" + "=" * 60)
         print("Seed Complete!")
         print("=" * 60)
@@ -399,10 +451,17 @@ async def main():
         print(f"  Capsules: {len(capsules)}")
         print(f"  Proposals: {len(proposals)}")
         print(f"  Overlays: {len(overlays)}")
-        print("\nDefault Credentials:")
-        print("  admin / AdminPass123!")
-        print("  developer / DevPass123!")
-        print("  analyst / AnalystPass123!")
+
+        # Show credential info
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        creds_file = os.path.join(script_dir, ".seed_credentials")
+        print(f"\nCredentials saved to: {creds_file}")
+        print("Add the environment variables from that file to your .env")
+        print("\nUsers created:")
+        print("  admin (CORE)")
+        print("  oracle (TRUSTED)")
+        print("  developer (STANDARD)")
+        print("  analyst (SANDBOX)")
         
     except Exception as e:
         print(f"\nError: {e}")
