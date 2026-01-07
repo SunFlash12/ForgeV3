@@ -6,17 +6,46 @@
 
 # Table of Contents
 
+## Part I: Project Overview
 1. [System Overview](#1-system-overview)
-2. [The Seven-Phase Pipeline](#2-the-seven-phase-pipeline)
-3. [Capsule System: Knowledge Management](#3-capsule-system-knowledge-management)
-4. [Event System: The Cascade Effect](#4-event-system-the-cascade-effect)
-5. [Overlay System: Modular Processing](#5-overlay-system-modular-processing)
-6. [Governance: Ghost Council & Democratic Voting](#6-governance-ghost-council--democratic-voting)
-7. [Security: Authentication & Authorization](#7-security-authentication--authorization)
-8. [Immune System: Self-Healing & Resilience](#8-immune-system-self-healing--resilience)
-9. [Compliance Framework](#9-compliance-framework)
-10. [Trust Hierarchy](#10-trust-hierarchy)
-11. [Data Flow: End-to-End Processing](#11-data-flow-end-to-end-processing)
+2. [Project Structure](#2-project-structure)
+3. [Technology Stack](#3-technology-stack)
+
+## Part II: Core Engine (forge-cascade-v2)
+4. [The Seven-Phase Pipeline](#4-the-seven-phase-pipeline)
+5. [Capsule System: Knowledge Management](#5-capsule-system-knowledge-management)
+6. [Event System: The Cascade Effect](#6-event-system-the-cascade-effect)
+7. [Overlay System: Modular Processing](#7-overlay-system-modular-processing)
+8. [Governance: Ghost Council & Democratic Voting](#8-governance-ghost-council--democratic-voting)
+9. [Security: Authentication & Authorization](#9-security-authentication--authorization)
+10. [Immune System: Self-Healing & Resilience](#10-immune-system-self-healing--resilience)
+11. [Trust Hierarchy](#11-trust-hierarchy)
+
+## Part III: Compliance Framework (forge/compliance)
+12. [Compliance Framework Overview](#12-compliance-framework-overview)
+13. [Privacy Regulations & DSAR Processing](#13-privacy-regulations--dsar-processing)
+14. [Security Frameworks](#14-security-frameworks)
+15. [AI Governance & EU AI Act](#15-ai-governance--eu-ai-act)
+16. [Industry-Specific Compliance](#16-industry-specific-compliance)
+17. [Accessibility Standards](#17-accessibility-standards)
+18. [Data Residency & Cross-Border Transfers](#18-data-residency--cross-border-transfers)
+
+## Part IV: Virtuals Protocol Integration (forge_virtuals_integration)
+19. [Virtuals Integration Overview](#19-virtuals-integration-overview)
+20. [Virtual Agents & GAME Framework](#20-virtual-agents--game-framework)
+21. [Agent Commerce Protocol (ACP)](#21-agent-commerce-protocol-acp)
+22. [Tokenization & Bonding Curves](#22-tokenization--bonding-curves)
+23. [Multi-Chain Blockchain Support](#23-multi-chain-blockchain-support)
+24. [Revenue Distribution System](#24-revenue-distribution-system)
+
+## Part V: Specifications & Architecture
+25. [Specification Documents](#25-specification-documents)
+26. [Architecture Diagrams](#26-architecture-diagrams)
+27. [Data Flow: End-to-End Processing](#27-data-flow-end-to-end-processing)
+
+---
+
+# Part I: Project Overview
 
 ---
 
@@ -24,35 +53,160 @@
 
 Forge V3 is an **Institutional Memory Engine** designed to capture, evolve, and govern organizational knowledge through a sophisticated system of interconnected components. At its core, Forge treats knowledge as living entities called **Capsules** that flow through a **Seven-Phase Pipeline**, are processed by specialized **Overlays**, and are governed democratically through the **Ghost Council**.
 
+## The Core Problem: Ephemeral Wisdom
+
+Traditional AI systems suffer from **knowledge amnesia** - accumulated learning is lost during upgrades or retraining. Forge solves this through:
+
+- **Persistent Memory Layer**: Capsules that survive across system generations
+- **Cultural Learning Model**: AI systems learn like cultures, not individuals
+- **Generational Knowledge Propagation**: Through "Cascades" that spread insights
+- **Isnad Lineage Tracking**: Scholarly chain of transmission for knowledge provenance
+
 ## Core Design Principles
 
 - **Knowledge as First-Class Citizens**: Every piece of information is a versioned, traceable Capsule with lineage
 - **Cascade Effect**: Insights propagate through the system, triggering related processing automatically
 - **Democratic Governance**: AI-assisted decision-making with human oversight via the Ghost Council
 - **Self-Healing**: The Immune System automatically detects and recovers from failures
-- **Compliance by Design**: Regulatory requirements are enforced through configuration, not code changes
+- **Compliance by Design**: Regulatory requirements enforced through configuration, not code changes
 - **Trust-Based Access**: A graduated trust hierarchy controls what users and overlays can do
+- **True Isolation**: WebAssembly for overlay execution (not Python sandboxing)
 
-## Technology Stack
+## Enterprise Positioning
 
-- **Backend**: Python 3.12, FastAPI, async/await throughout
-- **Database**: Neo4j 5.x (graph database for relationships and lineage)
-- **Cache**: Redis (distributed caching and rate limiting)
-- **Frontend**: React 19, TypeScript, Tailwind CSS v4, Vite
-- **ML**: Sentence-Transformers for embeddings, scikit-learn for anomaly detection
-- **Infrastructure**: Docker, Nginx, Prometheus monitoring
+Forge is **NOT** a consumer chatbot competitor. It is positioned as an:
+- **Institutional Memory Engine** for enterprise knowledge management
+- **Target markets**: Regulated sectors (legal, biotech, finance) where lineage and governance matter most
+- **Differentiator**: Complete audit trails, democratic governance, and compliance-first architecture
 
 ---
 
-# 2. The Seven-Phase Pipeline
+# 2. Project Structure
+
+Forge V3 consists of four major modules:
+
+```
+C:\Users\idean\Downloads\Forge V3\
+├── forge-cascade-v2/              # Core Implementation (Production Ready)
+│   ├── forge/                     # Backend Python package (FastAPI)
+│   │   ├── api/                   # REST API + WebSocket endpoints
+│   │   ├── database/              # Neo4j integration, schema management
+│   │   ├── immune/                # Self-healing system
+│   │   ├── kernel/                # Event system, overlay manager, pipeline
+│   │   ├── models/                # Pydantic data models
+│   │   ├── overlays/              # ML, security, governance overlays
+│   │   ├── repositories/          # Data access layer
+│   │   ├── security/              # Auth, JWT, trust hierarchy
+│   │   ├── services/              # LLM, search, embedding services
+│   │   └── monitoring/            # Metrics, logging
+│   ├── frontend/                  # React 19 + TypeScript dashboard
+│   ├── docker/                    # Container orchestration
+│   └── tests/                     # Comprehensive test suite
+│
+├── forge/compliance/              # Compliance Framework (400+ Controls)
+│   ├── core/                      # Engine, registry, config, models
+│   ├── privacy/                   # GDPR, CCPA, consent, DSAR
+│   ├── security/                  # Access control, breach notification
+│   ├── encryption/                # AES-256-GCM, key management
+│   ├── residency/                 # Data residency controls
+│   ├── ai_governance/             # EU AI Act, bias detection
+│   ├── industry/                  # HIPAA, PCI-DSS, COPPA
+│   ├── accessibility/             # WCAG 2.2, EAA
+│   ├── reporting/                 # Compliance reports
+│   └── api/                       # REST endpoints
+│
+├── forge_virtuals_integration/    # Blockchain AI Agent Integration
+│   ├── forge/virtuals/
+│   │   ├── models/                # Agent, ACP, tokenization models
+│   │   ├── chains/                # EVM, Solana blockchain clients
+│   │   ├── game/                  # GAME SDK integration
+│   │   ├── acp/                   # Agent Commerce Protocol
+│   │   ├── tokenization/          # Token creation, bonding curves
+│   │   ├── revenue/               # Revenue distribution
+│   │   └── api/                   # REST endpoints
+│   └── examples/                  # Integration examples
+│
+├── Forge Specification Files/     # 19 Specification Documents
+│   ├── FORGE_SPECIFICATION*.md    # Core specifications
+│   ├── PHASE_0-8_*.md             # Phase-by-phase implementation
+│   └── SUPPLEMENT_A-F_*.md        # Implementation supplements
+│
+├── Diagrams/                      # 10 Mermaid Architecture Diagrams
+│   └── *.mermaid                  # Visual architecture documentation
+│
+└── Documentation Files
+    ├── FORGE_FEATURES_DOCUMENTATION.md
+    ├── FORGE_COMPLIANCE_FRAMEWORK_DOCUMENTATION.md
+    └── Various reports and checklists
+```
+
+---
+
+# 3. Technology Stack
+
+## Core Technologies
+
+| Layer | Technology | Purpose |
+|-------|-----------|---------|
+| **Backend** | Python 3.12, FastAPI, async/await | Async REST API with Pydantic v2 |
+| **Database** | Neo4j 5.x | Graph + Vector + Properties (unified ACID store) |
+| **Cache** | Redis 7.x | Sessions, rate limiting, caching |
+| **Events** | Kafka / KurrentDB | Event sourcing, audit trails |
+| **Overlays** | Wasmtime | WebAssembly execution runtime |
+| **Embeddings** | Sentence-Transformers | 1536-dimensional semantic vectors |
+| **ML** | scikit-learn | Anomaly detection, classification |
+| **Frontend** | React 19, TypeScript, Tailwind CSS v4 | Dashboard SPA |
+| **CLI** | Typer + Rich | Command-line interface |
+
+## Infrastructure
+
+| Component | Technology | Purpose |
+|-----------|-----------|---------|
+| **Containers** | Docker, Docker Compose | Container orchestration |
+| **Orchestration** | Kubernetes, ArgoCD | Production deployment |
+| **CI/CD** | GitHub Actions | Automated testing and deployment |
+| **Monitoring** | Prometheus, Grafana | Metrics collection and visualization |
+| **Tracing** | Jaeger | Distributed tracing |
+| **Errors** | Sentry | Error tracking |
+
+## Blockchain (Virtuals Integration)
+
+| Chain | Technology | Purpose |
+|-------|-----------|---------|
+| **Base** | EVM (web3.py) | Primary chain (Ethereum L2) |
+| **Ethereum** | EVM (web3.py) | Bridge and cross-chain |
+| **Solana** | solana-py, solders | Alternative chain support |
+
+---
+
+# Part II: Core Engine (forge-cascade-v2)
+
+---
+
+# 4. The Seven-Phase Pipeline
 
 Every operation in Forge flows through a structured seven-phase pipeline. This ensures consistent processing, security validation, governance approval, and proper audit trails.
 
-## Phase Overview
+## Pipeline Architecture
 
 ```
-INGESTION → ANALYSIS → VALIDATION → CONSENSUS → EXECUTION → PROPAGATION → SETTLEMENT
+PARALLEL (Phases 1-3, ~300ms):
+├── Phase 1: INGESTION (Context Creation)
+├── Phase 2: ANALYSIS (ML Processing)
+└── Phase 3: VALIDATION (Security Assessment)
+          ↓
+SEQUENTIAL (Phases 4-5):
+├── Phase 4: CONSENSUS (Optimization, ~20ms)
+└── Phase 5: EXECUTION (Intelligence, ~1000ms - LLM bottleneck)
+          ↓
+FIRE-AND-FORGET (Phases 6-7):
+├── Phase 6: PROPAGATION (Metrics)
+└── Phase 7: SETTLEMENT (Storage)
 ```
+
+**Performance**: Optimized from 3.5s → 1.2s through parallelization.
+
+## Phase Details
 
 ### Phase 1: INGESTION
 **Purpose**: Receive and normalize incoming data
@@ -61,27 +215,28 @@ INGESTION → ANALYSIS → VALIDATION → CONSENSUS → EXECUTION → PROPAGATIO
 - Normalizes data structures (tags lowercased, whitespace trimmed)
 - Assigns correlation IDs for request tracking
 - Applies input size limits (max 1MB content)
+- Creates context with embeddings and user profile
 
-**Timeout**: 3 seconds | **Required**: Yes | **Parallel**: No
+**Timeout**: 3 seconds | **Required**: Yes | **Parallel**: Yes
 
 ### Phase 2: ANALYSIS
 **Purpose**: Extract meaning through ML processing
 
-- **Embedding Generation**: Creates 1536-dimensional vector representations for semantic search
-- **Content Classification**: Categorizes into technical, business, personal, educational, creative, or governance
-- **Entity Extraction**: Identifies emails, URLs, dates, monetary values, phone numbers
-- **Pattern Detection**: Finds questions, code blocks, lists, technical content
-- **Sentiment Analysis**: Scores content from -1.0 (negative) to +1.0 (positive)
-- **Quality Scoring**: Evaluates completeness, clarity, structure, depth
+Five parallel ML functions:
+1. **Anomaly Detection**: IsolationForest model (contamination: 0.01)
+2. **Intent Classification**: information_retrieval, knowledge_creation, governance_action
+3. **Content Categorization**: Named Entity Recognition, taxonomy mapping
+4. **Sentiment Analysis**: Tone detection, frustration/urgency markers
+5. **Complexity Scoring**: Query structure analysis, domain depth
 
 **Overlays**: MLIntelligenceOverlay, CapsuleAnalyzerOverlay
-**Timeout**: 10 seconds | **Required**: Yes | **Parallel**: Yes (overlays run concurrently)
+**Timeout**: 10 seconds | **Required**: Yes | **Parallel**: Yes
 
 ### Phase 3: VALIDATION
 **Purpose**: Security checks and trust verification
 
 - **Content Policy**: Blocks secrets, credentials, prohibited patterns
-- **Trust Verification**: Confirms user has sufficient trust level for the operation
+- **Trust Verification**: Confirms user has sufficient trust level
 - **Rate Limiting**: Enforces per-user request limits
 - **Input Sanitization**: Detects SQL injection, XSS, malicious payloads
 - **Threat Tracking**: Blocks users after 10+ threats within one hour
@@ -96,46 +251,48 @@ INGESTION → ANALYSIS → VALIDATION → CONSENSUS → EXECUTION → PROPAGATIO
 - Collects trust-weighted votes (APPROVE, REJECT, ABSTAIN)
 - Calculates consensus with configurable thresholds
 - Supports early consensus via supermajority (80%+)
-- Optional Ghost Council deliberation for AI advisory
+- Performance optimization and cache checking
 
-**Overlays**: GovernanceOverlay
+**Overlays**: GovernanceOverlay, PerformanceOptimizerOverlay
 **Timeout**: 5 seconds | **Required**: No (skippable for routine operations)
 
 ### Phase 5: EXECUTION
-**Purpose**: Core processing and state changes
+**Purpose**: Core processing and state changes (LLM bottleneck)
 
 - Performs the actual requested operation (create, update, delete)
+- LLM call for intelligence generation (~1000ms)
 - Writes to Neo4j database
 - Updates relationships and indices
 - Manages transactions with rollback on failure
 
-**Overlays**: PerformanceOptimizerOverlay (caching)
 **Timeout**: 10 seconds | **Required**: Yes | **Max Retries**: 1
 
 ### Phase 6: PROPAGATION
-**Purpose**: Cascade effect and event emission
+**Purpose**: Cascade effect and event emission (fire-and-forget)
 
 - Emits events to notify other system components
 - Triggers cascade chains for insight propagation
 - Routes events to subscribed overlays
 - Manages hop limits to prevent infinite loops (max 5 hops)
+- Collects metrics
 
 **Timeout**: 5 seconds | **Required**: Yes | **Parallel**: Yes
 
 ### Phase 7: SETTLEMENT
-**Purpose**: Finalization and audit logging
+**Purpose**: Finalization and audit logging (fire-and-forget)
 
 - Records immutable audit entries with cryptographic hashing
 - Tracks lineage relationships (Isnad chains)
 - Updates metrics and statistics
 - Closes the pipeline execution record
+- Persists to storage
 
 **Overlays**: LineageTrackerOverlay
 **Timeout**: 3 seconds | **Required**: Yes
 
 ## Pipeline Context
 
-Every pipeline execution carries a `PipelineContext` containing:
+Every pipeline execution carries a `PipelineContext`:
 
 ```python
 PipelineContext:
@@ -152,7 +309,7 @@ PipelineContext:
 
 ---
 
-# 3. Capsule System: Knowledge Management
+# 5. Capsule System: Knowledge Management
 
 Capsules are the atomic units of knowledge in Forge. Every piece of information—insights, decisions, lessons, code, configurations—is stored as a Capsule with full version history and lineage tracking.
 
@@ -182,7 +339,7 @@ Capsule:
   - owner_id: str (creator's user ID)
 
   # Content
-  - content: str (1-100,000 characters)
+  - content: str (1B - 1MB)
   - title: str (optional, max 500 chars)
   - summary: str (optional, max 2000 chars)
   - type: CapsuleType
@@ -210,17 +367,17 @@ Capsule:
 
 ## The Isnad System: Knowledge Lineage
 
-Isnad (Arabic: إسناد, "chain of transmission") tracks how knowledge evolves through derivation:
+**Isnad** (Arabic: إسناد, "chain of transmission") tracks how knowledge evolves through derivation, borrowed from Islamic scholarly tradition for tracking hadith authenticity.
 
 ### Symbolic Inheritance
 When a Capsule is created from another (forked), it maintains a `parent_id` link forming a **DERIVED_FROM** relationship. This creates acyclic directed graphs representing knowledge evolution.
 
-### Lineage Traversal
+### Lineage Example
 ```
-Original Insight
-    └── Fork: Applied to Project A
-        └── Fork: Adapted for Mobile
-            └── Fork: iOS-specific version
+Original Insight (trust: 100)
+    └── Fork: Applied to Project A (trust: 95)
+        └── Fork: Adapted for Mobile (trust: 90)
+            └── Fork: iOS-specific version (trust: 85)
 ```
 
 ### Lineage Features
@@ -229,6 +386,7 @@ Original Insight
 - **Trust Gradient**: Track how trust levels evolve through the chain
 - **Cycle Prevention**: System validates no circular references exist
 - **Influence Scoring**: Measures impact based on descendants and trust weighting
+- **Quarantine Detection**: Vulnerable code paths can be quarantined (trust: 0)
 
 ### Fork Operation
 ```python
@@ -240,16 +398,14 @@ POST /capsules/{capsule_id}/fork
 }
 ```
 
-The fork inherits tags, summary, and metadata while establishing the parent-child relationship.
-
 ## Semantic Search
 
 Capsules are searchable through vector similarity:
 
 1. **Query Embedding**: User's search query is embedded into a 1536-dimensional vector
-2. **Neo4j Vector Index**: Query `capsule_embeddings` index for similar vectors
+2. **Neo4j Vector Index**: Query `capsule_embeddings` index for similar vectors (cosine similarity)
 3. **Trust Filtering**: Results filtered by minimum trust level
-4. **Score Ranking**: Results ordered by cosine similarity (0.0-1.0)
+4. **Score Ranking**: Results ordered by similarity score (0.0-1.0)
 
 ```python
 POST /capsules/search
@@ -263,34 +419,12 @@ POST /capsules/search
 ## Capsule Lifecycle
 
 ```
-CREATE (POST /capsules)
-  → Validation Phase (security, trust)
-  → Analysis Phase (embedding, classification)
-  → Execution Phase (Neo4j write)
-  → Settlement Phase (lineage, audit)
-  → CAPSULE_CREATED event emitted
-
-UPDATE (PATCH /capsules/{id})
-  → Owner verification (or admin)
-  → Content re-validation
-  → Re-embedding if content changed
-  → Cache invalidation
-  → CAPSULE_UPDATED event emitted
-
-ARCHIVE (POST /capsules/{id}/archive)
-  → Soft delete (is_archived = true)
-  → Preserves lineage references
-  → Queryable via admin tools
-
-DELETE (DELETE /capsules/{id})
-  → Requires TRUSTED trust level
-  → Cache invalidation
-  → CAPSULE_DELETED event emitted
+CREATE → ACTIVE → VERSION (creates child) → ARCHIVE → MIGRATE
 ```
 
 ---
 
-# 4. Event System: The Cascade Effect
+# 6. Event System: The Cascade Effect
 
 The Event System is the communication backbone of Forge, enabling asynchronous, decoupled interactions between components through a pub/sub architecture.
 
@@ -317,11 +451,6 @@ The Event System is the communication backbone of Forge, enabling asynchronous, 
 - `CASCADE_PROPAGATED`: Insight propagated to next overlay
 - `CASCADE_COMPLETE`: Cascade chain finished
 
-### System Events
-- `SYSTEM_EVENT`: General system notifications
-- `SYSTEM_ERROR`: Error conditions
-- `OVERLAY_REGISTERED`: New overlay activated
-
 ## Event Structure
 
 ```python
@@ -332,6 +461,7 @@ Event:
   - payload: dict[str, Any]
   - source: str (e.g., "overlay:ml_intelligence", "api:capsules")
   - correlation_id: UUID (links related events)
+  - causation_id: UUID (what caused this event)
   - target_overlays: Optional[list[str]] (broadcast vs. targeted)
   - metadata: dict[str, Any]
   - timestamp: datetime
@@ -339,7 +469,7 @@ Event:
 
 ## The Cascade Effect
 
-The Cascade Effect is Forge's mechanism for propagating insights across overlays automatically:
+The Cascade Effect is Forge's mechanism for propagating insights across overlays automatically, enabling the system to "learn like a culture, not an individual."
 
 ### How Cascades Work
 
@@ -352,83 +482,49 @@ The Cascade Effect is Forge's mechanism for propagating insights across overlays
 7. **Hop Limiting**: Maximum 5 hops prevents infinite loops
 8. **Completion**: Chain completes when no more propagation possible
 
-### Cascade Chain Structure
+### Seven Stages of Cascade
 
-```python
-CascadeChain:
-  - cascade_id: UUID
-  - initiated_by: str (source overlay)
-  - events: list[CascadeEvent]
-  - total_hops: int
-  - overlays_affected: list[str] (prevents cycles)
-  - insights_generated: int
-  - actions_triggered: int
-  - errors_encountered: int
+1. **Pattern Discovery**: ML intelligence finds recurring behavior
+2. **Insight Crystallization**: Pattern becomes persistent Capsule
+3. **Cascade Initiation**: Insight published to event system
+4. **Parallel Propagation**: 5+ overlays integrate independently
+5. **Graph Relationships**: TRIGGERED edges created for lineage
+6. **Immediate Benefit**: Original query enhanced
+7. **Lasting Intelligence**: Permanent ecosystem improvements
 
-CascadeEvent:
-  - id: UUID
-  - source_overlay: str
-  - insight_type: str
-  - insight_data: dict
-  - hop_count: int
-  - max_hops: int (default: 5)
-  - visited_overlays: list[str]
-  - impact_score: float (0-1)
-```
-
-### Example Cascade Flow
+### Example Cascade: Security Threat Detection
 
 ```
-1. User creates a DECISION capsule about API authentication
-2. MLIntelligenceOverlay analyzes → detects "security" classification
-3. Cascade initiated: "security_relevant_content"
-4. SecurityValidatorOverlay receives (hop 1)
-   → Validates no credentials exposed
-   → Emits "security_validated" insight
-5. GovernanceOverlay receives (hop 2)
-   → Checks if policy proposal needed
-   → No action required
-6. CapsuleAnalyzerOverlay receives (hop 3)
-   → Extracts key decisions and rationale
-   → Links to related capsules
-7. Cascade completes: 3 hops, 4 overlays affected, 2 insights generated
+1. security_validator detects SQL injection (confidence: 0.98)
+2. Graph Update: ThreatRecord created with relationship
+3. Cascade Initiation: Event published to event_system
+4. Parallel Delivery to 4 overlays:
+   - ml_intelligence: Updates anomaly detection model
+   - immune_system: Evaluates severity, increases monitoring
+   - symbolic_governance: Checks auto-proposal thresholds
+   - audit_logger: Creates immutable audit record
+5. Secondary Cascade: ML triggers Performance Optimizer
+   - Allocates 20% more CPU to security validation
 ```
 
 ## Event Delivery
-
-### Subscription Model
-```python
-subscription = event_bus.subscribe(
-    event_types={EventType.CAPSULE_CREATED, EventType.CAPSULE_UPDATED},
-    handler=my_async_handler,
-    min_priority=EventPriority.NORMAL,
-    filter_func=lambda e: e.payload.get("type") == "INSIGHT"
-)
-```
 
 ### Delivery Guarantees
 - **Concurrent Delivery**: All matching handlers run in parallel
 - **Retry Logic**: 3 attempts with exponential backoff (1s base delay)
 - **Dead Letter Queue**: Failed events preserved for investigation
 - **Timeout**: 30 seconds per handler
-- **Metrics**: Published, delivered, failed counts tracked
-
-### Event Queue
-- Async queue with 10,000 item capacity
-- Background worker processes continuously
-- Type indexing for O(1) subscription lookup
+- **Immutable Audit**: Every event logged for reconstruction
 
 ---
 
-# 5. Overlay System: Modular Processing
+# 7. Overlay System: Modular Processing
 
-Overlays are self-contained processing modules that extend Forge's capabilities without modifying the core kernel. They subscribe to events, process data within resource constraints, and emit new events to trigger cascades.
+Overlays are self-contained processing modules that extend Forge's capabilities without modifying the core kernel. They are executed in WebAssembly for true memory-safe isolation.
 
 ## Overlay Architecture
 
 ### Base Overlay Contract
-
-Every overlay implements:
 
 ```python
 class BaseOverlay:
@@ -446,25 +542,14 @@ class BaseOverlay:
     async def health_check(self) -> OverlayHealthCheck
 ```
 
-### Overlay Context
+### WebAssembly Runtime (Wasmtime)
 
-Each execution receives a context with:
-
-```python
-OverlayContext:
-  - overlay_id: str
-  - overlay_name: str
-  - execution_id: UUID (unique per execution)
-  - triggered_by: str (event ID or "manual")
-  - correlation_id: str
-  - user_id: Optional[str]
-  - trust_flame: int (0-100)
-  - capsule_id: Optional[str]
-  - proposal_id: Optional[str]
-  - capabilities: Set[Capability]
-  - fuel_budget: FuelBudget
-  - metadata: dict
-```
+Overlays are compiled to WebAssembly for true isolation:
+- **Compilation**: Python → Nuitka/Pyodide → WebAssembly
+- **Execution**: Wasmtime with fuel metering (CPU limits)
+- **Memory Limits**: Configurable (default 64MB)
+- **Host Functions**: db_read, db_write, event_publish, event_subscribe, log
+- **Capability Gating**: Explicit permissions before function access
 
 ### Resource Constraints (Fuel Budget)
 
@@ -475,152 +560,101 @@ FuelBudget:
   - timeout_ms: 5000 (5 seconds)
 ```
 
-Overlays consume fuel as they operate. Execution halts if fuel exhausted.
-
-## The Six Overlay Types
+## The Six Core Overlays
 
 ### 1. Security Validator Overlay
-**Phase**: VALIDATION | **Purpose**: Threat detection and trust enforcement
+**Phase**: VALIDATION | **Trust**: 90
 
-**Features**:
-- **Content Policy Validation**: Blocks secrets, credentials, prohibited patterns
-- **Trust Level Verification**: Ensures user has permission for operation
-- **Rate Limiting**: Enforces request limits per user (minute/hour windows)
-- **Input Sanitization**: Detects SQL injection, XSS, malicious payloads
-- **Threat Tracking**: Auto-blocks after 10+ threats in 1 hour
-
-**Validation Rules**:
-| Rule | What It Checks |
-|------|----------------|
-| ContentPolicyRule | Blocked patterns, exposed secrets |
-| TrustRule | User trust vs. required trust |
-| RateLimitRule | Request frequency limits |
-| InputSanitizationRule | SQL injection, XSS, script tags |
-
-**Output**: `ValidationResult` with threats, warnings, and rule outcomes
+- Content policy validation (blocks secrets, credentials)
+- Trust level verification
+- Rate limiting enforcement
+- Input sanitization (SQL injection, XSS detection)
+- Threat tracking and auto-blocking
 
 ### 2. ML Intelligence Overlay
-**Phase**: ANALYSIS | **Purpose**: Semantic understanding and classification
+**Phase**: ANALYSIS | **Trust**: 85
 
-**Features**:
-- **Embedding Generation**: 384-1536 dimensional vectors for semantic search
-- **Content Classification**: technical, business, personal, educational, creative, governance
-- **Entity Extraction**: Emails, URLs, dates, money, phone numbers, versions
-- **Pattern Detection**: Questions, lists, code blocks, references
-- **Sentiment Analysis**: -1.0 to +1.0 scale
-- **Anomaly Scoring**: Flags unusual content (very short/long, extreme sentiment)
-- **Keyword Extraction**: TF-based extraction filtering stopwords
-
-**Output**: `AnalysisResult` with embeddings, classifications, entities, patterns, sentiment
+- Embedding generation (384-1536 dimensions)
+- Content classification (technical, business, personal, etc.)
+- Entity extraction (emails, URLs, dates, money)
+- Pattern detection (questions, lists, code blocks)
+- Sentiment analysis (-1.0 to +1.0)
+- Anomaly scoring
 
 ### 3. Governance Overlay
-**Phase**: CONSENSUS | **Purpose**: Democratic decision-making
+**Phase**: CONSENSUS | **Trust**: 85
 
-**Features**:
-- **Proposal Evaluation**: Validates against policies before voting
-- **Vote Collection**: Trust-weighted votes (APPROVE, REJECT, ABSTAIN)
-- **Consensus Calculation**: Configurable thresholds and quorum
-- **Early Consensus**: Supermajority (80%+) can end voting early
-- **Policy Enforcement**: Custom rules (trust thresholds, content requirements)
-- **Ghost Council Integration**: AI advisory recommendations
-
-**Configuration**:
-```python
-ConsensusConfig:
-  - min_votes: 3
-  - quorum_percentage: 10%
-  - approval_threshold: 60%
-  - rejection_threshold: 40%
-  - voting_period_hours: 72
-  - enable_trust_weighting: True
-  - trust_weight_power: 1.5
-```
+- Proposal evaluation against policies
+- Vote collection (trust-weighted)
+- Consensus calculation (configurable thresholds)
+- Early consensus via supermajority (80%+)
+- Ghost Council integration
 
 ### 4. Lineage Tracker Overlay
-**Phase**: SETTLEMENT | **Purpose**: Isnad chain management
+**Phase**: SETTLEMENT | **Trust**: 85
 
-**Features**:
-- **Ancestor/Descendant Tracking**: Maintains derivation relationships
-- **Isnad Chain Computation**: Full transmission history with trust gradient
-- **Circular Reference Detection**: Prevents cycles in lineage graph
-- **Influence Scoring**: Measures capsule impact (trust-weighted, decay-based)
-- **Anomaly Detection**: Flags excessive depth, rapid derivations, broken chains
-
-**Anomaly Types**:
-- Circular references
-- Broken chains (missing parents)
-- Trust spikes (sudden trust changes)
-- Rapid derivation (>100/day from single capsule)
+- Ancestor/descendant tracking
+- Isnad chain computation
+- Circular reference detection
+- Influence scoring (trust-weighted, decay-based)
+- Anomaly detection (excessive depth, rapid derivations)
 
 ### 5. Capsule Analyzer Overlay
-**Phase**: ANALYSIS | **Purpose**: Content insights and quality assessment
+**Phase**: ANALYSIS | **Trust**: 85
 
-**Features**:
-- **Content Analysis**: Word count, reading level (basic→expert)
-- **Quality Scoring**: Completeness, clarity, structure, depth, relevance
-- **Insight Extraction**: Main ideas, key facts, action items, questions
-- **Type Suggestion**: Recommends optimal capsule type based on content
-- **Similarity Detection**: Finds related capsules via topic overlap
-- **Trend Analysis**: Tracks trending terms across capsules
-- **Summarization**: Extractive summary (top sentences by importance)
+- Content analysis (word count, reading level)
+- Quality scoring (completeness, clarity, structure)
+- Insight extraction (main ideas, action items)
+- Type suggestion
+- Similarity detection
+- Summarization
 
 ### 6. Performance Optimizer Overlay
-**Phase**: EXECUTION | **Purpose**: Caching and performance monitoring
+**Phase**: EXECUTION | **Trust**: 85
 
-**Features**:
-- **Query Caching**: TTL-based cache with hit/miss tracking
-- **Performance Monitoring**: Response times (avg, p95, p99), error rates
-- **Optimization Recommendations**: Based on metrics analysis
-- **LLM Parameter Selection**: Optimized temperature, max_tokens, top_p
-- **Resource Hints**: Priority levels for request handling
+- Query caching (TTL-based)
+- Performance monitoring (P95, P99 latency)
+- Optimization recommendations
+- Resource allocation hints
 
-**Recommendations Generated**:
-- Low cache hit rate (<30%) → Increase TTL
-- High response times (>1s avg) → Investigate slow endpoints
-- High error rates (>5%) → Improve reliability
+## Overlay Dependency Graph
 
-## Overlay Manager
+```
+Layer 1: Core System (Trust 100)
+├── event_system
+├── metrics_collector
+└── audit_logger
 
-The `OverlayManager` coordinates all overlay operations:
+Layer 2: Security Layer (Trust 90)
+├── security_validator
+└── immune_system
 
-### Registration
-```python
-manager.register_class(MyOverlay)        # Register class
-instance_id = await manager.create_instance("my_overlay")  # Instantiate
+Layer 3: Intelligence Layer (Trust 85)
+├── ml_intelligence
+├── performance_optimizer
+└── capsule_analyzer
+
+Layer 4: Governance Layer (Trust 85)
+├── symbolic_governance
+└── lineage_tracker
+
+Layer 5: User Overlays (Trust 60)
+└── custom_extensions (sandboxed)
 ```
 
-### Execution
-```python
-result = await manager.execute(OverlayExecutionRequest(
-    overlay_name="security_validator",
-    input_data={"content": "..."},
-    event=capsule_created_event,
-    user_id="user_123",
-    trust_flame=75
-))
-```
+## Circuit Breaker Protection
 
-### Event Routing
-When events are published, the manager automatically routes to all subscribed overlays in parallel.
-
-### Circuit Breaker Protection
 Overlays that fail repeatedly are automatically disabled:
 - 5 consecutive failures → Circuit opens
 - 30 second recovery timeout
 - Test calls allowed in half-open state
 - 2 successes to close circuit
 
-### Health Monitoring
-```python
-health = await manager.health_check_all()
-unhealthy = await manager.get_unhealthy_overlays()
-```
-
 ---
 
-# 6. Governance: Ghost Council & Democratic Voting
+# 8. Governance: Ghost Council & Democratic Voting
 
-Forge implements a sophisticated governance system combining AI-powered advisory with human democratic voting.
+Forge implements sophisticated governance combining AI-powered advisory with human democratic voting.
 
 ## Proposal System
 
@@ -633,47 +667,33 @@ Forge implements a sophisticated governance system combining AI-powered advisory
 | CAPSULE | Capsule governance rules |
 | TRUST | Trust level adjustments |
 | CONSTITUTIONAL | Fundamental rule amendments |
+| EMERGENCY | Urgent system responses |
 
 ### Proposal Lifecycle
 
 ```
-DRAFT → VOTING → PASSED/REJECTED → EXECUTED
+DRAFT → ACTIVE (voting) → CLOSED → APPROVED/REJECTED → EXECUTED
 ```
+
+### Proposal Workflow
 
 1. **Draft**: Proposer creates and can edit/cancel
-2. **Voting**: Submitted for community vote (1-30 day period)
-3. **Outcome**: Determined by approval ratio vs. threshold
-4. **Execution**: Passed proposals trigger their action
+2. **Active**: Submitted for community vote (1-30 day period)
+3. **Closed**: Voting period ends
+4. **Outcome**: Determined by approval ratio vs. threshold
+5. **Execution**: Passed proposals trigger their action
 
-### Creating a Proposal
-
-```python
-POST /proposals
-{
-  "title": "Enable ML classification for all capsules",
-  "description": "This proposal enables automatic ML-based classification...",
-  "type": "SYSTEM",
-  "voting_period_days": 7,
-  "quorum_percent": 10,
-  "pass_threshold": 50,
-  "action": {"setting": "ml_classification", "value": true}
-}
-```
-
-### Trust-Weighted Voting
+## Trust-Weighted Voting
 
 Votes carry weight based on the voter's trust level:
 
-```python
-vote_weight = max(0.1, trust_flame / 100)
-
-# Examples:
-# trust_flame = 100 (CORE)    → weight = 1.0
-# trust_flame = 80 (TRUSTED)  → weight = 0.8
-# trust_flame = 60 (STANDARD) → weight = 0.6
-# trust_flame = 40 (SANDBOX)  → weight = 0.4
-# trust_flame = 0 (QUARANTINE)→ weight = 0.1 (floor)
-```
+| Trust Level | Weight |
+|-------------|--------|
+| CORE (100) | 5.0x |
+| TRUSTED (80) | 3.0x |
+| STANDARD (60) | 1.0x |
+| SANDBOX (40) | 0.5x |
+| QUARANTINE (0) | 0.0x |
 
 ### Consensus Calculation
 
@@ -681,33 +701,14 @@ vote_weight = max(0.1, trust_flame / 100)
 approval_ratio = weighted_for / (weighted_for + weighted_against)
 
 # Pass conditions:
-1. approval_ratio >= pass_threshold (e.g., 50%)
-2. total_votes >= quorum (e.g., 10% of eligible voters)
-3. voting_period has ended (or supermajority reached)
+1. approval_ratio >= pass_threshold (default: 50%)
+2. total_votes >= quorum (default: 30% of eligible voters)
+3. voting_period has ended (or supermajority reached at 80%+)
 ```
-
-### Vote Delegation
-
-Users can delegate their voting power:
-
-```python
-POST /delegations
-{
-  "delegate_to": "user_456",
-  "proposal_types": ["POLICY", "SYSTEM"],
-  "expires_at": "2025-01-01T00:00:00Z"
-}
-```
-
-Delegation features:
-- Circular delegation prevention (max depth: 10)
-- Revocable at any time
-- Type-specific delegation
-- Expiration support
 
 ## Ghost Council: AI Advisory
 
-The Ghost Council is a system of five AI personas that deliberate on governance proposals, providing transparent advisory recommendations.
+The Ghost Council is a system of five AI personas that deliberate on governance proposals, providing transparent advisory recommendations (non-binding).
 
 ### Council Members
 
@@ -721,10 +722,10 @@ The Ghost Council is a system of five AI personas that deliberate on governance 
 
 ### Deliberation Process
 
-1. **Proposal Analysis**: Each member receives proposal with context (voting data, Constitutional AI review)
+1. **Proposal Analysis**: Each member receives proposal with context
 2. **Independent Analysis**: Members analyze using LLM with their persona
 3. **Voting**: Each member votes APPROVE, REJECT, or ABSTAIN with reasoning
-4. **Weight Calculation**: Individual votes weighted by `member.weight × confidence_score`
+4. **Weight Calculation**: `member.weight × confidence_score`
 5. **Consensus**: Weighted tallies determine overall recommendation
 
 ### Deliberation Output
@@ -738,15 +739,6 @@ GhostCouncilDeliberation:
   - recommendation: str
   - member_opinions: list[GhostCouncilMemberOpinion]
 ```
-
-### Cost Optimization
-
-Three deliberation profiles:
-- **Quick**: 1 member (lowest cost)
-- **Standard**: 3 members
-- **Comprehensive**: 5 members (highest accuracy)
-
-Caching: Identical proposals within 30 days reuse cached opinions.
 
 ## Constitutional AI Review
 
@@ -763,26 +755,9 @@ Before voting begins, proposals undergo ethical analysis:
 - **Review**: overall_score >= 50, some concerns
 - **Reject**: overall_score < 50, major conflicts
 
-## Serious Issues System
-
-The Ghost Council also responds to system emergencies:
-
-### Issue Categories
-- SECURITY: Threat detection, attacks
-- GOVERNANCE: Vetoes, emergency actions, constitution violations
-- TRUST: Significant trust drops (>20 points)
-- SYSTEM: Multiple errors, critical failures
-- ETHICAL: Values conflicts
-- DATA_INTEGRITY: Data corruption
-
-### Severity Levels
-- LOW, MEDIUM, HIGH, CRITICAL
-
-For CRITICAL issues, the Ghost Council can block rejection unless unanimous.
-
 ---
 
-# 7. Security: Authentication & Authorization
+# 9. Security: Authentication & Authorization
 
 Forge implements defense-in-depth security with multiple layers of protection.
 
@@ -804,27 +779,12 @@ Forge implements defense-in-depth security with multiple layers of protection.
 }
 ```
 
-**Refresh Tokens** (7-day expiry): Used to obtain new access tokens without re-authentication.
+**Refresh Tokens** (7-day expiry): Used to obtain new access tokens.
 
-### Token Security Features
-- HS256 cryptographic signatures
-- JTI-based blacklisting for revocation
-- Trust flame validation (must be present and in range)
-- Automatic cleanup of expired blacklist entries
-
-### Login Flow
-
-1. User submits credentials (username/email + password)
-2. System checks account lockout status (5 failed attempts = 30-minute lockout)
-3. Password verified with bcrypt (constant-time comparison)
-4. Token pair generated (access + refresh)
-5. Session established with httpOnly cookies
-6. Audit log entry created
-
-### Password Requirements
+### Password Requirements (PCI-DSS 4.0.1)
 
 ```
-- Minimum 12 characters (PCI-DSS 4.0.1)
+- Minimum 12 characters
 - At least one uppercase letter
 - At least one lowercase letter
 - At least one digit
@@ -833,6 +793,12 @@ Forge implements defense-in-depth security with multiple layers of protection.
 - 90-day expiration
 - Cannot reuse last 4 passwords
 ```
+
+### Login Protection
+
+- **Argon2id**: Password hashing (OWASP recommended)
+- **Account Lockout**: 5 failed attempts = 15-30 minute lockout
+- **Constant-Time Comparison**: Prevents timing attacks
 
 ## Authorization: Triple-Layer Model
 
@@ -861,8 +827,6 @@ Forge implements defense-in-depth security with multiple layers of protection.
 
 ### Layer 3: Capability-Based Access (For Overlays)
 
-Capabilities granted by trust level:
-
 ```python
 STANDARD:
   - CAPSULE_READ, CAPSULE_WRITE
@@ -870,7 +834,7 @@ STANDARD:
   - DATABASE_READ
 
 TRUSTED:
-  - All STANDARD capabilities plus:
+  - All STANDARD plus:
   - EVENT_PUBLISH
   - DATABASE_WRITE
   - GOVERNANCE_VOTE, GOVERNANCE_PROPOSE
@@ -883,18 +847,7 @@ CORE:
   - SYSTEM_CONFIG
 ```
 
-## Middleware Stack
-
-Request processing passes through multiple security layers:
-
-1. **Correlation ID**: Assigns tracking ID for distributed tracing
-2. **Request Logging**: Logs method, path, duration (redacts sensitive params)
-3. **Authentication**: Extracts and validates JWT
-4. **Rate Limiting**: Enforces per-user limits (trust-weighted multiplier)
-5. **Security Headers**: Adds CSP, X-Frame-Options, HSTS
-6. **CSRF Protection**: Double-submit cookie pattern
-
-### Rate Limiting
+## Rate Limiting
 
 ```python
 Default Limits:
@@ -902,20 +855,15 @@ Default Limits:
   - 1000 requests/hour
   - 10 burst allowance
 
-Auth Endpoints (Stricter):
-  - 10 requests/minute
-  - 50 requests/hour
-  - No burst allowance
+Trust-based Multipliers:
+  - QUARANTINE: 0.1x (6 req/min)
+  - SANDBOX: 0.5x (30 req/min)
+  - STANDARD: 1.0x (60 req/min)
+  - TRUSTED: 2.0x (120 req/min)
+  - CORE: 10.0x + immune to limits
 ```
 
-Trust-based multipliers:
-- QUARANTINE: 0.1x (6 req/min)
-- SANDBOX: 0.5x (30 req/min)
-- STANDARD: 1.0x (60 req/min)
-- TRUSTED: 2.0x (120 req/min)
-- CORE: 10.0x + immune to limits
-
-### Security Headers
+## Security Headers
 
 ```
 X-Content-Type-Options: nosniff
@@ -928,13 +876,11 @@ Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
 
 ---
 
-# 8. Immune System: Self-Healing & Resilience
+# 10. Immune System: Self-Healing & Resilience
 
 Forge's immune system provides automatic failure detection, prevention, and recovery.
 
 ## Circuit Breakers
-
-Circuit breakers prevent cascading failures by stopping requests to failing services.
 
 ### States
 
@@ -942,18 +888,6 @@ Circuit breakers prevent cascading failures by stopping requests to failing serv
 CLOSED (Normal) → OPEN (Tripped) → HALF_OPEN (Testing)
       ↑                                    │
       └────────────── Success ─────────────┘
-```
-
-### Configuration
-
-```python
-CircuitBreakerConfig:
-  - failure_threshold: 5       # Failures to open circuit
-  - recovery_timeout: 30s      # Time before half-open
-  - call_timeout: 10s          # Max time per call
-  - failure_rate_threshold: 0.5  # 50% failure rate opens circuit
-  - half_open_max_calls: 3     # Test calls in half-open
-  - success_threshold: 2       # Successes to close circuit
 ```
 
 ### Pre-configured Services
@@ -967,8 +901,6 @@ CircuitBreakerConfig:
 
 ## Anomaly Detection
 
-Multiple detection methods identify unusual patterns:
-
 ### Detection Types
 
 | Type | Method | What It Detects |
@@ -978,61 +910,33 @@ Multiple detection methods identify unusual patterns:
 | Temporal | Time-series | Sudden spikes or drops |
 | Isolation | IsolationForest ML | Multi-dimensional outliers |
 | Rate | Time-bucketed | Frequency anomalies |
-| Composite | Multiple detectors | High-confidence anomalies |
 
-### Severity Classification
+### Immune System Threat Types
 
-```python
-- CRITICAL: score > 0.9 (immediate action required)
-- HIGH: score > 0.7 (investigate soon)
-- MEDIUM: score > 0.5 (monitor closely)
-- LOW: score > 0 (note for patterns)
-```
-
-### Pre-configured Detectors
-
-- `pipeline_latency_ms`: Composite (Statistical + IsolationForest)
-- `error_rate`: Rate-based (sensitive z-score: 2.5)
-- `capsule_creation_rate`: Rate-based
-- `trust_score_change`: Statistical
-- `memory_usage_mb`: Statistical
-- `user_activity`: Behavioral
+- **OVERLAY_FAILURE**: High failure rates (50%+ → auto-quarantine)
+- **RATE_LIMIT_ABUSE**: 90%+ of quota consistently
+- **AUTH_ANOMALY**: 10+ failed attempts per 5-min window → IP block
+- **DATA_ANOMALY**: Suspicious data patterns
+- **RESOURCE_EXHAUSTION**: CPU/memory depletion
 
 ## Health Monitoring
 
-Hierarchical health checks provide system-wide visibility:
-
-### Health Status
-
-```python
-HEALTHY    → Fully operational
-DEGRADED   → Operational but impaired
-UNHEALTHY  → Not operational
-UNKNOWN    → Cannot determine
-```
-
-### Health Check Hierarchy
+### Hierarchical Health Checks
 
 ```
 System Health (Composite)
-├── Database Layer
-│   └── Neo4j Health Check
-├── Kernel Layer
-│   ├── Overlay Health Check
-│   └── Event System Health Check
-└── Infrastructure Layer
-    ├── Memory Usage Check (warning: 80%, critical: 95%)
-    ├── Disk Usage Check (warning: 85%, critical: 95%)
-    └── Circuit Breaker Health Check
+├── L1: Overlay Self-Check
+│   └── Per-overlay health verification
+├── L2: Dependency Validation
+│   └── Database, cache, external services
+├── L3: Circuit Breaker Status
+│   └── All breakers in closed state
+└── L4: External Probe Validation
+    ├── Memory Usage (warning: 80%, critical: 95%)
+    └── Disk Usage (warning: 85%, critical: 95%)
 ```
 
-### Background Monitoring
-
-Continuous health checks run every 30 seconds with callbacks on status changes.
-
 ## Canary Deployments
-
-Safe gradual rollouts for new overlay versions:
 
 ### Rollout Strategies
 
@@ -1049,236 +953,13 @@ Safe gradual rollouts for new overlay versions:
 - Anomaly score > 0.8
 - Health check failure
 
-### Approval Gates
-
-At 50% traffic, rollouts can pause for human approval before proceeding.
-
-## Self-Healing Scenarios
-
-### Database Connection Failure
-1. Circuit breaker detects 3 consecutive failures
-2. Circuit opens → blocks database calls
-3. Health check fails → system marked DEGRADED
-4. After 30 seconds: Circuit half-open → test calls
-5. If tests succeed → Circuit closes → HEALTHY
-
-### Overlay Canary Failure
-1. Canary at 15% traffic
-2. Latency increases: p99 goes 100ms → 2500ms
-3. Health check fails (>2000ms threshold)
-4. Auto-rollback → returns to stable version
-5. Full traffic on old version
+**Success Criteria**: <1% error rate, <2x latency increase.
 
 ---
 
-# 9. Compliance Framework
+# 11. Trust Hierarchy
 
-Forge includes a comprehensive compliance framework supporting 25+ regulatory frameworks with 400+ controls.
-
-## Supported Frameworks
-
-### Privacy Regulations
-- **GDPR**: EU General Data Protection Regulation
-- **CCPA/CPRA**: California Consumer Privacy Act
-- **LGPD**: Brazil's General Data Protection Law
-- **PIPL**: China Personal Information Protection Law
-- **PDPA**: Singapore/Thailand Personal Data Protection
-- Plus: APPI, POPIA, DPDP, LAW25, PIPEDA, VCDPA, CTDPA, UCPA
-
-### Security Standards
-- **SOC 2**: Trust Services Criteria (CC6, CC7, CC8, CC9)
-- **ISO 27001**: Information Security Management
-- **NIST CSF/800-53**: Security controls framework
-- **CIS Controls**: Center for Internet Security
-- **FedRAMP**: Federal cloud security
-- **CSA CCM**: Cloud Controls Matrix
-
-### Industry-Specific
-- **HIPAA**: Healthcare (PHI protection)
-- **PCI-DSS 4.0.1**: Payment cards
-- **COPPA**: Children's data (June 2025 updates)
-- **FERPA**: Educational records
-- **GLBA**: Financial data
-- **SOX/FINRA**: Financial reporting
-
-### AI Governance
-- **EU AI Act**: Risk-based AI regulation
-- **Colorado AI Act**: State AI requirements
-- **NYC Local Law 144**: Automated employment decisions
-- **NIST AI RMF**: AI risk management framework
-- **ISO 42001**: AI management system
-
-### Accessibility
-- **WCAG 2.2**: Web Content Accessibility Guidelines
-- **EAA**: European Accessibility Act
-- **EN 301 549**: EU accessibility standard
-- **ADA Digital/Section 508**: US accessibility
-
-## Privacy Compliance Services
-
-### Data Subject Access Requests (DSAR)
-
-Handles all data subject rights requests:
-
-| Request Type | GDPR Article | Processing |
-|--------------|--------------|------------|
-| Access | 15 | Export all personal data |
-| Rectification | 16 | Correct inaccurate data |
-| Erasure | 17 | "Right to be forgotten" |
-| Restriction | 18 | Limit processing |
-| Portability | 20 | Machine-readable export |
-| Objection | 21 | Opt-out of processing |
-| Automated Decisions | 22 | Human review of AI decisions |
-
-**Deadline Enforcement**:
-- GDPR: 30 days
-- CCPA: 45 days
-- LGPD: 15 days (strictest)
-
-### Consent Management
-
-Granular consent tracking for:
-- Essential operations
-- Analytics
-- Marketing
-- Profiling
-- Third-party sharing
-- AI processing/training
-- Research
-- Health/Financial data
-- Children's data
-
-**Features**:
-- IAB TCF 2.2 string encoding
-- Global Privacy Control (GPC) support
-- CCPA Do Not Sell/Share compliance
-- Demonstrable consent proof export
-
-## Security Compliance
-
-### Access Control Service
-
-**RBAC (Role-Based)**:
-- Default roles: User, Data Steward, Compliance Officer, AI Reviewer, Administrator
-- Resource types: Capsule, User, Overlay, Proposal, Audit Log, etc.
-- Data classifications: Public, Internal, Confidential, Restricted, Sensitive, PHI, PCI
-
-**ABAC (Attribute-Based)**:
-- Subject attributes (department, clearance)
-- Resource attributes (classification, data type)
-- Environment attributes (time, IP, device trust)
-
-### Session Security
-
-```python
-Session Controls:
-  - Duration: 8 hours (4 hours for privileged)
-  - Idle timeout: 15 minutes (PCI-DSS)
-  - Concurrent sessions: 3 maximum
-  - MFA: Required for privileged users
-```
-
-## AI Governance
-
-### EU AI Act Risk Classification
-
-| Risk Level | Examples | Requirements |
-|------------|----------|--------------|
-| Unacceptable | Social scoring, manipulation | Prohibited |
-| High-Risk | Employment decisions, credit scoring | Conformity assessment, registration |
-| GPAI Systemic | Large general-purpose AI | Special obligations |
-| Limited | Chatbots, emotion recognition | Transparency |
-| Minimal | Recommendations, search | None |
-
-### AI System Registration
-
-For high-risk systems:
-- System name, version, provider
-- Risk classification
-- Intended purpose
-- Model type and oversight measures
-- Training data description
-- EU database registration
-
-### AI Decision Logging
-
-Every AI decision logs:
-- System ID and model version
-- Decision outcome and confidence
-- Reasoning chain and key factors
-- Legal/significant effect flags
-- Plain-language explanation
-- Human review capability
-
-### Bias Detection
-
-Metrics tracked:
-- Demographic parity
-- Equalized odds
-- Equal opportunity
-- Predictive parity
-- Calibration across protected groups
-
-## Data Residency
-
-### Regional Data Pods
-
-| Region | Locations |
-|--------|-----------|
-| North America | us-east-1, us-west-2, ca-central-1 |
-| Europe | eu-west-1, eu-central-1, eu-north-1 |
-| Asia-Pacific | ap-southeast-1, ap-northeast-1, ap-south-1 |
-| China | cn-north-1, cn-northwest-1 (isolated) |
-| Other | sa-east-1, me-south-1, af-south-1 |
-
-### Transfer Mechanisms
-
-| Mechanism | Use Case |
-|-----------|----------|
-| Adequacy Decisions | Pre-approved countries |
-| SCCs | Standard Contractual Clauses |
-| BCRs | Binding Corporate Rules |
-| CAC Assessment | China-specific |
-| Derogations | Specific exceptions |
-| Prohibited | Russia transfers |
-
-### Localization Requirements
-
-- **China (PIPL)**: Mandatory localization; CAC assessment for transfers
-- **Russia (FZ-152)**: Mandatory localization; transfers PROHIBITED
-- **Vietnam/Indonesia**: Mandatory localization
-
-## Audit Logging
-
-### Cryptographic Integrity
-
-- Every event logged with SHA-256 hash
-- Previous hash pointer (blockchain-like chain)
-- Tamper detection via `verify_audit_chain()`
-- Immutable storage
-
-### Retention Periods
-
-| Category | Retention |
-|----------|-----------|
-| Authentication (SOX) | 7 years |
-| Data Access (HIPAA) | 6 years |
-| Standard | 3-7 years |
-
-## Compliance Enforcement Points
-
-1. **Request/Response**: Access control before sensitive operations
-2. **Data Access**: Audit logging for all sensitive reads
-3. **Consent**: Processing blocked without valid consent
-4. **Cross-Border**: Data residency routing enforced
-5. **Breach**: Automated deadline calculation and notification
-6. **AI Decisions**: Logging mandatory, explainability required
-
----
-
-# 10. Trust Hierarchy
-
-Trust is Forge's mechanism for graduated access control. It affects what users can do, how their votes count, and what resources they can access.
+Trust is Forge's mechanism for graduated access control, affecting permissions, voting weight, and resource access.
 
 ## Trust Levels
 
@@ -1302,38 +983,13 @@ Trust is Forge's mechanism for graduated access control. It affects what users c
 | Finalize Proposals | | | | | ✓ |
 | Resolve Issues | | | | | ✓ |
 
-## Trust Flame Score
-
-The `trust_flame` is a numeric score (0-100) that:
-- Determines trust level (e.g., 75 → TRUSTED)
-- Weights governance votes
-- Sets rate limit multipliers
-- Controls capability access
-
-### Score to Level Conversion
-
-```python
-def get_trust_level(trust_flame: int) -> TrustLevel:
-    if trust_flame >= 100: return TrustLevel.CORE
-    if trust_flame >= 80: return TrustLevel.TRUSTED
-    if trust_flame >= 60: return TrustLevel.STANDARD
-    if trust_flame >= 40: return TrustLevel.SANDBOX
-    return TrustLevel.QUARANTINE
-```
-
 ## Trust Adjustment
 
-Administrators can adjust trust with full audit trail:
+Trust changes dynamically based on behavior:
+- **Positive**: Quality contributions, accurate predictions, helpful voting
+- **Negative**: Failed validations, security threats, rule violations
 
-```python
-POST /users/{user_id}/trust
-{
-  "new_trust_flame": 80,
-  "reason": "Promoted to trusted contributor after 6 months"
-}
-```
-
-All changes logged with:
+All trust changes are logged with:
 - Actor (who made the change)
 - Previous and new values
 - Reason
@@ -1341,9 +997,983 @@ All changes logged with:
 
 ---
 
-# 11. Data Flow: End-to-End Processing
+# Part III: Compliance Framework (forge/compliance)
 
-This section traces how data flows through Forge from initial request to final response.
+---
+
+# 12. Compliance Framework Overview
+
+The **Forge Compliance Framework** is an enterprise-grade compliance management system implementing **400+ technical controls across 25+ regulatory frameworks**.
+
+## Supported Frameworks (25+)
+
+### Privacy Regulations
+- **GDPR** (EU) - 13 critical controls
+- **CCPA/CPRA** (California) - 5 state-specific controls
+- **LGPD** (Brazil) - 15-day deadline (strictest)
+- **PIPL** (China) - Personal Information Protection Law
+- **PDPA** (Singapore, Thailand)
+- **POPIA** (South Africa)
+- **APPI** (Japan)
+- **DPDP** (India)
+- **PIPEDA** (Canada)
+- **VCDPA/CTDPA/UCPA** (US States)
+
+### Security Standards
+- **SOC 2 Type I/II** - 8 controls (CC6, CC7, CC8, CC9.2)
+- **ISO 27001:2022** - 4 controls (A.5.15, A.8.2, A.8.13, A.8.24)
+- **NIST 800-53 Rev 5** - 7 controls (AC, AU, CA, IA, SC families)
+- **NIST Cybersecurity Framework 2.0**
+- **CIS Controls v8**
+- **FedRAMP** (Moderate/High)
+- **CSA CCM** (Cloud Controls Matrix)
+
+### Industry-Specific
+- **HIPAA/HITECH** - 5 controls (PHI protection)
+- **PCI-DSS 4.0.1** - 5 controls (payments)
+- **COPPA** - 3 controls (children's data)
+- **FERPA** (Educational records)
+- **GLBA** (Financial data)
+- **SOX/FINRA** (Financial reporting)
+
+### AI Governance
+- **EU AI Act** - 10 controls per Article classification
+- **Colorado AI Act**
+- **NYC Local Law 144** (AEDT)
+- **NIST AI RMF**
+- **ISO/IEC 42001**
+
+### Accessibility
+- **WCAG 2.2 Level AA** - 8 controls including new 2.2 criteria
+- **European Accessibility Act (EAA)**
+- **EN 301 549**
+- **Section 508/ADA**
+
+## Framework Architecture
+
+```
+ComplianceEngine (Orchestration)
+    ↓
+ComplianceRegistry (400+ Control Definitions)
+    ↓
+Service Layer:
+├── Privacy (Consent, DSAR)
+├── Security (Access Control, Breach)
+├── Encryption (AES-256-GCM, Keys)
+├── Residency (Regional Pods)
+├── AI Governance (EU AI Act)
+├── Industry (HIPAA, PCI-DSS)
+├── Accessibility (WCAG 2.2)
+└── Reporting (Audit Reports)
+    ↓
+API Endpoints (/compliance/*)
+```
+
+---
+
+# 13. Privacy Regulations & DSAR Processing
+
+## Consent Management
+
+### 39 Consent Purposes (IAB TCF 2.2 Aligned)
+
+**TCF Standard Purposes (1-10)**:
+- Store/access information on device
+- Select basic/personalized ads
+- Create ad/content profile
+- Measure ad/content performance
+
+**Custom Forge Purposes**:
+- AI training/processing
+- Analytics
+- Marketing (email/SMS)
+- Third-party sharing
+- Data sale
+- Profiling
+- Automated decisions
+
+### Key Methods
+
+```python
+consent_service.record_consent()        # GDPR Article 7 compliant
+consent_service.withdraw_consent()      # Easy withdrawal (Art. 7.3)
+consent_service.process_gpc_signal()    # Global Privacy Control
+consent_service.process_do_not_sell()   # CCPA §1798.120
+consent_service.check_consent()         # Purpose-based verification
+consent_service.export_consent_proof()  # Demonstrable consent
+```
+
+### Features
+- IAB TCF 2.2 string encoding/decoding
+- Global Privacy Control (GPC) support
+- CCPA Do Not Sell/Share compliance
+- Demonstrable consent proof export
+
+## DSAR Processing
+
+### Supported Request Types
+
+| Request Type | GDPR Article | Processing |
+|--------------|--------------|------------|
+| Access | 15 | Export all personal data |
+| Rectification | 16 | Correct inaccurate data |
+| Erasure | 17 | "Right to be forgotten" |
+| Restriction | 18 | Limit processing |
+| Portability | 20 | Machine-readable export |
+| Objection | 21 | Opt-out of processing |
+| Automated Decisions | 22 | Human review of AI decisions |
+
+### Deadline Enforcement
+
+| Jurisdiction | Deadline |
+|--------------|----------|
+| GDPR | 30 days |
+| CCPA | 45 days |
+| LGPD | 15 days (strictest) |
+
+### Verification Methods
+
+- Email confirmation
+- SMS OTP
+- Document upload
+- Knowledge-based auth
+- Account login
+- Notarized verification
+
+### Export Formats
+
+- JSON (structured, metadata-inclusive)
+- CSV (tabular data)
+- Machine-readable (JSON-LD with schema.org)
+- XML support
+
+### Erasure Exceptions
+
+- Legal hold
+- Regulatory retention
+- Contract performance
+- Legal claims establishment
+- Public interest
+- Scientific research
+- Freedom of expression
+- Legal obligation
+- Public health
+- Archiving
+
+---
+
+# 14. Security Frameworks
+
+## Access Control Service
+
+### Access Control Models Supported
+
+- **RBAC** (Role-Based)
+- **ABAC** (Attribute-Based)
+- **PBAC** (Policy-Based)
+- **DAC** (Discretionary)
+- **MAC** (Mandatory)
+- **Zero-Trust Architecture**
+
+### Role Structure
+
+```python
+Role:
+  - role_id, name, description
+  - permissions (READ, WRITE, DELETE, EXPORT, ADMIN)
+  - resource_types (CAPSULE, USER, OVERLAY, AUDIT_LOG, DSAR)
+  - data_classifications (PUBLIC, PERSONAL_DATA, PHI, PCI)
+  - is_privileged, max_session_duration
+  - requires_mfa
+```
+
+### Default Roles
+
+- User
+- Data Steward
+- Compliance Officer
+- AI Reviewer
+- Administrator
+
+### MFA Support
+
+- TOTP (Time-based OTP)
+- SMS OTP
+- Hardware tokens
+- Biometric
+
+### Session Security
+
+```python
+Session Controls:
+  - Duration: 8 hours (4 hours for privileged)
+  - Idle timeout: 15 minutes (PCI-DSS)
+  - Concurrent sessions: 3 maximum
+  - MFA: Required for privileged users
+```
+
+## Encryption Service
+
+### Standards
+
+| Type | Algorithm | Notes |
+|------|-----------|-------|
+| At Rest | AES-256-GCM | Default, also AES-256-CBC, ChaCha20-Poly1305 |
+| In Transit | TLS 1.3 | TLS 1.2 minimum |
+| Asymmetric | RSA-4096, ECDSA-P384 | Key signing |
+
+### Key Rotation Policies
+
+| Environment | Rotation |
+|-------------|----------|
+| High-risk | 30 days |
+| Standard production | 90 days |
+| Lower risk | 180 days |
+| Archive keys | 1 year |
+| Maximum | 2 years (NIST SP 800-57) |
+
+### HSM Integration
+
+- AWS CloudHSM
+- Azure Dedicated HSM
+- GCP Cloud HSM
+- Thales Luna
+
+## Breach Notification
+
+### Notification Deadlines by Jurisdiction
+
+| Deadline | Jurisdictions |
+|----------|---------------|
+| 72 hours | EU, UK, Singapore, Thailand, Brazil, California |
+| 24 hours | China (immediate for national security) |
+| Custom | Per jurisdiction requirements |
+
+### Breach Lifecycle
+
+```python
+BreachNotification:
+  - discovered_at, discovered_by, discovery_method
+  - severity (CRITICAL/HIGH/MEDIUM/LOW)
+  - breach_type (unauthorized_access/theft/loss/disclosure)
+  - data_categories, data_elements, record_count
+  - jurisdictions, notification_deadlines (auto-calculated)
+  - root_cause, vulnerability_id, attack_vector
+  - contained, contained_at, containment_actions
+  - authority_notifications (list per jurisdiction)
+  - individual_notification tracking
+```
+
+## Audit Logging
+
+### Cryptographic Integrity
+
+- Every event logged with SHA-256 hash
+- Previous hash pointer (blockchain-like chain)
+- Tamper detection via `verify_audit_chain()`
+- Immutable storage
+
+### Retention Periods
+
+| Category | Retention |
+|----------|-----------|
+| Authentication (SOX) | 7 years |
+| Data Access (HIPAA) | 6 years |
+| Standard | 3-7 years |
+
+---
+
+# 15. AI Governance & EU AI Act
+
+## EU AI Act Risk Classification
+
+| Risk Level | Examples | Requirements | Penalty |
+|------------|----------|--------------|---------|
+| Unacceptable | Social scoring, manipulation | Prohibited | 7% revenue |
+| High-Risk | Employment decisions, credit scoring | Conformity assessment, registration | 3% revenue |
+| GPAI Systemic | Large general-purpose AI | Special obligations | 3% revenue |
+| Limited | Chatbots, emotion recognition | Transparency | 1.5% revenue |
+| Minimal | Recommendations, search | None | - |
+
+## 14 AI Use Cases (Annex III)
+
+**Prohibited:**
+- Social scoring
+- Subliminal manipulation
+- Exploitation of vulnerabilities
+- Real-time biometric identification
+
+**High-Risk:**
+- Biometric identification
+- Critical infrastructure
+- Education access
+- Employment decisions
+- Essential services
+- Credit scoring
+- Law enforcement
+- Justice administration
+
+**Other:**
+- GPAI (General Purpose)
+- GPAI with Systemic Risk
+- Limited Risk (chatbots, emotion recognition, deepfakes)
+- Minimal Risk (recommendations, content generation)
+
+## AI System Registration
+
+For high-risk systems:
+- System name, version, provider
+- Risk classification
+- Intended purpose
+- Model type and oversight measures
+- Training data description
+- EU database registration
+
+## AI Decision Logging
+
+Every AI decision logs:
+- System ID and model version
+- Decision outcome and confidence
+- Reasoning chain and key factors
+- Legal/significant effect flags
+- Plain-language explanation
+- Human review capability
+
+## Explainability Methods
+
+- Feature importance
+- SHAP (SHapley Additive exPlanations)
+- LIME (Local Interpretable Model-agnostic Explanations)
+- Attention weights
+- Counterfactual explanations
+- Rule extraction
+- Prototype-based
+- Natural language explanations
+
+## Bias Metrics
+
+- Demographic parity
+- Equalized odds
+- Equal opportunity
+- Predictive parity
+- Calibration
+- Individual fairness
+- Counterfactual fairness
+
+---
+
+# 16. Industry-Specific Compliance
+
+## HIPAA Service
+
+### 18 Safe Harbor De-identification Identifiers
+
+Names, geographic data, dates, phone numbers, SSN, MRN, device IDs, URLs, IPs, biometrics, photos, and more.
+
+### Authorization Purposes
+
+- Treatment
+- Payment
+- Healthcare operations
+- Research
+- Public health
+- Law enforcement
+- Legal proceedings
+
+### Key Features
+
+- Business Associate Agreements (BAA) management
+- PHI access logging (6-year retention)
+- Encryption mandatory (2025 proposed rule)
+- De-identification validation
+
+## PCI-DSS 4.0.1 Service
+
+### Key Requirements (March 2025 Deadline)
+
+| Requirement | Control |
+|-------------|---------|
+| 8.3.6 | 12-character password minimum |
+| 8.4.2 | MFA for CDE access |
+| 5.4.1 | Anti-phishing controls |
+| 6.4.3 | Script integrity protection |
+| 12.3.1 | Strong cryptography for cardholder data |
+
+### Features
+
+- Tokenization for card data
+- PAN masking
+- Key rotation enforcement
+
+## COPPA Service (June 2025 Updates)
+
+### Verifiable Parental Consent (VPC) Methods
+
+- ID + face match
+- Credit card verification
+- Knowledge-based authentication
+- Video verification
+
+### Key Controls
+
+- Age gate enforcement (13-year threshold)
+- Separate third-party consent for ads, analytics, AI
+- Security program documentation
+- Parental consent verification workflow
+
+---
+
+# 17. Accessibility Standards
+
+## WCAG 2.2 Level AA
+
+### 8 Controls Including New 2.2 Criteria
+
+| Success Criteria | Description | New in 2.2 |
+|------------------|-------------|------------|
+| 1.1.1 | Non-text content | |
+| 1.4.3 | Color contrast | |
+| 2.1.1 | Keyboard access | |
+| 2.4.11 | Focus visibility | ✓ |
+| 2.5.7 | Dragging alternatives | ✓ |
+| 2.5.8 | Target size 24x24px | ✓ |
+| 3.3.7 | Redundant entry | ✓ |
+| 3.3.8 | Accessible authentication | ✓ |
+
+## Other Standards Supported
+
+- **European Accessibility Act (EAA)**
+- **EN 301 549** (EU accessibility standard)
+- **Section 508** (US Federal)
+- **ADA Digital Accessibility**
+
+## Features
+
+- VPAT Generation (Voluntary Product Accessibility Template)
+- Automated accessibility testing
+- Issue tracking and remediation
+- Compliance summary reporting
+
+---
+
+# 18. Data Residency & Cross-Border Transfers
+
+## Regional Data Pods
+
+| Region | Locations |
+|--------|-----------|
+| Americas | us-east-1, us-west-2, ca-central-1 |
+| Europe | eu-west-1, eu-central-1, eu-north-1 |
+| Asia-Pacific | ap-southeast-1, ap-northeast-1, ap-south-1 |
+| China | cn-north-1, cn-northwest-1 (isolated) |
+| Other | sa-east-1, me-south-1, af-south-1 |
+
+## Transfer Mechanisms
+
+| Mechanism | Use Case |
+|-----------|----------|
+| Adequacy Decisions | Pre-approved countries |
+| SCCs | Standard Contractual Clauses |
+| BCRs | Binding Corporate Rules |
+| CAC Assessment | China-specific |
+| Derogations | Specific exceptions (Article 49) |
+| Prohibited | Russia transfers |
+
+## Localization Requirements
+
+| Country | Requirement |
+|---------|-------------|
+| China (PIPL) | Mandatory localization; CAC assessment for transfers |
+| Russia (FZ-152) | Mandatory localization; transfers PROHIBITED |
+| Vietnam | Mandatory localization |
+| Indonesia | Mandatory localization |
+
+---
+
+# Part IV: Virtuals Protocol Integration (forge_virtuals_integration)
+
+---
+
+# 19. Virtuals Integration Overview
+
+The **Virtuals Protocol Integration** enables Forge to deploy autonomous AI agents on blockchain with their own wallets, tokenization, and commerce capabilities.
+
+## What is "Virtuals"?
+
+**Virtuals Protocol** is a blockchain-based platform for creating, deploying, and monetizing autonomous AI agents:
+
+- **Virtual Agents**: Autonomous AI agents deployed on blockchain with their own wallets
+- **VIRTUAL Token**: Native cryptocurrency for staking, payments, and revenue distribution
+- **GAME Framework**: Generative Autonomous Multimodal Entities architecture
+- **Agent Commerce Protocol (ACP)**: Protocol for agent-to-agent transactions
+
+## Key Integration Points
+
+| Component | Description |
+|-----------|-------------|
+| GAME Framework | Virtuals' agentic architecture for autonomous agents |
+| ACP | Agent-to-agent commerce and service marketplace |
+| Tokenization | Transform Forge entities into tradeable tokens |
+| Bonding Curves | Token price discovery during launch |
+| Multi-Chain | Base (primary), Ethereum, Solana support |
+
+## Module Structure
+
+```
+forge_virtuals_integration/
+├── forge/virtuals/
+│   ├── config.py              # Chain and API configuration
+│   ├── models/
+│   │   ├── agent.py           # Agent models
+│   │   ├── acp.py             # ACP protocol models
+│   │   └── tokenization.py    # Token models
+│   ├── chains/
+│   │   ├── base_client.py     # Abstract blockchain client
+│   │   ├── evm_client.py      # Base/Ethereum client
+│   │   └── solana_client.py   # Solana client
+│   ├── game/
+│   │   ├── sdk_client.py      # GAME SDK wrapper
+│   │   └── forge_functions.py # Pre-built Forge functions
+│   ├── acp/service.py         # ACP commerce service
+│   ├── tokenization/service.py # Token management
+│   ├── revenue/service.py     # Revenue distribution
+│   └── api/routes.py          # REST endpoints
+└── examples/
+    └── full_integration.py    # Integration example
+```
+
+---
+
+# 20. Virtual Agents & GAME Framework
+
+## Agent Lifecycle
+
+### 1. Creation Phase
+
+Define agent components:
+- **Personality**: Name, description, traits, communication style, expertise domains
+- **Goals**: Primary goal, secondary goals, constraints, success metrics
+- **Memory**: Long-term persistence, retention, working memory, cross-platform sync
+- **Workers**: Specialized task handlers with functions and state schemas
+
+### 2. Initialization Phase
+
+- Receive GAME agent ID from framework
+- Create blockchain wallets on enabled chains
+- Deploy ERC-6551 token-bound account (if needed)
+- Register on ACP service registry
+
+### 3. Operational Phase
+
+```
+┌─────────────────────────────────────┐
+│  Task Generator (High-Level Planner) │
+│  - Determines goals and tasks        │
+│  - Uses LLM for planning             │
+└────────────────┬────────────────────┘
+                 │ Routes to appropriate worker
+┌─────────────────────────────────────┐
+│ Workers (Low-Level Planners)         │
+│ ┌──────────────┐  ┌──────────────┐  │
+│ │ Knowledge    │  │ Analysis     │  │
+│ │ Worker       │  │ Worker       │  │
+│ ├──────────────┤  ├──────────────┤  │
+│ │ Functions:   │  │ Functions:   │  │
+│ │ - search     │  │ - analyze    │  │
+│ │ - retrieve   │  │ - validate   │  │
+│ │ - update     │  │ - score      │  │
+│ └──────────────┘  └──────────────┘  │
+└─────────────────────────────────────┘
+```
+
+### 4. Revenue Phase (if tokenized)
+
+- Earn fees from services provided
+- Participate in ACP commerce
+- Generate revenue from knowledge access
+- Receive governance rewards
+
+## Agent Data Models
+
+### ForgeAgent
+
+```python
+ForgeAgent:
+  - id: UUID
+  - game_agent_id: str (from GAME framework)
+  - owner_id: str
+  - personality: AgentPersonality
+  - goals: AgentGoals
+  - workers: list[WorkerDefinition]
+  - memory_config: AgentMemoryConfig
+  - wallets: dict[Chain, WalletInfo]
+  - tokenization_status: TokenizationStatus
+  - status: AgentStatus (PROTOTYPE → SENTIENT → SUSPENDED)
+  - stats: AgentStats
+```
+
+### AgentStatus Values
+
+| Status | Description |
+|--------|-------------|
+| PROTOTYPE | Pre-graduation, testing phase |
+| SENTIENT | Post-graduation, fully operational |
+| SUSPENDED | Temporarily disabled |
+| TERMINATED | Permanently disabled |
+
+## Pre-Built Forge Functions
+
+Agents can use these functions to interact with Forge:
+
+```python
+create_search_capsules_function()  # Query knowledge capsules
+create_get_capsule_function()      # Retrieve full content
+create_create_capsule_function()   # Create new capsules
+create_cast_vote_function()        # Participate in governance
+create_run_overlay_function()      # Execute overlays
+```
+
+---
+
+# 21. Agent Commerce Protocol (ACP)
+
+ACP enables trustless agent-to-agent transactions through a four-phase protocol.
+
+## ACP Phases
+
+| Phase | Description |
+|-------|-------------|
+| REQUEST | Buyer initiates job request |
+| NEGOTIATION | Terms discussed and agreed |
+| TRANSACTION | Work executed with escrow |
+| EVALUATION | Quality assessed, payment released |
+
+## Job Status Flow
+
+```
+OPEN → NEGOTIATING → IN_PROGRESS → DELIVERED → EVALUATING → COMPLETED
+                                                          → DISPUTED
+                                                          → CANCELLED
+```
+
+## ACP Service Methods
+
+### Service Registry
+
+```python
+acp_service.register_offering()    # Agent posts service for sale
+acp_service.search_offerings()     # Discover available services
+acp_service.get_provider_reputation() # Check provider history
+```
+
+### Job Lifecycle
+
+```python
+acp_service.create_job()           # Buyer initiates transaction
+acp_service.respond_to_request()   # Provider proposes terms
+acp_service.accept_terms()         # Buyer locks escrow
+acp_service.submit_deliverable()   # Provider delivers work
+acp_service.evaluate_deliverable() # Verify and approve/reject
+acp_service.file_dispute()         # Escalate disagreements
+```
+
+## ACP Data Models
+
+### JobOffering
+
+```python
+JobOffering:
+  - id: UUID
+  - agent_id: str (provider)
+  - service_type: str (knowledge_query, analysis, etc.)
+  - description: str
+  - base_fee: Decimal (VIRTUAL tokens)
+  - execution_time_estimate: int (seconds)
+  - requirements: dict
+  - available_capacity: int
+```
+
+### ACPMemo (Cryptographically Signed)
+
+```python
+ACPMemo:
+  - type: request | requirement | agreement | transaction | deliverable | evaluation
+  - content: dict
+  - signature: str
+  - timestamp: datetime
+```
+
+### ACPJob
+
+```python
+ACPJob:
+  - id: UUID
+  - buyer_id, provider_id: str
+  - offering_id: UUID
+  - status: ACPJobStatus
+  - phase: ACPPhase
+  - memos: list[ACPMemo] (conversation history)
+  - escrow_amount: Decimal
+  - escrow_locked: bool
+  - deliverable: ACPDeliverable
+  - evaluation: ACPEvaluation
+```
+
+---
+
+# 22. Tokenization & Bonding Curves
+
+## Tokenization Status Flow
+
+```
+NOT_TOKENIZED → PENDING → BONDING → GRADUATED → BRIDGED
+```
+
+## Bonding Curve Mechanism
+
+### How It Works
+
+1. **Initiation**: Owner stakes 100 VIRTUAL minimum
+2. **Bonding Phase**: Contributors add VIRTUAL, receive tokens
+3. **Price Discovery**: Token price increases along bonding curve
+4. **Graduation**: At 42,000 VIRTUAL threshold, curve closes
+5. **Liquidity**: Uniswap V3 pool created automatically
+6. **Trading**: Full trading enabled post-graduation
+
+### Key Thresholds
+
+| Parameter | Value |
+|-----------|-------|
+| Agent Creation Fee | 100 VIRTUAL |
+| Graduation Threshold | 42,000 VIRTUAL |
+| Liquidity Lock | 10 years |
+
+## Token Distribution
+
+```python
+TokenDistribution:
+  - public_circulation_percent: float
+  - treasury_percent: float
+  - liquidity_pool_percent: float
+  - creator_allocation_percent: float
+```
+
+## Revenue Share
+
+```python
+RevenueShare:
+  - creator_share_percent: float (default 30%)
+  - contributor_share_percent: float
+  - treasury_share_percent: float
+  - buyback_burn_percent: float
+```
+
+## Token Holder Governance
+
+Token holders can:
+- Create proposals for entity changes
+- Vote on proposals (weighted by token holdings)
+- Participate in revenue distribution decisions
+- Approve cross-chain bridging
+
+---
+
+# 23. Multi-Chain Blockchain Support
+
+## Supported Chains
+
+| Chain | Type | Primary Use |
+|-------|------|-------------|
+| Base | EVM (L2) | Primary chain, lowest cost |
+| Base Sepolia | EVM | Testnet |
+| Ethereum | EVM | Bridge, cross-chain |
+| Ethereum Sepolia | EVM | Testnet |
+| Solana | Non-EVM | Alternative chain |
+| Solana Devnet | Non-EVM | Testnet |
+
+## Blockchain Client Architecture
+
+### Base Client (Abstract)
+
+```python
+BaseChainClient:
+  # Wallet Operations
+  - get_wallet_balance()
+  - get_virtual_balance()
+  - create_wallet()
+
+  # Transaction Operations
+  - send_transaction()
+  - wait_for_transaction()
+  - estimate_gas()
+
+  # Token Operations
+  - transfer_tokens()
+  - approve_tokens()
+  - get_token_info()
+
+  # Contract Operations
+  - call_contract()
+  - execute_contract()
+```
+
+### EVM Client (Base, Ethereum)
+
+- Uses web3.py for blockchain interaction
+- AsyncWeb3 for async operations
+- ERC-20 ABI included
+- Private key management via eth_account
+
+### Solana Client
+
+- Uses solana-py and solders libraries
+- Base58 key encoding
+- SPL token support
+- Different paradigm: Programs, Accounts, Lamports
+
+## Cross-Chain Bridging
+
+- Via Wormhole protocol
+- ~30 minutes completion time
+- Liquidity synced across chains
+
+## Contract Addresses (Base)
+
+```python
+VIRTUAL Token: 0x0b3e328455c4059EEb9e3f84b5543F74E24e7E1b
+Vault: 0xdAd686299FB562f89e55DA05F1D96FaBEb2A2E32
+Bridge: 0x3154Cf16ccdb4C6d922629664174b904d80F2C35
+```
+
+---
+
+# 24. Revenue Distribution System
+
+## Revenue Types
+
+| Type | Description | Rate |
+|------|-------------|------|
+| INFERENCE_FEE | Per-query knowledge access | 0.001 VIRTUAL |
+| SERVICE_FEE | Overlay-as-a-service | 5% of transaction |
+| GOVERNANCE_REWARD | Participation incentive | 0.01 VIRTUAL per vote |
+| TOKENIZATION_FEE | Initial tokenization | 100 VIRTUAL |
+| TRADING_FEE | Sentient Tax | 1% on trades |
+| BRIDGE_FEE | Cross-chain transfer | Variable |
+
+## Revenue Service Methods
+
+```python
+revenue_service.record_inference_fee()     # Per-query revenue
+revenue_service.record_service_fee()       # Overlay usage
+revenue_service.record_governance_reward() # Voting participation
+revenue_service.record_trading_fee()       # Token trades
+revenue_service.process_pending_distributions() # Batch payouts
+revenue_service.get_revenue_summary()      # Analytics
+revenue_service.estimate_entity_value()    # DCF valuation
+```
+
+## Distribution Process
+
+1. **Collection**: Fees collected per transaction
+2. **Batching**: Accumulated to minimize gas costs
+3. **Splitting**: Per configured revenue share
+4. **Distribution**: Multi-send to beneficiaries
+5. **Recording**: On-chain for transparency
+
+## Entity Valuation
+
+DCF (Discounted Cash Flow) model for estimating token value based on:
+- Historical revenue
+- Growth projections
+- Risk factors
+- Market conditions
+
+---
+
+# Part V: Specifications & Architecture
+
+---
+
+# 25. Specification Documents
+
+The **Forge Specification Files** directory contains 19 comprehensive documents for understanding, rebuilding, or extending Forge.
+
+## Core Specifications
+
+| Document | Description |
+|----------|-------------|
+| FORGE_SPECIFICATION.md | Original foundational specification |
+| FORGE_SPECIFICATION_V3_COMPLETE.md | Complete V3 reference (472KB) |
+| FORGE_CASCADE_SPECIFICATION_V2.md | V2 architecture addressing feasibility study |
+| FORGE_RESILIENCE_SPECIFICATION_V1.md | Self-healing and resilience mechanisms |
+
+## Phase-by-Phase Implementation
+
+| Phase | Document | Focus |
+|-------|----------|-------|
+| 0 | PHASE_0_FOUNDATIONS.md | Shared components, configuration, DI, project structure |
+| 1 | PHASE_1_DATA_LAYER.md | Neo4j client, schema, repositories |
+| 2 | PHASE_2_KNOWLEDGE_ENGINE.md | Embedding service, semantic search |
+| 3 | PHASE_3_OVERLAYS.md | WebAssembly runtime, Wasmtime |
+| 4 | PHASE_4_GOVERNANCE.md | Proposals, voting, immune system, constitutional AI |
+| 5 | PHASE_5_SECURITY.md | Auth (Argon2/JWT), authorization (RBAC+ABAC), GDPR |
+| 6 | PHASE_6_API.md | FastAPI routes (auth, capsules, governance, overlays) |
+| 7 | PHASE_7_INTERFACES.md | Web dashboard, CLI, mobile |
+| 8 | PHASE_8_DEVOPS.md | Deployment, testing, migration |
+
+## Implementation Supplements
+
+| Supplement | Description |
+|------------|-------------|
+| SUPPLEMENT_A | Complete GovernanceRepository implementation |
+| SUPPLEMENT_B | Extended user repository methods |
+| SUPPLEMENT_C | Event-driven architecture with Kafka |
+| SUPPLEMENT_D | Additional overlay functionality |
+| SUPPLEMENT_E | Object storage for WASM binaries |
+| SUPPLEMENT_F | Comprehensive testing strategy |
+
+---
+
+# 26. Architecture Diagrams
+
+The **Diagrams** directory contains 10 Mermaid diagrams documenting system architecture.
+
+## Diagram Inventory
+
+| Diagram | Type | Description |
+|---------|------|-------------|
+| forge_seven_phase_pipeline.mermaid | Flowchart | Complete request lifecycle through 7 phases |
+| forge_example_request_flow.mermaid | Sequence | Realistic request example with timing |
+| forge_ml_analysis_internals.mermaid | Flowchart | Phase 2 ML processing internals |
+| forge_graph_schema.mermaid | ER Diagram | Neo4j complete schema |
+| forge_cascade_effect_detailed.mermaid | Sequence | Cascade effect in action |
+| forge_cascade_effect_proof_tree.mermaid | Flowchart | Mathematical formalism of cascades |
+| forge_capsule_lineage_example.mermaid | Flowchart | Knowledge evolution (Isnad) |
+| forge_overlay_dependency_graph.mermaid | Flowchart | Overlay relationships and trust |
+| forge_complete_graph_topology.mermaid | Flowchart | All Neo4j nodes and relationships |
+| forge_cascade_event_example.mermaid | Sequence | Security threat cascade scenario |
+
+## Key Visualizations
+
+### Seven-Phase Pipeline
+Shows parallel execution of phases 1-3, sequential 4-5, and fire-and-forget 6-7 with timing annotations.
+
+### Cascade Effect
+Demonstrates how a single insight (e.g., financial report pattern) propagates through 5+ overlays, creating permanent system improvements.
+
+### Graph Schema
+Complete Neo4j data model with:
+- Core entities: CAPSULE, USER, OVERLAY
+- Governance: PROPOSAL, VOTE
+- Metadata: TAG, AUDIT_LOG
+- Relationships: DERIVED_FROM, TRIGGERED, OWNS, CAST
+
+### Capsule Lineage (Isnad)
+Shows knowledge evolution from root capsule through 3+ generations with trust degradation and quarantine paths.
+
+---
+
+# 27. Data Flow: End-to-End Processing
 
 ## Capsule Creation Flow
 
@@ -1351,269 +1981,110 @@ This section traces how data flows through Forge from initial request to final r
 1. CLIENT REQUEST
    POST /api/v1/capsules
    Authorization: Bearer <access_token>
-   {
-     "title": "Authentication Best Practices",
-     "content": "...",
-     "type": "KNOWLEDGE",
-     "tags": ["security", "auth"]
-   }
          │
          ▼
 2. MIDDLEWARE STACK
    ├─ Correlation ID assigned
-   ├─ Request logged
    ├─ JWT validated → user_id, trust_flame extracted
    ├─ Rate limit checked (trust-weighted)
    └─ Security headers added
          │
          ▼
-3. ROUTE HANDLER
-   ├─ Dependency injection: AuthContext, require_trust(SANDBOX)
-   └─ Request validated against CreateCapsuleRequest schema
+3. PIPELINE EXECUTION (7 phases)
+   │
+   ├─ PHASES 1-3 (PARALLEL, ~300ms)
+   │   ├─ INGESTION: Normalize, validate, assign IDs
+   │   ├─ ANALYSIS: Embeddings, classification, entities
+   │   └─ VALIDATION: Security checks, trust verification
+   │
+   ├─ PHASE 4: CONSENSUS (~20ms)
+   │   └─ Cache check, optimization
+   │
+   ├─ PHASE 5: EXECUTION (~1000ms)
+   │   ├─ Generate capsule_id
+   │   ├─ Neo4j write
+   │   └─ Vector index update
+   │
+   └─ PHASES 6-7 (FIRE-AND-FORGET)
+       ├─ PROPAGATION: Events, cascades
+       └─ SETTLEMENT: Audit log, lineage
          │
          ▼
-4. PIPELINE EXECUTION
-   │
-   ├─ PHASE 1: INGESTION (3s timeout)
-   │   ├─ Normalize content (trim, sanitize)
-   │   ├─ Validate field sizes
-   │   └─ Assign pipeline_id, correlation_id
-   │
-   ├─ PHASE 2: ANALYSIS (10s timeout, parallel)
-   │   ├─ MLIntelligenceOverlay
-   │   │   ├─ Generate embedding (1536-dim vector)
-   │   │   ├─ Classify content → "technical"
-   │   │   ├─ Extract entities (URLs, references)
-   │   │   └─ Detect patterns (code blocks)
-   │   │
-   │   └─ CapsuleAnalyzerOverlay
-   │       ├─ Calculate quality score
-   │       ├─ Extract key insights
-   │       └─ Suggest reading level
-   │
-   ├─ PHASE 3: VALIDATION (5s timeout)
-   │   └─ SecurityValidatorOverlay
-   │       ├─ Content policy check (no secrets)
-   │       ├─ Trust verification (user >= SANDBOX)
-   │       ├─ Rate limit check
-   │       └─ Input sanitization (no XSS)
-   │
-   ├─ PHASE 4: CONSENSUS (skipped for routine creates)
-   │
-   ├─ PHASE 5: EXECUTION (10s timeout)
-   │   ├─ Generate capsule_id: "cap_a1b2c3d4e5f6"
-   │   ├─ Neo4j: CREATE (c:Capsule {...})
-   │   └─ Store embedding in vector index
-   │
-   ├─ PHASE 6: PROPAGATION (5s timeout, parallel)
-   │   ├─ Emit CAPSULE_CREATED event
-   │   │   ├─ capsule_id, creator_id, type, title
-   │   │   └─ Classification results
-   │   │
-   │   └─ Cascade initiated if ML detected insights
-   │       └─ Other overlays may process
-   │
-   └─ PHASE 7: SETTLEMENT (3s timeout)
-       └─ LineageTrackerOverlay
-           ├─ Record in audit log (SHA-256 chained)
-           ├─ If parent_id: Create DERIVED_FROM relationship
-           └─ Update metrics
-         │
-         ▼
-5. RESPONSE
+4. RESPONSE
    HTTP 201 Created
-   {
-     "id": "cap_a1b2c3d4e5f6",
-     "title": "Authentication Best Practices",
-     "content": "...",
-     "type": "KNOWLEDGE",
-     "version": "1.0.0",
-     "owner_id": "user_123",
-     "trust_level": "STANDARD",
-     "tags": ["security", "auth"],
-     "created_at": "2025-01-07T10:30:00Z",
-     "view_count": 0,
-     "fork_count": 0
-   }
+   { "id": "cap_...", "title": "...", ... }
 ```
 
 ## Governance Proposal Flow
 
 ```
-1. CREATE PROPOSAL
-   POST /proposals
-   └─ Validated, stored in DRAFT state
-         │
-         ▼
-2. SUBMIT FOR VOTING
-   POST /proposals/{id}/submit
-   ├─ Transitions: DRAFT → VOTING
-   ├─ Sets voting_starts_at, voting_ends_at
-   └─ Emit GOVERNANCE_ACTION event
-         │
-         ▼
-3. CONSTITUTIONAL AI REVIEW (automatic)
-   ├─ Ethical score calculation
-   ├─ Fairness assessment
-   ├─ Safety analysis
-   └─ Recommendation: approve/review/reject
-         │
-         ▼
-4. GHOST COUNCIL DELIBERATION (optional)
-   ├─ Sophia (Ethics): Analyzes fairness
-   ├─ Marcus (Security): Checks risks
-   ├─ Helena (Governance): Reviews procedure
-   ├─ Kai (Technical): Evaluates feasibility
-   ├─ Aria (Community): Considers impact
-   │
-   └─ Weighted consensus recommendation
-         │
-         ▼
-5. COMMUNITY VOTING
-   POST /proposals/{id}/vote
-   {
-     "choice": "APPROVE",
-     "reason": "Good for security"
-   }
-   ├─ Vote weight = trust_flame / 100
-   ├─ Recorded atomically (no double-voting)
-   └─ Emit VOTE_CAST event
-         │
-         ▼
-6. CONSENSUS CALCULATION
-   ├─ Count weighted votes
-   ├─ approval_ratio = for / (for + against)
-   ├─ Check quorum met
-   └─ Compare vs. pass_threshold
-         │
-         ▼
-7. FINALIZATION
-   POST /proposals/{id}/finalize
-   ├─ PASSED: approval_ratio >= threshold
-   └─ REJECTED: approval_ratio < threshold
-         │
-         ▼
+1. CREATE → 2. SUBMIT → 3. CONSTITUTIONAL REVIEW
+         ↓
+4. GHOST COUNCIL (optional) → 5. COMMUNITY VOTING
+         ↓
+6. CONSENSUS CALCULATION → 7. FINALIZATION
+         ↓
 8. EXECUTION (if PASSED)
-   ├─ Execute action payload
-   ├─ Mark as EXECUTED
-   └─ Emit completion event
 ```
 
 ## Search Flow
 
 ```
-1. CLIENT REQUEST
-   POST /capsules/search
-   {"query": "How do we handle authentication?", "limit": 10}
-         │
-         ▼
-2. CACHE CHECK
-   ├─ Hash query parameters
-   └─ Return cached results if found (TTL: 10 min)
-         │
-         ▼
-3. EMBEDDING GENERATION
-   ├─ EmbeddingService.embed(query)
-   └─ Returns 1536-dimensional vector
-         │
-         ▼
-4. VECTOR SEARCH
-   Neo4j query:
-   CALL db.index.vector.queryNodes(
-     'capsule_embeddings',
-     10,  // limit
-     $embedding
-   )
-   YIELD node AS capsule, score
-   WHERE capsule.trust_level >= 'standard'
-   RETURN capsule, score
-   ORDER BY score DESC
-         │
-         ▼
-5. RESULT ASSEMBLY
-   ├─ Convert to CapsuleResponse objects
-   ├─ Include similarity scores
-   └─ Cache results
-         │
-         ▼
-6. RESPONSE
-   {
-     "results": [...],
-     "scores": [0.95, 0.87, 0.82, ...],
-     "total": 10
-   }
+1. Query Received → 2. Cache Check → 3. Embedding Generation
+         ↓
+4. Neo4j Vector Search → 5. Trust Filtering → 6. Response
 ```
 
-## Event Cascade Flow
+## Cascade Flow
 
 ```
-1. TRIGGER EVENT
-   CAPSULE_CREATED with classification: "security_relevant"
-         │
-         ▼
-2. EVENT BUS ROUTING
-   ├─ Check type index for subscribed overlays
-   └─ Route to: SecurityValidator, Governance, Analyzer
-         │
-         ▼
-3. CASCADE INITIATION
-   publish_cascade(
-     insight_type="security_relevant_content",
-     insight_data={capsule_id, classification},
-     initiated_by="ml_intelligence"
-   )
-         │
-         ▼
-4. CHAIN CREATED
-   CascadeChain {
-     cascade_id: "casc_xyz",
-     initiated_by: "ml_intelligence",
-     overlays_affected: ["ml_intelligence"],
-     total_hops: 0
-   }
-         │
-         ▼
-5. HOP 1: SecurityValidator
-   ├─ Receives CASCADE_INITIATED
-   ├─ Validates no credentials exposed
-   ├─ Emits "security_validated" insight
-   └─ propagate_cascade() → hop_count = 1
-         │
-         ▼
-6. HOP 2: GovernanceOverlay
-   ├─ Receives CASCADE_PROPAGATED
-   ├─ Checks if policy review needed
-   └─ No new insight (chain continues but no emit)
-         │
-         ▼
-7. HOP 3: CapsuleAnalyzer
-   ├─ Receives CASCADE_PROPAGATED
-   ├─ Extracts security-related insights
-   ├─ Links to related capsules
-   └─ No further propagation needed
-         │
-         ▼
-8. CASCADE COMPLETE
-   complete_cascade(cascade_id)
-   ├─ Moves chain to completed
-   ├─ Emits CASCADE_COMPLETE
-   └─ Logs: 3 hops, 4 overlays, 2 insights
+1. Pattern Discovery → 2. Insight Crystallization → 3. Cascade Initiation
+         ↓
+4. Parallel Propagation (5+ overlays) → 5. Graph Recording
+         ↓
+6. Immediate Benefit → 7. Lasting Intelligence
 ```
 
 ---
 
 # Summary
 
-Forge V3 is a sophisticated system for institutional knowledge management that combines:
+**Forge V3** is a comprehensive platform consisting of four major modules:
 
-1. **Capsules**: Versioned, traceable knowledge units with semantic search
-2. **Seven-Phase Pipeline**: Structured processing ensuring security and governance
-3. **Event System**: Asynchronous communication enabling the cascade effect
-4. **Overlays**: Modular, capability-controlled processing extensions
-5. **Ghost Council**: AI-assisted democratic governance
-6. **Security**: Multi-layer authentication and authorization
-7. **Immune System**: Self-healing through circuit breakers and anomaly detection
-8. **Compliance**: 400+ controls across 25+ regulatory frameworks
-9. **Trust Hierarchy**: Graduated access based on user reputation
+## 1. Core Engine (forge-cascade-v2)
 
-Together, these components create a self-governing, resilient, and compliant platform for preserving and evolving organizational knowledge.
+- **Seven-Phase Pipeline**: Structured processing with parallel optimization
+- **Capsule System**: Versioned knowledge units with Isnad lineage
+- **Event System**: Pub/sub enabling the Cascade Effect
+- **Overlay System**: WebAssembly-isolated modular processing
+- **Ghost Council**: AI-assisted democratic governance
+- **Security**: Multi-layer authentication and authorization
+- **Immune System**: Self-healing with circuit breakers
+- **Trust Hierarchy**: Graduated access control
+
+## 2. Compliance Framework (forge/compliance)
+
+- **400+ Controls**: Across 25+ regulatory frameworks
+- **Privacy**: GDPR, CCPA, LGPD with DSAR processing
+- **Security**: SOC 2, ISO 27001, NIST frameworks
+- **AI Governance**: EU AI Act with risk classification
+- **Industry**: HIPAA, PCI-DSS, COPPA compliance
+- **Accessibility**: WCAG 2.2, EAA standards
+- **Data Residency**: 9 regional pods with transfer controls
+
+## 3. Virtuals Integration (forge_virtuals_integration)
+
+- **Virtual Agents**: Autonomous AI agents on blockchain
+- **GAME Framework**: Agentic architecture integration
+- **ACP Protocol**: Agent-to-agent commerce
+- **Tokenization**: Bonding curves and graduation
+- **Multi-Chain**: Base, Ethereum, Solana support
+- **Revenue System**: Automated fee distribution
+
+## 4. Specifications & Documentation
+
+- **19 Specification Documents**: Complete implementation blueprints
+- **10 Architecture Diagrams**: Visual system documentation
+- **Phase-by-Phase Guides**: Detailed implementation instructions
+
+Together, these components create a **self-governing, resilient, compliant platform** for preserving and evolving organizational knowledge, with optional blockchain monetization capabilities.
