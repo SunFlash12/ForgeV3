@@ -241,6 +241,7 @@ def decode_token(token: str, verify_exp: bool = True) -> TokenPayload:
             trust_flame=payload.get("trust_flame"),
             exp=payload.get("exp"),
             iat=payload.get("iat"),
+            jti=payload.get("jti"),
             type=payload.get("type", "access")
         )
         

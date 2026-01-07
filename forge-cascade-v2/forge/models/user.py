@@ -241,6 +241,7 @@ class TokenPayload(ForgeModel):
     trust_flame: int | None = None  # Optional for refresh tokens
     exp: datetime | None = Field(default=None, description="Expiration timestamp")
     iat: datetime | None = Field(default=None, description="Issued at timestamp")
+    jti: str | None = Field(default=None, description="JWT ID for token blacklisting")
     type: str = Field(default="access", description="Token type: access or refresh")
 
 

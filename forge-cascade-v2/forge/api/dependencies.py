@@ -252,11 +252,8 @@ async def get_token_payload(
         payload = verify_token(token, settings.jwt_secret_key)
 
         # Check if token is blacklisted (logout)
-        if payload and hasattr(payload, 'jti') and payload.jti:
-            # Get jti from the raw token claims since TokenPayload might not have it
-            from forge.security.tokens import get_token_claims
-            claims = get_token_claims(token)
-            if TokenBlacklist.is_blacklisted(claims.get("jti")):
+        if payload and payload.jti:
+            if TokenBlacklist.is_blacklisted(payload.jti):
                 return None
 
         return payload
