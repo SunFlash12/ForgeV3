@@ -221,8 +221,8 @@ def main():
     # Test 3.4: Vote on proposal (metrics)
     if proposal_id:
         r = session.post(f"{BASE_URL}/governance/proposals/{proposal_id}/vote", json={
-            "vote": "FOR",
-            "reason": "Testing vote metrics"
+            "choice": "for",
+            "rationale": "Testing vote metrics"
         })
         log_test(
             "3.4 Cast vote (metrics recording)",
