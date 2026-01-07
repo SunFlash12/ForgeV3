@@ -78,20 +78,20 @@ export const useAuthStore = create<AuthState>()(
       },
 
       fetchCurrentUser: async () => {
-        if (!localStorage.getItem('access_token')) {
-          set({ isAuthenticated: false });
-          return;
-        }
-        
+        // Note: We use httpOnly cookies for auth, not localStorage
+        // Just try to fetch the user - cookies are sent automatically
         set({ isLoading: true });
         try {
           const user = await api.getCurrentUser();
-          set({ user, isAuthenticated: true, isLoading: false });
+          const trustInfo = await api.getTrustInfo();
+          set({ user, trustInfo, isAuthenticated: true, isLoading: false });
         } catch {
-          set({ 
-            user: null, 
-            isAuthenticated: false, 
-            isLoading: false 
+          // Auth failed - user not logged in or session expired
+          set({
+            user: null,
+            trustInfo: null,
+            isAuthenticated: false,
+            isLoading: false
           });
         }
       },

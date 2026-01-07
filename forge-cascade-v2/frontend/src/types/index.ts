@@ -4,12 +4,27 @@
 
 export type UUID = string;
 
-export type TrustLevel = 'UNTRUSTED' | 'SANDBOX' | 'STANDARD' | 'TRUSTED' | 'CORE';
+// Trust levels - QUARANTINE is the backend's lowest level (maps to UNTRUSTED conceptually)
+export type TrustLevel = 'QUARANTINE' | 'SANDBOX' | 'STANDARD' | 'TRUSTED' | 'CORE';
+
+// Legacy alias for backwards compatibility
+export type TrustLevelLegacy = 'UNTRUSTED' | 'SANDBOX' | 'STANDARD' | 'TRUSTED' | 'CORE';
+
 export type UserRole = 'USER' | 'MODERATOR' | 'ADMIN' | 'SYSTEM';
-export type CapsuleType = 'INSIGHT' | 'DECISION' | 'LESSON' | 'WARNING' | 'PRINCIPLE' | 'MEMORY';
-export type ProposalStatus = 'DRAFT' | 'ACTIVE' | 'PASSED' | 'REJECTED' | 'WITHDRAWN' | 'EXPIRED';
+
+// CapsuleType includes all backend types
+export type CapsuleType =
+  | 'INSIGHT' | 'DECISION' | 'LESSON' | 'WARNING' | 'PRINCIPLE' | 'MEMORY'  // Frontend display types
+  | 'KNOWLEDGE' | 'CODE' | 'CONFIG' | 'TEMPLATE' | 'DOCUMENT';              // Backend-only types
+
+// ProposalStatus matches backend exactly
+export type ProposalStatus = 'DRAFT' | 'ACTIVE' | 'VOTING' | 'PASSED' | 'REJECTED' | 'EXECUTED' | 'CANCELLED';
+
 export type ProposalType = 'POLICY' | 'SYSTEM' | 'OVERLAY' | 'CAPSULE' | 'TRUST' | 'CONSTITUTIONAL';
+
+// VoteChoice - FOR/AGAINST are deprecated aliases in backend
 export type VoteChoice = 'APPROVE' | 'REJECT' | 'ABSTAIN';
+
 export type HealthStatus = 'healthy' | 'degraded' | 'unhealthy';
 export type AnomalySeverity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 
@@ -24,12 +39,9 @@ export interface User {
   display_name: string | null;
   trust_level: TrustLevel;
   trust_score: number;
-  roles: UserRole[];
-  capabilities: string[];
+  roles: string[];  // Backend returns role values as strings
   is_active: boolean;
   created_at: string;
-  last_active: string | null;
-  metadata: Record<string, unknown>;
 }
 
 export interface AuthTokens {
@@ -40,11 +52,11 @@ export interface AuthTokens {
 }
 
 export interface TrustInfo {
-  current_level: TrustLevel;
+  current_level: string;  // Backend returns enum name as string
   trust_score: number;
-  next_level: TrustLevel | null;
+  next_level: string | null;
   score_to_next: number | null;
-  thresholds: Record<TrustLevel, number>;
+  thresholds: Record<string, number>;
 }
 
 // ============================================================================
@@ -114,7 +126,7 @@ export interface Proposal {
   weight_for: number;
   weight_against: number;
   weight_abstain: number;
-  created_at: string;
+  created_at: string | null;
   voting_starts_at: string | null;
   voting_ends_at: string | null;
 }
@@ -277,13 +289,14 @@ export interface PaginatedResponse<T> {
   items: T[];
   total: number;
   page: number;
-  per_page: number;
-  total_pages: number;
+  page_size: number;  // Backend uses page_size
+  total_pages: number;  // Computed: Math.ceil(total / page_size)
+  has_more: boolean;
 }
 
 export interface PaginationParams {
   page?: number;
-  per_page?: number;
+  page_size?: number;  // Backend uses page_size
 }
 
 // ============================================================================

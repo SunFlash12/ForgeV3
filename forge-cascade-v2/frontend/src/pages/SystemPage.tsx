@@ -255,7 +255,9 @@ export default function SystemPage() {
           <div className="space-y-3">
             {healthData?.components && Object.entries(healthData.components).map(([name, component]) => {
               const Icon = componentIcons[name] || Activity;
-              const StatusIcon = getStatusIcon((component as any).status);
+              // ComponentHealth type has status field - safely access it
+              const componentStatus = component.status || 'unknown';
+              const StatusIcon = getStatusIcon(componentStatus);
               return (
                 <div key={name} className="flex items-center justify-between p-3 bg-slate-100/30 rounded-lg">
                   <div className="flex items-center gap-3">
@@ -263,9 +265,9 @@ export default function SystemPage() {
                     <span className="text-slate-800 capitalize">{name.replace(/_/g, ' ')}</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <StatusIcon className={`w-5 h-5 ${getStatusColor((component as any).status)}`} />
-                    <span className={`text-sm capitalize ${getStatusColor((component as any).status)}`}>
-                      {(component as any).status}
+                    <StatusIcon className={`w-5 h-5 ${getStatusColor(componentStatus)}`} />
+                    <span className={`text-sm capitalize ${getStatusColor(componentStatus)}`}>
+                      {componentStatus}
                     </span>
                   </div>
                 </div>

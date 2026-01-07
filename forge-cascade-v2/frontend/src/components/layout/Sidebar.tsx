@@ -47,7 +47,7 @@ export function Sidebar() {
 
   const getTrustBadgeClass = () => {
     switch (user?.trust_level) {
-      case 'UNTRUSTED': return 'badge-trust-untrusted';
+      case 'QUARANTINE': return 'badge-trust-untrusted';
       case 'SANDBOX': return 'badge-trust-sandbox';
       case 'STANDARD': return 'badge-trust-standard';
       case 'TRUSTED': return 'badge-trust-trusted';

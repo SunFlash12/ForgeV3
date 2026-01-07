@@ -1,6 +1,101 @@
-import React from 'react';
-import { Loader2, TrendingUp, TrendingDown } from 'lucide-react';
+import React, { Component } from 'react';
+import type { ErrorInfo, ReactNode } from 'react';
+import { Loader2, TrendingUp, TrendingDown, AlertTriangle, RefreshCw } from 'lucide-react';
 import type { TrustLevel, HealthStatus, AnomalySeverity } from '../../types';
+
+
+// ============================================================================
+// Error Boundary Component
+// ============================================================================
+
+interface ErrorBoundaryProps {
+  children: ReactNode;
+  fallback?: ReactNode;
+  onError?: (error: Error, errorInfo: ErrorInfo) => void;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
+    // Log the error to console in development
+    console.error('ErrorBoundary caught an error:', error, errorInfo);
+
+    // Call the onError callback if provided
+    if (this.props.onError) {
+      this.props.onError(error, errorInfo);
+    }
+  }
+
+  handleReset = (): void => {
+    this.setState({ hasError: false, error: null });
+  };
+
+  render(): ReactNode {
+    if (this.state.hasError) {
+      // Custom fallback if provided
+      if (this.props.fallback) {
+        return this.props.fallback;
+      }
+
+      // Default error UI
+      return (
+        <div className="min-h-[400px] flex items-center justify-center p-8">
+          <div className="max-w-md w-full text-center">
+            <div className="w-16 h-16 rounded-2xl bg-red-100 flex items-center justify-center mx-auto mb-4">
+              <AlertTriangle className="w-8 h-8 text-red-600" />
+            </div>
+            <h2 className="text-xl font-semibold text-slate-800 mb-2">
+              Something went wrong
+            </h2>
+            <p className="text-slate-500 mb-6">
+              An unexpected error occurred. Please try again or refresh the page.
+            </p>
+            {this.state.error && (
+              <details className="mb-6 text-left p-4 bg-slate-100 rounded-lg">
+                <summary className="cursor-pointer text-sm font-medium text-slate-600 mb-2">
+                  Error details
+                </summary>
+                <pre className="text-xs text-red-600 overflow-auto whitespace-pre-wrap">
+                  {this.state.error.message}
+                </pre>
+              </details>
+            )}
+            <div className="flex gap-3 justify-center">
+              <button
+                onClick={this.handleReset}
+                className="btn btn-secondary"
+              >
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Try Again
+              </button>
+              <button
+                onClick={() => window.location.reload()}
+                className="btn btn-primary"
+              >
+                Refresh Page
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
 
 // ============================================================================
 // Card Component
@@ -76,23 +171,32 @@ export function Button({
 // ============================================================================
 
 interface TrustBadgeProps {
-  level: TrustLevel;
+  level: TrustLevel | string;  // Accept string for backend enum names
   score?: number;
   showScore?: boolean;
 }
 
 export function TrustBadge({ level, score, showScore = false }: TrustBadgeProps) {
-  const badgeClass = {
-    UNTRUSTED: 'badge-trust-untrusted',
+  // Normalize level string and handle both QUARANTINE and legacy UNTRUSTED
+  const normalizedLevel = String(level).toUpperCase();
+
+  const badgeClasses: Record<string, string> = {
+    QUARANTINE: 'badge-trust-untrusted',  // QUARANTINE uses untrusted styling
+    UNTRUSTED: 'badge-trust-untrusted',   // Legacy support
     SANDBOX: 'badge-trust-sandbox',
     STANDARD: 'badge-trust-standard',
     TRUSTED: 'badge-trust-trusted',
     CORE: 'badge-trust-core',
-  }[level];
+  };
+
+  const badgeClass = badgeClasses[normalizedLevel] || 'badge-trust-sandbox';
+
+  // Display user-friendly name (QUARANTINE shows as "QUARANTINE")
+  const displayName = normalizedLevel;
 
   return (
     <span className={`badge ${badgeClass}`}>
-      {level}
+      {displayName}
       {showScore && score !== undefined && (
         <span className="ml-1.5 opacity-70">({score})</span>
       )}

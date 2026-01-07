@@ -155,7 +155,7 @@ export default function GhostCouncilPage() {
                     </div>
                   )}
                   
-                  <p className="text-slate-200 whitespace-pre-wrap">{message.content}</p>
+                  <p className="text-slate-700 whitespace-pre-wrap">{message.content}</p>
                   
                   {message.wisdom && (
                     <div className="mt-3 pt-3 border-t border-slate-200">

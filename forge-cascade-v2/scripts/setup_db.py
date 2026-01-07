@@ -49,31 +49,31 @@ CONSTRAINTS = [
 # Indexes for query performance
 INDEXES = [
     # User indexes
-    ("user_trust_level", "User", "trust_level"),
+    ("user_trust_flame", "User", "trust_flame"),
     ("user_is_active", "User", "is_active"),
     ("user_created_at", "User", "created_at"),
-    
-    # Capsule indexes
-    ("capsule_domain", "Capsule", "domain"),
-    ("capsule_visibility", "Capsule", "visibility"),
+
+    # Capsule indexes (matching actual Capsule model fields)
+    ("capsule_type", "Capsule", "type"),
+    ("capsule_owner_id", "Capsule", "owner_id"),
     ("capsule_created_at", "Capsule", "created_at"),
-    ("capsule_created_by", "Capsule", "created_by"),
-    
+    ("capsule_is_archived", "Capsule", "is_archived"),
+
     # Proposal indexes
     ("proposal_status", "Proposal", "status"),
     ("proposal_type", "Proposal", "proposal_type"),
     ("proposal_created_at", "Proposal", "created_at"),
     ("proposal_expires_at", "Proposal", "expires_at"),
-    
+
     # Event indexes
     ("event_type", "Event", "event_type"),
     ("event_timestamp", "Event", "timestamp"),
-    
+
     # Audit indexes
     ("audit_action", "AuditLog", "action"),
     ("audit_timestamp", "AuditLog", "timestamp"),
-    ("audit_user_id", "AuditLog", "user_id"),
-    
+    ("audit_actor_id", "AuditLog", "actor_id"),
+
     # Overlay indexes
     ("overlay_type", "Overlay", "overlay_type"),
     ("overlay_is_active", "Overlay", "is_active"),

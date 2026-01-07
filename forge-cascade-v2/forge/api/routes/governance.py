@@ -83,7 +83,7 @@ class ProposalResponse(BaseModel):
     weight_for: float
     weight_against: float
     weight_abstain: float
-    created_at: str
+    created_at: str | None  # Can be None if not set
     voting_starts_at: str | None
     voting_ends_at: str | None
     
@@ -109,7 +109,7 @@ class ProposalResponse(BaseModel):
             weight_for=proposal.weight_for,
             weight_against=proposal.weight_against,
             weight_abstain=proposal.weight_abstain,
-            created_at=proposal.created_at.isoformat() if proposal.created_at else "",
+            created_at=proposal.created_at.isoformat() if proposal.created_at else None,
             voting_starts_at=proposal.voting_starts_at.isoformat() if proposal.voting_starts_at else None,
             voting_ends_at=proposal.voting_ends_at.isoformat() if proposal.voting_ends_at else None,
         )
@@ -1121,27 +1121,42 @@ async def create_delegation(
 
     # SECURITY FIX: Check for delegation cycles
     # A cycle would be: A -> B -> C -> A (or any loop back to the delegator)
-    async def would_create_cycle(target_id: str, visited: set[str], depth: int = 0) -> bool:
-        """Check if delegating to target_id would create a cycle."""
-        if depth > 10:  # Max delegation chain depth
-            return True  # Treat very deep chains as cycles
+    MAX_DELEGATION_DEPTH = 10  # Configurable max depth to prevent infinite recursion
+
+    async def would_create_cycle(target_id: str, visited: set[str], depth: int = 0) -> tuple[bool, str]:
+        """
+        Check if delegating to target_id would create a cycle.
+
+        Returns:
+            (is_problematic, reason) - True with reason if cycle found or chain too deep
+        """
         if target_id in visited:
-            return True  # Found cycle
+            return True, "circular_chain"  # Found actual cycle
+        if depth > MAX_DELEGATION_DEPTH:
+            return True, "chain_too_deep"  # Chain too deep (not a cycle, but rejected)
         visited.add(target_id)
 
         # Get target's active delegations (who does target delegate to?)
         target_delegations = await governance_repo.get_delegates(target_id)
         for delegation in target_delegations:
             if delegation.is_active:
-                if await would_create_cycle(delegation.delegate_id, visited, depth + 1):
-                    return True
-        return False
+                is_bad, reason = await would_create_cycle(delegation.delegate_id, visited.copy(), depth + 1)
+                if is_bad:
+                    return True, reason
+        return False, ""
 
-    if await would_create_cycle(request.delegate_id, {user.id}):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot create delegation: would create a circular delegation chain",
-        )
+    is_problematic, reason = await would_create_cycle(request.delegate_id, {user.id})
+    if is_problematic:
+        if reason == "circular_chain":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot create delegation: would create a circular delegation chain",
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Cannot create delegation: chain would exceed maximum depth of {MAX_DELEGATION_DEPTH}",
+            )
 
     delegation_id = f"del_{uuid4().hex[:12]}"
 

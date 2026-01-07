@@ -28,6 +28,12 @@ const typeColors: Record<CapsuleType, string> = {
   WARNING: 'bg-red-500/20 text-red-400 border-red-500/30',
   PRINCIPLE: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
   MEMORY: 'bg-slate-500/20 text-slate-500 border-slate-500/30',
+  // Backend-only types (may appear in responses)
+  KNOWLEDGE: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
+  CODE: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+  CONFIG: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
+  TEMPLATE: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30',
+  DOCUMENT: 'bg-teal-500/20 text-teal-400 border-teal-500/30',
 };
 
 export default function CapsulesPage() {
@@ -44,7 +50,7 @@ export default function CapsulesPage() {
     queryKey: ['capsules', filterType, searchParams.get('page')],
     queryFn: () => api.listCapsules({
       page: parseInt(searchParams.get('page') || '1'),
-      per_page: 12,
+      page_size: 12,
       type: filterType || undefined,
     }),
   });

@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { 
-  User, 
-  Lock, 
-  Bell, 
-  Shield, 
-  Palette, 
+import axios from 'axios';
+import {
+  User,
+  Lock,
+  Bell,
+  Shield,
+  Palette,
   Database,
   CheckCircle,
   AlertCircle,
@@ -16,6 +17,27 @@ import {
 import { useAuthStore } from '../stores/authStore';
 import { Card, Button, TrustBadge, Modal } from '../components/common';
 import { api } from '../api/client';
+
+/**
+ * Type-safe error message extraction from unknown errors.
+ * Handles Axios errors, standard errors, and unknown error types.
+ */
+function getErrorMessage(error: unknown, defaultMessage: string): string {
+  if (axios.isAxiosError(error)) {
+    // Axios error with response
+    const detail = error.response?.data?.detail;
+    if (typeof detail === 'string') {
+      return detail;
+    }
+    if (error.message) {
+      return error.message;
+    }
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return defaultMessage;
+}
 
 type SettingsTab = 'profile' | 'security' | 'notifications' | 'appearance' | 'data';
 
@@ -91,8 +113,10 @@ export default function SettingsPage() {
       await api.updateProfile({ display_name: displayName, email });
       await fetchCurrentUser();
       showMessage('success', 'Profile updated successfully');
-    } catch (err: any) {
-      showMessage('error', err.response?.data?.detail || 'Failed to update profile');
+    } catch (err: unknown) {
+      // Type-safe error handling for Axios errors
+      const errorMessage = getErrorMessage(err, 'Failed to update profile');
+      showMessage('error', errorMessage);
     } finally {
       setSaving(false);
     }
@@ -119,8 +143,9 @@ export default function SettingsPage() {
       setNewPassword('');
       setConfirmPassword('');
       showMessage('success', 'Password changed successfully');
-    } catch (err: any) {
-      showMessage('error', err.response?.data?.detail || 'Failed to change password');
+    } catch (err: unknown) {
+      const errorMessage = getErrorMessage(err, 'Failed to change password');
+      showMessage('error', errorMessage);
     } finally {
       setSaving(false);
     }
@@ -133,6 +158,45 @@ export default function SettingsPage() {
     } catch {
       showMessage('error', 'Failed to refresh trust information');
     }
+  };
+
+  /**
+   * Escape a value for CSV format to prevent CSV injection and handle special characters.
+   * - Wraps values in quotes if they contain commas, quotes, or newlines
+   * - Escapes double quotes by doubling them
+   * - Prevents formula injection by prefixing with single quote
+   */
+  const escapeCsvValue = (value: string | undefined | null): string => {
+    if (value === undefined || value === null) {
+      return '';
+    }
+
+    const stringValue = String(value);
+
+    // Check for formula injection attempts (CSV injection)
+    // Formulas typically start with =, +, -, @, tab, or carriage return
+    const formulaChars = ['=', '+', '-', '@', '\t', '\r'];
+    const needsProtection = formulaChars.some(char => stringValue.startsWith(char));
+
+    // Escape double quotes by doubling them
+    let escaped = stringValue.replace(/"/g, '""');
+
+    // If value contains special characters, wrap in quotes
+    const needsQuotes = escaped.includes(',') ||
+                        escaped.includes('"') ||
+                        escaped.includes('\n') ||
+                        escaped.includes('\r') ||
+                        needsProtection;
+
+    if (needsQuotes) {
+      // Prefix with single quote if it looks like a formula
+      if (needsProtection) {
+        escaped = "'" + escaped;
+      }
+      escaped = `"${escaped}"`;
+    }
+
+    return escaped;
   };
 
   const handleExportData = async () => {
@@ -150,18 +214,35 @@ export default function SettingsPage() {
         format: exportFormat,
       };
 
-      const blob = new Blob(
-        [exportFormat === 'json' ? JSON.stringify(data, null, 2) : 'id,username,email\n' + `${user?.id},${user?.username},${user?.email}`],
-        { type: exportFormat === 'json' ? 'application/json' : 'text/csv' }
-      );
-      
+      let content: string;
+      let mimeType: string;
+
+      if (exportFormat === 'json') {
+        content = JSON.stringify(data, null, 2);
+        mimeType = 'application/json';
+      } else {
+        // CSV format with proper escaping
+        const headers = 'id,username,email,trust_level,created_at';
+        const row = [
+          escapeCsvValue(user?.id),
+          escapeCsvValue(user?.username),
+          escapeCsvValue(user?.email),
+          escapeCsvValue(user?.trust_level),
+          escapeCsvValue(user?.created_at),
+        ].join(',');
+        content = `${headers}\n${row}`;
+        mimeType = 'text/csv';
+      }
+
+      const blob = new Blob([content], { type: mimeType });
+
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
       a.download = `forge-data-export.${exportFormat}`;
       a.click();
       URL.revokeObjectURL(url);
-      
+
       setShowExportModal(false);
       showMessage('success', 'Data exported successfully');
     } catch {
@@ -440,10 +521,10 @@ export default function SettingsPage() {
                 <div>
                   <label className="label">Theme</label>
                   <div className="flex gap-3">
-                    {['dark', 'light', 'system'].map((theme) => (
+                    {(['dark', 'light', 'system'] as const).map((theme) => (
                       <button
                         key={theme}
-                        onClick={() => setAppearance({ ...appearance, theme: theme as any })}
+                        onClick={() => setAppearance({ ...appearance, theme })}
                         className={`px-4 py-2 rounded-lg border transition-colors capitalize ${
                           appearance.theme === theme
                             ? 'border-sky-500 bg-sky-500/20 text-sky-400'

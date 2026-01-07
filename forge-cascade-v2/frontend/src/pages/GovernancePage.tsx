@@ -34,10 +34,11 @@ const PROPOSAL_TYPES: ProposalType[] = ['POLICY', 'SYSTEM', 'OVERLAY', 'CAPSULE'
 const statusColors: Record<ProposalStatus, string> = {
   DRAFT: 'bg-slate-500/20 text-slate-500 border-slate-500/30',
   ACTIVE: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+  VOTING: 'bg-sky-500/20 text-sky-400 border-sky-500/30',
   PASSED: 'bg-green-500/20 text-green-400 border-green-500/30',
   REJECTED: 'bg-red-500/20 text-red-400 border-red-500/30',
-  WITHDRAWN: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
-  EXPIRED: 'bg-slate-500/20 text-slate-500 border-slate-500/30',
+  EXECUTED: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+  CANCELLED: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
 };
 
 export default function GovernancePage() {
@@ -52,7 +53,7 @@ export default function GovernancePage() {
     queryKey: ['proposals', filterStatus, filterType],
     queryFn: () => api.listProposals({
       page: 1,
-      per_page: 20,
+      page_size: 20,
       status: filterStatus || undefined,
       type: filterType || undefined,
     }),

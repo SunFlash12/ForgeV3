@@ -45,13 +45,24 @@ router = APIRouter()
 # Cookie Configuration
 # =============================================================================
 
-# Cookie settings for secure token storage
-COOKIE_SETTINGS = {
-    "httponly": True,      # Prevent JavaScript access (XSS protection)
-    "secure": True,        # Only send over HTTPS
-    "samesite": "lax",     # CSRF protection (allows top-level navigation)
-    "path": "/",           # Available for all paths
-}
+from forge.config import get_settings
+
+def get_cookie_settings() -> dict:
+    """
+    Get cookie settings based on environment.
+
+    In development, secure=False allows cookies over HTTP.
+    In production, secure=True requires HTTPS.
+    """
+    settings = get_settings()
+    is_production = settings.app_env == "production"
+
+    return {
+        "httponly": True,      # Prevent JavaScript access (XSS protection)
+        "secure": is_production,  # Only require HTTPS in production
+        "samesite": "lax",     # CSRF protection (allows top-level navigation)
+        "path": "/",           # Available for all paths
+    }
 
 
 def set_auth_cookies(
@@ -68,12 +79,14 @@ def set_auth_cookies(
     Also sets a non-httpOnly CSRF token that JavaScript can read
     and include in request headers.
     """
+    cookie_settings = get_cookie_settings()
+
     # Access token cookie
     response.set_cookie(
         key="access_token",
         value=access_token,
         max_age=access_expires_seconds,
-        **COOKIE_SETTINGS,
+        **cookie_settings,
     )
 
     # Refresh token cookie (longer lived)
@@ -81,7 +94,7 @@ def set_auth_cookies(
         key="refresh_token",
         value=refresh_token,
         max_age=refresh_expires_days * 24 * 60 * 60,
-        **COOKIE_SETTINGS,
+        **cookie_settings,
     )
 
     # CSRF token - NOT httpOnly so JavaScript can read it
@@ -92,7 +105,7 @@ def set_auth_cookies(
             value=csrf_token,
             max_age=access_expires_seconds,
             httponly=False,  # JavaScript needs to read this
-            secure=True,
+            secure=cookie_settings["secure"],  # Match environment setting
             samesite="lax",
             path="/",
         )
@@ -100,11 +113,12 @@ def set_auth_cookies(
 
 def clear_auth_cookies(response: Response) -> None:
     """Clear all authentication cookies on logout."""
+    cookie_settings = get_cookie_settings()
     for cookie_name in ["access_token", "refresh_token", "csrf_token"]:
         response.delete_cookie(
             key=cookie_name,
             path="/",
-            secure=True,
+            secure=cookie_settings["secure"],
             samesite="lax",
         )
 

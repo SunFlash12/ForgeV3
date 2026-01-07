@@ -7,6 +7,7 @@ and role-based access control.
 
 from datetime import datetime
 from enum import Enum
+from typing import Any
 
 from pydantic import EmailStr, Field, field_validator
 
@@ -16,6 +17,34 @@ from forge.models.base import (
     TrustLevel,
     generate_id,
 )
+
+
+class Capability(str, Enum):
+    """User capabilities for fine-grained access control."""
+
+    # Capsule capabilities
+    CREATE_CAPSULE = "create_capsule"
+    EDIT_CAPSULE = "edit_capsule"
+    DELETE_CAPSULE = "delete_capsule"
+    ARCHIVE_CAPSULE = "archive_capsule"
+    VIEW_PRIVATE_CAPSULE = "view_private_capsule"
+
+    # Governance capabilities
+    CREATE_PROPOSAL = "create_proposal"
+    VOTE = "vote"
+    EXECUTE_PROPOSAL = "execute_proposal"
+
+    # Overlay capabilities
+    MANAGE_OVERLAYS = "manage_overlays"
+    CONFIGURE_OVERLAYS = "configure_overlays"
+
+    # Admin capabilities
+    MANAGE_USERS = "manage_users"
+    VIEW_AUDIT_LOG = "view_audit_log"
+    MANAGE_SYSTEM = "manage_system"
+
+    # Ghost Council
+    GHOST_COUNCIL_ACCESS = "ghost_council_access"
 
 
 class UserRole(str, Enum):
@@ -134,6 +163,10 @@ class User(UserBase, TimestampMixin):
     last_login: datetime | None = Field(
         default=None,
         description="Last login timestamp",
+    )
+    metadata: dict[str, Any] = Field(
+        default_factory=dict,
+        description="User metadata for extensible properties",
     )
 
     @property
