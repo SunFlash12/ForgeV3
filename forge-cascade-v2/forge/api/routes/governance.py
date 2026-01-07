@@ -40,6 +40,27 @@ from forge.models.governance import (
 )
 from forge.models.events import Event, EventType
 
+# Resilience integration - caching, validation, metrics
+from forge.resilience.integration import (
+    validate_capsule_content,
+    check_content_validation,
+    get_cached_proposal,
+    cache_proposal,
+    invalidate_proposal_cache,
+    get_cached_proposals_list,
+    cache_proposals_list,
+    get_cached_governance_metrics,
+    cache_governance_metrics,
+    record_proposal_created,
+    record_vote_cast,
+    record_proposal_finalized,
+    record_ghost_council_query,
+    record_cache_hit,
+    record_cache_miss,
+)
+import time
+import hashlib
+
 
 router = APIRouter()
 
@@ -179,11 +200,16 @@ async def create_proposal(
 ) -> ProposalResponse:
     """
     Create a new governance proposal.
-    
+
     Proposals enter PENDING status and begin voting after creation.
     """
+    # Resilience: Content validation for title and description
+    combined_content = f"{request.title}\n\n{request.description}"
+    validation_result = await validate_capsule_content(combined_content)
+    check_content_validation(validation_result)
+
     proposal_id = f"prop_{uuid4().hex[:12]}"
-    
+
     proposal_data = ProposalCreate(
         title=request.title,
         description=request.description,
@@ -193,11 +219,15 @@ async def create_proposal(
         quorum_percent=request.quorum_percent,
         pass_threshold=request.pass_threshold,
     )
-    
+
     created = await governance_repo.create(proposal_data, proposer_id=user.id)
 
     # Emit event
     prop_type = request.proposal_type.value if hasattr(request.proposal_type, 'value') else str(request.proposal_type)
+
+    # Resilience: Record metrics
+    record_proposal_created(prop_type)
+
     await event_system.emit(
         event_type=EventType.GOVERNANCE_ACTION,
         payload={
@@ -208,7 +238,7 @@ async def create_proposal(
         },
         source="api",
     )
-    
+
     await audit_repo.log_governance_action(
         actor_id=user.id,
         proposal_id=proposal_id,
@@ -274,15 +304,27 @@ async def get_proposal(
     """
     Get a specific proposal.
     """
+    # Resilience: Try cache first
+    cached = await get_cached_proposal(proposal_id)
+    if cached:
+        record_cache_hit("proposal")
+        return ProposalResponse(**cached)
+
+    record_cache_miss("proposal")
+
     proposal = await governance_repo.get_proposal(proposal_id)
-    
+
     if not proposal:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Proposal not found",
         )
-    
-    return ProposalResponse.from_proposal(proposal)
+
+    # Resilience: Cache the result
+    response = ProposalResponse.from_proposal(proposal)
+    await cache_proposal(proposal_id, response.model_dump())
+
+    return response
 
 
 @router.post("/proposals/{proposal_id}/submit", response_model=ProposalResponse)
@@ -327,6 +369,9 @@ async def submit_proposal_for_voting(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to start voting period",
         )
+
+    # Resilience: Invalidate cache
+    await invalidate_proposal_cache(proposal_id)
 
     # Emit event
     await event_system.emit(
@@ -377,9 +422,12 @@ async def withdraw_proposal(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot withdraw completed proposal",
         )
-    
+
     await governance_repo.update_proposal_status(proposal_id, ProposalStatus.WITHDRAWN)
-    
+
+    # Resilience: Invalidate cache
+    await invalidate_proposal_cache(proposal_id)
+
     await audit_repo.log_governance_action(
         actor_id=user.id,
         proposal_id=proposal_id,
@@ -472,6 +520,10 @@ async def cast_vote(
     # Handle both string and enum choice for event/audit
     choice_for_log = request.choice.value if hasattr(request.choice, 'value') else str(request.choice)
 
+    # Resilience: Invalidate proposal cache and record metrics
+    await invalidate_proposal_cache(proposal_id)
+    record_vote_cast(choice_for_log)
+
     # Emit event
     await event_system.emit(
         event_type=EventType.VOTE_CAST,
@@ -544,6 +596,8 @@ async def get_ghost_council_recommendation(
     council members deliberate using LLM-based analysis. When use_ai=False,
     uses quick heuristics based on voting patterns.
     """
+    start_time = time.perf_counter()
+
     proposal = await governance_repo.get_proposal(proposal_id)
 
     if not proposal:
@@ -635,6 +689,10 @@ async def get_ghost_council_recommendation(
         typical_outcome=typical_outcome,
         participation_rate=participation_rate,
     )
+
+    # Resilience: Record metrics
+    latency = time.perf_counter() - start_time
+    record_ghost_council_query(latency, use_ai)
 
     return GhostCouncilResponse(
         proposal_id=proposal_id,
@@ -751,6 +809,11 @@ async def report_serious_issue(
 
     This triggers Ghost Council deliberation on the reported issue.
     """
+    # Resilience: Content validation for title and description
+    combined_content = f"{request.title}\n\n{request.description}"
+    validation_result = await validate_capsule_content(combined_content)
+    check_content_validation(validation_result)
+
     from forge.services.ghost_council import (
         get_ghost_council_service,
         SeriousIssue,
@@ -1038,11 +1101,16 @@ async def finalize_proposal(
         new_status = ProposalStatus.PASSED
     else:
         new_status = ProposalStatus.REJECTED
-    
+
     updated = await governance_repo.update_proposal_status(proposal_id, new_status)
 
     # Handle both string and enum status
     status_val = new_status.value if hasattr(new_status, 'value') else str(new_status)
+
+    # Resilience: Invalidate cache and record metrics
+    await invalidate_proposal_cache(proposal_id)
+    record_proposal_finalized(status_val)
+
     await event_system.emit(
         event_type=EventType.GOVERNANCE_ACTION,
         payload={
@@ -1053,7 +1121,7 @@ async def finalize_proposal(
         },
         source="api",
     )
-    
+
     await audit_repo.log_governance_action(
         actor_id=user.id,
         proposal_id=proposal_id,

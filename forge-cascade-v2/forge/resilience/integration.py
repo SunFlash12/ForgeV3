@@ -387,3 +387,122 @@ def record_cache_miss(cache_type: str = "query") -> None:
     """Record cache miss."""
     metrics = get_metrics()
     metrics.cache_miss(cache_type)
+
+
+# =============================================================================
+# Governance Caching Helpers
+# =============================================================================
+
+async def get_cached_proposal(proposal_id: str) -> Optional[dict]:
+    """Get a proposal from cache."""
+    state = await get_resilience_state()
+    if not state.cache:
+        return None
+
+    key = f"proposal:{proposal_id}"
+    return await state.cache.get(key)
+
+
+async def cache_proposal(proposal_id: str, proposal_data: dict, ttl: int = 300) -> bool:
+    """Cache a proposal."""
+    state = await get_resilience_state()
+    if not state.cache:
+        return False
+
+    key = f"proposal:{proposal_id}"
+    return await state.cache.set(
+        key,
+        proposal_data,
+        ttl=ttl,
+        query_type="proposal",
+    )
+
+
+async def invalidate_proposal_cache(proposal_id: str) -> int:
+    """Invalidate cache for a proposal."""
+    state = await get_resilience_state()
+    if not state.cache:
+        return 0
+
+    key = f"proposal:{proposal_id}"
+    await state.cache.delete(key)
+
+    # Also invalidate proposal list caches
+    await state.cache.delete("proposals:list:*")
+    await state.cache.delete("proposals:active")
+    await state.cache.delete("governance:metrics")
+    return 1
+
+
+async def get_cached_proposals_list(cache_key: str) -> Optional[dict]:
+    """Get proposals list from cache."""
+    state = await get_resilience_state()
+    if not state.cache:
+        return None
+
+    return await state.cache.get(f"proposals:list:{cache_key}")
+
+
+async def cache_proposals_list(cache_key: str, data: dict, ttl: int = 120) -> bool:
+    """Cache proposals list."""
+    state = await get_resilience_state()
+    if not state.cache:
+        return False
+
+    return await state.cache.set(
+        f"proposals:list:{cache_key}",
+        data,
+        ttl=ttl,
+        query_type="proposals_list",
+    )
+
+
+async def get_cached_governance_metrics() -> Optional[dict]:
+    """Get governance metrics from cache."""
+    state = await get_resilience_state()
+    if not state.cache:
+        return None
+
+    return await state.cache.get("governance:metrics")
+
+
+async def cache_governance_metrics(data: dict, ttl: int = 60) -> bool:
+    """Cache governance metrics (short TTL as metrics change frequently)."""
+    state = await get_resilience_state()
+    if not state.cache:
+        return False
+
+    return await state.cache.set(
+        "governance:metrics",
+        data,
+        ttl=ttl,
+        query_type="governance_metrics",
+    )
+
+
+# =============================================================================
+# Governance Metrics Helpers
+# =============================================================================
+
+def record_proposal_created(proposal_type: str) -> None:
+    """Record proposal creation metric."""
+    metrics = get_metrics()
+    metrics.increment("governance_proposals_created", {"type": proposal_type})
+
+
+def record_vote_cast(vote_choice: str) -> None:
+    """Record vote cast metric."""
+    metrics = get_metrics()
+    metrics.increment("governance_votes_cast", {"choice": vote_choice})
+
+
+def record_proposal_finalized(status: str) -> None:
+    """Record proposal finalization metric."""
+    metrics = get_metrics()
+    metrics.increment("governance_proposals_finalized", {"status": status})
+
+
+def record_ghost_council_query(latency: float, use_ai: bool) -> None:
+    """Record Ghost Council query metric."""
+    metrics = get_metrics()
+    metrics.observe("governance_ghost_council_latency", latency, {"ai_enabled": str(use_ai)})
