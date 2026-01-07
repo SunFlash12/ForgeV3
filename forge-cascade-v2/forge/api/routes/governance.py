@@ -514,14 +514,20 @@ async def get_ghost_council_recommendation(
         )
 
         # Convert to API response format
-        recommendation = opinion.consensus_vote.value
+        # Handle both enum and string consensus_vote values
+        consensus_vote = opinion.consensus_vote
+        if hasattr(consensus_vote, 'value'):
+            recommendation = consensus_vote.value
+        else:
+            recommendation = str(consensus_vote)
         confidence = opinion.consensus_strength
         reasoning = opinion.final_recommendation
 
         # Determine typical outcome from consensus
-        if opinion.consensus_vote == VoteChoice.APPROVE:
+        vote_str = recommendation.upper()
+        if vote_str == "APPROVE":
             typical_outcome = "approved"
-        elif opinion.consensus_vote == VoteChoice.REJECT:
+        elif vote_str == "REJECT":
             typical_outcome = "rejected"
         else:
             typical_outcome = "contested"
