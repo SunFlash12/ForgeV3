@@ -715,3 +715,93 @@ async def cache_health_status(health_data: dict, ttl: int = 15) -> bool:
         ttl=ttl,
         query_type="health_status",
     )
+
+
+# =============================================================================
+# Cascade Effect Metrics Helpers
+# =============================================================================
+
+def record_cascade_triggered(source_overlay: str, insight_type: str) -> None:
+    """Record cascade trigger metric."""
+    metrics = get_metrics()
+    metrics.increment("cascade_triggered", {"source_overlay": source_overlay, "insight_type": insight_type})
+
+
+def record_cascade_propagated(cascade_id: str, target_overlay: str, hop_count: int) -> None:
+    """Record cascade propagation metric."""
+    metrics = get_metrics()
+    metrics.increment("cascade_propagated", {"target_overlay": target_overlay, "hop_count": str(hop_count)})
+
+
+def record_cascade_completed(cascade_id: str, total_hops: int, overlays_affected: int) -> None:
+    """Record cascade completion metric."""
+    metrics = get_metrics()
+    metrics.increment("cascade_completed", {"total_hops": str(total_hops), "overlays_affected": str(overlays_affected)})
+
+
+def record_pipeline_executed(pipeline_id: str, status: str, duration_ms: float) -> None:
+    """Record pipeline execution metric."""
+    metrics = get_metrics()
+    metrics.increment("pipeline_executions", {"status": status})
+    metrics.observe("pipeline_duration_ms", duration_ms, {"status": status})
+
+
+# =============================================================================
+# Cascade Caching Helpers
+# =============================================================================
+
+async def get_cached_active_cascades() -> Optional[list]:
+    """Get active cascades from cache."""
+    state = await get_resilience_state()
+    if not state.cache:
+        return None
+
+    return await state.cache.get("cascade:active")
+
+
+async def cache_active_cascades(cascades: list, ttl: int = 30) -> bool:
+    """Cache active cascades (short TTL for real-time accuracy)."""
+    state = await get_resilience_state()
+    if not state.cache:
+        return False
+
+    return await state.cache.set(
+        "cascade:active",
+        cascades,
+        ttl=ttl,
+        query_type="cascade_list",
+    )
+
+
+async def get_cached_cascade_metrics() -> Optional[dict]:
+    """Get cascade metrics from cache."""
+    state = await get_resilience_state()
+    if not state.cache:
+        return None
+
+    return await state.cache.get("cascade:metrics")
+
+
+async def cache_cascade_metrics(metrics_data: dict, ttl: int = 60) -> bool:
+    """Cache cascade metrics."""
+    state = await get_resilience_state()
+    if not state.cache:
+        return False
+
+    return await state.cache.set(
+        "cascade:metrics",
+        metrics_data,
+        ttl=ttl,
+        query_type="cascade_metrics",
+    )
+
+
+async def invalidate_cascade_cache() -> int:
+    """Invalidate cascade-related caches."""
+    state = await get_resilience_state()
+    if not state.cache:
+        return 0
+
+    await state.cache.delete("cascade:active")
+    await state.cache.delete("cascade:metrics")
+    return 1

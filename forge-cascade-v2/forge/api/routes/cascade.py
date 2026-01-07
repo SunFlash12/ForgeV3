@@ -34,6 +34,15 @@ from forge.api.dependencies import (
 )
 from forge.models.events import EventType
 
+# Resilience integration - metrics and caching
+from forge.resilience.integration import (
+    record_cascade_triggered,
+    record_cascade_propagated,
+    record_cascade_completed,
+    record_pipeline_executed,
+    invalidate_cascade_cache,
+)
+
 
 router = APIRouter()
 
@@ -161,6 +170,10 @@ async def trigger_cascade(
         max_hops=request.max_hops,
     )
 
+    # Resilience: Record cascade trigger metric and invalidate cache
+    record_cascade_triggered(request.source_overlay, request.insight_type)
+    await invalidate_cascade_cache()
+
     await audit_repo.log_action(
         action="cascade_triggered",
         entity_type="cascade",
@@ -206,6 +219,10 @@ async def propagate_cascade(
             detail="Could not propagate cascade - either max hops reached, cycle detected, or cascade not found",
         )
 
+    # Resilience: Record cascade propagation metric and invalidate cache
+    record_cascade_propagated(request.cascade_id, request.target_overlay, event.hop_count)
+    await invalidate_cascade_cache()
+
     await audit_repo.log_action(
         action="cascade_propagated",
         entity_type="cascade",
@@ -242,6 +259,10 @@ async def complete_cascade(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Cascade chain not found",
         )
+
+    # Resilience: Record cascade completion metric and invalidate cache
+    record_cascade_completed(cascade_id, chain.total_hops, len(chain.overlays_affected))
+    await invalidate_cascade_cache()
 
     await audit_repo.log_action(
         action="cascade_completed",
@@ -358,6 +379,9 @@ async def execute_cascade_pipeline(
             "max_hops": request.max_hops,
         }
     )
+
+    # Resilience: Record pipeline execution metric
+    record_pipeline_executed(result.pipeline_id, result.status.value, result.duration_ms)
 
     await audit_repo.log_action(
         action="cascade_pipeline_executed",
