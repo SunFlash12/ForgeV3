@@ -41,6 +41,28 @@ from forge.models.capsule import (
 )
 from forge.models.events import Event, EventType
 
+# Resilience integration - caching, validation, metrics
+from forge.resilience.integration import (
+    get_cached_capsule,
+    cache_capsule,
+    invalidate_capsule_cache,
+    get_cached_search,
+    cache_search_results,
+    get_cached_lineage,
+    cache_lineage,
+    validate_capsule_content,
+    check_content_validation,
+    record_capsule_created,
+    record_capsule_updated,
+    record_capsule_deleted,
+    record_search,
+    record_lineage_query,
+    record_cache_hit,
+    record_cache_miss,
+)
+import hashlib
+import time
+
 
 router = APIRouter()
 
@@ -218,13 +240,17 @@ async def create_capsule(
 ) -> CapsuleResponse:
     """
     Create a new knowledge capsule.
-    
+
     The capsule will be processed through the 7-phase cascade pipeline
     for validation, analysis, and governance checks.
     """
+    # Resilience: Content validation for security threats
+    validation_result = await validate_capsule_content(request.content)
+    check_content_validation(validation_result)
+
     # Build capsule create model
     capsule_id = f"cap_{uuid4().hex[:12]}"
-    
+
     capsule_data = CapsuleCreate(
         content=request.content,
         type=request.type,
@@ -233,7 +259,7 @@ async def create_capsule(
         tags=request.tags,
         metadata=request.metadata,
     )
-    
+
     # Process through pipeline
     result = await pipeline.execute(
         input_data=capsule_data.model_dump(),
@@ -241,18 +267,21 @@ async def create_capsule(
         user_id=user.id,
         trust_flame=int(user.trust_flame),
     )
-    
+
     if not result.success:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=result.error or "Capsule creation failed pipeline validation",
         )
-    
+
     # Create in database
     capsule = await capsule_repo.create(capsule_data, owner_id=user.id)
 
     # Get type value safely (could be enum or string)
     type_value = capsule.type.value if hasattr(capsule.type, 'value') else str(capsule.type)
+
+    # Resilience: Record metrics
+    record_capsule_created(type_value)
 
     # Emit event
     await event_system.emit(
@@ -275,7 +304,7 @@ async def create_capsule(
         details={"title": capsule.title, "type": type_value},
         correlation_id=correlation_id,
     )
-    
+
     return CapsuleResponse.from_capsule(capsule)
 
 
@@ -328,6 +357,32 @@ async def search_capsules(
     """
     Semantic search across capsules.
     """
+    start_time = time.perf_counter()
+
+    # Resilience: Create cache key from query hash
+    import json
+    cache_key_data = json.dumps({
+        "query": request.query,
+        "limit": request.limit,
+        "filters": request.filters,
+    }, sort_keys=True)
+    query_hash = hashlib.sha256(cache_key_data.encode()).hexdigest()[:16]
+
+    # Try cache first
+    cached = await get_cached_search(query_hash)
+    if cached:
+        record_cache_hit("search")
+        latency = time.perf_counter() - start_time
+        record_search(latency, len(cached))
+        return SearchResponse(
+            query=request.query,
+            results=[CapsuleResponse(**c) for c in cached.get("results", [])],
+            scores=cached.get("scores", []),
+            total=cached.get("total", 0),
+        )
+
+    record_cache_miss("search")
+
     # Convert text query to embedding vector
     embedding_result = await embedding_service.embed(request.query)
 
@@ -346,9 +401,26 @@ async def search_capsules(
     capsules = [r.capsule for r in search_results]
     scores = [r.score for r in search_results]
 
+    # Build response
+    response_data = [CapsuleResponse.from_capsule(c) for c in capsules]
+
+    # Resilience: Cache results and record metrics
+    await cache_search_results(
+        query_hash,
+        {
+            "results": [r.model_dump() for r in response_data],
+            "scores": scores,
+            "total": len(capsules),
+        },
+        ttl=600,  # 10 minute cache for search results
+    )
+
+    latency = time.perf_counter() - start_time
+    record_search(latency, len(capsules))
+
     return SearchResponse(
         query=request.query,
-        results=[CapsuleResponse.from_capsule(c) for c in capsules],
+        results=response_data,
         scores=scores,
         total=len(capsules),
     )
@@ -406,22 +478,40 @@ async def get_capsule(
     """
     Get a specific capsule by ID.
     """
+    # Resilience: Try cache first
+    cached = await get_cached_capsule(capsule_id)
+    if cached:
+        record_cache_hit("capsule")
+        # Still emit access event for tracking
+        await event_system.emit(
+            event_type=EventType.CAPSULE_ACCESSED,
+            payload={"capsule_id": capsule_id, "user_id": user.id, "cached": True},
+            source="api",
+        )
+        return CapsuleResponse(**cached)
+
+    record_cache_miss("capsule")
+
     capsule = await capsule_repo.get_by_id(capsule_id)
-    
+
     if not capsule:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Capsule not found",
         )
-    
+
+    # Resilience: Cache the result
+    response = CapsuleResponse.from_capsule(capsule)
+    await cache_capsule(capsule_id, response.model_dump())
+
     # Emit access event (for tracking)
     await event_system.emit(
         event_type=EventType.CAPSULE_ACCESSED,
         payload={"capsule_id": capsule_id, "user_id": user.id},
         source="api",
     )
-    
-    return CapsuleResponse.from_capsule(capsule)
+
+    return response
 
 
 @router.patch("/{capsule_id}", response_model=CapsuleResponse)
@@ -443,6 +533,11 @@ async def update_capsule(
     """
     from forge.security.authorization import is_admin
 
+    # Resilience: Content validation if content is being updated
+    if request.content is not None:
+        validation_result = await validate_capsule_content(request.content)
+        check_content_validation(validation_result)
+
     capsule = await capsule_repo.get_by_id(capsule_id)
 
     if not capsule:
@@ -452,7 +547,6 @@ async def update_capsule(
         )
 
     # SECURITY FIX: Only owner OR admin can update
-    # Previous code allowed ANY user with trust >= 80 to update ANY capsule
     is_owner = capsule.owner_id == user.id
     user_is_admin = is_admin(user)
 
@@ -461,7 +555,7 @@ async def update_capsule(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only the capsule owner can update this capsule",
         )
-    
+
     # Build update
     updates = {}
     if request.title is not None:
@@ -472,10 +566,10 @@ async def update_capsule(
         updates["tags"] = request.tags
     if request.metadata is not None:
         updates["metadata"] = {**capsule.metadata, **request.metadata}
-    
+
     if not updates:
         return CapsuleResponse.from_capsule(capsule)
-    
+
     # Process through pipeline
     result = await pipeline.execute(
         input_data={"capsule_id": capsule_id, "updates": updates},
@@ -483,16 +577,23 @@ async def update_capsule(
         user_id=user.id,
         trust_flame=int(user.trust_flame),
     )
-    
+
     if not result.success:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=result.error or "Update failed pipeline validation",
         )
-    
+
     # Update in database
     updated = await capsule_repo.update(capsule_id, CapsuleUpdate(**updates))
-    
+
+    # Get type value safely
+    type_value = updated.type.value if hasattr(updated.type, 'value') else str(updated.type)
+
+    # Resilience: Invalidate cache and record metrics
+    await invalidate_capsule_cache(capsule_id)
+    record_capsule_updated(type_value)
+
     # Emit event
     await event_system.emit(
         event_type=EventType.CAPSULE_UPDATED,
@@ -503,7 +604,7 @@ async def update_capsule(
         },
         source="api",
     )
-    
+
     # Audit log
     await audit_repo.log_capsule_action(
         actor_id=user.id,
@@ -512,7 +613,7 @@ async def update_capsule(
         details={"fields": list(updates.keys())},
         correlation_id=correlation_id,
     )
-    
+
     return CapsuleResponse.from_capsule(updated)
 
 
@@ -542,8 +643,10 @@ async def delete_capsule(
             detail="Capsule not found",
         )
 
+    # Get type value for metrics before deletion
+    type_value = capsule.type.value if hasattr(capsule.type, 'value') else str(capsule.type)
+
     # SECURITY FIX: Only owner OR admin can delete
-    # Previous code allowed ANY trusted user to delete ANY capsule
     is_owner = capsule.owner_id == user.id
     user_is_admin = is_admin(user)
 
@@ -555,14 +658,18 @@ async def delete_capsule(
 
     # Delete
     await capsule_repo.delete(capsule_id)
-    
+
+    # Resilience: Invalidate cache and record metrics
+    await invalidate_capsule_cache(capsule_id)
+    record_capsule_deleted(type_value)
+
     # Emit event
     await event_system.emit(
         event_type=EventType.CAPSULE_DELETED,
         payload={"capsule_id": capsule_id, "user_id": user.id},
         source="api",
     )
-    
+
     # Audit log
     await audit_repo.log_capsule_action(
         actor_id=user.id,
@@ -585,29 +692,69 @@ async def get_lineage(
 ) -> LineageResponse:
     """
     Get capsule lineage (Isnad chain).
-    
+
     Returns ancestors and descendants up to specified depth.
     """
+    start_time = time.perf_counter()
+
+    # Resilience: Try cache first
+    cached = await get_cached_lineage(capsule_id, depth)
+    if cached:
+        record_cache_hit("lineage")
+        latency = time.perf_counter() - start_time
+        record_lineage_query(latency, depth)
+        return LineageResponse(
+            capsule=CapsuleResponse(**cached["capsule"]),
+            ancestors=[CapsuleResponse(**a) for a in cached.get("ancestors", [])],
+            descendants=[CapsuleResponse(**d) for d in cached.get("descendants", [])],
+            depth=cached.get("depth", 0),
+            trust_gradient=cached.get("trust_gradient", []),
+        )
+
+    record_cache_miss("lineage")
+
     capsule = await capsule_repo.get_by_id(capsule_id)
-    
+
     if not capsule:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Capsule not found",
         )
-    
+
     # Get lineage
     ancestors = await capsule_repo.get_ancestors(capsule_id, max_depth=depth)
     descendants = await capsule_repo.get_descendants(capsule_id, max_depth=depth)
-    
+
     # Calculate trust gradient (using trust_level enum value)
     all_in_chain = [capsule] + ancestors + descendants
     trust_gradient = [float(c.trust_level.value) if hasattr(c.trust_level, 'value') else float(c.trust_level) for c in sorted(all_in_chain, key=lambda x: x.created_at or datetime.min)]
-    
+
+    # Build response
+    capsule_response = CapsuleResponse.from_capsule(capsule)
+    ancestor_responses = [CapsuleResponse.from_capsule(c) for c in ancestors]
+    descendant_responses = [CapsuleResponse.from_capsule(c) for c in descendants]
+
+    # Resilience: Cache lineage and record metrics
+    await cache_lineage(
+        capsule_id,
+        depth,
+        {
+            "capsule": capsule_response.model_dump(),
+            "ancestors": [a.model_dump() for a in ancestor_responses],
+            "descendants": [d.model_dump() for d in descendant_responses],
+            "depth": len(ancestors),
+            "trust_gradient": trust_gradient,
+        },
+        ttl=1800,  # 30 minute cache for lineage (more stable)
+    )
+
+    latency = time.perf_counter() - start_time
+    record_lineage_query(latency, depth)
+
     return LineageResponse(
-        capsule=CapsuleResponse.from_capsule(capsule),
-        ancestors=[CapsuleResponse.from_capsule(c) for c in ancestors],
-        descendants=[CapsuleResponse.from_capsule(c) for c in descendants],
+        capsule=capsule_response,
+        ancestors=ancestor_responses,
+        descendants=descendant_responses,
         depth=len(ancestors),
         trust_gradient=trust_gradient,
     )

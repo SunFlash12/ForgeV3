@@ -30,6 +30,11 @@ from forge.kernel.event_system import EventSystem
 from forge.kernel.overlay_manager import OverlayManager
 from forge.kernel.pipeline import CascadePipeline
 from forge.immune import create_immune_system, get_circuit_registry
+from forge.resilience.integration import (
+    ObservabilityMiddleware,
+    initialize_resilience,
+    shutdown_resilience,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -55,7 +60,10 @@ class ForgeApp:
         self.health_checker = None
         self.anomaly_system = None
         self.canary_manager = None
-        
+
+        # Resilience components
+        self.resilience_initialized: bool = False
+
         # State
         self.started_at: datetime | None = None
         self.is_ready: bool = False
@@ -102,13 +110,24 @@ class ForgeApp:
         
         # Register core overlays
         await self._register_core_overlays()
-        
+
+        # Initialize resilience layer (caching, observability, validation)
+        try:
+            from forge.resilience.integration import get_resilience_state
+            resilience_state = await get_resilience_state()
+            self.resilience_initialized = resilience_state.initialized
+            logger.info("resilience_layer_initialized")
+        except Exception as e:
+            logger.warning("resilience_init_failed", error=str(e))
+            self.resilience_initialized = False
+
         self.started_at = datetime.now(timezone.utc)
         self.is_ready = True
-        
+
         logger.info(
             "forge_initialized",
             overlays=len(self.overlay_manager._registry.instances) if self.overlay_manager else 0,
+            resilience=self.resilience_initialized,
         )
     
     async def _register_core_overlays(self) -> None:
@@ -139,19 +158,29 @@ class ForgeApp:
     async def shutdown(self) -> None:
         """Gracefully shutdown all components."""
         logger.info("forge_shutting_down")
-        
+
         self.is_ready = False
-        
+
+        # Shutdown resilience layer
+        if self.resilience_initialized:
+            try:
+                from forge.resilience.integration import get_resilience_state
+                resilience_state = await get_resilience_state()
+                await resilience_state.close()
+                logger.info("resilience_layer_shutdown")
+            except Exception as e:
+                logger.warning("resilience_shutdown_failed", error=str(e))
+
         # Shutdown services
         from forge.services.init import shutdown_all_services
         shutdown_all_services()
-        
+
         if self.overlay_manager:
             await self.overlay_manager.stop()
-        
+
         if self.db_client:
             await self.db_client.close()
-        
+
         logger.info("forge_shutdown_complete")
     
     def get_status(self) -> dict[str, Any]:
@@ -284,6 +313,10 @@ def create_app(
     app.add_middleware(SecurityHeadersMiddleware, enable_hsts=(settings.app_env == "production"))
     app.add_middleware(CorrelationIdMiddleware)
     app.add_middleware(RequestLoggingMiddleware)
+
+    # Resilience: Observability middleware for tracing and metrics
+    app.add_middleware(ObservabilityMiddleware)
+
     app.add_middleware(RequestSizeLimitMiddleware, max_content_length=10 * 1024 * 1024)  # 10MB limit
     app.add_middleware(CSRFProtectionMiddleware, enabled=(settings.app_env != "development"))  # CSRF protection
     app.add_middleware(IdempotencyMiddleware)  # Idempotency support
