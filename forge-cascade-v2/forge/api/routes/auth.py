@@ -37,6 +37,17 @@ from forge.api.dependencies import (
 from forge.models.user import User, TrustLevel
 from forge.security.password import verify_password, hash_password, PasswordValidationError, validate_password_strength
 
+# Resilience integration - validation and metrics
+from forge.resilience.integration import (
+    validate_capsule_content,
+    check_content_validation,
+    record_login_attempt,
+    record_registration,
+    record_token_refresh,
+    record_logout,
+    record_password_change,
+)
+
 
 router = APIRouter()
 
@@ -263,6 +274,13 @@ async def register(
     """
     from forge.security.auth_service import RegistrationError
 
+    # Resilience: Content validation for username and display_name
+    content_to_validate = request.username
+    if request.display_name:
+        content_to_validate += f" {request.display_name}"
+    validation_result = await validate_capsule_content(content_to_validate)
+    check_content_validation(validation_result)
+
     # Validate password strength on backend
     try:
         validate_password_strength(request.password)
@@ -280,6 +298,9 @@ async def register(
             display_name=request.display_name,
             ip_address=client_info.ip_address,
         )
+
+        # Resilience: Record registration metric
+        record_registration()
 
         # Audit log with IP and user agent
         await audit_repo.log_user_action(
@@ -342,6 +363,9 @@ async def login(
             user_agent=client_info.user_agent,
         )
 
+        # Resilience: Record successful login
+        record_login_attempt(success=True)
+
         # Audit log with IP and user agent
         await audit_repo.log_user_action(
             actor_id=user.id,
@@ -373,6 +397,8 @@ async def login(
         )
 
     except Exception as e:
+        # Resilience: Record failed login
+        record_login_attempt(success=False, reason="invalid_credentials")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials",
@@ -420,6 +446,9 @@ async def refresh_token(
     try:
         tokens = await auth_service.refresh_tokens(token_to_use)
 
+        # Resilience: Record successful token refresh
+        record_token_refresh(success=True)
+
         # Generate new CSRF token
         csrf_token = generate_csrf_token()
         expires_in = settings.jwt_access_token_expire_minutes * 60
@@ -440,6 +469,8 @@ async def refresh_token(
         )
 
     except ValueError as e:
+        # Resilience: Record failed token refresh
+        record_token_refresh(success=False)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid refresh token",
@@ -481,6 +512,9 @@ async def logout(
         except Exception:
             pass  # Token parsing failed, but still clear cookies
 
+    # Resilience: Record logout metric
+    record_logout()
+
     await audit_repo.log_user_action(
         actor_id=user.id,
         target_user_id=user.id,
@@ -514,8 +548,13 @@ async def update_profile(
     """
     Update current user's profile.
     """
+    # Resilience: Content validation for display_name
+    if request.display_name:
+        validation_result = await validate_capsule_content(request.display_name)
+        check_content_validation(validation_result)
+
     updates = {}
-    
+
     if request.display_name is not None:
         updates["display_name"] = request.display_name
     
@@ -568,13 +607,16 @@ async def change_password(
     # Update password
     new_hash = hash_password(request.new_password)
     await user_repo.update(user.id, {"password_hash": new_hash})
-    
+
+    # Resilience: Record password change metric
+    record_password_change()
+
     await audit_repo.log_user_action(
         actor_id=user.id,
         target_user_id=user.id,
         action="password_changed",
     )
-    
+
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

@@ -506,3 +506,37 @@ def record_ghost_council_query(latency: float, use_ai: bool) -> None:
     """Record Ghost Council query metric."""
     metrics = get_metrics()
     metrics.observe("governance_ghost_council_latency", latency, {"ai_enabled": str(use_ai)})
+
+
+# =============================================================================
+# Authentication Metrics Helpers
+# =============================================================================
+
+def record_login_attempt(success: bool, reason: str = "") -> None:
+    """Record login attempt metric."""
+    metrics = get_metrics()
+    metrics.increment("auth_login_attempts", {"success": str(success).lower(), "reason": reason})
+
+
+def record_registration() -> None:
+    """Record new user registration metric."""
+    metrics = get_metrics()
+    metrics.increment("auth_registrations", {})
+
+
+def record_token_refresh(success: bool) -> None:
+    """Record token refresh metric."""
+    metrics = get_metrics()
+    metrics.increment("auth_token_refreshes", {"success": str(success).lower()})
+
+
+def record_logout() -> None:
+    """Record logout metric."""
+    metrics = get_metrics()
+    metrics.increment("auth_logouts", {})
+
+
+def record_password_change() -> None:
+    """Record password change metric."""
+    metrics = get_metrics()
+    metrics.increment("auth_password_changes", {})
