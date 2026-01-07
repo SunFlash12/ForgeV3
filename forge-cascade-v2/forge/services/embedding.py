@@ -46,6 +46,8 @@ class EmbeddingConfig:
     timeout_seconds: float = 30.0
     cache_enabled: bool = True
     normalize: bool = True
+    # Cost optimization: Configurable cache size (default 50000 for better hit rates)
+    cache_size: int = 50000
 
 
 @dataclass
@@ -313,8 +315,9 @@ class SentenceTransformersProvider(EmbeddingProviderBase):
 
 class EmbeddingCache:
     """Simple in-memory cache for embeddings."""
-    
-    def __init__(self, max_size: int = 10000):
+
+    # Cost optimization: Increased default from 10000 to 50000 for better hit rates
+    def __init__(self, max_size: int = 50000):
         self._cache: dict[str, EmbeddingResult] = {}
         self._max_size = max_size
         self._hits = 0
@@ -390,7 +393,8 @@ class EmbeddingService:
     def __init__(self, config: Optional[EmbeddingConfig] = None):
         self._config = config or EmbeddingConfig()
         self._provider = self._create_provider()
-        self._cache = EmbeddingCache() if self._config.cache_enabled else None
+        # Use configurable cache size for cost optimization
+        self._cache = EmbeddingCache(max_size=self._config.cache_size) if self._config.cache_enabled else None
         
         logger.info(
             "embedding_service_initialized",

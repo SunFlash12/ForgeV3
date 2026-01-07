@@ -15,11 +15,12 @@ Features:
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Optional, Callable
+from typing import Any, Optional, Callable, Literal
 from uuid import uuid4
 
 import structlog
@@ -89,6 +90,19 @@ class GhostCouncilConfig:
     # Severity thresholds
     critical_security_events: int = 3  # Trigger after N security events
     trust_drop_threshold: float = 20.0  # Trigger if trust drops by this much
+
+    # ═══════════════════════════════════════════════════════════════
+    # Cost Optimization Settings
+    # ═══════════════════════════════════════════════════════════════
+    # Profile controls how many council members deliberate:
+    # - "quick": 1 member (Ethics Guardian only) - lowest cost
+    # - "standard": 3 members (Ethics, Security, Governance) - balanced
+    # - "comprehensive": 5 members (all) - full deliberation
+    profile: Literal["quick", "standard", "comprehensive"] = "comprehensive"
+
+    # Cache Ghost Council opinions to avoid re-deliberation
+    cache_enabled: bool = True
+    cache_ttl_days: int = 30  # How long to cache opinions
 
 
 # Default Ghost Council Members - Each with a unique perspective
@@ -169,6 +183,10 @@ class GhostCouncilService:
 
         # Respond to a serious issue
         response = await service.respond_to_issue(issue)
+
+    Cost Optimization:
+        - Profile setting controls how many members deliberate
+        - Caching avoids re-deliberation on identical proposals
     """
 
     def __init__(
@@ -177,9 +195,18 @@ class GhostCouncilService:
         members: Optional[list[GhostCouncilMember]] = None,
     ):
         self._config = config or GhostCouncilConfig()
-        self._members = members or DEFAULT_COUNCIL_MEMBERS
+
+        # Select members based on profile (cost optimization)
+        if members is not None:
+            self._members = members
+        else:
+            self._members = self._get_members_for_profile(self._config.profile)
+
         self._active_issues: dict[str, SeriousIssue] = {}
         self._issue_handlers: list[Callable[[SeriousIssue], None]] = []
+
+        # Opinion cache for cost optimization
+        self._opinion_cache: dict[str, tuple[GhostCouncilOpinion, datetime]] = {}
 
         # Statistics
         self._stats = {
@@ -187,13 +214,88 @@ class GhostCouncilService:
             "issues_responded": 0,
             "unanimous_decisions": 0,
             "split_decisions": 0,
+            "cache_hits": 0,
         }
 
         logger.info(
             "ghost_council_initialized",
             members=len(self._members),
             member_names=[m.name for m in self._members],
+            profile=self._config.profile,
+            cache_enabled=self._config.cache_enabled,
         )
+
+    def _get_members_for_profile(
+        self,
+        profile: Literal["quick", "standard", "comprehensive"],
+    ) -> list[GhostCouncilMember]:
+        """
+        Get council members based on profile setting.
+
+        Cost optimization: Fewer members = fewer LLM calls = lower cost.
+        """
+        if profile == "quick":
+            # Just Ethics Guardian - covers ethical considerations
+            return DEFAULT_COUNCIL_MEMBERS[:1]
+        elif profile == "standard":
+            # Ethics, Security, Governance - covers most critical areas
+            return DEFAULT_COUNCIL_MEMBERS[:3]
+        else:  # comprehensive
+            # All 5 members - full deliberation
+            return DEFAULT_COUNCIL_MEMBERS
+
+    def _hash_proposal(self, proposal: Proposal) -> str:
+        """Create a cache key for a proposal based on its content."""
+        content = f"{proposal.title}:{proposal.description}:{proposal.type}"
+        return hashlib.sha256(content.encode()).hexdigest()
+
+    def _is_cache_valid(self, cached_at: datetime) -> bool:
+        """Check if a cached opinion is still valid."""
+        if not self._config.cache_enabled:
+            return False
+        age_days = (datetime.now(timezone.utc) - cached_at).days
+        return age_days < self._config.cache_ttl_days
+
+    def _get_cached_opinion(self, proposal: Proposal) -> Optional[GhostCouncilOpinion]:
+        """Get cached opinion if available and valid."""
+        if not self._config.cache_enabled:
+            return None
+
+        cache_key = self._hash_proposal(proposal)
+        if cache_key in self._opinion_cache:
+            opinion, cached_at = self._opinion_cache[cache_key]
+            if self._is_cache_valid(cached_at):
+                self._stats["cache_hits"] += 1
+                logger.debug(
+                    "ghost_council_cache_hit",
+                    proposal_id=proposal.id,
+                    cached_at=cached_at.isoformat(),
+                )
+                return opinion
+            else:
+                # Expired, remove from cache
+                del self._opinion_cache[cache_key]
+
+        return None
+
+    def _cache_opinion(self, proposal: Proposal, opinion: GhostCouncilOpinion) -> None:
+        """Cache an opinion for future use."""
+        if not self._config.cache_enabled:
+            return
+
+        cache_key = self._hash_proposal(proposal)
+        self._opinion_cache[cache_key] = (opinion, datetime.now(timezone.utc))
+
+        # Limit cache size to prevent memory issues
+        max_cache_size = 1000
+        if len(self._opinion_cache) > max_cache_size:
+            # Remove oldest entries
+            sorted_keys = sorted(
+                self._opinion_cache.keys(),
+                key=lambda k: self._opinion_cache[k][1],
+            )
+            for key in sorted_keys[:100]:  # Remove oldest 100
+                del self._opinion_cache[key]
 
     @property
     def members(self) -> list[GhostCouncilMember]:
@@ -214,6 +316,7 @@ class GhostCouncilService:
         proposal: Proposal,
         context: Optional[dict[str, Any]] = None,
         constitutional_review: Optional[dict[str, Any]] = None,
+        skip_cache: bool = False,
     ) -> GhostCouncilOpinion:
         """
         Have the Ghost Council deliberate on a proposal.
@@ -222,14 +325,28 @@ class GhostCouncilService:
             proposal: The governance proposal to review
             context: Additional context (voting data, history, etc.)
             constitutional_review: Optional Constitutional AI review
+            skip_cache: Force fresh deliberation even if cached
 
         Returns:
             Collective Ghost Council opinion
         """
+        # Check cache first (cost optimization)
+        if not skip_cache:
+            cached_opinion = self._get_cached_opinion(proposal)
+            if cached_opinion:
+                logger.info(
+                    "ghost_council_using_cached_opinion",
+                    proposal_id=proposal.id,
+                    proposal_title=proposal.title,
+                )
+                return cached_opinion
+
         logger.info(
             "ghost_council_deliberating",
             proposal_id=proposal.id,
             proposal_title=proposal.title,
+            members_count=len(self._members),
+            profile=self._config.profile,
         )
 
         # Get LLM service
@@ -264,6 +381,9 @@ class GhostCouncilService:
             final_recommendation=consensus["recommendation"],
         )
 
+        # Cache the opinion (cost optimization)
+        self._cache_opinion(proposal, opinion)
+
         self._stats["proposals_reviewed"] += 1
         if consensus["strength"] >= 0.9:
             self._stats["unanimous_decisions"] += 1
@@ -273,7 +393,7 @@ class GhostCouncilService:
         logger.info(
             "ghost_council_deliberation_complete",
             proposal_id=proposal.id,
-            consensus_vote=consensus["vote"].value,
+            consensus_vote=consensus["vote"].value if hasattr(consensus["vote"], "value") else str(consensus["vote"]),
             consensus_strength=consensus["strength"],
             votes={
                 "approve": sum(1 for v in member_votes if v.vote == VoteChoice.APPROVE),

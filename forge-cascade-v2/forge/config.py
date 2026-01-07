@@ -125,8 +125,10 @@ class Settings(BaseSettings):
     llm_model: str = Field(
         default="claude-sonnet-4-20250514", description="LLM model name"
     )
-    llm_max_tokens: int = Field(default=4096, ge=1, description="Max LLM output tokens")
-    llm_temperature: float = Field(default=0.7, ge=0.0, le=2.0, description="LLM temperature")
+    # Cost optimization: Reduced from 4096 - Ghost Council responses typically 500-800 tokens
+    llm_max_tokens: int = Field(default=2000, ge=1, description="Max LLM output tokens")
+    # Cost optimization: Lower temperature for more consistent, cacheable responses
+    llm_temperature: float = Field(default=0.4, ge=0.0, le=2.0, description="LLM temperature")
 
     # Embeddings
     embedding_provider: Literal["openai", "sentence_transformers", "mock"] = Field(
@@ -141,6 +143,22 @@ class Settings(BaseSettings):
     )
     embedding_cache_enabled: bool = Field(default=True, description="Cache embeddings")
     embedding_batch_size: int = Field(default=100, ge=1, description="Batch size for embedding")
+    # Cost optimization: Increased from 10000 for better cache hit rates
+    embedding_cache_size: int = Field(default=50000, ge=1000, description="Max embedding cache entries")
+
+    # ═══════════════════════════════════════════════════════════════
+    # GHOST COUNCIL
+    # ═══════════════════════════════════════════════════════════════
+    # Cost optimization: Profile controls how many council members deliberate
+    # - "quick": 1 member (Ethics) - fastest, lowest cost
+    # - "standard": 3 members (Ethics, Security, Governance) - balanced
+    # - "comprehensive": 5 members (all) - full deliberation
+    ghost_council_profile: Literal["quick", "standard", "comprehensive"] = Field(
+        default="comprehensive", description="Ghost Council deliberation profile"
+    )
+    # Cache Ghost Council opinions to avoid re-deliberation on identical proposals
+    ghost_council_cache_enabled: bool = Field(default=True, description="Cache council opinions")
+    ghost_council_cache_ttl_days: int = Field(default=30, ge=1, description="Opinion cache TTL in days")
 
     # ═══════════════════════════════════════════════════════════════
     # IMMUNE SYSTEM
