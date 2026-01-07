@@ -366,7 +366,9 @@ def test_capsules(session):
     try:
         r = session.get(f"{BASE_URL}/api/v1/capsules", timeout=10)
         data = r.json()
-        is_list = isinstance(data.get("data", data), list) if r.status_code == 200 else False
+        # Response could be list or dict with items/data/capsules key
+        capsules = data if isinstance(data, list) else data.get("items", data.get("data", data.get("capsules", [])))
+        is_list = isinstance(capsules, list) if r.status_code == 200 else False
         log_result("Capsules", "List capsules", r.status_code == 200 and is_list,
                    f"Is list: {is_list}", None)
     except Exception as e:
@@ -388,12 +390,12 @@ def test_capsules(session):
     except Exception as e:
         log_result("Capsules", "List with type filter", False, str(e))
 
-    # Test 3.11: Update capsule
+    # Test 3.11: Update capsule (uses PATCH, not PUT)
     if created_capsule_id:
         try:
             update_data = {"content": "Updated machine learning content with new neural network information."}
-            r = session.put(f"{BASE_URL}/api/v1/capsules/{created_capsule_id}",
-                           json=update_data, timeout=15)
+            r = session.patch(f"{BASE_URL}/api/v1/capsules/{created_capsule_id}",
+                             json=update_data, timeout=15)
             log_result("Capsules", "Update capsule", r.status_code == 200,
                        f"Status: {r.status_code}", r.json() if r.text else None)
         except Exception as e:
@@ -665,33 +667,33 @@ def test_governance(session):
     except Exception as e:
         log_result("Governance", "Nonexistent proposal 404", False, str(e))
 
-    # Test 5.7: Activate proposal (if it's in draft state)
+    # Test 5.7: Submit proposal (move from draft to active)
     if created_proposal_id:
         try:
-            r = session.post(f"{BASE_URL}/api/v1/governance/proposals/{created_proposal_id}/activate",
+            r = session.post(f"{BASE_URL}/api/v1/governance/proposals/{created_proposal_id}/submit",
                             timeout=15)
-            log_result("Governance", "Activate proposal", r.status_code in [200, 400, 403],
+            log_result("Governance", "Submit proposal", r.status_code in [200, 400, 403],
                        f"Status: {r.status_code}", r.json() if r.text else None)
         except Exception as e:
-            log_result("Governance", "Activate proposal", False, str(e))
+            log_result("Governance", "Submit proposal", False, str(e))
 
-    # Test 5.8: Cast vote FOR
+    # Test 5.8: Cast vote APPROVE (uses choice/rationale, not decision/reasoning)
     if created_proposal_id:
         try:
-            vote_data = {"decision": "for", "reasoning": "Testing vote functionality - voting FOR"}
+            vote_data = {"choice": "APPROVE", "rationale": "Testing vote functionality - voting APPROVE"}
             r = session.post(f"{BASE_URL}/api/v1/governance/proposals/{created_proposal_id}/vote",
                             json=vote_data, timeout=10)
-            log_result("Governance", "Cast vote FOR", r.status_code in [200, 201, 400],
+            log_result("Governance", "Cast vote APPROVE", r.status_code in [200, 201, 400],
                        f"Status: {r.status_code}", r.json() if r.text else None)
         except Exception as e:
-            log_result("Governance", "Cast vote FOR", False, str(e))
+            log_result("Governance", "Cast vote APPROVE", False, str(e))
     else:
-        skip_test("Governance", "Cast vote FOR", "No proposal created")
+        skip_test("Governance", "Cast vote APPROVE", "No proposal created")
 
     # Test 5.9: Cast vote - duplicate vote (edge case)
     if created_proposal_id:
         try:
-            vote_data = {"decision": "against", "reasoning": "Trying to vote again"}
+            vote_data = {"choice": "REJECT", "rationale": "Trying to vote again"}
             r = session.post(f"{BASE_URL}/api/v1/governance/proposals/{created_proposal_id}/vote",
                             json=vote_data, timeout=10)
             log_result("Governance", "Duplicate vote handling", r.status_code in [200, 400, 409],
@@ -699,13 +701,13 @@ def test_governance(session):
         except Exception as e:
             log_result("Governance", "Duplicate vote handling", False, str(e))
 
-    # Test 5.10: Cast vote - invalid decision (edge case)
+    # Test 5.10: Cast vote - invalid choice (edge case)
     if created_proposal_id:
         try:
-            invalid_vote = {"decision": "invalid_decision"}
+            invalid_vote = {"choice": "INVALID_CHOICE"}
             r = session.post(f"{BASE_URL}/api/v1/governance/proposals/{created_proposal_id}/vote",
                             json=invalid_vote, timeout=10)
-            log_result("Governance", "Invalid vote decision rejection",
+            log_result("Governance", "Invalid vote choice rejection",
                        r.status_code in [400, 422],
                        f"Status: {r.status_code}", r.json() if r.text else None)
         except Exception as e:
@@ -804,8 +806,9 @@ def test_overlays(session):
         overlays = []
         if r.status_code == 200:
             data = r.json()
-            overlays = data.get("data", data) if isinstance(data, dict) else data
-        log_result("Overlays", "List overlays", r.status_code == 200,
+            # Response could be list or dict with overlays/items/data key
+            overlays = data if isinstance(data, list) else data.get("overlays", data.get("items", data.get("data", [])))
+        log_result("Overlays", "List overlays", r.status_code == 200 and len(overlays) > 0,
                    f"Count: {len(overlays) if overlays else 0}", None)
     except Exception as e:
         log_result("Overlays", "List overlays", False, str(e))
@@ -815,9 +818,10 @@ def test_overlays(session):
         r = session.get(f"{BASE_URL}/api/v1/overlays", timeout=10)
         if r.status_code == 200:
             data = r.json()
-            overlays = data.get("data", data) if isinstance(data, dict) else data
-            if overlays and len(overlays) > 0:
-                overlay_id = overlays[0].get("id")
+            # Response could be list or dict with overlays/items/data key
+            overlays = data if isinstance(data, list) else data.get("overlays", data.get("items", data.get("data", [])))
+            if overlays and isinstance(overlays, list) and len(overlays) > 0:
+                overlay_id = overlays[0].get("id") if isinstance(overlays[0], dict) else None
                 if overlay_id:
                     r2 = session.get(f"{BASE_URL}/api/v1/overlays/{overlay_id}", timeout=10)
                     log_result("Overlays", "Get overlay by ID", r2.status_code == 200,
