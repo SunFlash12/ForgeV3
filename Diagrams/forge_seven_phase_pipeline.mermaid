@@ -1,0 +1,176 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#1a1a2e', 'primaryTextColor': '#eee', 'primaryBorderColor': '#16213e', 'lineColor': '#e94560', 'secondaryColor': '#0f3460', 'tertiaryColor': '#16213e', 'background': '#0f0f23', 'mainBkg': '#1a1a2e', 'nodeBorder': '#e94560', 'clusterBkg': '#16213e', 'clusterBorder': '#e94560', 'edgeLabelBackground':'#1a1a2e'}}}%%
+
+flowchart TB
+    %% ═══════════════════════════════════════════════════════════════════
+    %% FORGE CASCADE: SEVEN-PHASE COORDINATION PIPELINE
+    %% Shows the complete request lifecycle from input to response
+    %% ═══════════════════════════════════════════════════════════════════
+
+    %% Entry Point
+    REQ[/"🔷 Incoming Request<br/>user_id + query + operation"/]
+    
+    %% Pipeline Context Creation
+    CTX["📋 Create Pipeline Context<br/>• Generate correlation_id<br/>• Capture timestamp<br/>• Initialize phase_timings"]
+    
+    REQ --> CTX
+
+    %% ═══════════════════════════════════════════════════════════════════
+    %% PARALLEL GROUP 1: Phases 1, 2, 3 execute concurrently
+    %% ═══════════════════════════════════════════════════════════════════
+    
+    subgraph PARALLEL["⚡ PARALLEL GROUP 1 (asyncio.gather) ~300ms max"]
+        direction LR
+        
+        subgraph P1["Phase 1: Context Creation"]
+            P1A["Generate query embedding<br/>via LLM.embed()"]
+            P1B["Semantic search Neo4j<br/>for relevant capsules"]
+            P1C["Load user profile<br/>& preferences"]
+            P1A --> P1B
+            P1A --> P1C
+        end
+        
+        subgraph P2["Phase 2: ML Analysis"]
+            P2A["Call ml_intelligence<br/>overlay (WebAssembly)"]
+            P2B["Pattern recognition<br/>Anomaly detection<br/>Complexity scoring"]
+            P2A --> P2B
+        end
+        
+        subgraph P3["Phase 3: Security Assessment"]
+            P3A["Validate user<br/>trust_flame level"]
+            P3B["Check operation<br/>permissions"]
+            P3C["Call security_validator<br/>overlay for threats"]
+            P3A --> P3C
+            P3B --> P3C
+        end
+    end
+    
+    CTX --> PARALLEL
+
+    %% Security Gate
+    SEC_CHECK{"🛡️ Security<br/>Approved?"}
+    PARALLEL --> SEC_CHECK
+    
+    SEC_FAIL["❌ Return Error<br/>• reason: threat or trust<br/>• correlation_id"]
+    SEC_CHECK -->|"No"| SEC_FAIL
+
+    %% ═══════════════════════════════════════════════════════════════════
+    %% SEQUENTIAL: Phase 4 requires all parallel results
+    %% ═══════════════════════════════════════════════════════════════════
+    
+    subgraph P4["Phase 4: Performance Optimization ~20ms"]
+        P4A["Check semantic cache<br/>for similar queries"]
+        P4B{"Cache<br/>Hit?"}
+        P4C["Return cached result<br/>skip LLM call"]
+        P4D["Calculate optimal<br/>LLM parameters"]
+        P4E["Set temperature based<br/>on complexity_score"]
+        P4F["Assign priority based<br/>on trust_level"]
+        
+        P4A --> P4B
+        P4B -->|"Yes"| P4C
+        P4B -->|"No"| P4D
+        P4D --> P4E
+        P4E --> P4F
+    end
+    
+    SEC_CHECK -->|"Yes"| P4
+
+    %% ═══════════════════════════════════════════════════════════════════
+    %% SEQUENTIAL: Phase 5 - The Main Intelligence Bottleneck
+    %% ═══════════════════════════════════════════════════════════════════
+    
+    subgraph P5["Phase 5: Intelligence Generation ~1000ms"]
+        P5A["Build enriched prompt<br/>with capsule context"]
+        P5B["Include user profile<br/>& ML analysis hints"]
+        P5C["🧠 Call LLM.generate()<br/>with optimized params"]
+        P5D["Receive AI response<br/>& token usage stats"]
+        
+        P5A --> P5B
+        P5B --> P5C
+        P5C --> P5D
+    end
+    
+    P4C --> RESP
+    P4F --> P5
+
+    %% ═══════════════════════════════════════════════════════════════════
+    %% FIRE-AND-FORGET: Phases 6 & 7 run in background
+    %% ═══════════════════════════════════════════════════════════════════
+    
+    SPAWN["🔀 asyncio.create_task()<br/>Fire-and-Forget"]
+    P5 --> SPAWN
+
+    subgraph ASYNC["⏳ BACKGROUND TASKS (non-blocking)"]
+        direction LR
+        
+        subgraph P6["Phase 6: Metrics"]
+            P6A["Record to MetricsSink<br/>• correlation_id<br/>• phase_timings<br/>• ml_analysis results"]
+            P6B["Feed ML training<br/>pipeline data"]
+            P6A --> P6B
+        end
+        
+        subgraph P7["Phase 7: Storage"]
+            P7A["Create AuditLog entry<br/>in Neo4j graph"]
+            P7B{"save_as_capsule<br/>flag set?"}
+            P7C["Create new Capsule<br/>with DERIVED_FROM<br/>lineage link"]
+            P7D["Update user<br/>interaction history"]
+            
+            P7A --> P7B
+            P7B -->|"Yes"| P7C
+            P7B -->|"No"| P7D
+            P7C --> P7D
+        end
+    end
+    
+    SPAWN --> P6
+    SPAWN --> P7
+
+    %% ═══════════════════════════════════════════════════════════════════
+    %% Response Assembly
+    %% ═══════════════════════════════════════════════════════════════════
+    
+    RESP["✅ Return Response<br/>• result: intelligence_output<br/>• correlation_id<br/>• timing: {total_seconds, phases}"]
+    
+    SPAWN --> RESP
+
+    %% ═══════════════════════════════════════════════════════════════════
+    %% Supporting Infrastructure (shown as database/service nodes)
+    %% ═══════════════════════════════════════════════════════════════════
+    
+    subgraph INFRA["🗄️ Infrastructure Layer"]
+        direction TB
+        NEO4J[("Neo4j Unified Store<br/>Graph + Vector + Properties")]
+        WASM["WebAssembly Runtime<br/>Overlay Sandbox"]
+        LLM["LLM Client<br/>Embedding + Generation"]
+        METRICS[("Metrics Sink<br/>Prometheus/InfluxDB")]
+    end
+    
+    %% Infrastructure connections (dotted lines)
+    P1B -.->|"vector query"| NEO4J
+    P1C -.->|"user profile"| NEO4J
+    P2A -.->|"execute"| WASM
+    P3C -.->|"execute"| WASM
+    P5C -.->|"generate"| LLM
+    P6A -.->|"record"| METRICS
+    P7A -.->|"persist"| NEO4J
+    P7C -.->|"create node"| NEO4J
+
+    %% ═══════════════════════════════════════════════════════════════════
+    %% Styling
+    %% ═══════════════════════════════════════════════════════════════════
+    
+    classDef entryExit fill:#2d5a27,stroke:#4ade80,stroke-width:2px,color:#fff
+    classDef parallel fill:#1e40af,stroke:#60a5fa,stroke-width:2px,color:#fff
+    classDef sequential fill:#7c2d12,stroke:#fb923c,stroke-width:2px,color:#fff
+    classDef async fill:#581c87,stroke:#c084fc,stroke-width:2px,color:#fff
+    classDef decision fill:#b91c1c,stroke:#fca5a5,stroke-width:2px,color:#fff
+    classDef infra fill:#374151,stroke:#9ca3af,stroke-width:1px,color:#fff
+    classDef error fill:#7f1d1d,stroke:#ef4444,stroke-width:2px,color:#fff
+    
+    class REQ,RESP entryExit
+    class CTX,SPAWN sequential
+    class P1,P2,P3,PARALLEL parallel
+    class P4,P5 sequential
+    class P6,P7,ASYNC async
+    class SEC_CHECK,P4B,P7B decision
+    class NEO4J,WASM,LLM,METRICS,INFRA infra
+    class SEC_FAIL error

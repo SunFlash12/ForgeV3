@@ -1,0 +1,170 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#1e293b', 'primaryTextColor': '#f1f5f9', 'primaryBorderColor': '#475569', 'lineColor': '#ec4899', 'secondaryColor': '#0f172a', 'tertiaryColor': '#334155', 'background': '#020617', 'mainBkg': '#1e293b', 'nodeBorder': '#ec4899', 'clusterBkg': '#0f172a', 'clusterBorder': '#475569'}}}%%
+
+flowchart TB
+    %% ═══════════════════════════════════════════════════════════════════
+    %% FORGE CASCADE: OVERLAY DEPENDENCY & CASCADE GRAPH
+    %% 
+    %% Shows two types of relationships between Overlays:
+    %% 1. DEPENDS_ON: Static dependencies (must load in order)
+    %% 2. TRIGGERED: Dynamic cascade events (runtime propagation)
+    %% ═══════════════════════════════════════════════════════════════════
+
+    %% ───────────────────────────────────────────────────────────────────
+    %% CORE SYSTEM OVERLAYS (No dependencies - always loaded first)
+    %% ───────────────────────────────────────────────────────────────────
+
+    subgraph CORE["🏛️ Core System Overlays (Trust: 100)"]
+        direction LR
+        
+        EVENT["⚡ event_system<br/><br/>state: ACTIVE<br/>capabilities:<br/>• EVENT_PUBLISH<br/>• EVENT_SUBSCRIBE<br/><br/>Purpose: Central event bus<br/>for cascade propagation"]
+        
+        METRICS["📊 metrics_collector<br/><br/>state: ACTIVE<br/>capabilities:<br/>• DATABASE_WRITE<br/>• EVENT_SUBSCRIBE<br/><br/>Purpose: System-wide<br/>performance tracking"]
+        
+        AUDIT["📝 audit_logger<br/><br/>state: ACTIVE<br/>capabilities:<br/>• DATABASE_WRITE<br/>• EVENT_SUBSCRIBE<br/><br/>Purpose: Immutable<br/>operation logging"]
+    end
+
+    %% ───────────────────────────────────────────────────────────────────
+    %% SECURITY LAYER OVERLAYS
+    %% ───────────────────────────────────────────────────────────────────
+
+    subgraph SECURITY["🛡️ Security Layer Overlays (Trust: 90)"]
+        direction LR
+        
+        SECVAL["🔐 security_validator<br/><br/>state: ACTIVE<br/>capabilities:<br/>• DATABASE_READ<br/>• EVENT_PUBLISH<br/>• EVENT_SUBSCRIBE<br/><br/>Purpose: Trust validation<br/>and threat detection"]
+        
+        IMMUNE["🦠 immune_system<br/><br/>state: ACTIVE<br/>capabilities:<br/>• DATABASE_*<br/>• EVENT_*<br/>• OVERLAY_CONTROL<br/><br/>Purpose: Health monitoring<br/>quarantine enforcement"]
+    end
+
+    %% ───────────────────────────────────────────────────────────────────
+    %% INTELLIGENCE LAYER OVERLAYS
+    %% ───────────────────────────────────────────────────────────────────
+
+    subgraph INTELLIGENCE["🧠 Intelligence Layer Overlays (Trust: 85)"]
+        direction LR
+        
+        ML["🤖 ml_intelligence<br/><br/>state: ACTIVE<br/>capabilities:<br/>• DATABASE_READ<br/>• EVENT_PUBLISH<br/><br/>Purpose: Pattern recognition<br/>anomaly detection"]
+        
+        PERF["⚡ performance_optimizer<br/><br/>state: ACTIVE<br/>capabilities:<br/>• DATABASE_READ<br/>• EVENT_SUBSCRIBE<br/><br/>Purpose: Resource allocation<br/>caching strategy"]
+        
+        CAPSULE["📦 capsule_analyzer<br/><br/>state: ACTIVE<br/>capabilities:<br/>• DATABASE_*<br/>• CAPSULE_*<br/>• EVENT_PUBLISH<br/><br/>Purpose: Content analysis<br/>similarity detection"]
+    end
+
+    %% ───────────────────────────────────────────────────────────────────
+    %% GOVERNANCE LAYER OVERLAYS
+    %% ───────────────────────────────────────────────────────────────────
+
+    subgraph GOVERNANCE["🏛️ Governance Layer Overlays (Trust: 85)"]
+        direction LR
+        
+        GOV["🗳️ symbolic_governance<br/><br/>state: ACTIVE<br/>capabilities:<br/>• DATABASE_*<br/>• EVENT_*<br/>• GOVERNANCE_VOTE<br/><br/>Purpose: Democratic<br/>decision-making"]
+        
+        LINEAGE["🌳 lineage_tracker<br/><br/>state: ACTIVE<br/>capabilities:<br/>• DATABASE_READ<br/><br/>Purpose: Isnad visualization<br/>ancestry tracing"]
+    end
+
+    %% ───────────────────────────────────────────────────────────────────
+    %% USER-INSTALLED OVERLAYS (Lower trust, sandboxed)
+    %% ───────────────────────────────────────────────────────────────────
+
+    subgraph USER["👤 User-Installed Overlays (Trust: 60)"]
+        direction LR
+        
+        CUSTOM1["🔧 custom_analyzer<br/><br/>state: ACTIVE<br/>capabilities:<br/>• DATABASE_READ<br/>• CAPSULE_CREATE<br/><br/>Purpose: Domain-specific<br/>content processing"]
+        
+        CUSTOM2["📈 report_generator<br/><br/>state: ACTIVE<br/>capabilities:<br/>• DATABASE_READ<br/><br/>Purpose: Custom<br/>report creation"]
+    end
+
+    %% ───────────────────────────────────────────────────────────────────
+    %% QUARANTINED OVERLAY
+    %% ───────────────────────────────────────────────────────────────────
+
+    subgraph QUARANTINED["🔒 Quarantined (Trust: 0)"]
+        MALICIOUS["⚠️ suspicious_overlay<br/><br/>state: QUARANTINE<br/>capabilities: REVOKED<br/><br/>Reason: 3 consecutive<br/>health check failures<br/><br/>Quarantined by: immune_system<br/>at: 2025-04-01T14:32:00Z"]
+    end
+
+    %% ═══════════════════════════════════════════════════════════════════
+    %% DEPENDS_ON RELATIONSHIPS (Static - Load Order)
+    %% Solid lines = must be loaded before dependent can start
+    %% ═══════════════════════════════════════════════════════════════════
+
+    %% Security depends on Core
+    SECVAL -->|"DEPENDS_ON"| EVENT
+    SECVAL -->|"DEPENDS_ON"| AUDIT
+    IMMUNE -->|"DEPENDS_ON"| EVENT
+    IMMUNE -->|"DEPENDS_ON"| METRICS
+
+    %% Intelligence depends on Security + Core
+    ML -->|"DEPENDS_ON"| EVENT
+    ML -->|"DEPENDS_ON"| SECVAL
+    PERF -->|"DEPENDS_ON"| METRICS
+    PERF -->|"DEPENDS_ON"| ML
+    CAPSULE -->|"DEPENDS_ON"| ML
+    CAPSULE -->|"DEPENDS_ON"| SECVAL
+
+    %% Governance depends on multiple layers
+    GOV -->|"DEPENDS_ON"| EVENT
+    GOV -->|"DEPENDS_ON"| SECVAL
+    GOV -->|"DEPENDS_ON"| AUDIT
+    LINEAGE -->|"DEPENDS_ON"| CAPSULE
+
+    %% User overlays depend on core services
+    CUSTOM1 -->|"DEPENDS_ON"| CAPSULE
+    CUSTOM1 -->|"DEPENDS_ON"| SECVAL
+    CUSTOM2 -->|"DEPENDS_ON"| CAPSULE
+
+    %% ═══════════════════════════════════════════════════════════════════
+    %% TRIGGERED RELATIONSHIPS (Dynamic - Cascade Events)
+    %% Dashed lines = runtime event propagation
+    %% ═══════════════════════════════════════════════════════════════════
+
+    %% Security threat cascade
+    SECVAL -.->|"TRIGGERED<br/>event: 'security_threat'<br/>payload: {pattern, severity}"| ML
+    SECVAL -.->|"TRIGGERED<br/>event: 'security_threat'"| GOV
+    SECVAL -.->|"TRIGGERED<br/>event: 'security_threat'"| AUDIT
+
+    %% ML insight cascade
+    ML -.->|"TRIGGERED<br/>event: 'pattern_detected'<br/>payload: {pattern, confidence}"| PERF
+    ML -.->|"TRIGGERED<br/>event: 'anomaly_detected'"| IMMUNE
+    ML -.->|"TRIGGERED<br/>event: 'anomaly_detected'"| SECVAL
+
+    %% Immune system actions
+    IMMUNE -.->|"TRIGGERED<br/>event: 'overlay_quarantined'"| GOV
+    IMMUNE -.->|"TRIGGERED<br/>event: 'health_degraded'"| METRICS
+    IMMUNE -.->|"TRIGGERED<br/>event: 'quarantine_action'"| MALICIOUS
+
+    %% Governance decisions
+    GOV -.->|"TRIGGERED<br/>event: 'proposal_approved'<br/>payload: {changes}"| PERF
+    GOV -.->|"TRIGGERED<br/>event: 'trust_adjusted'"| SECVAL
+
+    %% Capsule events
+    CAPSULE -.->|"TRIGGERED<br/>event: 'capsule_created'"| LINEAGE
+    CAPSULE -.->|"TRIGGERED<br/>event: 'similarity_found'"| ML
+
+    %% ═══════════════════════════════════════════════════════════════════
+    %% LEGEND
+    %% ═══════════════════════════════════════════════════════════════════
+
+    subgraph LEGEND["📖 Legend"]
+        direction LR
+        L1["───────►"] 
+        L1T["DEPENDS_ON<br/>(static load order)"]
+        L2["- - - - - -►"]
+        L2T["TRIGGERED<br/>(runtime cascade)"]
+    end
+
+    %% ───────────────────────────────────────────────────────────────────
+    %% STYLING
+    %% ───────────────────────────────────────────────────────────────────
+
+    classDef core fill:#065f46,stroke:#34d399,stroke-width:3px,color:#fff
+    classDef security fill:#7f1d1d,stroke:#f87171,stroke-width:2px,color:#fff
+    classDef intel fill:#1e40af,stroke:#60a5fa,stroke-width:2px,color:#fff
+    classDef governance fill:#581c87,stroke:#c084fc,stroke-width:2px,color:#fff
+    classDef user fill:#78350f,stroke:#fcd34d,stroke-width:2px,color:#fff
+    classDef quarantine fill:#374151,stroke:#ef4444,stroke-width:3px,color:#fff,stroke-dasharray: 5 5
+
+    class EVENT,METRICS,AUDIT core
+    class SECVAL,IMMUNE security
+    class ML,PERF,CAPSULE intel
+    class GOV,LINEAGE governance
+    class CUSTOM1,CUSTOM2 user
+    class MALICIOUS quarantine

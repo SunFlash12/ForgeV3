@@ -1,0 +1,226 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#1e293b', 'primaryTextColor': '#f1f5f9', 'primaryBorderColor': '#475569', 'lineColor': '#a855f7', 'secondaryColor': '#0f172a', 'tertiaryColor': '#334155', 'background': '#020617', 'mainBkg': '#1e293b', 'nodeBorder': '#a855f7', 'clusterBkg': '#0f172a', 'clusterBorder': '#475569'}}}%%
+
+flowchart TB
+    %% ═══════════════════════════════════════════════════════════════════
+    %% FORGE CASCADE: ML ANALYSIS (PHASE 2) INTERNALS
+    %% 
+    %% Example Input:
+    %% User "alice" asks: "What were the key findings from last 
+    %% quarter's security audit?"
+    %% ═══════════════════════════════════════════════════════════════════
+
+    %% Entry Point
+    INPUT[/"📥 Phase 2 Receives Request<br/><br/>content: 'What were the key findings<br/>from last quarter's security audit?'<br/>user_id: 'alice'<br/>user_history_embedding: float[1536]"/]
+
+    %% WebAssembly Sandbox
+    subgraph WASM["🔒 WebAssembly Sandbox (ml_intelligence.wasm)"]
+        direction TB
+        
+        INIT["⚙️ Overlay Initialization<br/><br/>fuel_limit: 5,000,000 cycles<br/>capabilities: [DATABASE_READ, EVENT_PUBLISH]<br/>anomaly_threshold: 0.85<br/>model_trained: true"]
+        
+        ANALYZE["📨 analyze(payload) called<br/><br/>Receives JSON payload with:<br/>• content (the query text)<br/>• user_history (embedding vector)"]
+        
+        INIT --> ANALYZE
+    end
+    
+    INPUT --> WASM
+
+    %% ═══════════════════════════════════════════════════════════════════
+    %% FIVE PARALLEL ML FUNCTIONS
+    %% ═══════════════════════════════════════════════════════════════════
+
+    subgraph ML_FUNCTIONS["🧠 ML Analysis Functions (run in parallel)"]
+        direction TB
+        
+        %% ───────────────────────────────────────────────────────────────
+        %% ANOMALY DETECTION
+        %% ───────────────────────────────────────────────────────────────
+        subgraph ANOMALY["1️⃣ Anomaly Detection"]
+            direction TB
+            
+            A1["Load sliding window<br/>(last 1000 samples)"]
+            A2["Extract feature vector:<br/>• latency_ms<br/>• memory_mb<br/>• cpu_percent<br/>• error_rate<br/>• request_rate<br/>• fuel_consumed"]
+            A3["IsolationForest Model<br/><br/>contamination: 0.01<br/>n_estimators: 100"]
+            A4["Calculate anomaly_score<br/><br/>Raw score → Normalize to 0.0-1.0"]
+            A5{"score > 0.85?"}
+            A6["🚨 event_publish(<br/>'anomaly_detected',<br/>{score, severity, metrics})"]
+            A7["anomaly_score: 0.12<br/>(normal behavior)"]
+            
+            A1 --> A2
+            A2 --> A3
+            A3 --> A4
+            A4 --> A5
+            A5 -->|"Yes"| A6
+            A5 -->|"No"| A7
+        end
+
+        %% ───────────────────────────────────────────────────────────────
+        %% INTENT CLASSIFICATION
+        %% ───────────────────────────────────────────────────────────────
+        subgraph INTENT["2️⃣ Intent Classification"]
+            direction TB
+            
+            I1["Tokenize query text"]
+            I2["Extract intent signals:<br/>• 'What were' → question<br/>• 'key findings' → retrieval<br/>• 'security audit' → domain"]
+            I3["Classify against known intents:<br/>• information_retrieval<br/>• knowledge_creation<br/>• governance_action<br/>• capsule_modification<br/>• system_query"]
+            I4["intent: 'information_retrieval'<br/>confidence: 0.94"]
+            
+            I1 --> I2
+            I2 --> I3
+            I3 --> I4
+        end
+
+        %% ───────────────────────────────────────────────────────────────
+        %% CONTENT CATEGORIZATION
+        %% ───────────────────────────────────────────────────────────────
+        subgraph CATEGORY["3️⃣ Content Categorization"]
+            direction TB
+            
+            C1["Named Entity Recognition<br/><br/>Entities found:<br/>• 'security audit'<br/>• 'last quarter' (Q3)<br/>• 'key findings'"]
+            C2["Map to capsule taxonomy"]
+            C3["Query Neo4j for category stats:<br/><br/>db_read('MATCH (c:Capsule)<br/>WHERE c.type IN $types<br/>RETURN c.category, count(*)')"]
+            C4["categories:<br/>['security', 'audit',<br/>'compliance', 'Q3-2025']"]
+            
+            C1 --> C2
+            C2 --> C3
+            C3 --> C4
+        end
+
+        %% ───────────────────────────────────────────────────────────────
+        %% SENTIMENT ANALYSIS
+        %% ───────────────────────────────────────────────────────────────
+        subgraph SENTIMENT["4️⃣ Sentiment Analysis"]
+            direction TB
+            
+            S1["Analyze emotional tone<br/>of query text"]
+            S2["Check for:<br/>• Frustration markers<br/>• Urgency indicators<br/>• Positive/negative words"]
+            S3["sentiment: 'neutral'<br/>(factual query, no emotion)"]
+            
+            S1 --> S2
+            S2 --> S3
+        end
+
+        %% ───────────────────────────────────────────────────────────────
+        %% COMPLEXITY SCORING
+        %% ───────────────────────────────────────────────────────────────
+        subgraph COMPLEXITY["5️⃣ Complexity Scoring"]
+            direction TB
+            
+            X1["Analyze query structure:<br/>• Word count: 11<br/>• Clause count: 1<br/>• Technical terms: 2"]
+            X2["Check domain depth:<br/>• 'security audit' → specialized<br/>• 'key findings' → summary request"]
+            X3["Estimate response needs:<br/>• Multi-part answer likely<br/>• Technical detail expected"]
+            X4["complexity_score: 0.72<br/>(moderately complex)"]
+            
+            X1 --> X2
+            X2 --> X3
+            X3 --> X4
+        end
+    end
+    
+    ANALYZE --> ML_FUNCTIONS
+
+    %% ═══════════════════════════════════════════════════════════════════
+    %% PATTERN DETECTION (Cross-cutting concern)
+    %% ═══════════════════════════════════════════════════════════════════
+
+    subgraph PATTERNS["🔍 Pattern Recognition (Cross-Cutting)"]
+        direction LR
+        
+        P1["Scan for known patterns:<br/>• Code patterns<br/>• Usage patterns<br/>• Attack signatures"]
+        P2["Compare against user history<br/>(user_history_embedding)"]
+        P3{"New pattern<br/>discovered?"}
+        P4["🎯 event_publish(<br/>'pattern_detected',<br/>{pattern, confidence})"]
+        P5["patterns: []<br/>(no new patterns)"]
+        
+        P1 --> P2
+        P2 --> P3
+        P3 -->|"Yes"| P4
+        P3 -->|"No"| P5
+    end
+
+    ML_FUNCTIONS --> PATTERNS
+
+    %% ═══════════════════════════════════════════════════════════════════
+    %% RESULT AGGREGATION
+    %% ═══════════════════════════════════════════════════════════════════
+
+    subgraph AGGREGATE["📊 Result Aggregation"]
+        direction TB
+        
+        AGG1["Combine all ML outputs"]
+        AGG2["Calculate overall confidence<br/><br/>confidence = mean(<br/>  intent_conf,<br/>  category_conf,<br/>  anomaly_certainty<br/>)"]
+        AGG3["Build Phase2Result object"]
+    end
+
+    PATTERNS --> AGGREGATE
+    A7 --> AGGREGATE
+    I4 --> AGGREGATE
+    C4 --> AGGREGATE
+    S3 --> AGGREGATE
+    X4 --> AGGREGATE
+
+    %% ═══════════════════════════════════════════════════════════════════
+    %% FINAL OUTPUT
+    %% ═══════════════════════════════════════════════════════════════════
+
+    OUTPUT[/"📤 Phase2Result<br/><br/>{<br/>  anomaly_score: 0.12,<br/>  intent: 'information_retrieval',<br/>  categories: ['security', 'audit', 'compliance', 'Q3-2025'],<br/>  sentiment: 'neutral',<br/>  complexity_score: 0.72,<br/>  patterns: [],<br/>  confidence: 0.92<br/>}"/]
+
+    AGGREGATE --> OUTPUT
+
+    %% ═══════════════════════════════════════════════════════════════════
+    %% DOWNSTREAM EFFECTS
+    %% ═══════════════════════════════════════════════════════════════════
+
+    subgraph DOWNSTREAM["⬇️ How Phase 2 Output Affects Later Phases"]
+        direction TB
+        
+        D4["Phase 4: Optimization<br/><br/>complexity_score: 0.72 → 0.7<br/>• temperature = 0.7 (creative)<br/>• max_tokens = 2000 (detailed)"]
+        
+        D5["Phase 5: Intelligence<br/><br/>intent: 'information_retrieval'<br/>• Prompt tuned for Q&A format<br/>• Focus on capsule synthesis<br/><br/>categories: ['security', 'audit']<br/>• Weight security-related capsules"]
+        
+        D7["Phase 7: Storage<br/><br/>categories: ['security', 'audit']<br/>• If saved, capsule tagged correctly<br/><br/>sentiment: 'neutral'<br/>• No feedback loop triggered"]
+    end
+
+    OUTPUT --> DOWNSTREAM
+
+    %% ═══════════════════════════════════════════════════════════════════
+    %% CASCADE EVENTS (if triggered)
+    %% ═══════════════════════════════════════════════════════════════════
+
+    subgraph CASCADE["🌊 Potential Cascade Events"]
+        direction LR
+        
+        CE1["If anomaly_detected:<br/>→ security_validator updates model<br/>→ performance_optimizer reallocates<br/>→ governance may auto-propose"]
+        
+        CE2["If pattern_detected:<br/>→ Other overlays learn new pattern<br/>→ Knowledge graph enriched<br/>→ Future queries benefit"]
+    end
+
+    A6 -.->|"event bus"| CASCADE
+    P4 -.->|"event bus"| CASCADE
+
+    %% ═══════════════════════════════════════════════════════════════════
+    %% STYLING
+    %% ═══════════════════════════════════════════════════════════════════
+
+    classDef input fill:#065f46,stroke:#34d399,stroke-width:2px,color:#fff
+    classDef wasm fill:#7c2d12,stroke:#fb923c,stroke-width:2px,color:#fff
+    classDef ml fill:#1e3a8a,stroke:#60a5fa,stroke-width:2px,color:#fff
+    classDef anomaly fill:#7f1d1d,stroke:#f87171,stroke-width:2px,color:#fff
+    classDef intent fill:#312e81,stroke:#a5b4fc,stroke-width:2px,color:#fff
+    classDef category fill:#134e4a,stroke:#5eead4,stroke-width:2px,color:#fff
+    classDef sentiment fill:#4c1d95,stroke:#c4b5fd,stroke-width:2px,color:#fff
+    classDef complexity fill:#78350f,stroke:#fcd34d,stroke-width:2px,color:#fff
+    classDef output fill:#14532d,stroke:#4ade80,stroke-width:2px,color:#fff
+    classDef cascade fill:#581c87,stroke:#d8b4fe,stroke-width:2px,color:#fff
+    classDef decision fill:#991b1b,stroke:#fca5a5,stroke-width:2px,color:#fff
+
+    class INPUT input
+    class WASM,INIT,ANALYZE wasm
+    class ANOMALY,A1,A2,A3,A4,A6,A7 anomaly
+    class INTENT,I1,I2,I3,I4 intent
+    class CATEGORY,C1,C2,C3,C4 category
+    class SENTIMENT,S1,S2,S3 sentiment
+    class COMPLEXITY,X1,X2,X3,X4 complexity
+    class OUTPUT output
+    class CASCADE,CE1,CE2 cascade
+    class A5,P3 decision

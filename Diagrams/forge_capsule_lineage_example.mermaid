@@ -1,0 +1,111 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#1e293b', 'primaryTextColor': '#f1f5f9', 'primaryBorderColor': '#475569', 'lineColor': '#22c55e', 'secondaryColor': '#0f172a', 'tertiaryColor': '#334155', 'background': '#020617', 'mainBkg': '#1e293b', 'nodeBorder': '#22c55e', 'clusterBkg': '#0f172a', 'clusterBorder': '#475569'}}}%%
+
+flowchart TB
+    %% ═══════════════════════════════════════════════════════════════════
+    %% FORGE CASCADE: CAPSULE LINEAGE GRAPH (THE "ISNAD")
+    %% 
+    %% This diagram shows how knowledge evolves through symbolic inheritance.
+    %% Each capsule maintains an explicit link to its parent, creating
+    %% a traceable "Isnad" (chain of transmission) for audit and compliance.
+    %% ═══════════════════════════════════════════════════════════════════
+
+    %% ───────────────────────────────────────────────────────────────────
+    %% ROOT CAPSULES (No parent - original knowledge)
+    %% ───────────────────────────────────────────────────────────────────
+
+    subgraph ROOTS["🌱 Root Capsules (Genesis Knowledge)"]
+        direction LR
+        
+        ROOT1["📦 CAPSULE: c001<br/><br/>type: knowledge<br/>version: 1.0.0<br/>trust: 100 (CORE)<br/>parent_id: null<br/><br/>content: 'Security best practices<br/>for API authentication'<br/><br/>owner: system<br/>created: 2025-01-15"]
+        
+        ROOT2["📦 CAPSULE: c002<br/><br/>type: code<br/>version: 1.0.0<br/>trust: 100 (CORE)<br/>parent_id: null<br/><br/>content: 'def validate_jwt(token):<br/>    # Original implementation'<br/><br/>owner: system<br/>created: 2025-01-15"]
+    end
+
+    %% ───────────────────────────────────────────────────────────────────
+    %% FIRST GENERATION (Direct children of roots)
+    %% ───────────────────────────────────────────────────────────────────
+
+    subgraph GEN1["🌿 Generation 1 (First Evolution)"]
+        direction LR
+        
+        GEN1A["📦 CAPSULE: c003<br/><br/>type: knowledge<br/>version: 1.1.0<br/>trust: 85 (TRUSTED)<br/>parent_id: c001<br/><br/>content: 'OAuth 2.0 implementation<br/>guidelines for Forge'<br/><br/>owner: alice<br/>created: 2025-02-10"]
+        
+        GEN1B["📦 CAPSULE: c004<br/><br/>type: decision<br/>version: 1.0.0<br/>trust: 80 (TRUSTED)<br/>parent_id: c001<br/><br/>content: 'Decision: Use RS256<br/>for JWT signing'<br/><br/>owner: governance<br/>created: 2025-02-12"]
+        
+        GEN1C["📦 CAPSULE: c005<br/><br/>type: code<br/>version: 2.0.0<br/>trust: 85 (TRUSTED)<br/>parent_id: c002<br/><br/>content: 'def validate_jwt(token):<br/>    # Added RS256 support'<br/><br/>owner: bob<br/>created: 2025-02-15"]
+    end
+
+    %% ───────────────────────────────────────────────────────────────────
+    %% SECOND GENERATION
+    %% ───────────────────────────────────────────────────────────────────
+
+    subgraph GEN2["🌳 Generation 2 (Deeper Evolution)"]
+        direction LR
+        
+        GEN2A["📦 CAPSULE: c006<br/><br/>type: insight<br/>version: 1.0.0<br/>trust: 75 (TRUSTED)<br/>parent_id: c003<br/><br/>content: 'Insight: Token refresh<br/>should use sliding window'<br/><br/>owner: ml_intelligence<br/>created: 2025-03-01"]
+        
+        GEN2B["📦 CAPSULE: c007<br/><br/>type: code<br/>version: 2.1.0<br/>trust: 80 (TRUSTED)<br/>parent_id: c005<br/><br/>content: 'def validate_jwt(token):<br/>    # Added refresh logic'<br/><br/>owner: alice<br/>created: 2025-03-05"]
+        
+        GEN2C["📦 CAPSULE: c008<br/><br/>type: knowledge<br/>version: 1.0.0<br/>trust: 70 (STANDARD)<br/>parent_id: c004<br/><br/>content: 'RS256 key rotation<br/>procedure documentation'<br/><br/>owner: charlie<br/>created: 2025-03-10"]
+    end
+
+    %% ───────────────────────────────────────────────────────────────────
+    %% THIRD GENERATION (Shows depth of lineage)
+    %% ───────────────────────────────────────────────────────────────────
+
+    subgraph GEN3["🌲 Generation 3 (Current Knowledge)"]
+        direction LR
+        
+        GEN3A["📦 CAPSULE: c009<br/><br/>type: code<br/>version: 3.0.0<br/>trust: 85 (TRUSTED)<br/>parent_id: c007<br/><br/>content: 'def validate_jwt(token):<br/>    # Production-ready<br/>    # with key rotation'<br/><br/>owner: security_validator<br/>created: 2025-04-01"]
+        
+        GEN3B["📦 CAPSULE: c010<br/><br/>type: config<br/>version: 1.0.0<br/>trust: 80 (TRUSTED)<br/>parent_id: c008<br/><br/>content: 'JWT_ROTATION_DAYS: 30<br/>JWT_ALGORITHM: RS256'<br/><br/>owner: governance<br/>created: 2025-04-05"]
+    end
+
+    %% ───────────────────────────────────────────────────────────────────
+    %% QUARANTINED CAPSULE (Shows trust degradation)
+    %% ───────────────────────────────────────────────────────────────────
+
+    subgraph QUARANTINE["🔒 Quarantined (Trust Degraded)"]
+        QCAP["📦 CAPSULE: c011<br/><br/>type: code<br/>version: 2.2.0<br/>trust: 0 (QUARANTINE)<br/>parent_id: c007<br/><br/>content: 'def validate_jwt(token):<br/>    # VULNERABLE: SQL injection'<br/><br/>owner: mallory<br/>created: 2025-03-20<br/><br/>⚠️ Quarantined by Immune System"]
+    end
+
+    %% ───────────────────────────────────────────────────────────────────
+    %% DERIVED_FROM RELATIONSHIPS (The Lineage Links)
+    %% ───────────────────────────────────────────────────────────────────
+
+    ROOT1 -->|"DERIVED_FROM<br/>reason: 'OAuth specialization'<br/>changes: +500 words"| GEN1A
+    ROOT1 -->|"DERIVED_FROM<br/>reason: 'Governance decision'<br/>changes: algorithm choice"| GEN1B
+    ROOT2 -->|"DERIVED_FROM<br/>reason: 'RS256 implementation'<br/>changes: +45 lines"| GEN1C
+
+    GEN1A -->|"DERIVED_FROM<br/>reason: 'ML insight discovery'<br/>changes: refresh pattern"| GEN2A
+    GEN1C -->|"DERIVED_FROM<br/>reason: 'Refresh logic added'<br/>changes: +28 lines"| GEN2B
+    GEN1B -->|"DERIVED_FROM<br/>reason: 'Documentation'<br/>changes: procedure docs"| GEN2C
+
+    GEN2B -->|"DERIVED_FROM<br/>reason: 'Production hardening'<br/>changes: key rotation"| GEN3A
+    GEN2C -->|"DERIVED_FROM<br/>reason: 'Config extraction'<br/>changes: externalized"| GEN3B
+
+    GEN2B -->|"DERIVED_FROM<br/>reason: 'Performance tweak'<br/>changes: ⚠️ introduced vuln"| QCAP
+
+    %% ───────────────────────────────────────────────────────────────────
+    %% CROSS-REFERENCES (Semantic Links, not inheritance)
+    %% ───────────────────────────────────────────────────────────────────
+
+    GEN3A -.->|"REFERENCES<br/>(uses config from)"| GEN3B
+    GEN2A -.->|"REFERENCES<br/>(insight applies to)"| GEN2B
+    GEN1B -.->|"REFERENCES<br/>(decision affects)"| GEN1C
+
+    %% ───────────────────────────────────────────────────────────────────
+    %% STYLING
+    %% ───────────────────────────────────────────────────────────────────
+
+    classDef root fill:#065f46,stroke:#34d399,stroke-width:3px,color:#fff
+    classDef gen1 fill:#1e40af,stroke:#60a5fa,stroke-width:2px,color:#fff
+    classDef gen2 fill:#7c2d12,stroke:#fb923c,stroke-width:2px,color:#fff
+    classDef gen3 fill:#581c87,stroke:#c084fc,stroke-width:2px,color:#fff
+    classDef quarantine fill:#7f1d1d,stroke:#ef4444,stroke-width:3px,color:#fff
+
+    class ROOT1,ROOT2 root
+    class GEN1A,GEN1B,GEN1C gen1
+    class GEN2A,GEN2B,GEN2C gen2
+    class GEN3A,GEN3B gen3
+    class QCAP quarantine

@@ -1,0 +1,173 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#1e293b', 'primaryTextColor': '#f1f5f9', 'primaryBorderColor': '#475569', 'lineColor': '#8b5cf6', 'secondaryColor': '#0f172a', 'tertiaryColor': '#334155', 'background': '#020617', 'mainBkg': '#1e293b', 'nodeBorder': '#8b5cf6', 'clusterBkg': '#0f172a', 'clusterBorder': '#475569', 'actorBkg': '#1e293b', 'actorBorder': '#8b5cf6', 'actorTextColor': '#f1f5f9', 'noteBkgColor': '#334155', 'noteBorderColor': '#8b5cf6', 'noteTextColor': '#f1f5f9'}}}%%
+
+sequenceDiagram
+    autonumber
+    
+    %% ═══════════════════════════════════════════════════════════════════
+    %% FORGE CASCADE: THE CASCADE EFFECT IN ACTION
+    %% 
+    %% SCENARIO: A user frequently asks about "quarterly financial reports"
+    %% but the ml_intelligence overlay notices they always refine their
+    %% queries to include "with YoY comparison". It discovers this pattern
+    %% and the insight cascades through the entire system.
+    %% 
+    %% This demonstrates how Forge "learns like a culture, not an individual"
+    %% - a single insight improves the entire ecosystem.
+    %% ═══════════════════════════════════════════════════════════════════
+
+    participant User as 👤 User: finance_analyst
+    participant Pipeline as ⚙️ Seven-Phase Pipeline
+    participant ML as 🤖 ml_intelligence
+    participant NEO as 🗄️ Neo4j Graph
+    participant EVENT as ⚡ SecureEventSystem
+    participant CAPSULE as 📦 capsule_analyzer
+    participant PERF as ⚡ performance_optimizer
+    participant GOV as 🗳️ symbolic_governance
+    participant SEC as 🔐 security_validator
+    participant AUDIT as 📝 audit_logger
+
+    %% ═══════════════════════════════════════════════════════════════════
+    %% PHASE 1: PATTERN DISCOVERY
+    %% The ml_intelligence overlay detects a recurring behavior pattern
+    %% ═══════════════════════════════════════════════════════════════════
+
+    Note over User,AUDIT: 🔍 STAGE 1: Pattern Discovery<br/>ml_intelligence notices a recurring user behavior
+
+    User->>Pipeline: Query: "Show me Q3 financial reports"
+    Pipeline->>ML: Phase 2: analyze(request_data)
+
+    Note over ML: 📊 Analyzing user history...<br/><br/>Query #1: "Q2 financial reports"<br/>→ Refined to: "Q2 financial reports YoY"<br/><br/>Query #2: "Q3 revenue summary"<br/>→ Refined to: "Q3 revenue YoY comparison"<br/><br/>Query #3: "Annual earnings"<br/>→ Refined to: "Annual earnings vs last year"<br/><br/>🎯 PATTERN DETECTED!<br/>User always wants YoY comparisons<br/>but doesn't ask for them initially.
+
+    ML->>ML: Pattern Recognition Engine:<br/>pattern_type: "query_refinement"<br/>trigger: "financial + temporal"<br/>action: "add YoY comparison"<br/>confidence: 0.94<br/>occurrences: 47
+
+    %% ═══════════════════════════════════════════════════════════════════
+    %% PHASE 2: INSIGHT CRYSTALLIZATION
+    %% The pattern becomes a Capsule (persistent knowledge)
+    %% ═══════════════════════════════════════════════════════════════════
+
+    Note over User,AUDIT: 💎 STAGE 2: Insight Crystallization<br/>Pattern becomes persistent knowledge (Capsule)
+
+    ML->>NEO: CREATE (c:Capsule {<br/>  id: 'insight_001',<br/>  type: 'insight',<br/>  content: 'Users querying financial reports<br/>  with temporal terms typically want<br/>  year-over-year comparisons included',<br/>  version: '1.0.0',<br/>  trust_level: 75,<br/>  owner_id: 'ml_intelligence',<br/>  metadata: {<br/>    pattern_type: 'query_refinement',<br/>    confidence: 0.94,<br/>    sample_size: 47<br/>  }<br/>})
+
+    NEO-->>ML: ✓ Capsule created: insight_001
+
+    ML->>NEO: Generate embedding for capsule<br/>and index in vector store
+
+    Note over NEO: 📦 NEW KNOWLEDGE PERSISTED<br/><br/>This insight will survive:<br/>• System restarts<br/>• Model updates<br/>• Architecture changes<br/><br/>This is "Ephemeral Wisdom" solved.
+
+    %% ═══════════════════════════════════════════════════════════════════
+    %% PHASE 3: CASCADE INITIATION
+    %% The insight is published to the event system
+    %% ═══════════════════════════════════════════════════════════════════
+
+    Note over User,AUDIT: 🌊 STAGE 3: Cascade Initiation<br/>Insight published to event system for propagation
+
+    ML->>EVENT: publish('pattern_detected', {<br/>  insight_id: 'insight_001',<br/>  pattern_type: 'query_refinement',<br/>  domain: 'financial_reports',<br/>  trigger_conditions: ['quarterly', 'annual',<br/>    'revenue', 'earnings', 'financial'],<br/>  suggested_action: 'append_yoy_comparison',<br/>  confidence: 0.94,<br/>  applicability: 'user_specific',<br/>  user_id: 'finance_analyst'<br/>})
+
+    Note over EVENT: 🔀 EVENT ROUTING<br/><br/>Query: Which overlays subscribe<br/>to 'pattern_detected' events?<br/><br/>Checking capability requirements<br/>and trust levels...
+
+    EVENT->>NEO: MATCH (o:Overlay)-[:SUBSCRIBES_TO]-><br/>(:EventType {name: 'pattern_detected'})<br/>WHERE o.state = 'ACTIVE'<br/>AND o.trust_level >= 60<br/>RETURN o.name, o.capabilities
+
+    NEO-->>EVENT: Subscribers:<br/>• capsule_analyzer (trust: 85)<br/>• performance_optimizer (trust: 85)<br/>• symbolic_governance (trust: 85)<br/>• security_validator (trust: 90)<br/>• audit_logger (trust: 100)
+
+    %% ═══════════════════════════════════════════════════════════════════
+    %% PHASE 4: PARALLEL CASCADE PROPAGATION
+    %% Each subscriber receives and acts on the insight
+    %% ═══════════════════════════════════════════════════════════════════
+
+    Note over User,AUDIT: ⚡ STAGE 4: Cascade Propagation (Parallel)<br/>Each overlay receives and integrates the insight
+
+    par 📦 Capsule Analyzer Integration
+        EVENT->>CAPSULE: deliver('pattern_detected', payload)
+        
+        Note over CAPSULE: 🔗 SEMANTIC LINKING<br/><br/>Search for related capsules<br/>that could benefit from<br/>this insight...
+        
+        CAPSULE->>NEO: CALL db.index.vector.queryNodes(<br/>  'capsule_embeddings', 10,<br/>  $insight_embedding<br/>)<br/>WHERE type IN ['knowledge', 'config']
+        
+        NEO-->>CAPSULE: Related capsules:<br/>• "Financial Report Template" (0.89)<br/>• "Dashboard Query Defaults" (0.84)<br/>• "User Preference Schema" (0.81)
+        
+        CAPSULE->>NEO: CREATE (insight:Capsule {id: 'insight_001'})<br/>-[:REFERENCES {<br/>  relationship: 'enhances',<br/>  discovered_at: datetime()<br/>}]->(related:Capsule)
+        
+        Note over CAPSULE: 📊 3 semantic links created<br/>Future queries will find<br/>this insight automatically
+
+    and ⚡ Performance Optimizer Integration
+        EVENT->>PERF: deliver('pattern_detected', payload)
+        
+        Note over PERF: 🎯 PREDICTIVE CACHING<br/><br/>If user asks about financial<br/>reports, pre-compute YoY<br/>comparison data...
+        
+        PERF->>PERF: Add to predictive cache rules:<br/><br/>RULE: financial_yoy_prefetch<br/>trigger: query contains<br/>  ['quarterly', 'financial', 'report']<br/>action: prefetch YoY data<br/>user_scope: finance_analyst<br/>priority: high
+        
+        PERF->>NEO: CREATE (c:CacheRule {<br/>  id: 'rule_001',<br/>  pattern_source: 'insight_001',<br/>  trigger_terms: [...],<br/>  prefetch_action: 'yoy_comparison'<br/>})
+        
+        Note over PERF: ⚡ Next similar query<br/>will be 3x faster<br/>(data pre-loaded)
+
+    and 🗳️ Governance Integration
+        EVENT->>GOV: deliver('pattern_detected', payload)
+        
+        Note over GOV: 🤔 POLICY EVALUATION<br/><br/>Should this pattern become<br/>a system-wide default?<br/><br/>Checking: Is this user-specific<br/>or broadly applicable?
+        
+        GOV->>GOV: Evaluate pattern scope:<br/><br/>applicability: 'user_specific'<br/>confidence: 0.94 (high)<br/>sample_size: 47 (sufficient)<br/><br/>Decision: Monitor for broader<br/>applicability before proposing<br/>system-wide change.
+        
+        GOV->>NEO: CREATE (m:MonitoringTask {<br/>  insight_id: 'insight_001',<br/>  check_broader_applicability: true,<br/>  threshold: 5, // more users<br/>  review_after: datetime() + P30D<br/>})
+        
+        Note over GOV: 👁️ Will auto-propose if<br/>5+ users show same pattern
+
+    and 🔐 Security Validator Integration
+        EVENT->>SEC: deliver('pattern_detected', payload)
+        
+        Note over SEC: 🛡️ SECURITY ASSESSMENT<br/><br/>Is this pattern safe?<br/>Could it be exploited?
+        
+        SEC->>SEC: Threat analysis:<br/><br/>• Pattern modifies query? YES<br/>• Could inject malicious content? NO<br/>  (appends static comparison)<br/>• Exposes sensitive data? NO<br/>• Trust level of source: 75 (OK)<br/><br/>✅ APPROVED: Safe to apply
+        
+        SEC->>NEO: MATCH (c:Capsule {id: 'insight_001'})<br/>SET c.security_approved = true,<br/>    c.approved_by = 'security_validator',<br/>    c.approved_at = datetime()
+        
+        Note over SEC: ✅ Insight cleared for use<br/>in production queries
+
+    and 📝 Audit Logger Integration
+        EVENT->>AUDIT: deliver('pattern_detected', payload)
+        
+        AUDIT->>NEO: CREATE (a:AuditLog {<br/>  id: randomUUID(),<br/>  action: 'CASCADE_PATTERN_DETECTED',<br/>  actor_type: 'overlay',<br/>  actor_id: 'ml_intelligence',<br/>  resource_type: 'Capsule',<br/>  resource_id: 'insight_001',<br/>  cascade_recipients: [<br/>    'capsule_analyzer',<br/>    'performance_optimizer',<br/>    'symbolic_governance',<br/>    'security_validator'<br/>  ],<br/>  timestamp: datetime(),<br/>  correlation_id: $correlation_id<br/>})
+        
+        Note over AUDIT: 📋 Complete audit trail<br/>of cascade propagation<br/>(EU AI Act compliant)
+    end
+
+    %% ═══════════════════════════════════════════════════════════════════
+    %% PHASE 5: GRAPH RELATIONSHIPS CREATED
+    %% Record the cascade in the graph for future tracing
+    %% ═══════════════════════════════════════════════════════════════════
+
+    Note over User,AUDIT: 🔗 STAGE 5: Graph Relationships<br/>Cascade path recorded for lineage tracing
+
+    ML->>NEO: CREATE (ml:Overlay {name: 'ml_intelligence'})<br/>-[:TRIGGERED {<br/>  event: 'pattern_detected',<br/>  timestamp: datetime(),<br/>  insight_id: 'insight_001'<br/>}]->(ca:Overlay {name: 'capsule_analyzer'})
+
+    ML->>NEO: CREATE (ml)-[:TRIGGERED]->(po:Overlay {name: 'performance_optimizer'})
+    ML->>NEO: CREATE (ml)-[:TRIGGERED]->(sg:Overlay {name: 'symbolic_governance'})
+    ML->>NEO: CREATE (ml)-[:TRIGGERED]->(sv:Overlay {name: 'security_validator'})
+
+    Note over NEO: 🌳 GRAPH STATE<br/><br/>New nodes: 1 Capsule, 1 CacheRule,<br/>1 MonitoringTask, 1 AuditLog<br/><br/>New relationships:<br/>• 4 TRIGGERED edges (cascade)<br/>• 3 REFERENCES edges (semantic)<br/>• 1 security approval
+
+    %% ═══════════════════════════════════════════════════════════════════
+    %% PHASE 6: IMMEDIATE BENEFIT
+    %% The original query benefits from the cascade
+    %% ═══════════════════════════════════════════════════════════════════
+
+    Note over User,AUDIT: ✨ STAGE 6: Immediate Benefit<br/>The original request is enhanced by the insight
+
+    ML-->>Pipeline: ml_analysis: {<br/>  intent: 'financial_query',<br/>  insight_applied: 'insight_001',<br/>  suggested_enhancement:<br/>    'Include YoY comparison',<br/>  confidence: 0.94<br/>}
+
+    Pipeline->>Pipeline: Phase 5: Intelligence Generation<br/><br/>Build prompt with enhancement:<br/>"User asked for Q3 financial reports.<br/>Based on learned patterns, include<br/>year-over-year comparison."
+
+    Pipeline-->>User: Response: "Here are the Q3 financial<br/>reports with year-over-year comparison:<br/><br/>Revenue: $4.2M (+12% YoY)<br/>Expenses: $2.8M (+5% YoY)<br/>Net Income: $1.4M (+28% YoY)<br/><br/>I noticed you typically want YoY<br/>comparisons - I've included them<br/>automatically."
+
+    Note over User: 😊 User didn't have to refine<br/>their query this time!<br/><br/>The system learned from their<br/>past behavior and anticipated<br/>their needs.
+
+    %% ═══════════════════════════════════════════════════════════════════
+    %% PHASE 7: LONG-TERM SYSTEM INTELLIGENCE
+    %% The cascade creates lasting improvements
+    %% ═══════════════════════════════════════════════════════════════════
+
+    Note over User,AUDIT: 🌟 STAGE 7: Lasting System Intelligence<br/>The cascade has permanently improved the system
+
+    Note over ML,AUDIT: 📈 CASCADE OUTCOMES:<br/><br/>1. CAPSULE CREATED<br/>   → Insight persists forever<br/>   → Survives restarts/updates<br/><br/>2. SEMANTIC LINKS CREATED<br/>   → Related capsules connected<br/>   → Future searches find insight<br/><br/>3. CACHE RULE CREATED<br/>   → Similar queries 3x faster<br/>   → Predictive data loading<br/><br/>4. GOVERNANCE MONITORING<br/>   → Will auto-propose if pattern<br/>      is seen in other users<br/><br/>5. SECURITY APPROVED<br/>   → Safe for production use<br/><br/>6. AUDIT TRAIL<br/>   → Full lineage traceable<br/>   → Compliant with regulations
+
+    Note over User,AUDIT: 🎯 THIS IS THE CASCADE EFFECT:<br/><br/>A single insight from ml_intelligence<br/>propagated to 5 other overlays,<br/>each integrating it in their own way:<br/><br/>• capsule_analyzer → semantic linking<br/>• performance_optimizer → caching<br/>• symbolic_governance → policy monitoring<br/>• security_validator → approval<br/>• audit_logger → compliance<br/><br/>The system is now collectively smarter.<br/>This is how Forge "learns like a culture."

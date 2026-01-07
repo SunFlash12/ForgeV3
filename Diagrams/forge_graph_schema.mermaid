@@ -1,0 +1,150 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#1e293b', 'primaryTextColor': '#f1f5f9', 'primaryBorderColor': '#475569', 'lineColor': '#f59e0b', 'secondaryColor': '#0f172a', 'tertiaryColor': '#334155', 'background': '#020617', 'mainBkg': '#1e293b', 'nodeBorder': '#f59e0b', 'clusterBkg': '#0f172a', 'clusterBorder': '#475569'}}}%%
+
+erDiagram
+    %% ═══════════════════════════════════════════════════════════════════
+    %% FORGE CASCADE: NEO4J GRAPH SCHEMA
+    %% Entity-Relationship Diagram showing all node types and relationships
+    %% ═══════════════════════════════════════════════════════════════════
+
+    %% ───────────────────────────────────────────────────────────────────
+    %% CORE ENTITIES
+    %% ───────────────────────────────────────────────────────────────────
+
+    CAPSULE {
+        uuid id PK "Unique identifier"
+        string content "The actual knowledge/data"
+        enum type "knowledge | code | decision | insight | config"
+        semver version "Semantic version (1.0.0, 2.1.0)"
+        uuid parent_id FK "Symbolic inheritance link (nullable)"
+        uuid owner_id FK "Creator/owner reference"
+        int trust_level "0-100: QUARANTINE(0) to CORE(100)"
+        float_array embedding "Vector[1536] for semantic search"
+        json metadata "Extensible properties"
+        datetime created_at
+        datetime updated_at
+        enum lifecycle "CREATE | ACTIVE | VERSION | ARCHIVE | MIGRATE"
+    }
+
+    USER {
+        uuid id PK
+        string username "Unique username"
+        string email "Unique email"
+        string password_hash "Argon2id hashed"
+        enum role "admin | moderator | user | guest"
+        int trust_flame "0-100 trust score"
+        boolean is_active
+        json preferences "User settings"
+        datetime created_at
+        datetime last_login
+    }
+
+    OVERLAY {
+        uuid id PK
+        string name "Unique overlay name"
+        semver version
+        bytes wasm_binary "Compiled WebAssembly module"
+        sha256 source_hash "Source verification"
+        int trust_level "0-100"
+        array dependencies "List of dependency overlay IDs"
+        array capabilities "Required permissions"
+        enum state "INACTIVE | LOADING | ACTIVE | DEGRADED | QUARANTINE"
+        json metrics "Performance stats"
+        datetime activated_at
+    }
+
+    PROPOSAL {
+        uuid id PK
+        string title
+        text description
+        uuid proposer_id FK
+        enum type "configuration | policy | trust | overlay | emergency"
+        enum status "draft | active | closed | approved | rejected | executed"
+        json changes "Structured proposed changes"
+        int votes_for
+        int votes_against
+        float weight_for "Trust-weighted votes"
+        float weight_against
+        datetime created_at
+        datetime closes_at
+        datetime executed_at
+    }
+
+    VOTE {
+        uuid id PK
+        uuid user_id FK
+        uuid proposal_id FK
+        enum decision "for | against | abstain"
+        float weight "Voter's trust_flame at vote time"
+        text rationale "Optional explanation"
+        datetime cast_at
+    }
+
+    TAG {
+        uuid id PK
+        string name "Tag label"
+        string category "Taxonomy category"
+        int usage_count
+    }
+
+    AUDIT_LOG {
+        uuid id PK
+        datetime timestamp
+        string action "CREATE | UPDATE | DELETE | EXECUTE"
+        enum actor_type "user | overlay | system"
+        uuid actor_id
+        string resource_type
+        uuid resource_id
+        json changes "Diff of changes"
+        string ip_address
+        uuid correlation_id "Pipeline trace ID"
+    }
+
+    SESSION {
+        uuid id PK
+        uuid user_id FK
+        string token_hash
+        datetime created_at
+        datetime expires_at
+        string ip_address
+        string user_agent
+    }
+
+    CONSENT_RECORD {
+        uuid id PK
+        uuid user_id FK
+        string purpose
+        boolean granted
+        datetime timestamp
+        string jurisdiction
+        string version
+    }
+
+    %% ───────────────────────────────────────────────────────────────────
+    %% RELATIONSHIPS
+    %% ───────────────────────────────────────────────────────────────────
+
+    %% Capsule Relationships
+    CAPSULE ||--o{ CAPSULE : "DERIVED_FROM (parent-child lineage)"
+    CAPSULE }o--|| USER : "OWNED_BY"
+    CAPSULE }o--o{ TAG : "TAGGED_WITH"
+    CAPSULE }o--o{ CAPSULE : "REFERENCES (semantic link)"
+
+    %% User Relationships
+    USER ||--o{ CAPSULE : "OWNS"
+    USER ||--o{ PROPOSAL : "CREATED"
+    USER ||--o{ VOTE : "CAST"
+    USER ||--o{ SESSION : "HAS_SESSION"
+    USER ||--o{ CONSENT_RECORD : "GAVE_CONSENT"
+
+    %% Governance Relationships
+    PROPOSAL ||--o{ VOTE : "HAS_VOTE"
+
+    %% Overlay Relationships
+    OVERLAY ||--o{ OVERLAY : "DEPENDS_ON"
+    OVERLAY ||--o{ CAPSULE : "PROCESSED"
+    OVERLAY ||--o{ OVERLAY : "TRIGGERED (cascade event)"
+
+    %% Audit Relationships
+    USER ||--o{ AUDIT_LOG : "performed action"
+    OVERLAY ||--o{ AUDIT_LOG : "performed action"
+    CAPSULE ||--o{ AUDIT_LOG : "was modified"

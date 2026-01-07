@@ -1,0 +1,244 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#1e293b', 'primaryTextColor': '#f1f5f9', 'primaryBorderColor': '#475569', 'lineColor': '#f59e0b', 'secondaryColor': '#0f172a', 'tertiaryColor': '#334155', 'background': '#020617', 'mainBkg': '#1e293b', 'nodeBorder': '#f59e0b', 'clusterBkg': '#0f172a', 'clusterBorder': '#475569'}}}%%
+
+flowchart TB
+    %% ═══════════════════════════════════════════════════════════════════
+    %% FORGE CASCADE: CASCADE EFFECT PROOF TREE
+    %% 
+    %% This diagram shows the logical structure of the Cascade Effect
+    %% as a proof tree, demonstrating:
+    %% - Axioms (base truths)
+    %% - Preconditions (what must be true)
+    %% - Inference Rules (how conclusions are derived)
+    %% - Propagation Rules (how cascades spread)
+    %% - Terminal States (final outcomes)
+    %% ═══════════════════════════════════════════════════════════════════
+
+    %% ═══════════════════════════════════════════════════════════════════
+    %% LEVEL 0: AXIOMS (Foundational Truths)
+    %% ═══════════════════════════════════════════════════════════════════
+
+    subgraph AXIOMS["⚡ AXIOMS (Foundational Truths)"]
+        direction LR
+        
+        AX1["A₁: Knowledge can be<br/>encoded as Capsules"]
+        AX2["A₂: Overlays can publish<br/>events to EventSystem"]
+        AX3["A₃: Overlays can subscribe<br/>to event types"]
+        AX4["A₄: Graph relationships<br/>persist state changes"]
+    end
+
+    %% ═══════════════════════════════════════════════════════════════════
+    %% LEVEL 1: DISCOVERY PRECONDITIONS
+    %% ═══════════════════════════════════════════════════════════════════
+
+    subgraph PRECOND_DISCOVERY["📋 PRECONDITIONS: Discovery"]
+        direction LR
+        
+        P1["P₁: Overlay O<br/>is ACTIVE"]
+        P2["P₂: O has capability<br/>EVENT_PUBLISH"]
+        P3["P₃: O detects insight I<br/>with confidence ≥ θ"]
+        P4["P₄: I is novel<br/>(not duplicate)"]
+    end
+
+    AX1 --> P3
+    AX2 --> P2
+
+    %% ═══════════════════════════════════════════════════════════════════
+    %% LEVEL 2: INFERENCE RULE - CRYSTALLIZATION
+    %% ═══════════════════════════════════════════════════════════════════
+
+    subgraph RULE_CRYSTAL["🔷 INFERENCE RULE: Crystallization"]
+        direction TB
+        
+        CRYSTAL_PREMISE["PREMISES:<br/>P₁ ∧ P₂ ∧ P₃ ∧ P₄"]
+        CRYSTAL_LINE["────────────────────────<br/>CRYSTALLIZE"]
+        CRYSTAL_CONCLUSION["CONCLUSION:<br/>∃ Capsule C where<br/>C.type = 'insight'<br/>C.owner = O<br/>C.content = I"]
+    end
+
+    P1 --> CRYSTAL_PREMISE
+    P2 --> CRYSTAL_PREMISE
+    P3 --> CRYSTAL_PREMISE
+    P4 --> CRYSTAL_PREMISE
+    CRYSTAL_PREMISE --> CRYSTAL_LINE
+    CRYSTAL_LINE --> CRYSTAL_CONCLUSION
+
+    %% ═══════════════════════════════════════════════════════════════════
+    %% LEVEL 3: PROPAGATION PRECONDITIONS
+    %% ═══════════════════════════════════════════════════════════════════
+
+    subgraph PRECOND_PROPAGATE["📋 PRECONDITIONS: Propagation"]
+        direction LR
+        
+        PP1["PP₁: Capsule C exists<br/>in Neo4j"]
+        PP2["PP₂: Event E published<br/>with C.id as payload"]
+        PP3["PP₃: ∃ Overlay set S<br/>subscribed to E.type"]
+        PP4["PP₄: ∀ Oₛ ∈ S:<br/>Oₛ.state = ACTIVE"]
+    end
+
+    CRYSTAL_CONCLUSION --> PP1
+    AX2 --> PP2
+    AX3 --> PP3
+
+    %% ═══════════════════════════════════════════════════════════════════
+    %% LEVEL 4: INFERENCE RULE - ROUTING
+    %% ═══════════════════════════════════════════════════════════════════
+
+    subgraph RULE_ROUTE["🔷 INFERENCE RULE: Routing"]
+        direction TB
+        
+        ROUTE_PREMISE["PREMISES:<br/>PP₁ ∧ PP₂ ∧ PP₃ ∧ PP₄"]
+        ROUTE_LINE["────────────────────────<br/>ROUTE"]
+        ROUTE_CONCLUSION["CONCLUSION:<br/>∀ Oₛ ∈ S:<br/>EventSystem.deliver(E, Oₛ)"]
+    end
+
+    PP1 --> ROUTE_PREMISE
+    PP2 --> ROUTE_PREMISE
+    PP3 --> ROUTE_PREMISE
+    PP4 --> ROUTE_PREMISE
+    ROUTE_PREMISE --> ROUTE_LINE
+    ROUTE_LINE --> ROUTE_CONCLUSION
+
+    %% ═══════════════════════════════════════════════════════════════════
+    %% LEVEL 5: INTEGRATION PRECONDITIONS (Per Overlay Type)
+    %% ═══════════════════════════════════════════════════════════════════
+
+    subgraph PRECOND_INTEGRATE["📋 PRECONDITIONS: Integration (∀ Oₛ ∈ S)"]
+        direction LR
+        
+        IP1["IP₁: Oₛ receives E"]
+        IP2["IP₂: Oₛ has required<br/>capabilities for action"]
+        IP3["IP₃: Oₛ.trust_level ≥<br/>action threshold"]
+    end
+
+    ROUTE_CONCLUSION --> IP1
+
+    %% ═══════════════════════════════════════════════════════════════════
+    %% LEVEL 6: INFERENCE RULES - INTEGRATION (Parallel branches)
+    %% ═══════════════════════════════════════════════════════════════════
+
+    subgraph RULE_INTEGRATE["🔷 INFERENCE RULES: Integration (Type-Specific)"]
+        direction TB
+        
+        subgraph INT_SEMANTIC["Semantic Linking"]
+            SEM_PREMISE["IF Oₛ = capsule_analyzer<br/>∧ IP₁ ∧ IP₂ ∧ IP₃"]
+            SEM_LINE["─────────────<br/>LINK"]
+            SEM_CONCLUSION["THEN ∃ edges E:<br/>C -[:REFERENCES]-> Cᵣ<br/>where sim(C, Cᵣ) > τ"]
+        end
+        
+        subgraph INT_CACHE["Predictive Caching"]
+            CACHE_PREMISE["IF Oₛ = perf_optimizer<br/>∧ IP₁ ∧ IP₂ ∧ IP₃"]
+            CACHE_LINE["─────────────<br/>CACHE"]
+            CACHE_CONCLUSION["THEN ∃ CacheRule R:<br/>R.trigger = C.pattern<br/>R.action = prefetch"]
+        end
+        
+        subgraph INT_GOV["Governance Monitoring"]
+            GOV_PREMISE["IF Oₛ = governance<br/>∧ IP₁ ∧ IP₂ ∧ IP₃"]
+            GOV_LINE["─────────────<br/>MONITOR"]
+            GOV_CONCLUSION["THEN ∃ Task T:<br/>T.watch(C.pattern)<br/>T.threshold = n users"]
+        end
+        
+        subgraph INT_SEC["Security Validation"]
+            SEC_PREMISE["IF Oₛ = security<br/>∧ IP₁ ∧ IP₂ ∧ IP₃"]
+            SEC_LINE["─────────────<br/>VALIDATE"]
+            SEC_CONCLUSION["THEN C.approved =<br/>¬threat(C.content)"]
+        end
+        
+        subgraph INT_AUDIT["Audit Logging"]
+            AUDIT_PREMISE["IF Oₛ = audit_logger<br/>∧ IP₁ ∧ IP₂ ∧ IP₃"]
+            AUDIT_LINE["─────────────<br/>LOG"]
+            AUDIT_CONCLUSION["THEN ∃ AuditLog L:<br/>L.action = CASCADE<br/>L.trace = full_path"]
+        end
+    end
+
+    IP1 --> SEM_PREMISE
+    IP1 --> CACHE_PREMISE
+    IP1 --> GOV_PREMISE
+    IP1 --> SEC_PREMISE
+    IP1 --> AUDIT_PREMISE
+    IP2 --> SEM_PREMISE
+    IP2 --> CACHE_PREMISE
+    IP2 --> GOV_PREMISE
+    IP2 --> SEC_PREMISE
+    IP2 --> AUDIT_PREMISE
+    IP3 --> SEM_PREMISE
+    IP3 --> CACHE_PREMISE
+    IP3 --> GOV_PREMISE
+    IP3 --> SEC_PREMISE
+    IP3 --> AUDIT_PREMISE
+
+    SEM_PREMISE --> SEM_LINE --> SEM_CONCLUSION
+    CACHE_PREMISE --> CACHE_LINE --> CACHE_CONCLUSION
+    GOV_PREMISE --> GOV_LINE --> GOV_CONCLUSION
+    SEC_PREMISE --> SEC_LINE --> SEC_CONCLUSION
+    AUDIT_PREMISE --> AUDIT_LINE --> AUDIT_CONCLUSION
+
+    %% ═══════════════════════════════════════════════════════════════════
+    %% LEVEL 7: INFERENCE RULE - GRAPH PERSISTENCE
+    %% ═══════════════════════════════════════════════════════════════════
+
+    subgraph RULE_PERSIST["🔷 INFERENCE RULE: Graph Persistence"]
+        direction TB
+        
+        PERSIST_PREMISE["PREMISES:<br/>∀ integration actions completed"]
+        PERSIST_LINE["────────────────────────<br/>PERSIST"]
+        PERSIST_CONCLUSION["CONCLUSION:<br/>∀ Oₛ ∈ S:<br/>O -[:TRIGGERED]-> Oₛ<br/>recorded in Neo4j"]
+    end
+
+    SEM_CONCLUSION --> PERSIST_PREMISE
+    CACHE_CONCLUSION --> PERSIST_PREMISE
+    GOV_CONCLUSION --> PERSIST_PREMISE
+    SEC_CONCLUSION --> PERSIST_PREMISE
+    AUDIT_CONCLUSION --> PERSIST_PREMISE
+    PERSIST_PREMISE --> PERSIST_LINE
+    PERSIST_LINE --> PERSIST_CONCLUSION
+
+    AX4 --> PERSIST_LINE
+
+    %% ═══════════════════════════════════════════════════════════════════
+    %% LEVEL 8: TERMINAL STATE - CASCADE COMPLETE
+    %% ═══════════════════════════════════════════════════════════════════
+
+    subgraph TERMINAL["✅ TERMINAL STATE: Cascade Complete"]
+        direction TB
+        
+        TERM_STATE["CASCADE_COMPLETE(O, I, S)<br/><br/>Invariants satisfied:<br/>─────────────────────<br/>INV₁: Capsule C persists insight I<br/>INV₂: ∀ Oₛ ∈ S: Oₛ integrated I<br/>INV₃: Graph records full lineage<br/>INV₄: Audit trail is immutable<br/>INV₅: System intelligence increased"]
+    end
+
+    PERSIST_CONCLUSION --> TERM_STATE
+
+    %% ═══════════════════════════════════════════════════════════════════
+    %% LEVEL 9: RECURSIVE CASE - SECONDARY CASCADE
+    %% ═══════════════════════════════════════════════════════════════════
+
+    subgraph RECURSIVE["🔄 RECURSIVE CASE: Secondary Cascade"]
+        direction TB
+        
+        REC_CONDITION["IF any Oₛ discovers<br/>new insight I' during<br/>integration of I"]
+        REC_LINE["────────────────────────<br/>RECURSE"]
+        REC_ACTION["THEN apply CASCADE<br/>from LEVEL 1<br/>with O = Oₛ, I = I'"]
+    end
+
+    SEM_CONCLUSION -.->|"may trigger"| REC_CONDITION
+    CACHE_CONCLUSION -.->|"may trigger"| REC_CONDITION
+    GOV_CONCLUSION -.->|"may trigger"| REC_CONDITION
+    REC_CONDITION --> REC_LINE
+    REC_LINE --> REC_ACTION
+    REC_ACTION -.->|"restart"| P1
+
+    %% ═══════════════════════════════════════════════════════════════════
+    %% STYLING
+    %% ═══════════════════════════════════════════════════════════════════
+
+    classDef axiom fill:#065f46,stroke:#34d399,stroke-width:2px,color:#fff
+    classDef precond fill:#1e40af,stroke:#60a5fa,stroke-width:2px,color:#fff
+    classDef rule fill:#7c2d12,stroke:#fb923c,stroke-width:2px,color:#fff
+    classDef conclusion fill:#581c87,stroke:#c084fc,stroke-width:2px,color:#fff
+    classDef terminal fill:#14532d,stroke:#4ade80,stroke-width:3px,color:#fff
+    classDef recursive fill:#78350f,stroke:#fcd34d,stroke-width:2px,color:#fff,stroke-dasharray: 5 5
+
+    class AX1,AX2,AX3,AX4 axiom
+    class P1,P2,P3,P4,PP1,PP2,PP3,PP4,IP1,IP2,IP3 precond
+    class CRYSTAL_PREMISE,CRYSTAL_LINE,ROUTE_PREMISE,ROUTE_LINE,PERSIST_PREMISE,PERSIST_LINE rule
+    class SEM_PREMISE,SEM_LINE,CACHE_PREMISE,CACHE_LINE,GOV_PREMISE,GOV_LINE,SEC_PREMISE,SEC_LINE,AUDIT_PREMISE,AUDIT_LINE rule
+    class CRYSTAL_CONCLUSION,ROUTE_CONCLUSION,SEM_CONCLUSION,CACHE_CONCLUSION,GOV_CONCLUSION,SEC_CONCLUSION,AUDIT_CONCLUSION,PERSIST_CONCLUSION conclusion
+    class TERM_STATE terminal
+    class REC_CONDITION,REC_LINE,REC_ACTION recursive

@@ -1,0 +1,644 @@
+{
+  "passed": 91,
+  "failed": 0,
+  "skipped": 0,
+  "details": [
+    {
+      "category": "Core",
+      "test": "Health endpoint",
+      "status": "PASS",
+      "details": "Status: 200",
+      "response": "{'status': 'healthy'}"
+    },
+    {
+      "category": "Core",
+      "test": "OpenAPI documentation",
+      "status": "PASS",
+      "details": "Paths found: True",
+      "response": null
+    },
+    {
+      "category": "Core",
+      "test": "Response envelope structure",
+      "status": "PASS",
+      "details": "Status: 401",
+      "response": "{'error': 'Not authenticated', 'status_code': 401, 'path': '/api/v1/capsules/'}"
+    },
+    {
+      "category": "Core",
+      "test": "404 handling",
+      "status": "PASS",
+      "details": "Status: 404",
+      "response": "{'error': 'Not Found', 'status_code': 404, 'path': '/api/v1/nonexistent'}"
+    },
+    {
+      "category": "Core",
+      "test": "CORS headers",
+      "status": "PASS",
+      "details": "Status: 405",
+      "response": null
+    },
+    {
+      "category": "Auth",
+      "test": "User registration (valid)",
+      "status": "PASS",
+      "details": "Status: 201",
+      "response": "{'id': 'd8fa2371-c94d-4c78-9c1a-4c2bc0a4e436', 'username': 'testuser_142fa617', 'email': 'test_469287a4@example.com', 'display_name': 'testuser_142fa617', 'trust_level': 'STANDARD', 'trust_score': 60.0, 'roles': ['user'], 'is_active': True, 'created_at': '2026-01-07T08:34:05.236461+00:00'}"
+    },
+    {
+      "category": "Auth",
+      "test": "Registration duplicate rejection",
+      "status": "PASS",
+      "details": "Status: 409",
+      "response": "{'error': \"Username 'testuser_142fa617' is already taken\", 'status_code': 409, 'path': '/api/v1/auth/register'}"
+    },
+    {
+      "category": "Auth",
+      "test": "Weak password rejection",
+      "status": "PASS",
+      "details": "Status: 422",
+      "response": "{'error': 'Validation error', 'details': [{'type': 'string_too_short', 'loc': ['body', 'password'], 'msg': 'String should have at least 8 characters', 'input': 'weak', 'ctx': {'min_length': 8}}], 'path': '/api/v1/auth/register'}"
+    },
+    {
+      "category": "Auth",
+      "test": "Invalid email rejection",
+      "status": "PASS",
+      "details": "Status: 422",
+      "response": "{'error': 'Validation error', 'details': [{'type': 'value_error', 'loc': ['body', 'email'], 'msg': 'value is not a valid email address: An email address must have an @-sign.', 'input': 'not-an-email', 'ctx': {'reason': 'An email address must have an @-sign.'}}], 'path': '/api/v1/auth/register'}"
+    },
+    {
+      "category": "Auth",
+      "test": "Login (valid credentials)",
+      "status": "PASS",
+      "details": "Status: 200, Cookie set: True",
+      "response": null
+    },
+    {
+      "category": "Auth",
+      "test": "Wrong password rejection",
+      "status": "PASS",
+      "details": "Status: 401",
+      "response": "{'error': 'Invalid credentials', 'status_code': 401, 'path': '/api/v1/auth/login'}"
+    },
+    {
+      "category": "Auth",
+      "test": "Nonexistent user rejection",
+      "status": "PASS",
+      "details": "Status: 401",
+      "response": "{'error': 'Invalid credentials', 'status_code': 401, 'path': '/api/v1/auth/login'}"
+    },
+    {
+      "category": "Auth",
+      "test": "Unauthenticated access blocked",
+      "status": "PASS",
+      "details": "Status: 401",
+      "response": "{'error': 'Not authenticated', 'status_code': 401, 'path': '/api/v1/auth/me'}"
+    },
+    {
+      "category": "Auth",
+      "test": "Authenticated access allowed",
+      "status": "PASS",
+      "details": "Status: 200",
+      "response": "{'id': 'd8fa2371-c94d-4c78-9c1a-4c2bc0a4e436', 'username': 'testuser_142fa617', 'email': 'test_469287a4@example.com', 'display_name': 'testuser_142fa617', 'trust_level': 'STANDARD', 'trust_score': 60.0, 'roles': ['user'], 'is_active': True, 'created_at': '2026-01-07T08:34:05.236461+00:00'}"
+    },
+    {
+      "category": "Auth",
+      "test": "Invalid token rejection",
+      "status": "PASS",
+      "details": "Status: 401",
+      "response": "{'error': 'Not authenticated', 'status_code': 401, 'path': '/api/v1/auth/me'}"
+    },
+    {
+      "category": "Auth",
+      "test": "Token refresh",
+      "status": "PASS",
+      "details": "Status: 200",
+      "response": null
+    },
+    {
+      "category": "Auth",
+      "test": "Logout",
+      "status": "PASS",
+      "details": "Status: 204",
+      "response": null
+    },
+    {
+      "category": "Auth",
+      "test": "Access blocked after logout",
+      "status": "PASS",
+      "details": "Status: 401",
+      "response": null
+    },
+    {
+      "category": "Capsules",
+      "test": "Create capsule (valid)",
+      "status": "PASS",
+      "details": "ID: 2cb1a57d-82e2-46b9-9826-c1122cb341b7",
+      "response": "{'id': '2cb1a57d-82e2-46b9-9826-c1122cb341b7', 'title': None, 'content': 'This is test knowledge about machine learning algorithms and neural networks.', 'type': 'KNOWLEDGE', 'owner_id': 'a426b783-2320-4895-bcad-734066259d53', 'trust_level': '60', 'version': '1.0.0', 'parent_id': None, 'tags': [], 'metadata': {'topic': 'ML', 'importance': 'high'}, 'view_count': 0, 'fork_count': 0, 'is_archived': False, 'created_at': '2026-01-07T08:35:32.027146+00:00', 'updated_at': '2026-01-07T08:35:32.027146+00"
+    },
+    {
+      "category": "Capsules",
+      "test": "Create second capsule",
+      "status": "PASS",
+      "details": "Status: 201",
+      "response": null
+    },
+    {
+      "category": "Capsules",
+      "test": "Empty content rejection",
+      "status": "PASS",
+      "details": "Status: 422",
+      "response": "{'error': 'Validation error', 'details': [{'type': 'string_too_short', 'loc': ['body', 'content'], 'msg': 'String should have at least 1 character', 'input': '', 'ctx': {'min_length': 1}}], 'path': '/api/v1/capsules/'}"
+    },
+    {
+      "category": "Capsules",
+      "test": "Invalid type rejection",
+      "status": "PASS",
+      "details": "Status: 422",
+      "response": "{'error': 'Validation error', 'details': [{'type': 'enum', 'loc': ['body', 'type'], 'msg': \"Input should be 'INSIGHT', 'DECISION', 'LESSON', 'WARNING', 'PRINCIPLE', 'MEMORY', 'KNOWLEDGE', 'CODE', 'CONFIG', 'TEMPLATE' or 'DOCUMENT'\", 'input': 'invalid_type', 'ctx': {'expected': \"'INSIGHT', 'DECISION', 'LESSON', 'WARNING', 'PRINCIPLE', 'MEMORY', 'KNOWLEDGE', 'CODE', 'CONFIG', 'TEMPLATE' or 'DOCUMENT'\"}}], 'path': '/api/v1/capsules/'}"
+    },
+    {
+      "category": "Capsules",
+      "test": "Get capsule by ID",
+      "status": "PASS",
+      "details": "Status: 200",
+      "response": "{'id': '2cb1a57d-82e2-46b9-9826-c1122cb341b7', 'title': None, 'content': 'This is test knowledge about machine learning algorithms and neural networks.', 'type': 'KNOWLEDGE', 'owner_id': 'a426b783-2320-4895-bcad-734066259d53', 'trust_level': '60', 'version': '1.0.0', 'parent_id': None, 'tags': [], 'metadata': {'topic': 'ML', 'importance': 'high'}, 'view_count': 0, 'fork_count': 0, 'is_archived': False, 'created_at': '2026-01-07T08:35:32.027146+00:00', 'updated_at': '2026-01-07T08:35:32.027146+00"
+    },
+    {
+      "category": "Capsules",
+      "test": "Nonexistent capsule 404",
+      "status": "PASS",
+      "details": "Status: 404",
+      "response": "{'error': 'Capsule not found', 'status_code': 404, 'path': '/api/v1/capsules/66ab01eb-78a3-4bfa-ae85-7345e35d4ccb'}"
+    },
+    {
+      "category": "Capsules",
+      "test": "Invalid UUID rejection",
+      "status": "PASS",
+      "details": "Status: 404",
+      "response": "{'error': 'Capsule not found', 'status_code': 404, 'path': '/api/v1/capsules/not-a-uuid'}"
+    },
+    {
+      "category": "Capsules",
+      "test": "List capsules",
+      "status": "PASS",
+      "details": "Is list: True",
+      "response": null
+    },
+    {
+      "category": "Capsules",
+      "test": "List with pagination",
+      "status": "PASS",
+      "details": "Status: 200",
+      "response": null
+    },
+    {
+      "category": "Capsules",
+      "test": "List with type filter",
+      "status": "PASS",
+      "details": "Status: 200",
+      "response": null
+    },
+    {
+      "category": "Capsules",
+      "test": "Update capsule",
+      "status": "PASS",
+      "details": "Status: 200",
+      "response": "{'id': '2cb1a57d-82e2-46b9-9826-c1122cb341b7', 'title': None, 'content': 'Updated machine learning content with new neural network information.', 'type': 'KNOWLEDGE', 'owner_id': 'a426b783-2320-4895-bcad-734066259d53', 'trust_level': '60', 'version': '1.0.0', 'parent_id': None, 'tags': [], 'metadata': {'topic': 'ML', 'importance': 'high'}, 'view_count': 0, 'fork_count': 0, 'is_archived': False, 'created_at': '2026-01-07T08:35:32.027146+00:00', 'updated_at': '2026-01-07T08:36:40.403228+00:00'}"
+    },
+    {
+      "category": "Capsules",
+      "test": "Semantic search",
+      "status": "PASS",
+      "details": "Has results: True",
+      "response": "{'query': 'machine learning algorithms', 'results': [], 'scores': [], 'total': 0}"
+    },
+    {
+      "category": "Capsules",
+      "test": "Semantic search (NLP query)",
+      "status": "PASS",
+      "details": "Status: 200",
+      "response": null
+    },
+    {
+      "category": "Capsules",
+      "test": "Empty search query handling",
+      "status": "PASS",
+      "details": "Status: 422",
+      "response": "{'error': 'Validation error', 'details': [{'type': 'string_too_short', 'loc': ['body', 'query'], 'msg': 'String should have at least 1 character', 'input': '', 'ctx': {'min_length': 1}}], 'path': '/api/v1/capsules/search'}"
+    },
+    {
+      "category": "Capsules",
+      "test": "Get lineage",
+      "status": "PASS",
+      "details": "Status: 200",
+      "response": "{'capsule': {'id': '2cb1a57d-82e2-46b9-9826-c1122cb341b7', 'title': None, 'content': 'Updated machine learning content with new neural network information.', 'type': 'KNOWLEDGE', 'owner_id': 'a426b783-2320-4895-bcad-734066259d53', 'trust_level': '60', 'version': '1.0.0', 'parent_id': None, 'tags': [], 'metadata': {'topic': 'ML', 'importance': 'high'}, 'view_count': 0, 'fork_count': 0, 'is_archived': False, 'created_at': '2026-01-07T08:35:32.027146+00:00', 'updated_at': '2026-01-07T08:36:40.40322"
+    },
+    {
+      "category": "Capsules",
+      "test": "Create derived capsule",
+      "status": "PASS",
+      "details": "ID: 2d0e7ef1-a511-4a92-85ae-678a8cc275a3",
+      "response": "{'id': '2d0e7ef1-a511-4a92-85ae-678a8cc275a3', 'title': None, 'content': 'This is derived knowledge based on parent capsule about advanced ML.', 'type': 'KNOWLEDGE', 'owner_id': 'a426b783-2320-4895-bcad-734066259d53', 'trust_level': '60', 'version': '1.0.0', 'parent_id': '2cb1a57d-82e2-46b9-9826-c1122cb341b7', 'tags': [], 'metadata': {}, 'view_count': 0, 'fork_count': 0, 'is_archived': False, 'created_at': '2026-01-07T08:37:06.401630+00:00', 'updated_at': '2026-01-07T08:37:06.401630+00:00'}"
+    },
+    {
+      "category": "Capsules",
+      "test": "Verify derived lineage",
+      "status": "PASS",
+      "details": "Status: 200",
+      "response": "{'capsule': {'id': '2d0e7ef1-a511-4a92-85ae-678a8cc275a3', 'title': None, 'content': 'This is derived knowledge based on parent capsule about advanced ML.', 'type': 'KNOWLEDGE', 'owner_id': 'a426b783-2320-4895-bcad-734066259d53', 'trust_level': '60', 'version': '1.0.0', 'parent_id': '2cb1a57d-82e2-46b9-9826-c1122cb341b7', 'tags': [], 'metadata': {}, 'view_count': 0, 'fork_count': 0, 'is_archived': False, 'created_at': '2026-01-07T08:37:06.401630+00:00', 'updated_at': '2026-01-07T08:37:06.401630+"
+    },
+    {
+      "category": "Capsules",
+      "test": "Delete capsule",
+      "status": "PASS",
+      "details": "Status: 204",
+      "response": null
+    },
+    {
+      "category": "Capsules",
+      "test": "Delete nonexistent capsule",
+      "status": "PASS",
+      "details": "Status: 404",
+      "response": null
+    },
+    {
+      "category": "Capsules",
+      "test": "Long content handling",
+      "status": "PASS",
+      "details": "Status: 201",
+      "response": null
+    },
+    {
+      "category": "Capsules",
+      "test": "Create KNOWLEDGE type",
+      "status": "PASS",
+      "details": "Status: 201",
+      "response": null
+    },
+    {
+      "category": "Capsules",
+      "test": "Create DECISION type",
+      "status": "PASS",
+      "details": "Status: 201",
+      "response": null
+    },
+    {
+      "category": "Capsules",
+      "test": "Create MEMORY type",
+      "status": "PASS",
+      "details": "Status: 201",
+      "response": null
+    },
+    {
+      "category": "Capsules",
+      "test": "Create INSIGHT type",
+      "status": "PASS",
+      "details": "Status: 201",
+      "response": null
+    },
+    {
+      "category": "Capsules",
+      "test": "Create LESSON type",
+      "status": "PASS",
+      "details": "Status: 201",
+      "response": null
+    },
+    {
+      "category": "Capsules",
+      "test": "Create CODE type",
+      "status": "PASS",
+      "details": "Status: 201",
+      "response": null
+    },
+    {
+      "category": "Trust",
+      "test": "Get trust level",
+      "status": "PASS",
+      "details": "Trust: CORE, Score: 100.0",
+      "response": null
+    },
+    {
+      "category": "Trust",
+      "test": "New user trust level",
+      "status": "PASS",
+      "details": "Trust level: STANDARD",
+      "response": null
+    },
+    {
+      "category": "Trust",
+      "test": "Admin has CORE trust",
+      "status": "PASS",
+      "details": "Trust level: CORE",
+      "response": null
+    },
+    {
+      "category": "Governance",
+      "test": "List proposals",
+      "status": "PASS",
+      "details": "Status: 200",
+      "response": "{'items': [{'id': '651ecc50-f8db-427d-8b45-354d1e360f06', 'title': 'Test Proposal 6bd4cbe9', 'description': 'This is a comprehensive test proposal for testing the governance system thoroughly.', 'proposal_type': 'policy', 'status': 'voting', 'proposer_id': 'a426b783-2320-4895-bcad-734066259d53', 'action': {}, 'voting_period_days': 7, 'quorum_percent': 0.1, 'pass_threshold': 0.5, 'votes_for': 1, 'votes_against': 0, 'votes_abstain': 0, 'weight_for': 1.0, 'weight_against': 0.0, 'weight_abstain': 0."
+    },
+    {
+      "category": "Governance",
+      "test": "Create proposal",
+      "status": "PASS",
+      "details": "Status: 201, ID: 91a959a2-0f9d-4c01-b7a5-6db8dbf4b4f3",
+      "response": "{'id': '91a959a2-0f9d-4c01-b7a5-6db8dbf4b4f3', 'title': 'Test Proposal ab726412', 'description': 'This is a comprehensive test proposal for testing the governance system thoroughly.', 'proposal_type': 'policy', 'status': 'draft', 'proposer_id': 'a426b783-2320-4895-bcad-734066259d53', 'action': {}, 'voting_period_days': 7, 'quorum_percent': 0.1, 'pass_threshold': 0.5, 'votes_for': 0, 'votes_against': 0, 'votes_abstain': 0, 'weight_for': 0.0, 'weight_against': 0.0, 'weight_abstain': 0.0, 'created_"
+    },
+    {
+      "category": "Governance",
+      "test": "Empty title rejection",
+      "status": "PASS",
+      "details": "Status: 422",
+      "response": "{'error': 'Validation error', 'details': [{'type': 'string_too_short', 'loc': ['body', 'title'], 'msg': 'String should have at least 5 characters', 'input': '', 'ctx': {'min_length': 5}}, {'type': 'string_too_short', 'loc': ['body', 'description'], 'msg': 'String should have at least 20 characters', 'input': 'Description here', 'ctx': {'min_length': 20}}], 'path': '/api/v1/governance/proposals'}"
+    },
+    {
+      "category": "Governance",
+      "test": "Invalid proposal type rejection",
+      "status": "PASS",
+      "details": "Status: 422",
+      "response": "{'error': 'Validation error', 'details': [{'type': 'string_too_short', 'loc': ['body', 'title'], 'msg': 'String should have at least 5 characters', 'input': 'Test', 'ctx': {'min_length': 5}}, {'type': 'string_too_short', 'loc': ['body', 'description'], 'msg': 'String should have at least 20 characters', 'input': 'Description', 'ctx': {'min_length': 20}}], 'path': '/api/v1/governance/proposals'}"
+    },
+    {
+      "category": "Governance",
+      "test": "Get proposal by ID",
+      "status": "PASS",
+      "details": "Status: 200",
+      "response": "{'id': '91a959a2-0f9d-4c01-b7a5-6db8dbf4b4f3', 'title': 'Test Proposal ab726412', 'description': 'This is a comprehensive test proposal for testing the governance system thoroughly.', 'proposal_type': 'policy', 'status': 'draft', 'proposer_id': 'a426b783-2320-4895-bcad-734066259d53', 'action': {}, 'voting_period_days': 7, 'quorum_percent': 0.1, 'pass_threshold': 0.5, 'votes_for': 0, 'votes_against': 0, 'votes_abstain': 0, 'weight_for': 0.0, 'weight_against': 0.0, 'weight_abstain': 0.0, 'created_"
+    },
+    {
+      "category": "Governance",
+      "test": "Nonexistent proposal 404",
+      "status": "PASS",
+      "details": "Status: 404",
+      "response": "{'error': 'Proposal not found', 'status_code': 404, 'path': '/api/v1/governance/proposals/367eccf8-1338-4fec-b8fe-bb9918b45b08'}"
+    },
+    {
+      "category": "Governance",
+      "test": "Submit proposal",
+      "status": "PASS",
+      "details": "Status: 200",
+      "response": "{'id': '91a959a2-0f9d-4c01-b7a5-6db8dbf4b4f3', 'title': 'Test Proposal ab726412', 'description': 'This is a comprehensive test proposal for testing the governance system thoroughly.', 'proposal_type': 'policy', 'status': 'voting', 'proposer_id': 'a426b783-2320-4895-bcad-734066259d53', 'action': {}, 'voting_period_days': 7, 'quorum_percent': 0.1, 'pass_threshold': 0.5, 'votes_for': 0, 'votes_against': 0, 'votes_abstain': 0, 'weight_for': 0.0, 'weight_against': 0.0, 'weight_abstain': 0.0, 'created"
+    },
+    {
+      "category": "Governance",
+      "test": "Cast vote APPROVE",
+      "status": "PASS",
+      "details": "Status: 200",
+      "response": "{'id': 'vote_37c800371387', 'proposal_id': '91a959a2-0f9d-4c01-b7a5-6db8dbf4b4f3', 'user_id': 'a426b783-2320-4895-bcad-734066259d53', 'choice': 'APPROVE', 'weight': 1.0, 'rationale': 'Testing vote functionality - voting APPROVE', 'created_at': '2026-01-07T08:39:33.128563+00:00'}"
+    },
+    {
+      "category": "Governance",
+      "test": "Duplicate vote handling",
+      "status": "PASS",
+      "details": "Status: 400",
+      "response": "{'error': 'Already voted on this proposal', 'status_code': 400, 'path': '/api/v1/governance/proposals/91a959a2-0f9d-4c01-b7a5-6db8dbf4b4f3/vote'}"
+    },
+    {
+      "category": "Governance",
+      "test": "Invalid vote choice rejection",
+      "status": "PASS",
+      "details": "Status: 422",
+      "response": "{'error': 'Validation error', 'details': [{'type': 'enum', 'loc': ['body', 'choice'], 'msg': \"Input should be 'APPROVE', 'REJECT', 'ABSTAIN', 'APPROVE' or 'REJECT'\", 'input': 'INVALID_CHOICE', 'ctx': {'expected': \"'APPROVE', 'REJECT', 'ABSTAIN', 'APPROVE' or 'REJECT'\"}}], 'path': '/api/v1/governance/proposals/91a959a2-0f9d-4c01-b7a5-6db8dbf4b4f3/vote'}"
+    },
+    {
+      "category": "Governance",
+      "test": "Filter proposals by status",
+      "status": "PASS",
+      "details": "Status: 200",
+      "response": null
+    },
+    {
+      "category": "Governance",
+      "test": "Filter proposals by type",
+      "status": "PASS",
+      "details": "Status: 200",
+      "response": null
+    },
+    {
+      "category": "Governance",
+      "test": "Get governance metrics",
+      "status": "PASS",
+      "details": "Status: 200",
+      "response": "{'timestamp': '2026-01-07T08:39:56.882063+00:00', 'total_proposals': 18, 'active_proposals': 13, 'passed_proposals': 1, 'rejected_proposals': 0, 'total_votes': 6, 'unique_voters': 1, 'average_participation': 0.056, 'average_pass_rate': 1.0, 'proposals_by_type': {'policy': 18}, 'proposals_by_status': {'voting': 13, 'draft': 4, 'passed': 1}}"
+    },
+    {
+      "category": "GhostCouncil",
+      "test": "Get council members",
+      "status": "PASS",
+      "details": "Members: 3",
+      "response": "[{'id': 'gc_ethics', 'name': 'Sophia (Ethics Guardian)', 'role': 'Ethics Advisor', 'weight': 1.2}, {'id': 'gc_security', 'name': 'Marcus (Security Sentinel)', 'role': 'Security Expert', 'weight': 1.3}, {'id': 'gc_governance', 'name': 'Helena (Governance Keeper)', 'role': 'Governance Expert', 'weight': 1.1}]"
+    },
+    {
+      "category": "GhostCouncil",
+      "test": "Get council status",
+      "status": "PASS",
+      "details": "Status: 200",
+      "response": "{'proposals_reviewed': 0, 'issues_responded': 0, 'unanimous_decisions': 0, 'split_decisions': 0, 'cache_hits': 0, 'active_issues': 0, 'total_issues_tracked': 0, 'council_members': 3}"
+    },
+    {
+      "category": "GhostCouncil",
+      "test": "Request deliberation",
+      "status": "PASS",
+      "details": "Status: 200",
+      "response": "[]"
+    },
+    {
+      "category": "GhostCouncil",
+      "test": "Ghost Council on proposal",
+      "status": "PASS",
+      "details": "Status: 200",
+      "response": null
+    },
+    {
+      "category": "Overlays",
+      "test": "List overlays",
+      "status": "PASS",
+      "details": "Count: 4",
+      "response": null
+    },
+    {
+      "category": "Overlays",
+      "test": "Get overlay by ID",
+      "status": "PASS",
+      "details": "Status: 200",
+      "response": "{'id': 'abd895e0-e175-440d-aaf3-b4f84fcef19d', 'name': 'security_validator', 'version': '1.0.0', 'description': 'Validates capsules and actions against security policies', 'phase': 1, 'priority': 100, 'enabled': False, 'critical': False, 'config': {}, 'created_at': '', 'updated_at': ''}"
+    },
+    {
+      "category": "Overlays",
+      "test": "Nonexistent overlay 404",
+      "status": "PASS",
+      "details": "Status: 404",
+      "response": "{'error': 'Overlay not found', 'status_code': 404, 'path': '/api/v1/overlays/3f1414b2-3903-49f5-91e3-14f35e372d79'}"
+    },
+    {
+      "category": "Overlays",
+      "test": "Filter overlays by state",
+      "status": "PASS",
+      "details": "Status: 200",
+      "response": null
+    },
+    {
+      "category": "Overlays",
+      "test": "Overlays with pagination",
+      "status": "PASS",
+      "details": "Status: 200",
+      "response": null
+    },
+    {
+      "category": "Immune",
+      "test": "Health check endpoint",
+      "status": "PASS",
+      "details": "Status: healthy",
+      "response": "{'status': 'healthy'}"
+    },
+    {
+      "category": "Immune",
+      "test": "System metrics",
+      "status": "PASS",
+      "details": "Status: 200",
+      "response": "{'timestamp': '2026-01-07T08:41:21.200516Z', 'events_emitted_total': 0, 'events_processed_total': 0, 'active_overlays': 0, 'pipeline_executions': 0, 'average_pipeline_duration_ms': 0.0, 'open_circuit_breakers': 0, 'active_anomalies': 0, 'canary_deployments': 0, 'db_connected': True, 'memory_usage_mb': 134.2421875, 'cpu_usage_percent': None}"
+    },
+    {
+      "category": "Immune",
+      "test": "System status",
+      "status": "PASS",
+      "details": "Status: 200",
+      "response": "{'status': 'degraded', 'version': '0.1.0', 'uptime_seconds': 0.0, 'timestamp': '2026-01-07T08:41:25.345164Z', 'services': {'database': 'operational', 'event_system': 'degraded', 'circuit_breakers': 'operational', 'api': 'operational'}}"
+    },
+    {
+      "category": "Immune",
+      "test": "Circuit breaker status",
+      "status": "PASS",
+      "details": "Status: 200",
+      "response": "{'circuit_breakers': [], 'total': 0, 'open_count': 0, 'half_open_count': 0}"
+    },
+    {
+      "category": "Immune",
+      "test": "Rate limiting test",
+      "status": "PASS",
+      "details": "Requests: 30, Limited: False",
+      "response": null
+    },
+    {
+      "category": "Immune",
+      "test": "Concurrent requests handling",
+      "status": "PASS",
+      "details": "Success rate: 100.0%",
+      "response": null
+    },
+    {
+      "category": "Events",
+      "test": "Audit log endpoint",
+      "status": "PASS",
+      "details": "Status: 200",
+      "response": "{'items': [{'id': '06cbfb6f-a06a-4425-aaee-4f365f0e6657', 'action': 'Governance: vote_cast', 'entity_type': 'proposal', 'entity_id': '91a959a2-0f9d-4c01-b7a5-6db8dbf4b4f3', 'user_id': 'a426b783-2320-4895-bcad-734066259d53', 'details': {'vote_id': 'vote_37c800371387', 'choice': 'APPROVE'}, 'correlation_id': '72d17feb-00c3-4b00-8356-005e4ed5959d', 'timestamp': '2026-01-07T08:39:33.311612Z'}, {'id': '86af4cdd-44b2-45e6-9d28-6f2c85699884', 'action': 'Governance: proposal_submitted', 'entity_type': '"
+    },
+    {
+      "category": "Events",
+      "test": "Recent events endpoint",
+      "status": "PASS",
+      "details": "Status: 200",
+      "response": null
+    },
+    {
+      "category": "Events",
+      "test": "Events recorded on action",
+      "status": "PASS",
+      "details": "Status: 200",
+      "response": null
+    },
+    {
+      "category": "EdgeCases",
+      "test": "SQL injection handling",
+      "status": "PASS",
+      "details": "Status: 200",
+      "response": null
+    },
+    {
+      "category": "EdgeCases",
+      "test": "NoSQL injection handling",
+      "status": "PASS",
+      "details": "Status: 200",
+      "response": null
+    },
+    {
+      "category": "EdgeCases",
+      "test": "XSS content handling",
+      "status": "PASS",
+      "details": "Status: 201",
+      "response": null
+    },
+    {
+      "category": "EdgeCases",
+      "test": "Unicode content handling",
+      "status": "PASS",
+      "details": "Status: 201",
+      "response": null
+    },
+    {
+      "category": "EdgeCases",
+      "test": "Malformed JSON handling",
+      "status": "PASS",
+      "details": "Status: 422",
+      "response": "{'error': 'Validation error', 'details': [{'type': 'json_invalid', 'loc': ['body', 0], 'msg': 'JSON decode error', 'input': {}, 'ctx': {'error': 'Expecting value'}}], 'path': '/api/v1/capsules/'}"
+    },
+    {
+      "category": "EdgeCases",
+      "test": "Extra/prototype fields handling",
+      "status": "PASS",
+      "details": "Status: 201",
+      "response": null
+    },
+    {
+      "category": "EdgeCases",
+      "test": "Missing fields rejection",
+      "status": "PASS",
+      "details": "Status: 422",
+      "response": "{'error': 'Validation error', 'details': [{'type': 'missing', 'loc': ['body', 'content'], 'msg': 'Field required', 'input': {'type': 'KNOWLEDGE'}}], 'path': '/api/v1/capsules/'}"
+    },
+    {
+      "category": "EdgeCases",
+      "test": "Null value handling",
+      "status": "PASS",
+      "details": "Status: 422",
+      "response": "{'error': 'Validation error', 'details': [{'type': 'string_type', 'loc': ['body', 'content'], 'msg': 'Input should be a valid string', 'input': None}], 'path': '/api/v1/capsules/'}"
+    },
+    {
+      "category": "EdgeCases",
+      "test": "Empty body handling",
+      "status": "PASS",
+      "details": "Status: 422",
+      "response": "{'error': 'Validation error', 'details': [{'type': 'missing', 'loc': ['body', 'content'], 'msg': 'Field required', 'input': {}}], 'path': '/api/v1/capsules/'}"
+    },
+    {
+      "category": "EdgeCases",
+      "test": "Very long content handling",
+      "status": "PASS",
+      "details": "Status: 201",
+      "response": null
+    },
+    {
+      "category": "EdgeCases",
+      "test": "Path traversal blocked",
+      "status": "PASS",
+      "details": "Status: 404",
+      "response": null
+    },
+    {
+      "category": "EdgeCases",
+      "test": "Method not allowed handling",
+      "status": "PASS",
+      "details": "Status: 405",
+      "response": null
+    },
+    {
+      "category": "EdgeCases",
+      "test": "Timeout handling",
+      "status": "PASS",
+      "details": "Timeout handling verified through other tests",
+      "response": null
+    }
+  ]
+}

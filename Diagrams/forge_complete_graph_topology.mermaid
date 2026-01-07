@@ -1,0 +1,156 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#1e293b', 'primaryTextColor': '#f1f5f9', 'primaryBorderColor': '#475569', 'lineColor': '#06b6d4', 'secondaryColor': '#0f172a', 'tertiaryColor': '#334155', 'background': '#020617', 'mainBkg': '#1e293b', 'nodeBorder': '#06b6d4', 'clusterBkg': '#0f172a', 'clusterBorder': '#475569'}}}%%
+
+flowchart TB
+    %% ═══════════════════════════════════════════════════════════════════
+    %% FORGE CASCADE: COMPLETE GRAPH TOPOLOGY
+    %% 
+    %% Shows all node types and their relationships in the Neo4j graph.
+    %% This is the complete picture of how data interconnects in Forge.
+    %% ═══════════════════════════════════════════════════════════════════
+
+    %% ───────────────────────────────────────────────────────────────────
+    %% CENTRAL ENTITIES
+    %% ───────────────────────────────────────────────────────────────────
+
+    subgraph CENTER["🎯 Central Entities"]
+        USER["👤 USER<br/><br/>• id: UUID<br/>• username<br/>• trust_flame: 0-100<br/>• role: admin/mod/user"]
+        
+        CAPSULE["📦 CAPSULE<br/><br/>• id: UUID<br/>• content: string<br/>• type: knowledge/code/...<br/>• version: semver<br/>• trust_level: 0-100<br/>• embedding: float[1536]"]
+        
+        OVERLAY["⚙️ OVERLAY<br/><br/>• id: UUID<br/>• name: string<br/>• wasm_binary: bytes<br/>• state: ACTIVE/QUARANTINE<br/>• capabilities: array"]
+    end
+
+    %% ───────────────────────────────────────────────────────────────────
+    %% GOVERNANCE ENTITIES
+    %% ───────────────────────────────────────────────────────────────────
+
+    subgraph GOV["🏛️ Governance"]
+        PROPOSAL["🗳️ PROPOSAL<br/><br/>• id: UUID<br/>• title, description<br/>• status: active/approved/...<br/>• votes_for/against<br/>• weight_for/against"]
+        
+        VOTE["✓ VOTE<br/><br/>• id: UUID<br/>• decision: for/against<br/>• weight: float<br/>• rationale: text"]
+    end
+
+    %% ───────────────────────────────────────────────────────────────────
+    %% METADATA ENTITIES
+    %% ───────────────────────────────────────────────────────────────────
+
+    subgraph META["🏷️ Metadata"]
+        TAG["🏷️ TAG<br/><br/>• name<br/>• category<br/>• usage_count"]
+        
+        AUDIT["📋 AUDIT_LOG<br/><br/>• timestamp<br/>• action<br/>• actor_type/id<br/>• changes: json<br/>• correlation_id"]
+    end
+
+    %% ───────────────────────────────────────────────────────────────────
+    %% SESSION & COMPLIANCE
+    %% ───────────────────────────────────────────────────────────────────
+
+    subgraph SESSION["🔐 Session & Compliance"]
+        SESS["🔑 SESSION<br/><br/>• token_hash<br/>• expires_at<br/>• ip_address"]
+        
+        CONSENT["📜 CONSENT_RECORD<br/><br/>• purpose<br/>• granted: bool<br/>• jurisdiction"]
+    end
+
+    %% ═══════════════════════════════════════════════════════════════════
+    %% ALL RELATIONSHIP TYPES
+    %% ═══════════════════════════════════════════════════════════════════
+
+    %% ─────────────────────────────────────────────────────────────────
+    %% CAPSULE RELATIONSHIPS
+    %% ─────────────────────────────────────────────────────────────────
+
+    CAPSULE -->|"DERIVED_FROM<br/><br/>• reason: string<br/>• timestamp<br/>• changes: json<br/><br/>📜 The 'Isnad' lineage chain"| CAPSULE
+    
+    CAPSULE -->|"REFERENCES<br/><br/>• semantic link<br/>• not inheritance<br/><br/>🔗 Cross-references"| CAPSULE
+    
+    CAPSULE -->|"TAGGED_WITH<br/><br/>🏷️ Taxonomy classification"| TAG
+    
+    USER -->|"OWNS<br/><br/>👤 Creator/owner relationship"| CAPSULE
+
+    %% ─────────────────────────────────────────────────────────────────
+    %% OVERLAY RELATIONSHIPS
+    %% ─────────────────────────────────────────────────────────────────
+
+    OVERLAY -->|"DEPENDS_ON<br/><br/>⚙️ Static load order<br/>Must load before dependent"| OVERLAY
+    
+    OVERLAY -->|"TRIGGERED<br/><br/>• event_type<br/>• payload: json<br/>• timestamp<br/><br/>🌊 Cascade propagation"| OVERLAY
+    
+    OVERLAY -->|"PROCESSED<br/><br/>📦 Overlay analyzed/modified capsule"| CAPSULE
+
+    %% ─────────────────────────────────────────────────────────────────
+    %% USER RELATIONSHIPS
+    %% ─────────────────────────────────────────────────────────────────
+
+    USER -->|"CREATED<br/><br/>📝 Authored proposal"| PROPOSAL
+    
+    USER -->|"CAST<br/><br/>🗳️ Submitted vote"| VOTE
+    
+    USER -->|"HAS_SESSION<br/><br/>🔑 Active login"| SESS
+    
+    USER -->|"GAVE_CONSENT<br/><br/>📜 Privacy consent"| CONSENT
+
+    %% ─────────────────────────────────────────────────────────────────
+    %% GOVERNANCE RELATIONSHIPS
+    %% ─────────────────────────────────────────────────────────────────
+
+    PROPOSAL -->|"HAS_VOTE<br/><br/>✓ Vote on proposal"| VOTE
+
+    %% ─────────────────────────────────────────────────────────────────
+    %% TRUST RELATIONSHIPS (Self-referential)
+    %% ─────────────────────────────────────────────────────────────────
+
+    USER -->|"TRUST_CHANGED<br/><br/>• old_level<br/>• new_level<br/>• reason<br/><br/>📈 Trust history"| USER
+    
+    OVERLAY -->|"TRUST_CHANGED<br/><br/>📉 Trust adjustment"| OVERLAY
+    
+    CAPSULE -->|"TRUST_CHANGED<br/><br/>📊 Trust evolution"| CAPSULE
+
+    %% ─────────────────────────────────────────────────────────────────
+    %% AUDIT RELATIONSHIPS
+    %% ─────────────────────────────────────────────────────────────────
+
+    USER -.->|"performed<br/><br/>📋 Action logged"| AUDIT
+    OVERLAY -.->|"performed<br/><br/>📋 Action logged"| AUDIT
+    CAPSULE -.->|"was_modified<br/><br/>📋 Change recorded"| AUDIT
+
+    %% ═══════════════════════════════════════════════════════════════════
+    %% VECTOR INDEX (Special - enables semantic search)
+    %% ═══════════════════════════════════════════════════════════════════
+
+    subgraph VECTOR["🔍 Vector Index (Semantic Search)"]
+        VIDX["capsule_embedding_index<br/><br/>• dimensions: 1536<br/>• similarity: cosine<br/>• quantization: enabled<br/><br/>Enables: 'Find similar capsules'<br/>Query: db.index.vector.queryNodes()"]
+    end
+
+    CAPSULE -.->|"indexed by<br/>embedding field"| VIDX
+
+    %% ═══════════════════════════════════════════════════════════════════
+    %% COMPOSITE QUERY EXAMPLE
+    %% ═══════════════════════════════════════════════════════════════════
+
+    subgraph QUERY["🔎 Example Composite Query"]
+        direction TB
+        Q1["1. Vector search for similar capsules"]
+        Q2["2. Filter by trust_level >= 40"]
+        Q3["3. Traverse DERIVED_FROM for lineage"]
+        Q4["4. Join with OWNS to get author"]
+        Q5["5. Return capsule + score + lineage + author"]
+        
+        Q1 --> Q2 --> Q3 --> Q4 --> Q5
+    end
+
+    %% ───────────────────────────────────────────────────────────────────
+    %% STYLING
+    %% ───────────────────────────────────────────────────────────────────
+
+    classDef central fill:#1e40af,stroke:#60a5fa,stroke-width:3px,color:#fff
+    classDef governance fill:#581c87,stroke:#c084fc,stroke-width:2px,color:#fff
+    classDef meta fill:#065f46,stroke:#34d399,stroke-width:2px,color:#fff
+    classDef session fill:#7f1d1d,stroke:#f87171,stroke-width:2px,color:#fff
+    classDef vector fill:#78350f,stroke:#fcd34d,stroke-width:2px,color:#fff
+    classDef query fill:#374151,stroke:#9ca3af,stroke-width:1px,color:#fff
+
+    class USER,CAPSULE,OVERLAY central
+    class PROPOSAL,VOTE governance
+    class TAG,AUDIT meta
+    class SESS,CONSENT session
+    class VIDX vector
+    class Q1,Q2,Q3,Q4,Q5 query

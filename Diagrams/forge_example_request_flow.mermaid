@@ -1,0 +1,145 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#1e293b', 'primaryTextColor': '#f1f5f9', 'primaryBorderColor': '#475569', 'lineColor': '#22d3ee', 'secondaryColor': '#0f172a', 'tertiaryColor': '#334155', 'background': '#020617', 'mainBkg': '#1e293b', 'nodeBorder': '#22d3ee', 'clusterBkg': '#0f172a', 'clusterBorder': '#475569', 'edgeLabelBackground':'#1e293b', 'noteTextColor': '#f1f5f9', 'noteBkgColor': '#334155', 'noteBorderColor': '#64748b'}}}%%
+
+sequenceDiagram
+    autonumber
+    
+    %% ═══════════════════════════════════════════════════════════════════
+    %% FORGE CASCADE: Example Request Lifecycle
+    %% 
+    %% EXAMPLE INPUT:
+    %% User "alice" (trust_flame: 75) asks:
+    %% "What were the key findings from last quarter's security audit?"
+    %% ═══════════════════════════════════════════════════════════════════
+
+    participant User as 👤 User: alice<br/>trust_flame: 75
+    participant API as 🌐 API Gateway
+    participant Pipeline as ⚙️ OptimizedPipeline
+    participant Neo4j as 🗄️ Neo4j<br/>Unified Store
+    participant LLM as 🧠 LLM Client
+    participant WASM as 📦 WebAssembly<br/>Overlay Runtime
+    participant Metrics as 📊 Metrics Sink
+
+    %% ═══════════════════════════════════════════════════════════════════
+    %% REQUEST ARRIVAL
+    %% ═══════════════════════════════════════════════════════════════════
+    
+    Note over User,Metrics: 📥 INCOMING REQUEST
+    
+    User->>API: POST /api/query<br/>{"query": "What were the key findings<br/>from last quarter's security audit?",<br/>"operation": "knowledge_retrieval"}
+    
+    API->>Pipeline: execute(user_id="alice", request={...})
+    
+    Note over Pipeline: 📋 CREATE PIPELINE CONTEXT<br/>correlation_id: "a1b2c3d4-..."<br/>started_at: 2026-01-05T14:32:01Z<br/>phase_timings: {}
+
+    %% ═══════════════════════════════════════════════════════════════════
+    %% PARALLEL GROUP 1: Phases 1, 2, 3
+    %% ═══════════════════════════════════════════════════════════════════
+    
+    Note over Pipeline,Metrics: ⚡ PARALLEL GROUP 1 (asyncio.gather)
+    
+    rect rgb(30, 64, 175)
+        Note over Pipeline,LLM: PHASE 1: Context Creation
+        
+        Pipeline->>LLM: embed("What were the key findings<br/>from last quarter's security audit?")
+        LLM-->>Pipeline: embedding: float[1536]<br/>[0.023, -0.847, 0.156, ...]
+        
+        par Parallel Sub-Operations
+            Pipeline->>Neo4j: CALL db.index.vector.queryNodes(<br/>'capsule_embeddings', 5, $embedding)<br/>WHERE trust_level >= 40
+            Neo4j-->>Pipeline: 3 relevant capsules found:<br/>• "Q3 Security Audit Report" (score: 0.94)<br/>• "Vulnerability Assessment 2025" (score: 0.87)<br/>• "Penetration Test Results" (score: 0.82)
+        and
+            Pipeline->>Neo4j: MATCH (u:User {id: "alice"})<br/>RETURN u.preferences, u.role
+            Neo4j-->>Pipeline: user_profile:<br/>{role: "security_analyst",<br/>preferences: {detail_level: "technical"}}
+        end
+    end
+    
+    rect rgb(124, 45, 18)
+        Note over Pipeline,WASM: PHASE 2: ML Analysis
+        
+        Pipeline->>WASM: execute("ml_intelligence", "analyze",<br/>{data: request_data})
+        
+        Note over WASM: 🔒 WebAssembly Sandbox<br/>fuel_limit: 5,000,000 cycles<br/>capabilities: [DATABASE_READ,<br/>EVENT_PUBLISH]
+        
+        WASM-->>Pipeline: ml_analysis:<br/>{complexity_score: 0.72,<br/>intent: "information_retrieval",<br/>entities: ["security audit", "Q3"],<br/>sentiment: "neutral"}
+    end
+    
+    rect rgb(88, 28, 135)
+        Note over Pipeline,WASM: PHASE 3: Security Assessment
+        
+        Pipeline->>Neo4j: MATCH (u:User {id: "alice"})<br/>RETURN u.trust_flame
+        Neo4j-->>Pipeline: trust_flame: 75
+        
+        Pipeline->>WASM: execute("security_validator", "validate",<br/>{user_id: "alice",<br/>operation: "knowledge_retrieval"})
+        
+        WASM-->>Pipeline: threat_check:<br/>{threat_detected: false,<br/>risk_score: 0.12,<br/>flags: []}
+        
+        Note over Pipeline: ✅ SECURITY APPROVED<br/>trust_level (75) >= required (40)<br/>No threats detected
+    end
+    
+    Note over Pipeline: parallel_group_1 completed<br/>elapsed: 287ms
+
+    %% ═══════════════════════════════════════════════════════════════════
+    %% PHASE 4: Optimization
+    %% ═══════════════════════════════════════════════════════════════════
+    
+    Note over Pipeline,Neo4j: 🎯 PHASE 4: Performance Optimization
+    
+    rect rgb(113, 63, 18)
+        Pipeline->>Pipeline: Check cache for query hash:<br/>hash("What were the key...")
+        Note over Pipeline: ❌ Cache MISS<br/>(first time this query)
+        
+        Pipeline->>Pipeline: Calculate LLM params from<br/>complexity_score: 0.72
+        
+        Note over Pipeline: optimization_hints:<br/>{use_cache: false,<br/>llm_params: {<br/>  temperature: 0.7,<br/>  max_tokens: 2000<br/>},<br/>priority: "normal"}
+    end
+    
+    Note over Pipeline: phase_4_optimization completed<br/>elapsed: 18ms
+
+    %% ═══════════════════════════════════════════════════════════════════
+    %% PHASE 5: Intelligence Generation (Main Bottleneck)
+    %% ═══════════════════════════════════════════════════════════════════
+    
+    Note over Pipeline,LLM: 🧠 PHASE 5: Intelligence Generation
+    
+    rect rgb(153, 27, 27)
+        Pipeline->>Pipeline: Build enriched prompt with context
+        
+        Note over Pipeline: CONSTRUCTED PROMPT:<br/>─────────────────────<br/>System: You are a knowledge assistant.<br/>The user is a security_analyst who<br/>prefers technical detail.<br/><br/>Context from knowledge base:<br/>─────────────────────<br/>Capsule 1 (trust: 85, v2.1.0):<br/>"Q3 Security Audit identified 3 critical<br/>vulnerabilities: CVE-2025-1234..."<br/><br/>Capsule 2 (trust: 78, v1.0.0):<br/>"Vulnerability assessment revealed<br/>outdated TLS configurations..."<br/><br/>Capsule 3 (trust: 72, v1.2.0):<br/>"Penetration testing found SQL<br/>injection in legacy endpoints..."<br/>─────────────────────<br/>User Query: What were the key findings<br/>from last quarter's security audit?
+        
+        Pipeline->>LLM: generate(prompt, temperature=0.7,<br/>max_tokens=2000)
+        
+        LLM-->>Pipeline: intelligence_output:<br/>{response: "Based on the Q3 Security<br/>Audit, three key findings emerged:<br/><br/>1. Critical Vulnerabilities (CVE-2025-1234):<br/>   Three critical issues were identified...<br/><br/>2. TLS Configuration Issues:<br/>   Several services were running outdated...<br/><br/>3. SQL Injection Vectors:<br/>   Legacy API endpoints contained...",<br/>model_used: "claude-3-opus",<br/>tokens_used: {prompt: 847, completion: 412}}
+    end
+    
+    Note over Pipeline: phase_5_intelligence completed<br/>elapsed: 1,142ms
+
+    %% ═══════════════════════════════════════════════════════════════════
+    %% PHASES 6 & 7: Fire-and-Forget Background Tasks
+    %% ═══════════════════════════════════════════════════════════════════
+    
+    Note over Pipeline,Metrics: 🔀 FIRE-AND-FORGET (asyncio.create_task)
+    
+    Pipeline-->>User: 📤 IMMEDIATE RESPONSE<br/>(don't wait for storage/metrics)
+    
+    rect rgb(55, 65, 81)
+        par Background Tasks (non-blocking)
+            Note over Pipeline,Metrics: PHASE 6: Metrics Recording
+            Pipeline->>Metrics: record({<br/>correlation_id: "a1b2c3d4-...",<br/>user_id: "alice",<br/>total_time: 1.447s,<br/>phase_timings: {<br/>  parallel_group_1: 0.287,<br/>  phase_4: 0.018,<br/>  phase_5: 1.142<br/>},<br/>ml_analysis: {...},<br/>tokens_used: 1259<br/>})
+            Metrics-->>Pipeline: ✓ recorded
+        and
+            Note over Pipeline,Neo4j: PHASE 7: Results Storage
+            Pipeline->>Neo4j: CREATE (a:AuditLog {<br/>id: randomUUID(),<br/>operation: "PIPELINE_EXECUTE",<br/>entity_type: "Interaction",<br/>entity_id: "a1b2c3d4-...",<br/>user_id: "alice",<br/>correlation_id: "a1b2c3d4-...",<br/>timestamp: datetime()<br/>})
+            Neo4j-->>Pipeline: ✓ audit log created
+            
+            Note over Pipeline: save_as_capsule: false<br/>(user didn't request persistence)
+        end
+    end
+
+    %% ═══════════════════════════════════════════════════════════════════
+    %% FINAL RESPONSE TO USER
+    %% ═══════════════════════════════════════════════════════════════════
+    
+    Note over User,Metrics: 📤 RESPONSE DELIVERED
+    
+    API-->>User: HTTP 200 OK<br/>{<br/>"result": {<br/>  "response": "Based on the Q3 Security<br/>  Audit, three key findings emerged...",<br/>  "model_used": "claude-3-opus",<br/>  "tokens_used": {...}<br/>},<br/>"correlation_id": "a1b2c3d4-...",<br/>"timing": {<br/>  "total_seconds": 1.447,<br/>  "phases": {<br/>    "parallel_group_1": 0.287,<br/>    "phase_4_optimization": 0.018,<br/>    "phase_5_intelligence": 1.142<br/>  }<br/>}<br/>}
+    
+    Note over User: 🎉 User receives answer in ~1.5s<br/>enriched with 3 relevant capsules<br/>from the knowledge graph,<br/>personalized for their role<br/>(security_analyst)

@@ -1,0 +1,135 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#1e293b', 'primaryTextColor': '#f1f5f9', 'primaryBorderColor': '#475569', 'lineColor': '#f43f5e', 'secondaryColor': '#0f172a', 'tertiaryColor': '#334155', 'background': '#020617', 'mainBkg': '#1e293b', 'actorBkg': '#1e293b', 'actorBorder': '#f43f5e', 'actorTextColor': '#f1f5f9', 'noteBkgColor': '#334155', 'noteBorderColor': '#64748b', 'noteTextColor': '#f1f5f9'}}}%%
+
+sequenceDiagram
+    autonumber
+    
+    %% ═══════════════════════════════════════════════════════════════════
+    %% FORGE CASCADE: EXAMPLE GRAPH CASCADE EVENT
+    %% 
+    %% Scenario: security_validator detects a SQL injection pattern
+    %% in an incoming request. This triggers a cascade that propagates
+    %% through the overlay graph via TRIGGERED relationships.
+    %% ═══════════════════════════════════════════════════════════════════
+
+    participant REQ as 📨 Incoming Request
+    participant SEC as 🔐 security_validator
+    participant NEO as 🗄️ Neo4j Graph
+    participant EVENT as ⚡ event_system
+    participant ML as 🤖 ml_intelligence
+    participant IMMUNE as 🦠 immune_system
+    participant GOV as 🗳️ symbolic_governance
+    participant PERF as ⚡ performance_optimizer
+    participant AUDIT as 📝 audit_logger
+
+    %% ═══════════════════════════════════════════════════════════════════
+    %% THREAT DETECTION
+    %% ═══════════════════════════════════════════════════════════════════
+
+    Note over REQ,AUDIT: 🚨 PHASE 1: Threat Detection
+
+    REQ->>SEC: validate({query: "'; DROP TABLE users; --"})
+    
+    SEC->>SEC: Pattern matching against<br/>known attack signatures
+    
+    Note over SEC: ⚠️ MATCH FOUND<br/>Pattern: SQL_INJECTION<br/>Confidence: 0.98<br/>Severity: HIGH
+
+    %% ═══════════════════════════════════════════════════════════════════
+    %% GRAPH UPDATE: Create threat record
+    %% ═══════════════════════════════════════════════════════════════════
+
+    Note over REQ,AUDIT: 📝 PHASE 2: Graph Update
+
+    SEC->>NEO: CREATE (t:ThreatRecord {<br/>  id: 'threat_001',<br/>  pattern: 'SQL_INJECTION',<br/>  severity: 'HIGH',<br/>  source_ip: '192.168.1.100',<br/>  timestamp: datetime()<br/>})
+    
+    NEO-->>SEC: ✓ ThreatRecord created
+
+    SEC->>NEO: MATCH (s:Overlay {name: 'security_validator'})<br/>CREATE (s)-[:DETECTED]->(t:ThreatRecord {id: 'threat_001'})
+    
+    NEO-->>SEC: ✓ Relationship created
+
+    %% ═══════════════════════════════════════════════════════════════════
+    %% CASCADE INITIATION
+    %% ═══════════════════════════════════════════════════════════════════
+
+    Note over REQ,AUDIT: 🌊 PHASE 3: Cascade Initiation
+
+    SEC->>EVENT: publish('security_threat', {<br/>  pattern: 'SQL_INJECTION',<br/>  severity: 'HIGH',<br/>  confidence: 0.98,<br/>  source_ip: '192.168.1.100',<br/>  correlation_id: 'abc123'<br/>})
+
+    Note over EVENT: Event system queries Neo4j<br/>for subscribed overlays
+
+    EVENT->>NEO: MATCH (o:Overlay)-[:SUBSCRIBES_TO]-><br/>(:EventType {name: 'security_threat'})<br/>WHERE o.state = 'ACTIVE'<br/>RETURN o.name
+
+    NEO-->>EVENT: ['ml_intelligence', 'immune_system',<br/>'symbolic_governance', 'audit_logger']
+
+    %% ═══════════════════════════════════════════════════════════════════
+    %% CASCADE PROPAGATION (Parallel fan-out)
+    %% ═══════════════════════════════════════════════════════════════════
+
+    Note over REQ,AUDIT: ⚡ PHASE 4: Cascade Propagation (Parallel)
+
+    par Cascade to ML Intelligence
+        EVENT->>ML: deliver('security_threat', payload)
+        
+        ML->>ML: Update anomaly detection model<br/>with new attack pattern
+        
+        ML->>NEO: MATCH (m:Overlay {name: 'ml_intelligence'})<br/>SET m.last_model_update = datetime()
+        
+        ML->>NEO: CREATE (s:Overlay {name: 'security_validator'})<br/>-[:TRIGGERED {<br/>  event_type: 'security_threat',<br/>  timestamp: datetime()<br/>}]->(m:Overlay {name: 'ml_intelligence'})
+        
+        Note over ML: 🧠 Model updated with<br/>SQL_INJECTION pattern
+        
+    and Cascade to Immune System
+        EVENT->>IMMUNE: deliver('security_threat', payload)
+        
+        IMMUNE->>IMMUNE: Evaluate threat severity<br/>Check if quarantine needed
+        
+        Note over IMMUNE: Severity: HIGH<br/>Action: Increase monitoring<br/>No quarantine (external threat)
+        
+        IMMUNE->>NEO: CREATE (s)-[:TRIGGERED]->(i:Overlay {name: 'immune_system'})
+        
+    and Cascade to Governance
+        EVENT->>GOV: deliver('security_threat', payload)
+        
+        GOV->>GOV: Check if auto-proposal<br/>threshold met
+        
+        Note over GOV: Threshold: 3 similar threats/hour<br/>Current: 1<br/>Action: Log, no proposal yet
+        
+        GOV->>NEO: CREATE (s)-[:TRIGGERED]->(g:Overlay {name: 'symbolic_governance'})
+        
+    and Cascade to Audit Logger
+        EVENT->>AUDIT: deliver('security_threat', payload)
+        
+        AUDIT->>NEO: CREATE (a:AuditLog {<br/>  id: randomUUID(),<br/>  action: 'SECURITY_THREAT_DETECTED',<br/>  actor_type: 'overlay',<br/>  actor_id: 'security_validator',<br/>  resource_type: 'ThreatRecord',<br/>  resource_id: 'threat_001',<br/>  changes: $payload,<br/>  correlation_id: 'abc123',<br/>  timestamp: datetime()<br/>})
+        
+        Note over AUDIT: 📋 Immutable audit<br/>record created
+    end
+
+    %% ═══════════════════════════════════════════════════════════════════
+    %% SECONDARY CASCADE (ML triggers Performance)
+    %% ═══════════════════════════════════════════════════════════════════
+
+    Note over REQ,AUDIT: 🔄 PHASE 5: Secondary Cascade
+
+    ML->>EVENT: publish('model_updated', {<br/>  overlay: 'ml_intelligence',<br/>  update_type: 'threat_pattern',<br/>  pattern: 'SQL_INJECTION'<br/>})
+
+    EVENT->>PERF: deliver('model_updated', payload)
+
+    PERF->>PERF: Adjust resource allocation<br/>Increase security validation capacity
+
+    PERF->>NEO: CREATE (m:Overlay {name: 'ml_intelligence'})<br/>-[:TRIGGERED {<br/>  event_type: 'model_updated'<br/>}]->(p:Overlay {name: 'performance_optimizer'})
+
+    Note over PERF: ⚡ Allocated 20% more<br/>CPU to security_validator
+
+    %% ═══════════════════════════════════════════════════════════════════
+    %% FINAL GRAPH STATE
+    %% ═══════════════════════════════════════════════════════════════════
+
+    Note over REQ,AUDIT: 📊 FINAL: Graph State After Cascade
+
+    Note over NEO: NEW NODES CREATED:<br/>• ThreatRecord (threat_001)<br/>• AuditLog entry<br/><br/>NEW RELATIONSHIPS:<br/>• security_validator -[:DETECTED]-> ThreatRecord<br/>• security_validator -[:TRIGGERED]-> ml_intelligence<br/>• security_validator -[:TRIGGERED]-> immune_system<br/>• security_validator -[:TRIGGERED]-> symbolic_governance<br/>• ml_intelligence -[:TRIGGERED]-> performance_optimizer<br/><br/>UPDATED PROPERTIES:<br/>• ml_intelligence.last_model_update<br/>• performance_optimizer.resource_allocation
+
+    %% ═══════════════════════════════════════════════════════════════════
+    %% QUERY: Trace the cascade
+    %% ═══════════════════════════════════════════════════════════════════
+
+    Note over NEO: 🔍 QUERY TO TRACE CASCADE:<br/><br/>MATCH path = (s:Overlay {name: 'security_validator'})<br/>-[:TRIGGERED*1..5]->(affected:Overlay)<br/>WHERE affected.state = 'ACTIVE'<br/>RETURN DISTINCT affected.name,<br/>       length(path) AS hop_distance<br/>ORDER BY hop_distance<br/><br/>RESULT:<br/>ml_intelligence (1 hop)<br/>immune_system (1 hop)<br/>symbolic_governance (1 hop)<br/>performance_optimizer (2 hops)
