@@ -285,6 +285,71 @@ async def get_proposal(
     return ProposalResponse.from_proposal(proposal)
 
 
+@router.post("/proposals/{proposal_id}/submit", response_model=ProposalResponse)
+async def submit_proposal_for_voting(
+    proposal_id: str,
+    user: ActiveUserDep,
+    governance_repo: GovernanceRepoDep,
+    event_system: EventSystemDep,
+    audit_repo: AuditRepoDep,
+    correlation_id: CorrelationIdDep,
+) -> ProposalResponse:
+    """
+    Submit a draft proposal to start the voting period.
+
+    Only the proposer can submit their proposal. This transitions the
+    proposal from DRAFT to VOTING status and sets the voting period.
+    """
+    proposal = await governance_repo.get_proposal(proposal_id)
+
+    if not proposal:
+        raise HTTPException(status_code=404, detail="Proposal not found")
+
+    if proposal.proposer_id != user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the proposer can submit this proposal",
+        )
+
+    # Check current status
+    status_str = proposal.status.value if hasattr(proposal.status, 'value') else str(proposal.status)
+    if status_str.upper() != 'DRAFT':
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Proposal is already in {status_str} status, cannot submit",
+        )
+
+    # Start voting
+    updated = await governance_repo.start_voting(proposal_id)
+
+    if not updated:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to start voting period",
+        )
+
+    # Emit event
+    await event_system.emit(
+        event_type=EventType.GOVERNANCE_ACTION,
+        payload={
+            "action": "proposal_submitted",
+            "proposal_id": proposal_id,
+            "proposer_id": user.id,
+            "voting_ends_at": updated.voting_ends_at.isoformat() if updated.voting_ends_at else None,
+        },
+        source="api",
+    )
+
+    await audit_repo.log_governance_action(
+        actor_id=user.id,
+        proposal_id=proposal_id,
+        action="proposal_submitted",
+        details={"new_status": "voting"},
+    )
+
+    return ProposalResponse.from_proposal(updated)
+
+
 @router.delete("/proposals/{proposal_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def withdraw_proposal(
     proposal_id: str,
@@ -355,11 +420,17 @@ async def cast_vote(
             detail="Proposal is not open for voting",
         )
 
-    if proposal.voting_ends_at and datetime.now(timezone.utc) > proposal.voting_ends_at:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Voting period has ended",
-        )
+    # Check if voting period has ended (timezone-safe)
+    if proposal.voting_ends_at:
+        ends_at = proposal.voting_ends_at
+        # Handle naive datetime from database
+        if ends_at.tzinfo is None:
+            ends_at = ends_at.replace(tzinfo=timezone.utc)
+        if datetime.now(timezone.utc) > ends_at:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Voting period has ended",
+            )
 
     # Check if already voted
     existing = await governance_repo.get_user_vote(proposal_id, user.id)
@@ -801,6 +872,98 @@ async def get_ghost_council_stats(
 
     ghost_council = get_ghost_council_service()
     return ghost_council.get_stats()
+
+
+# =============================================================================
+# Governance Metrics Endpoint
+# =============================================================================
+
+
+class GovernanceMetricsResponse(BaseModel):
+    """Governance system metrics."""
+    timestamp: str
+    total_proposals: int
+    active_proposals: int
+    passed_proposals: int
+    rejected_proposals: int
+    total_votes: int
+    unique_voters: int
+    average_participation: float
+    average_pass_rate: float
+    proposals_by_type: dict[str, int]
+    proposals_by_status: dict[str, int]
+
+
+@router.get("/metrics", response_model=GovernanceMetricsResponse)
+async def get_governance_metrics(
+    user: ActiveUserDep,
+    governance_repo: GovernanceRepoDep,
+) -> GovernanceMetricsResponse:
+    """
+    Get governance system metrics.
+
+    Returns statistics about proposals, voting participation,
+    and governance health.
+    """
+    # Get all proposals for metrics
+    proposals, total = await governance_repo.list_proposals(
+        offset=0,
+        limit=1000,  # Get all for metrics
+        filters={},
+    )
+
+    # Count by status
+    status_counts = {}
+    type_counts = {}
+    total_votes = 0
+    unique_voters = set()
+    passed = 0
+    rejected = 0
+    active = 0
+
+    for p in proposals:
+        # Count by status
+        status_str = p.status.value if hasattr(p.status, 'value') else str(p.status)
+        status_counts[status_str] = status_counts.get(status_str, 0) + 1
+
+        # Count by type
+        type_str = p.type.value if hasattr(p.type, 'value') else str(p.type)
+        type_counts[type_str] = type_counts.get(type_str, 0) + 1
+
+        # Track pass/reject/active
+        if status_str.upper() == 'PASSED':
+            passed += 1
+        elif status_str.upper() == 'REJECTED':
+            rejected += 1
+        elif status_str.upper() in ('ACTIVE', 'VOTING', 'PENDING'):
+            active += 1
+
+        # Aggregate vote counts
+        total_votes += p.votes_for + p.votes_against + p.votes_abstain
+
+        # Get votes for unique voter tracking
+        votes = await governance_repo.get_proposal_votes(p.id)
+        for v in votes:
+            unique_voters.add(v.voter_id)
+
+    # Calculate averages
+    decided = passed + rejected
+    avg_pass_rate = passed / decided if decided > 0 else 0.0
+    avg_participation = len(unique_voters) / max(1, total) if total > 0 else 0.0
+
+    return GovernanceMetricsResponse(
+        timestamp=datetime.now(timezone.utc).isoformat(),
+        total_proposals=total,
+        active_proposals=active,
+        passed_proposals=passed,
+        rejected_proposals=rejected,
+        total_votes=total_votes,
+        unique_voters=len(unique_voters),
+        average_participation=round(avg_participation, 3),
+        average_pass_rate=round(avg_pass_rate, 3),
+        proposals_by_type=type_counts,
+        proposals_by_status=status_counts,
+    )
 
 
 # =============================================================================

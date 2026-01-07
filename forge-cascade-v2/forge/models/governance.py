@@ -140,13 +140,21 @@ class Proposal(ProposalBase, TimestampMixin):
     @property
     def is_voting_open(self) -> bool:
         """Check if voting is currently open."""
+        from datetime import timezone
         if self.status != ProposalStatus.VOTING:
             return False
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
+        # Make comparison timezone-safe
+        starts = self.voting_starts_at
+        ends = self.voting_ends_at
+        if starts and starts.tzinfo is None:
+            starts = starts.replace(tzinfo=timezone.utc)
+        if ends and ends.tzinfo is None:
+            ends = ends.replace(tzinfo=timezone.utc)
         return (
-            self.voting_starts_at is not None
-            and self.voting_ends_at is not None
-            and self.voting_starts_at <= now <= self.voting_ends_at
+            starts is not None
+            and ends is not None
+            and starts <= now <= ends
         )
 
 

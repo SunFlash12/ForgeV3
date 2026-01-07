@@ -123,7 +123,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
                 "id": proposal_id,
                 "title": data.title,
                 "description": data.description,
-                "type": data.type.value,
+                "type": data.type.value if hasattr(data.type, "value") else str(data.type),
                 "action": action_json,
                 "proposer_id": proposer_id,
                 "status": ProposalStatus.DRAFT.value,
@@ -139,7 +139,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
             "Created proposal",
             proposal_id=proposal_id,
             title=data.title,
-            type=data.type.value,
+            type=data.type.value if hasattr(data.type, "value") else str(data.type),
             proposer_id=proposer_id,
         )
         
@@ -182,7 +182,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
         
         query = f"""
         MATCH (p:Proposal {{id: $id}})
-        WHERE p.status = 'DRAFT'
+        WHERE p.status = 'draft'
         SET {', '.join(set_parts)}
         RETURN p {{.*}} AS entity
         """
@@ -207,9 +207,9 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
         
         query = """
         MATCH (p:Proposal {id: $id})
-        WHERE p.status = 'DRAFT'
+        WHERE p.status = 'draft'
         SET
-            p.status = 'VOTING',
+            p.status = 'voting',
             p.voting_starts_at = $starts_at,
             p.voting_ends_at = $ends_at,
             p.updated_at = $now
@@ -305,9 +305,9 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
         
         query = """
         MATCH (p:Proposal {id: $id})
-        WHERE p.status = 'PASSED'
+        WHERE p.status = 'passed'
         SET
-            p.status = 'EXECUTED',
+            p.status = 'executed',
             p.executed_at = $now,
             p.updated_at = $now
         RETURN p {.*} AS entity
@@ -335,9 +335,9 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
         """
         query = """
         MATCH (p:Proposal {id: $id})
-        WHERE p.status IN ['DRAFT', 'VOTING']
+        WHERE p.status IN ['draft', 'voting']
         SET
-            p.status = 'CANCELLED',
+            p.status = 'cancelled',
             p.cancellation_reason = $reason,
             p.updated_at = $now
         RETURN p {.*} AS entity
@@ -395,7 +395,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
         # Create vote and update proposal tallies atomically
         query = """
         MATCH (p:Proposal {id: $proposal_id})
-        WHERE p.status = 'VOTING'
+        WHERE p.status = 'voting'
         CREATE (v:Vote {
             id: $vote_id,
             proposal_id: $proposal_id,
@@ -727,7 +727,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
         
         query = """
         MATCH (p:Proposal)
-        WHERE p.status = 'VOTING'
+        WHERE p.status = 'voting'
         AND p.voting_ends_at > $now
         RETURN p {.*} AS entity
         ORDER BY p.voting_ends_at ASC
@@ -777,7 +777,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
         
         query = """
         MATCH (p:Proposal)
-        WHERE p.status = 'VOTING'
+        WHERE p.status = 'voting'
         AND p.voting_ends_at <= $deadline
         AND p.voting_ends_at > $now
         RETURN p {.*} AS entity
@@ -911,7 +911,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
         # might both pass the existing vote check
         query = """
         MATCH (p:Proposal {id: $proposal_id})
-        WHERE p.status IN ['ACTIVE', 'VOTING']
+        WHERE p.status IN ['active', 'voting']
         MERGE (v:Vote {proposal_id: $proposal_id, voter_id: $voter_id})
         ON CREATE SET
             v.id = $vote_id,
@@ -1070,9 +1070,9 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
         MATCH (p:Proposal)
         WITH
             count(p) AS total,
-            count(CASE WHEN p.status = 'VOTING' THEN 1 END) AS active,
-            count(CASE WHEN p.status IN ['PASSED', 'EXECUTED'] THEN 1 END) AS passed,
-            count(CASE WHEN p.status = 'REJECTED' THEN 1 END) AS rejected
+            count(CASE WHEN p.status = 'voting' THEN 1 END) AS active,
+            count(CASE WHEN p.status IN ['passed', 'executed'] THEN 1 END) AS passed,
+            count(CASE WHEN p.status = 'rejected' THEN 1 END) AS rejected
         OPTIONAL MATCH (v:Vote)
         WITH total, active, passed, rejected,
             count(v) AS total_votes,

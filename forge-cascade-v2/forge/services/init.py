@@ -109,11 +109,18 @@ def init_all_services(
     )
     logger.info("search_service_ready")
 
-    # Initialize Ghost Council service
-    ghost_council = init_ghost_council_service()
+    # Initialize Ghost Council service with config from settings
+    from forge.services.ghost_council import GhostCouncilConfig
+    ghost_council_config = GhostCouncilConfig(
+        profile=settings.ghost_council_profile,
+        cache_enabled=settings.ghost_council_cache_enabled,
+        cache_ttl_days=settings.ghost_council_cache_ttl_days,
+    )
+    ghost_council = init_ghost_council_service(config=ghost_council_config)
     logger.info(
         "ghost_council_service_ready",
         members=len(ghost_council.members),
+        profile=settings.ghost_council_profile,
     )
 
     # Set up serious issue detection if event_bus is available

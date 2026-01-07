@@ -849,7 +849,7 @@ class AuditRepository:
             action=node["action"],
             resource_type=node["resource_type"],
             resource_id=node.get("resource_id"),
-            details=details,
+            details=details or {},
             old_value=old_value,
             new_value=new_value,
             ip_address=node.get("ip_address"),
@@ -859,12 +859,6 @@ class AuditRepository:
             timestamp=timestamp
         )
 
-
-# Convenience factory
-def get_audit_repository(db: Neo4jClient) -> AuditRepository:
-    """Get audit repository instance."""
-    return AuditRepository(db)
-
     async def list(
         self,
         offset: int = 0,
@@ -873,33 +867,33 @@ def get_audit_repository(db: Neo4jClient) -> AuditRepository:
     ) -> tuple[list[AuditEvent], int]:
         """
         List audit events with filtering and pagination.
-        
+
         Args:
             offset: Number of records to skip
             limit: Maximum records to return
             filters: Optional filters (action, entity_type, user_id)
-            
+
         Returns:
             Tuple of (events list, total count)
         """
         filters = filters or {}
         conditions = []
         params = {"offset": offset, "limit": limit}
-        
+
         if filters.get("action"):
             conditions.append("a.action CONTAINS $action")
             params["action"] = filters["action"]
-        
+
         if filters.get("entity_type"):
             conditions.append("a.resource_type = $entity_type")
             params["entity_type"] = filters["entity_type"]
-        
+
         if filters.get("user_id"):
             conditions.append("a.actor_id = $user_id")
             params["user_id"] = filters["user_id"]
-        
+
         where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
-        
+
         # Get count
         count_query = f"""
         MATCH (a:AuditLog)
@@ -908,7 +902,7 @@ def get_audit_repository(db: Neo4jClient) -> AuditRepository:
         """
         count_result = await self.db.execute_single(count_query, params)
         total = count_result["total"] if count_result else 0
-        
+
         # Get events
         query = f"""
         MATCH (a:AuditLog)
@@ -918,8 +912,14 @@ def get_audit_repository(db: Neo4jClient) -> AuditRepository:
         SKIP $offset
         LIMIT $limit
         """
-        
+
         records = await self.db.execute(query, params)
         events = [self._to_audit_event(r["a"]) for r in records]
-        
+
         return events, total
+
+
+# Convenience factory
+def get_audit_repository(db: Neo4jClient) -> AuditRepository:
+    """Get audit repository instance."""
+    return AuditRepository(db)

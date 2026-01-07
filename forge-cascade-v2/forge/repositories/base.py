@@ -87,8 +87,9 @@ class BaseRepository(ABC, Generic[T, CreateT, UpdateT]):
         return str(uuid4())
 
     def _now(self) -> datetime:
-        """Get current UTC timestamp."""
-        return datetime.utcnow()
+        """Get current UTC timestamp (timezone-aware)."""
+        from datetime import timezone
+        return datetime.now(timezone.utc)
 
     def _to_model(self, record: dict[str, Any]) -> T | None:
         """

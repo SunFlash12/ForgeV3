@@ -915,9 +915,9 @@ async def clear_caches(
 )
 async def get_system_info() -> dict[str, Any]:
     """Get basic system information."""
-    
+
     import sys
-    
+
     return {
         "name": "Forge Knowledge Cascade",
         "version": "0.1.0",
@@ -925,6 +925,81 @@ async def get_system_info() -> dict[str, Any]:
         "api_version": "v1",
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
+
+
+# ============================================================================
+# System Status Endpoint (simplified status view)
+# ============================================================================
+
+
+class SystemStatusResponse(BaseModel):
+    """Simplified system status response."""
+
+    status: str = Field(description="Overall status: operational, degraded, down")
+    version: str = Field(default="0.1.0")
+    uptime_seconds: float
+    timestamp: datetime
+    services: dict[str, str] = Field(
+        default_factory=dict,
+        description="Status of each service: operational, degraded, down"
+    )
+
+
+@router.get(
+    "/status",
+    response_model=SystemStatusResponse,
+    summary="Get system status",
+    description="Returns simplified system status for monitoring"
+)
+async def get_system_status(
+    db_client: DbClientDep,
+    event_system: EventSystemDep,
+    circuit_registry: CircuitRegistryDep,
+) -> SystemStatusResponse:
+    """Get simplified system status."""
+
+    # Calculate uptime
+    uptime = (
+        datetime.now(timezone.utc) - event_system._start_time
+    ).total_seconds() if hasattr(event_system, "_start_time") else 0.0
+
+    services = {}
+
+    # Database status
+    try:
+        db_ok = await db_client.verify_connection()
+        services["database"] = "operational" if db_ok else "down"
+    except Exception:
+        services["database"] = "down"
+
+    # Event system status
+    event_running = event_system._running if hasattr(event_system, "_running") else True
+    services["event_system"] = "operational" if event_running else "degraded"
+
+    # Circuit breakers status
+    open_breakers = sum(
+        1 for cb in circuit_registry._breakers.values()
+        if cb.state.name == "OPEN"
+    ) if hasattr(circuit_registry, "_breakers") else 0
+    services["circuit_breakers"] = "degraded" if open_breakers > 0 else "operational"
+
+    # API is operational if we got here
+    services["api"] = "operational"
+
+    # Determine overall status
+    if services["database"] == "down":
+        overall = "down"
+    elif any(s == "degraded" for s in services.values()):
+        overall = "degraded"
+    else:
+        overall = "operational"
+
+    return SystemStatusResponse(
+        status=overall,
+        uptime_seconds=uptime,
+        timestamp=datetime.now(timezone.utc),
+        services=services,
+    )
 
 
 # ============================================================================
@@ -995,11 +1070,11 @@ async def get_audit_log(
         items=[
             AuditLogEntry(
                 id=e.id,
-                action=e.operation,  # Fixed: was e.action
-                entity_type=e.entity_type,
-                entity_id=e.entity_id,
-                user_id=e.actor_id,  # Fixed: was e.user_id
-                details=e.changes or {},  # Fixed: was e.details
+                action=e.action,
+                entity_type=e.resource_type,
+                entity_id=e.resource_id or "",
+                user_id=e.actor_id,
+                details=e.details or {},
                 correlation_id=e.correlation_id,
                 timestamp=e.timestamp,
             )
@@ -1034,13 +1109,66 @@ async def get_audit_trail(
     return [
         AuditLogEntry(
             id=e.id,
-            action=e.operation,
-            entity_type=e.entity_type,
-            entity_id=e.entity_id,
+            action=e.action,
+            entity_type=e.resource_type,
+            entity_id=e.resource_id or "",
             user_id=e.actor_id,
-            details=e.changes or {},  # Fixed: was e.details
+            details=e.details or {},
             correlation_id=e.correlation_id,
             timestamp=e.timestamp,
         )
         for e in entries
     ]
+
+
+# ============================================================================
+# Alias Endpoints for convenience
+# ============================================================================
+
+
+@router.get(
+    "/audit",
+    response_model=AuditLogResponse,
+    summary="Get audit log (alias)",
+    description="Alias for /audit-log endpoint"
+)
+async def get_audit_alias(
+    user: AdminUserDep,
+    db: DbClientDep,
+    action: str | None = Query(None, description="Filter by action type"),
+    entity_type: str | None = Query(None, description="Filter by entity type"),
+    user_id: str | None = Query(None, description="Filter by user ID"),
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+) -> AuditLogResponse:
+    """Alias for /audit-log - Get audit log entries."""
+    return await get_audit_log(
+        user=user,
+        db=db,
+        action=action,
+        entity_type=entity_type,
+        user_id=user_id,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.get(
+    "/events",
+    response_model=EventListResponse,
+    summary="Get recent events (alias)",
+    description="Alias for /events/recent endpoint"
+)
+async def get_events_alias(
+    _user: TrustedUserDep,
+    event_system: EventSystemDep,
+    limit: int = Query(default=50, ge=1, le=500),
+    event_type: Optional[str] = Query(default=None, description="Filter by event type"),
+) -> EventListResponse:
+    """Alias for /events/recent - Get recently emitted events."""
+    return await get_recent_events(
+        _user=_user,
+        event_system=event_system,
+        limit=limit,
+        event_type=event_type,
+    )

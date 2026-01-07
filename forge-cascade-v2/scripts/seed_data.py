@@ -81,24 +81,28 @@ async def seed_users(client: Neo4jClient) -> dict[str, str]:
             "email": "admin@forge.example.com",
             "display_name": "System Administrator",
             "trust_level": TrustLevel.CORE,
+            "role": "admin",  # Admin role for administrative access
         },
         {
             "username": "oracle",
             "email": "oracle@forge.example.com",
             "display_name": "Oracle (Ghost Council)",
             "trust_level": TrustLevel.TRUSTED,
+            "role": "user",
         },
         {
             "username": "developer",
             "email": "dev@forge.example.com",
             "display_name": "Test Developer",
             "trust_level": TrustLevel.STANDARD,
+            "role": "user",
         },
         {
             "username": "analyst",
             "email": "analyst@forge.example.com",
             "display_name": "Data Analyst",
             "trust_level": TrustLevel.SANDBOX,
+            "role": "user",
         },
     ]
 
@@ -121,12 +125,14 @@ async def seed_users(client: Neo4jClient) -> dict[str, str]:
             u.password_hash = $password_hash,
             u.display_name = $display_name,
             u.trust_flame = $trust_flame,
+            u.role = $role,
             u.is_active = true,
             u.created_at = datetime(),
             u.updated_at = datetime()
         ON MATCH SET
             u.trust_flame = $trust_flame,
             u.display_name = $display_name,
+            u.role = $role,
             u.updated_at = datetime()
         RETURN u.id as id
         """
@@ -140,6 +146,7 @@ async def seed_users(client: Neo4jClient) -> dict[str, str]:
                 "password_hash": password_hash,
                 "display_name": user["display_name"],
                 "trust_flame": user["trust_level"].value,
+                "role": user.get("role", "user"),
             }
         )
         
