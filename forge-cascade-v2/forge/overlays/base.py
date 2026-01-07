@@ -162,6 +162,7 @@ class BaseOverlay(ABC):
         self.last_error: Optional[str] = None
         self._initialized = False
         self._logger = logger.bind(overlay_name=self.NAME, overlay_id=self.id)
+        self.config: dict[str, Any] = {}  # Runtime configuration
     
     # =========================================================================
     # Lifecycle Methods

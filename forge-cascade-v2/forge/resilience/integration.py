@@ -245,7 +245,14 @@ async def cache_search_results(
     key = config.cache.search_key_pattern.format(query_hash=query_hash)
 
     # Extract capsule IDs for invalidation tracking
-    capsule_ids = [r.get('id') for r in results if r.get('id')]
+    # Handle both dict results and string IDs
+    capsule_ids = []
+    for r in results:
+        if isinstance(r, dict):
+            if r.get('id'):
+                capsule_ids.append(r.get('id'))
+        elif isinstance(r, str):
+            capsule_ids.append(r)
 
     return await state.cache.set(
         key,
@@ -487,25 +494,25 @@ async def cache_governance_metrics(data: dict, ttl: int = 60) -> bool:
 def record_proposal_created(proposal_type: str) -> None:
     """Record proposal creation metric."""
     metrics = get_metrics()
-    metrics.increment("governance_proposals_created", {"type": proposal_type})
+    metrics.increment("governance_proposals_created", labels={"type": proposal_type})
 
 
 def record_vote_cast(vote_choice: str) -> None:
     """Record vote cast metric."""
     metrics = get_metrics()
-    metrics.increment("governance_votes_cast", {"choice": vote_choice})
+    metrics.increment("governance_votes_cast", labels={"choice": vote_choice})
 
 
 def record_proposal_finalized(status: str) -> None:
     """Record proposal finalization metric."""
     metrics = get_metrics()
-    metrics.increment("governance_proposals_finalized", {"status": status})
+    metrics.increment("governance_proposals_finalized", labels={"status": status})
 
 
 def record_ghost_council_query(latency: float, use_ai: bool) -> None:
     """Record Ghost Council query metric."""
     metrics = get_metrics()
-    metrics.observe("governance_ghost_council_latency", latency, {"ai_enabled": str(use_ai)})
+    metrics.record_latency("governance_ghost_council_latency", latency, labels={"ai_enabled": str(use_ai)})
 
 
 # =============================================================================
@@ -515,31 +522,31 @@ def record_ghost_council_query(latency: float, use_ai: bool) -> None:
 def record_login_attempt(success: bool, reason: str = "") -> None:
     """Record login attempt metric."""
     metrics = get_metrics()
-    metrics.increment("auth_login_attempts", {"success": str(success).lower(), "reason": reason})
+    metrics.increment("auth_login_attempts", labels={"success": str(success).lower(), "reason": reason})
 
 
 def record_registration() -> None:
     """Record new user registration metric."""
     metrics = get_metrics()
-    metrics.increment("auth_registrations", {})
+    metrics.increment("auth_registrations", labels={})
 
 
 def record_token_refresh(success: bool) -> None:
     """Record token refresh metric."""
     metrics = get_metrics()
-    metrics.increment("auth_token_refreshes", {"success": str(success).lower()})
+    metrics.increment("auth_token_refreshes", labels={"success": str(success).lower()})
 
 
 def record_logout() -> None:
     """Record logout metric."""
     metrics = get_metrics()
-    metrics.increment("auth_logouts", {})
+    metrics.increment("auth_logouts", labels={})
 
 
 def record_password_change() -> None:
     """Record password change metric."""
     metrics = get_metrics()
-    metrics.increment("auth_password_changes", {})
+    metrics.increment("auth_password_changes", labels={})
 
 
 # =============================================================================
@@ -549,43 +556,43 @@ def record_password_change() -> None:
 def record_overlay_activated(overlay_id: str) -> None:
     """Record overlay activation metric."""
     metrics = get_metrics()
-    metrics.increment("overlay_activations", {"overlay_id": overlay_id})
+    metrics.increment("overlay_activations", labels={"overlay_id": overlay_id})
 
 
 def record_overlay_deactivated(overlay_id: str) -> None:
     """Record overlay deactivation metric."""
     metrics = get_metrics()
-    metrics.increment("overlay_deactivations", {"overlay_id": overlay_id})
+    metrics.increment("overlay_deactivations", labels={"overlay_id": overlay_id})
 
 
 def record_overlay_config_updated(overlay_id: str) -> None:
     """Record overlay configuration update metric."""
     metrics = get_metrics()
-    metrics.increment("overlay_config_updates", {"overlay_id": overlay_id})
+    metrics.increment("overlay_config_updates", labels={"overlay_id": overlay_id})
 
 
 def record_canary_started(overlay_id: str) -> None:
     """Record canary deployment start metric."""
     metrics = get_metrics()
-    metrics.increment("canary_deployments_started", {"overlay_id": overlay_id})
+    metrics.increment("canary_deployments_started", labels={"overlay_id": overlay_id})
 
 
 def record_canary_advanced(overlay_id: str, stage: int) -> None:
     """Record canary deployment advancement metric."""
     metrics = get_metrics()
-    metrics.increment("canary_deployments_advanced", {"overlay_id": overlay_id, "stage": str(stage)})
+    metrics.increment("canary_deployments_advanced", labels={"overlay_id": overlay_id, "stage": str(stage)})
 
 
 def record_canary_rolled_back(overlay_id: str) -> None:
     """Record canary deployment rollback metric."""
     metrics = get_metrics()
-    metrics.increment("canary_deployments_rolled_back", {"overlay_id": overlay_id})
+    metrics.increment("canary_deployments_rolled_back", labels={"overlay_id": overlay_id})
 
 
 def record_overlays_reloaded(count: int) -> None:
     """Record overlays reload metric."""
     metrics = get_metrics()
-    metrics.increment("overlays_reloaded", {"count": str(count)})
+    metrics.increment("overlays_reloaded", labels={"count": str(count)})
 
 
 # =============================================================================
@@ -634,37 +641,37 @@ async def invalidate_overlay_cache() -> int:
 def record_health_check_access() -> None:
     """Record health check access metric."""
     metrics = get_metrics()
-    metrics.increment("system_health_checks", {})
+    metrics.increment("system_health_checks", labels={})
 
 
 def record_circuit_breaker_reset(circuit_name: str) -> None:
     """Record circuit breaker reset metric."""
     metrics = get_metrics()
-    metrics.increment("circuit_breaker_resets", {"circuit_name": circuit_name})
+    metrics.increment("circuit_breaker_resets", labels={"circuit_name": circuit_name})
 
 
 def record_anomaly_acknowledged(anomaly_id: str, severity: str) -> None:
     """Record anomaly acknowledgment metric."""
     metrics = get_metrics()
-    metrics.increment("anomalies_acknowledged", {"severity": severity})
+    metrics.increment("anomalies_acknowledged", labels={"severity": severity})
 
 
 def record_anomaly_resolved(anomaly_id: str, severity: str) -> None:
     """Record anomaly resolution metric."""
     metrics = get_metrics()
-    metrics.increment("anomalies_resolved", {"severity": severity})
+    metrics.increment("anomalies_resolved", labels={"severity": severity})
 
 
 def record_maintenance_mode_changed(enabled: bool) -> None:
     """Record maintenance mode change metric."""
     metrics = get_metrics()
-    metrics.increment("maintenance_mode_changes", {"enabled": str(enabled).lower()})
+    metrics.increment("maintenance_mode_changes", labels={"enabled": str(enabled).lower()})
 
 
 def record_cache_cleared(caches: list[str]) -> None:
     """Record cache clear metric."""
     metrics = get_metrics()
-    metrics.increment("system_caches_cleared", {"count": str(len(caches))})
+    metrics.increment("system_caches_cleared", labels={"count": str(len(caches))})
 
 
 # =============================================================================
@@ -724,26 +731,26 @@ async def cache_health_status(health_data: dict, ttl: int = 15) -> bool:
 def record_cascade_triggered(source_overlay: str, insight_type: str) -> None:
     """Record cascade trigger metric."""
     metrics = get_metrics()
-    metrics.increment("cascade_triggered", {"source_overlay": source_overlay, "insight_type": insight_type})
+    metrics.increment("cascade_triggered", labels={"source_overlay": source_overlay, "insight_type": insight_type})
 
 
 def record_cascade_propagated(cascade_id: str, target_overlay: str, hop_count: int) -> None:
     """Record cascade propagation metric."""
     metrics = get_metrics()
-    metrics.increment("cascade_propagated", {"target_overlay": target_overlay, "hop_count": str(hop_count)})
+    metrics.increment("cascade_propagated", labels={"target_overlay": target_overlay, "hop_count": str(hop_count)})
 
 
 def record_cascade_completed(cascade_id: str, total_hops: int, overlays_affected: int) -> None:
     """Record cascade completion metric."""
     metrics = get_metrics()
-    metrics.increment("cascade_completed", {"total_hops": str(total_hops), "overlays_affected": str(overlays_affected)})
+    metrics.increment("cascade_completed", labels={"total_hops": str(total_hops), "overlays_affected": str(overlays_affected)})
 
 
 def record_pipeline_executed(pipeline_id: str, status: str, duration_ms: float) -> None:
     """Record pipeline execution metric."""
     metrics = get_metrics()
-    metrics.increment("pipeline_executions", {"status": status})
-    metrics.observe("pipeline_duration_ms", duration_ms, {"status": status})
+    metrics.increment("pipeline_executions", labels={"status": status})
+    metrics.record_latency("pipeline_duration_ms", duration_ms / 1000, labels={"status": status})
 
 
 # =============================================================================

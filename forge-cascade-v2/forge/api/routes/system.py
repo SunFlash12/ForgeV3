@@ -30,6 +30,7 @@ from forge.api.dependencies import (
     TrustedUserDep,
 )
 from forge.immune.anomaly import AnomalySeverity, AnomalyType
+from forge.models.events import EventType
 
 # Resilience integration - metrics and caching
 from forge.resilience.integration import (
@@ -930,8 +931,9 @@ async def clear_caches(
     record_cache_cleared(cleared)
 
     await event_system.emit(
-        "CACHES_CLEARED",
+        EventType.SYSTEM_EVENT,
         {
+            "event_name": "caches_cleared",
             "cleared_by": str(user.id),
             "caches": cleared
         }

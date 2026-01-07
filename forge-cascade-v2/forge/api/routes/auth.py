@@ -34,7 +34,7 @@ from forge.api.dependencies import (
     CorrelationIdDep,
     ClientInfoDep,
 )
-from forge.models.user import User, TrustLevel
+from forge.models.user import User, TrustLevel, UserUpdate
 from forge.security.password import verify_password, hash_password, PasswordValidationError, validate_password_strength
 
 # Resilience integration - validation and metrics
@@ -553,11 +553,12 @@ async def update_profile(
         validation_result = await validate_capsule_content(request.display_name)
         check_content_validation(validation_result)
 
-    updates = {}
+    # Build update data
+    update_data = UserUpdate(
+        display_name=request.display_name,
+        email=request.email,
+    )
 
-    if request.display_name is not None:
-        updates["display_name"] = request.display_name
-    
     if request.email is not None:
         # Check if email already exists
         existing = await user_repo.get_by_email(request.email)
@@ -566,19 +567,18 @@ async def update_profile(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Email already in use",
             )
-        updates["email"] = request.email
-    
-    if request.metadata is not None:
-        updates["metadata"] = {**user.metadata, **request.metadata}
-    
-    if updates:
-        updated_user = await user_repo.update(user.id, updates)
+
+    # Check if there are any updates to make
+    has_updates = request.display_name is not None or request.email is not None
+
+    if has_updates:
+        updated_user = await user_repo.update(user.id, update_data)
         
         await audit_repo.log_user_action(
             actor_id=user.id,
             target_user_id=user.id,
             action="profile_updated",
-            details={"fields": list(updates.keys())},
+            details={"fields": [f for f in ["display_name", "email"] if getattr(request, f) is not None]},
         )
         
         return UserResponse.from_user(updated_user)
