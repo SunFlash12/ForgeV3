@@ -1,0 +1,90 @@
+name: PR Check
+
+on:
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  # ===========================================================================
+  # Quick validation for PRs
+  # ===========================================================================
+  validate:
+    name: Validate PR
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: forge-cascade-v2/requirements.txt
+
+      - name: Install Python dependencies
+        run: |
+          cd forge-cascade-v2
+          pip install -r requirements.txt
+
+      - name: Python syntax check
+        run: |
+          cd forge-cascade-v2
+          python -m py_compile forge/**/*.py
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: forge-cascade-v2/frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: |
+          cd forge-cascade-v2/frontend
+          npm ci
+
+      - name: TypeScript check
+        run: |
+          cd forge-cascade-v2/frontend
+          npx tsc --noEmit
+
+      - name: Build frontend
+        run: |
+          cd forge-cascade-v2/frontend
+          npm run build
+
+  # ===========================================================================
+  # Docker build check (no push)
+  # ===========================================================================
+  docker-check:
+    name: Docker Build Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build backend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./forge-cascade-v2
+          file: ./forge-cascade-v2/Dockerfile
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build frontend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./forge-cascade-v2/frontend
+          file: ./forge-cascade-v2/frontend/Dockerfile
+          push: false
+          build-args: |
+            VITE_API_URL=http://localhost:8001/api/v1
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
