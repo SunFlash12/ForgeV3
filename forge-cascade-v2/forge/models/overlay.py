@@ -43,6 +43,7 @@ class Capability(str, Enum):
     GOVERNANCE_EXECUTE = "GOVERNANCE_EXECUTE"  # Can execute passed proposals
     USER_READ = "USER_READ"                 # Can read user data
     SYSTEM_CONFIG = "SYSTEM_CONFIG"         # Can modify system config
+    LLM_ACCESS = "LLM_ACCESS"               # Can call LLM APIs
 
 
 # Core overlay capability sets
@@ -79,6 +80,21 @@ CORE_OVERLAY_CAPABILITIES = {
     },
     "lineage_tracker": {
         Capability.DATABASE_READ,
+        Capability.DATABASE_WRITE,
+    },
+    "graph_algorithms": {
+        Capability.DATABASE_READ,
+        Capability.EVENT_PUBLISH,
+    },
+    "knowledge_query": {
+        Capability.DATABASE_READ,
+        Capability.LLM_ACCESS,
+    },
+    "temporal_tracker": {
+        Capability.DATABASE_READ,
+        Capability.DATABASE_WRITE,
+        Capability.EVENT_PUBLISH,
+        Capability.EVENT_SUBSCRIBE,
     },
 }
 
