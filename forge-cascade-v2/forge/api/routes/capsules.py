@@ -16,8 +16,9 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, status, Query
+from fastapi import APIRouter, HTTPException, status, Query, BackgroundTasks
 from pydantic import BaseModel, Field, field_validator
+import structlog
 
 from forge.api.dependencies import (
     CapsuleRepoDep,
@@ -65,6 +66,77 @@ import time
 
 
 router = APIRouter()
+logger = structlog.get_logger(__name__)
+
+
+# =============================================================================
+# Background Tasks
+# =============================================================================
+
+async def run_semantic_edge_detection(capsule_id: str, user_id: str):
+    """
+    Background task to analyze a capsule for semantic relationships.
+
+    This runs asynchronously after capsule creation to detect
+    SUPPORTS, CONTRADICTS, ELABORATES relationships with existing capsules.
+    """
+    try:
+        from forge.database.client import Neo4jClient
+        from forge.repositories.capsule_repository import CapsuleRepository
+        from forge.services.semantic_edge_detector import (
+            SemanticEdgeDetector,
+            DetectionConfig,
+        )
+        from forge.config import get_settings
+
+        settings = get_settings()
+
+        # Only run in production or if explicitly enabled
+        if settings.app_env == "development" and not getattr(settings, 'enable_dev_semantic_detection', False):
+            logger.debug("semantic_detection_skipped", reason="development mode", capsule_id=capsule_id)
+            return
+
+        # Create temporary client and repository
+        db_client = Neo4jClient()
+        await db_client.connect()
+
+        try:
+            capsule_repo = CapsuleRepository(db_client)
+
+            # Get the capsule
+            capsule = await capsule_repo.get_by_id(capsule_id)
+            if not capsule:
+                logger.warning("semantic_detection_capsule_not_found", capsule_id=capsule_id)
+                return
+
+            # Configure detector with conservative settings
+            config = DetectionConfig(
+                similarity_threshold=0.75,  # Higher threshold for auto-detection
+                confidence_threshold=0.8,   # Require high confidence
+                max_candidates=10,          # Limit candidates for performance
+                enabled=True,
+            )
+
+            detector = SemanticEdgeDetector(capsule_repo, config=config)
+            result = await detector.analyze_capsule(capsule, created_by=user_id)
+
+            logger.info(
+                "semantic_detection_complete",
+                capsule_id=capsule_id,
+                candidates_analyzed=result.candidates_analyzed,
+                edges_created=result.edges_created,
+                duration_ms=result.duration_ms,
+            )
+
+        finally:
+            await db_client.close()
+
+    except Exception as e:
+        logger.error(
+            "semantic_detection_failed",
+            capsule_id=capsule_id,
+            error=str(e),
+        )
 
 
 # =============================================================================
@@ -231,6 +303,7 @@ class SearchResponse(BaseModel):
 @router.post("/", response_model=CapsuleResponse, status_code=status.HTTP_201_CREATED)
 async def create_capsule(
     request: CreateCapsuleRequest,
+    background_tasks: BackgroundTasks,
     user: SandboxUserDep,  # Minimum SANDBOX trust to create
     capsule_repo: CapsuleRepoDep,
     pipeline: PipelineDep,
@@ -304,6 +377,10 @@ async def create_capsule(
         details={"title": capsule.title, "type": type_value},
         correlation_id=correlation_id,
     )
+
+    # Schedule semantic edge detection in background
+    # This will auto-detect SUPPORTS, CONTRADICTS, ELABORATES relationships
+    background_tasks.add_task(run_semantic_edge_detection, capsule.id, user.id)
 
     return CapsuleResponse.from_capsule(capsule)
 

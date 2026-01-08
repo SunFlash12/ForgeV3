@@ -355,6 +355,94 @@ class TrustTransitivityRequest(ForgeModel):
     return_all_paths: bool = Field(default=False)
 
 
+class NodeSimilarityRequest(ForgeModel):
+    """Parameters for node similarity computation using GDS."""
+
+    node_label: str = Field(default="Capsule")
+    relationship_type: str = Field(default="DERIVED_FROM")
+    similarity_metric: str = Field(
+        default="jaccard",
+        description="jaccard, overlap, or cosine",
+    )
+    top_k: int = Field(default=10, ge=1, le=100, description="Similar nodes per source")
+    similarity_cutoff: float = Field(
+        default=0.1,
+        ge=0.0,
+        le=1.0,
+        description="Minimum similarity threshold",
+    )
+    source_node_id: str | None = Field(
+        default=None,
+        description="Specific node to find similar nodes for (None = all)",
+    )
+
+
+class SimilarNode(ForgeModel):
+    """A similar node with similarity score."""
+
+    node_id: str
+    node_type: str
+    title: str | None = None
+    similarity_score: float = Field(ge=0.0, le=1.0)
+    shared_neighbors: int = Field(default=0, ge=0)
+
+
+class NodeSimilarityResult(ForgeModel):
+    """Result of node similarity computation."""
+
+    source_id: str | None = Field(default=None, description="Source node if specific")
+    similar_nodes: list[SimilarNode] = Field(default_factory=list)
+    similarity_metric: str
+    top_k: int
+    computation_time_ms: float = Field(ge=0.0)
+    backend_used: GraphBackend = Field(default=GraphBackend.CYPHER)
+
+
+class ShortestPathRequest(ForgeModel):
+    """Parameters for shortest path computation."""
+
+    source_id: str = Field(description="Starting node")
+    target_id: str = Field(description="Target node")
+    relationship_types: list[str] = Field(
+        default_factory=lambda: ["DERIVED_FROM", "RELATED_TO", "SUPPORTS"],
+        description="Relationships to traverse",
+    )
+    max_depth: int = Field(default=10, ge=1, le=50)
+    weighted: bool = Field(
+        default=False,
+        description="Use trust-weighted path finding",
+    )
+
+
+class PathNode(ForgeModel):
+    """A node in a path."""
+
+    node_id: str
+    node_type: str
+    title: str | None = None
+    trust_level: int | None = None
+
+
+class ShortestPathResult(ForgeModel):
+    """Result of shortest path computation."""
+
+    source_id: str
+    target_id: str
+    path_found: bool = Field(default=False)
+    path_length: int = Field(default=0, ge=0)
+    path_nodes: list[PathNode] = Field(default_factory=list)
+    path_relationships: list[str] = Field(
+        default_factory=list,
+        description="Relationship types along the path",
+    )
+    total_trust: float | None = Field(
+        default=None,
+        description="Product of trust levels along path (if weighted)",
+    )
+    computation_time_ms: float = Field(ge=0.0)
+    backend_used: GraphBackend = Field(default=GraphBackend.CYPHER)
+
+
 # ═══════════════════════════════════════════════════════════════
 # ALGORITHM PROVIDER CONFIG
 # ═══════════════════════════════════════════════════════════════

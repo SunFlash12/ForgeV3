@@ -44,6 +44,21 @@ from .ghost_council import (
     init_ghost_council_service,
     DEFAULT_COUNCIL_MEMBERS,
 )
+from .scheduler import (
+    BackgroundScheduler,
+    ScheduledTask,
+    SchedulerStats,
+    get_scheduler,
+    setup_scheduler,
+)
+from .query_cache import (
+    QueryCache,
+    InMemoryQueryCache,
+    CachedQueryResult,
+    get_query_cache,
+    init_query_cache,
+    close_query_cache,
+)
 
 __all__ = [
     # Embedding
@@ -79,4 +94,17 @@ __all__ = [
     "get_ghost_council_service",
     "init_ghost_council_service",
     "DEFAULT_COUNCIL_MEMBERS",
+    # Scheduler
+    "BackgroundScheduler",
+    "ScheduledTask",
+    "SchedulerStats",
+    "get_scheduler",
+    "setup_scheduler",
+    # Query Cache
+    "QueryCache",
+    "InMemoryQueryCache",
+    "CachedQueryResult",
+    "get_query_cache",
+    "init_query_cache",
+    "close_query_cache",
 ]

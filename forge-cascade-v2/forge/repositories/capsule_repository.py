@@ -617,6 +617,88 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
         results = await self.client.execute(query, {"limit": limit})
         return self._to_models([r["capsule"] for r in results if r.get("capsule")])
 
+    async def find_similar_by_embedding(
+        self,
+        embedding: list[float],
+        limit: int = 20,
+        min_similarity: float = 0.7,
+        exclude_ids: list[str] | None = None,
+    ) -> list[tuple[Capsule, float]]:
+        """
+        Find capsules similar to the given embedding vector.
+
+        Args:
+            embedding: Query embedding vector
+            limit: Maximum results
+            min_similarity: Minimum similarity score (0-1)
+            exclude_ids: Capsule IDs to exclude from results
+
+        Returns:
+            List of (Capsule, similarity_score) tuples
+        """
+        exclude_ids = exclude_ids or []
+
+        query = """
+        CALL db.index.vector.queryNodes('capsule_embeddings', $limit, $embedding)
+        YIELD node AS capsule, score
+        WHERE capsule.is_archived = false
+          AND NOT capsule.id IN $exclude_ids
+          AND score >= $min_similarity
+        RETURN capsule {.*} AS capsule, score
+        ORDER BY score DESC
+        """
+
+        try:
+            results = await self.client.execute(
+                query,
+                {
+                    "embedding": embedding,
+                    "limit": limit + len(exclude_ids),  # Account for exclusions
+                    "min_similarity": min_similarity,
+                    "exclude_ids": exclude_ids,
+                },
+            )
+
+            return [
+                (self._to_model(r["capsule"]), r["score"])
+                for r in results[:limit]
+                if r.get("capsule")
+            ]
+        except Exception as e:
+            self.logger.warning(
+                "find_similar_by_embedding failed",
+                error=str(e),
+                hint="Vector index may not be available",
+            )
+            return []
+
+    async def get_semantic_edge(self, edge_id: str) -> SemanticEdge | None:
+        """
+        Get a semantic edge by ID.
+
+        Args:
+            edge_id: Edge ID
+
+        Returns:
+            SemanticEdge or None
+        """
+        query = """
+        MATCH (c1)-[r:SEMANTIC_EDGE {id: $id}]->(c2)
+        RETURN r {
+            .*,
+            source_id: c1.id,
+            target_id: c2.id,
+            source_title: c1.title,
+            target_title: c2.title
+        } AS edge
+        """
+
+        result = await self.client.execute_single(query, {"id": edge_id})
+
+        if result and result.get("edge"):
+            return self._to_semantic_edge(result["edge"])
+        return None
+
     # ═══════════════════════════════════════════════════════════════
     # SEMANTIC EDGES
     # ═══════════════════════════════════════════════════════════════

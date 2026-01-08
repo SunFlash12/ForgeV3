@@ -35,6 +35,8 @@ class EventType(str, Enum):
     CAPSULE_ARCHIVED = "capsule.archived"
     CAPSULE_UNARCHIVED = "capsule.unarchived"
     CAPSULE_SEARCHED = "capsule.searched"
+    SEMANTIC_EDGE_CREATED = "capsule.semantic_edge_created"
+    SEMANTIC_EDGE_DELETED = "capsule.semantic_edge_deleted"
 
     # User Events
     USER_REGISTERED = "user.registered"

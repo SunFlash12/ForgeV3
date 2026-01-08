@@ -10,6 +10,8 @@ import GhostCouncilPage from './pages/GhostCouncilPage';
 import OverlaysPage from './pages/OverlaysPage';
 import SystemPage from './pages/SystemPage';
 import SettingsPage from './pages/SettingsPage';
+import ContradictionsPage from './pages/ContradictionsPage';
+import VersionHistoryPage from './pages/VersionHistoryPage';
 
 function App() {
   const { isAuthenticated, fetchCurrentUser, isLoading } = useAuthStore();
@@ -37,9 +39,11 @@ function App() {
       <Route path="/" element={<Layout />}>
         <Route index element={<DashboardPage />} />
         <Route path="capsules" element={<CapsulesPage />} />
+        <Route path="capsules/:capsuleId/versions" element={<VersionHistoryPage />} />
         <Route path="governance" element={<GovernancePage />} />
         <Route path="ghost-council" element={<GhostCouncilPage />} />
         <Route path="overlays" element={<OverlaysPage />} />
+        <Route path="contradictions" element={<ContradictionsPage />} />
         <Route path="system" element={<SystemPage />} />
         <Route path="settings" element={<SettingsPage />} />
       </Route>
