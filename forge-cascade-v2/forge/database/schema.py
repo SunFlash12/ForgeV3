@@ -122,6 +122,38 @@ class SchemaManager:
                 "CREATE CONSTRAINT event_id_unique IF NOT EXISTS "
                 "FOR (e:Event) REQUIRE e.id IS UNIQUE"
             ),
+
+            # ═══════════════════════════════════════════════════════════════
+            # GRAPH EXTENSIONS: Temporal & Semantic
+            # ═══════════════════════════════════════════════════════════════
+
+            # CapsuleVersion constraints
+            (
+                "capsuleversion_id_unique",
+                "CREATE CONSTRAINT capsuleversion_id_unique IF NOT EXISTS "
+                "FOR (v:CapsuleVersion) REQUIRE v.id IS UNIQUE"
+            ),
+
+            # TrustSnapshot constraints
+            (
+                "trustsnapshot_id_unique",
+                "CREATE CONSTRAINT trustsnapshot_id_unique IF NOT EXISTS "
+                "FOR (t:TrustSnapshot) REQUIRE t.id IS UNIQUE"
+            ),
+
+            # GraphSnapshot constraints
+            (
+                "graphsnapshot_id_unique",
+                "CREATE CONSTRAINT graphsnapshot_id_unique IF NOT EXISTS "
+                "FOR (g:GraphSnapshot) REQUIRE g.id IS UNIQUE"
+            ),
+
+            # SemanticEdge constraints
+            (
+                "semanticedge_id_unique",
+                "CREATE CONSTRAINT semanticedge_id_unique IF NOT EXISTS "
+                "FOR (s:SemanticEdge) REQUIRE s.id IS UNIQUE"
+            ),
         ]
         
         results = {}
@@ -241,6 +273,87 @@ class SchemaManager:
                 "CREATE INDEX event_timestamp_idx IF NOT EXISTS "
                 "FOR (e:Event) ON (e.timestamp)"
             ),
+
+            # ═══════════════════════════════════════════════════════════════
+            # GRAPH EXTENSIONS: Temporal Indexes
+            # ═══════════════════════════════════════════════════════════════
+
+            # CapsuleVersion indexes
+            (
+                "version_capsule_idx",
+                "CREATE INDEX version_capsule_idx IF NOT EXISTS "
+                "FOR (v:CapsuleVersion) ON (v.capsule_id)"
+            ),
+            (
+                "version_timestamp_idx",
+                "CREATE INDEX version_timestamp_idx IF NOT EXISTS "
+                "FOR (v:CapsuleVersion) ON (v.created_at)"
+            ),
+            (
+                "version_type_idx",
+                "CREATE INDEX version_type_idx IF NOT EXISTS "
+                "FOR (v:CapsuleVersion) ON (v.snapshot_type)"
+            ),
+            (
+                "version_creator_idx",
+                "CREATE INDEX version_creator_idx IF NOT EXISTS "
+                "FOR (v:CapsuleVersion) ON (v.created_by)"
+            ),
+
+            # TrustSnapshot indexes
+            (
+                "trustsnapshot_entity_idx",
+                "CREATE INDEX trustsnapshot_entity_idx IF NOT EXISTS "
+                "FOR (t:TrustSnapshot) ON (t.entity_id, t.entity_type)"
+            ),
+            (
+                "trustsnapshot_time_idx",
+                "CREATE INDEX trustsnapshot_time_idx IF NOT EXISTS "
+                "FOR (t:TrustSnapshot) ON (t.timestamp)"
+            ),
+            (
+                "trustsnapshot_type_idx",
+                "CREATE INDEX trustsnapshot_type_idx IF NOT EXISTS "
+                "FOR (t:TrustSnapshot) ON (t.change_type)"
+            ),
+
+            # GraphSnapshot indexes
+            (
+                "graphsnapshot_time_idx",
+                "CREATE INDEX graphsnapshot_time_idx IF NOT EXISTS "
+                "FOR (g:GraphSnapshot) ON (g.created_at)"
+            ),
+
+            # ═══════════════════════════════════════════════════════════════
+            # GRAPH EXTENSIONS: Semantic Edge Indexes
+            # ═══════════════════════════════════════════════════════════════
+
+            # SemanticEdge indexes (for edge node pattern)
+            (
+                "semanticedge_source_idx",
+                "CREATE INDEX semanticedge_source_idx IF NOT EXISTS "
+                "FOR (s:SemanticEdge) ON (s.source_id)"
+            ),
+            (
+                "semanticedge_target_idx",
+                "CREATE INDEX semanticedge_target_idx IF NOT EXISTS "
+                "FOR (s:SemanticEdge) ON (s.target_id)"
+            ),
+            (
+                "semanticedge_type_idx",
+                "CREATE INDEX semanticedge_type_idx IF NOT EXISTS "
+                "FOR (s:SemanticEdge) ON (s.relationship_type)"
+            ),
+            (
+                "semanticedge_confidence_idx",
+                "CREATE INDEX semanticedge_confidence_idx IF NOT EXISTS "
+                "FOR (s:SemanticEdge) ON (s.confidence)"
+            ),
+            (
+                "semanticedge_created_idx",
+                "CREATE INDEX semanticedge_created_idx IF NOT EXISTS "
+                "FOR (s:SemanticEdge) ON (s.created_at)"
+            ),
         ]
         
         results = {}
@@ -354,8 +467,13 @@ class SchemaManager:
             "vote_id_unique",
             "auditlog_id_unique",
             "event_id_unique",
+            # Graph extensions
+            "capsuleversion_id_unique",
+            "trustsnapshot_id_unique",
+            "graphsnapshot_id_unique",
+            "semanticedge_id_unique",
         }
-        
+
         expected_indexes = {
             "capsule_type_idx",
             "capsule_owner_idx",
@@ -375,8 +493,23 @@ class SchemaManager:
             "event_type_idx",
             "event_source_idx",
             "event_timestamp_idx",
+            # Graph extensions: Temporal
+            "version_capsule_idx",
+            "version_timestamp_idx",
+            "version_type_idx",
+            "version_creator_idx",
+            "trustsnapshot_entity_idx",
+            "trustsnapshot_time_idx",
+            "trustsnapshot_type_idx",
+            "graphsnapshot_time_idx",
+            # Graph extensions: Semantic
+            "semanticedge_source_idx",
+            "semanticedge_target_idx",
+            "semanticedge_type_idx",
+            "semanticedge_confidence_idx",
+            "semanticedge_created_idx",
         }
-        
+
         expected_vector_indexes = {
             "capsule_embeddings",
         }

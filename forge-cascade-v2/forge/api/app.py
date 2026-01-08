@@ -121,6 +121,14 @@ class ForgeApp:
             logger.warning("resilience_init_failed", error=str(e))
             self.resilience_initialized = False
 
+        # Initialize token blacklist with Redis for distributed deployments
+        try:
+            from forge.security.tokens import TokenBlacklist
+            redis_connected = await TokenBlacklist.initialize(self.settings.redis_url)
+            logger.info("token_blacklist_initialized", redis_enabled=redis_connected)
+        except Exception as e:
+            logger.warning("token_blacklist_init_failed", error=str(e))
+
         self.started_at = datetime.now(timezone.utc)
         self.is_ready = True
 
@@ -137,6 +145,9 @@ class ForgeApp:
             create_ml_intelligence,
             create_governance_overlay,
             create_lineage_tracker,
+            create_graph_algorithms_overlay,
+            create_knowledge_query_overlay,
+            create_temporal_tracker_overlay,
         )
 
         # Use environment-based configuration for overlay strict mode
@@ -144,16 +155,31 @@ class ForgeApp:
 
         # Create overlays - enable strict mode in production
         security = create_security_validator(strict_mode=is_production)
-        ml = create_ml_intelligence(production_mode=is_production)
+
+        # ML overlay needs embedding provider in production mode
+        ml_kwargs = {}
+        if is_production:
+            ml_kwargs["embedding_provider"] = self.settings.embedding_provider
+        ml = create_ml_intelligence(production_mode=is_production, **ml_kwargs)
+
         governance = create_governance_overlay(strict_mode=is_production)
         lineage = create_lineage_tracker(strict_mode=is_production)
-        
+
+        # Graph extension overlays
+        # These are created without repositories initially - they'll be wired via dependency injection
+        graph_algorithms = create_graph_algorithms_overlay()
+        knowledge_query = create_knowledge_query_overlay()
+        temporal_tracker = create_temporal_tracker_overlay()
+
         # Register with manager (auto-initializes by default)
         if self.overlay_manager:
             await self.overlay_manager.register_instance(security)
             await self.overlay_manager.register_instance(ml)
             await self.overlay_manager.register_instance(governance)
             await self.overlay_manager.register_instance(lineage)
+            await self.overlay_manager.register_instance(graph_algorithms)
+            await self.overlay_manager.register_instance(knowledge_query)
+            await self.overlay_manager.register_instance(temporal_tracker)
     
     async def shutdown(self) -> None:
         """Gracefully shutdown all components."""
@@ -277,6 +303,10 @@ def create_app(
                 "name": "system",
                 "description": "System health and metrics",
             },
+            {
+                "name": "graph",
+                "description": "Graph analysis, queries, and temporal operations",
+            },
         ],
     )
     
@@ -321,11 +351,14 @@ def create_app(
     app.add_middleware(CSRFProtectionMiddleware, enabled=(settings.app_env != "development"))  # CSRF protection
     app.add_middleware(IdempotencyMiddleware)  # Idempotency support
     app.add_middleware(AuthenticationMiddleware)
+    # Rate limiting - use environment-based configuration
+    # Production: stricter limits. Development: relaxed for testing
+    is_dev = settings.app_env == "development"
     app.add_middleware(
         RateLimitMiddleware,
         redis_url=settings.redis_url,
-        auth_requests_per_minute=30,  # Increased from 10 to support test suites
-        auth_requests_per_hour=200,   # Increased from 50 to support test suites
+        auth_requests_per_minute=30 if is_dev else 10,  # Stricter in production
+        auth_requests_per_hour=200 if is_dev else 50,   # Stricter in production
     )
     
     # Exception handlers
@@ -367,7 +400,7 @@ def create_app(
         )
     
     # Include routers
-    from forge.api.routes import auth, capsules, cascade, governance, overlays, system
+    from forge.api.routes import auth, capsules, cascade, governance, overlays, system, graph
 
     app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
     app.include_router(capsules.router, prefix="/api/v1/capsules", tags=["capsules"])
@@ -375,6 +408,7 @@ def create_app(
     app.include_router(governance.router, prefix="/api/v1/governance", tags=["governance"])
     app.include_router(overlays.router, prefix="/api/v1/overlays", tags=["overlays"])
     app.include_router(system.router, prefix="/api/v1/system", tags=["system"])
+    app.include_router(graph.router, prefix="/api/v1/graph", tags=["graph"])
     
     # WebSocket endpoints
     from forge.api.websocket import websocket_router

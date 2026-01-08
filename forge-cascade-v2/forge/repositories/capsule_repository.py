@@ -23,7 +23,16 @@ from forge.models.capsule import (
     CapsuleSearchResult,
     LineageNode,
 )
-from forge.models.base import TrustLevel, CapsuleType
+from forge.models.base import TrustLevel, CapsuleType, generate_id
+from forge.models.semantic_edges import (
+    SemanticEdge,
+    SemanticEdgeCreate,
+    SemanticRelationType,
+    SemanticNeighbor,
+    ContradictionCluster,
+    ContradictionSeverity,
+    ContradictionStatus,
+)
 from forge.repositories.base import BaseRepository
 
 logger = structlog.get_logger(__name__)
@@ -607,3 +616,491 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
 
         results = await self.client.execute(query, {"limit": limit})
         return self._to_models([r["capsule"] for r in results if r.get("capsule")])
+
+    # ═══════════════════════════════════════════════════════════════
+    # SEMANTIC EDGES
+    # ═══════════════════════════════════════════════════════════════
+
+    async def create_semantic_edge(
+        self,
+        data: SemanticEdgeCreate,
+        created_by: str,
+    ) -> SemanticEdge:
+        """
+        Create a semantic relationship between two capsules.
+
+        For bidirectional relationships (RELATED_TO, CONTRADICTS),
+        a single edge is created but can be traversed in both directions.
+
+        Args:
+            data: Semantic edge creation data
+            created_by: User creating the edge
+
+        Returns:
+            Created semantic edge
+        """
+        edge_id = generate_id()
+        now = self._now()
+
+        # Determine if bidirectional
+        is_bidirectional = data.relationship_type.is_bidirectional
+
+        # For bidirectional edges, store in canonical order (lower ID first)
+        if is_bidirectional:
+            source_id = min(data.source_id, data.target_id)
+            target_id = max(data.source_id, data.target_id)
+        else:
+            source_id = data.source_id
+            target_id = data.target_id
+
+        # Check if edge already exists
+        existing = await self._get_semantic_edge(
+            source_id, target_id, data.relationship_type
+        )
+        if existing:
+            self.logger.warning(
+                "Semantic edge already exists",
+                source_id=source_id,
+                target_id=target_id,
+                relationship_type=data.relationship_type.value,
+            )
+            return existing
+
+        # Create the edge as a relationship with properties
+        query = """
+        MATCH (source:Capsule {id: $source_id})
+        MATCH (target:Capsule {id: $target_id})
+        CREATE (source)-[r:SEMANTIC_EDGE {
+            id: $id,
+            relationship_type: $rel_type,
+            confidence: $confidence,
+            reason: $reason,
+            auto_detected: $auto_detected,
+            properties: $properties,
+            bidirectional: $bidirectional,
+            created_by: $created_by,
+            created_at: $now,
+            updated_at: $now
+        }]->(target)
+        RETURN r {
+            .*,
+            source_id: source.id,
+            target_id: target.id
+        } AS edge
+        """
+
+        params = {
+            "id": edge_id,
+            "source_id": source_id,
+            "target_id": target_id,
+            "rel_type": data.relationship_type.value,
+            "confidence": data.confidence,
+            "reason": data.reason,
+            "auto_detected": data.auto_detected,
+            "properties": json.dumps(data.properties),
+            "bidirectional": is_bidirectional,
+            "created_by": created_by,
+            "now": now.isoformat(),
+        }
+
+        result = await self.client.execute_single(query, params)
+
+        if result and result.get("edge"):
+            self.logger.info(
+                "Created semantic edge",
+                edge_id=edge_id,
+                relationship_type=data.relationship_type.value,
+                source_id=source_id,
+                target_id=target_id,
+            )
+            return self._to_semantic_edge(result["edge"])
+
+        raise RuntimeError("Failed to create semantic edge")
+
+    async def get_semantic_neighbors(
+        self,
+        capsule_id: str,
+        rel_types: list[SemanticRelationType] | None = None,
+        direction: str = "both",
+        min_confidence: float = 0.0,
+        limit: int = 100,
+    ) -> list[SemanticNeighbor]:
+        """
+        Get semantically connected neighbor capsules.
+
+        Args:
+            capsule_id: Source capsule ID
+            rel_types: Filter by relationship types (None = all)
+            direction: "in", "out", or "both"
+            min_confidence: Minimum confidence score
+            limit: Maximum results
+
+        Returns:
+            List of semantic neighbors with relationship info
+        """
+        type_filter = ""
+        if rel_types:
+            type_values = [rt.value for rt in rel_types]
+            type_filter = f"AND r.relationship_type IN {type_values}"
+
+        # Build direction-specific query
+        if direction == "out":
+            match_clause = "(c:Capsule {id: $id})-[r:SEMANTIC_EDGE]->(neighbor:Capsule)"
+            dir_label = "outgoing"
+        elif direction == "in":
+            match_clause = "(c:Capsule {id: $id})<-[r:SEMANTIC_EDGE]-(neighbor:Capsule)"
+            dir_label = "incoming"
+        else:
+            # Both directions
+            match_clause = "(c:Capsule {id: $id})-[r:SEMANTIC_EDGE]-(neighbor:Capsule)"
+            dir_label = "both"
+
+        query = f"""
+        MATCH {match_clause}
+        WHERE r.confidence >= $min_confidence {type_filter}
+        RETURN neighbor.id AS capsule_id,
+               neighbor.title AS title,
+               neighbor.type AS capsule_type,
+               neighbor.trust_level AS trust_level,
+               r.relationship_type AS relationship_type,
+               r.confidence AS confidence,
+               r.id AS edge_id,
+               CASE WHEN startNode(r).id = $id THEN 'outgoing' ELSE 'incoming' END AS direction
+        ORDER BY r.confidence DESC
+        LIMIT $limit
+        """
+
+        results = await self.client.execute(
+            query,
+            {
+                "id": capsule_id,
+                "min_confidence": min_confidence,
+                "limit": limit,
+            },
+        )
+
+        return [
+            SemanticNeighbor(
+                capsule_id=r["capsule_id"],
+                title=r.get("title"),
+                capsule_type=r.get("capsule_type"),
+                trust_level=r.get("trust_level"),
+                relationship_type=SemanticRelationType(r["relationship_type"]),
+                direction=r.get("direction", dir_label),
+                confidence=r.get("confidence", 1.0),
+                edge_id=r["edge_id"],
+            )
+            for r in results
+            if r.get("capsule_id")
+        ]
+
+    async def find_contradictions(
+        self,
+        capsule_id: str | None = None,
+        tags: list[str] | None = None,
+        min_severity: ContradictionSeverity = ContradictionSeverity.LOW,
+        include_resolved: bool = False,
+        limit: int = 50,
+    ) -> list[tuple[Capsule, Capsule, SemanticEdge]]:
+        """
+        Find contradiction relationships.
+
+        Args:
+            capsule_id: Filter to contradictions involving this capsule
+            tags: Filter to capsules with these tags
+            min_severity: Minimum severity level
+            include_resolved: Include resolved contradictions
+            limit: Maximum results
+
+        Returns:
+            List of (capsule1, capsule2, edge) tuples
+        """
+        conditions = ["r.relationship_type = 'CONTRADICTS'"]
+        params: dict[str, Any] = {"limit": limit}
+
+        if capsule_id:
+            conditions.append("(c1.id = $capsule_id OR c2.id = $capsule_id)")
+            params["capsule_id"] = capsule_id
+
+        if tags:
+            conditions.append(
+                "(any(tag IN c1.tags WHERE tag IN $tags) OR any(tag IN c2.tags WHERE tag IN $tags))"
+            )
+            params["tags"] = tags
+
+        if not include_resolved:
+            conditions.append(
+                "(r.properties IS NULL OR NOT r.properties CONTAINS 'resolved')"
+            )
+
+        where_clause = " AND ".join(conditions)
+
+        query = f"""
+        MATCH (c1:Capsule)-[r:SEMANTIC_EDGE]->(c2:Capsule)
+        WHERE {where_clause}
+        RETURN c1 {{.*}} AS capsule1,
+               c2 {{.*}} AS capsule2,
+               r {{
+                   .*,
+                   source_id: c1.id,
+                   target_id: c2.id
+               }} AS edge
+        ORDER BY r.created_at DESC
+        LIMIT $limit
+        """
+
+        results = await self.client.execute(query, params)
+
+        return [
+            (
+                self._to_model(r["capsule1"]),
+                self._to_model(r["capsule2"]),
+                self._to_semantic_edge(r["edge"]),
+            )
+            for r in results
+            if r.get("capsule1") and r.get("capsule2") and r.get("edge")
+        ]
+
+    async def find_contradiction_clusters(
+        self,
+        min_size: int = 2,
+        limit: int = 20,
+    ) -> list[ContradictionCluster]:
+        """
+        Find clusters of mutually contradicting capsules.
+
+        Uses connected component analysis on CONTRADICTS edges.
+
+        Args:
+            min_size: Minimum cluster size
+            limit: Maximum clusters to return
+
+        Returns:
+            List of contradiction clusters
+        """
+        query = """
+        MATCH (c1:Capsule)-[r:SEMANTIC_EDGE {relationship_type: 'CONTRADICTS'}]-(c2:Capsule)
+        WITH collect(DISTINCT c1) + collect(DISTINCT c2) AS all_nodes,
+             collect(r) AS all_edges
+        WITH [n IN all_nodes | n.id] AS node_ids,
+             [e IN all_edges | {
+                 id: e.id,
+                 source: startNode(e).id,
+                 target: endNode(e).id,
+                 severity: e.properties
+             }] AS edges
+        WHERE size(node_ids) >= $min_size
+        RETURN node_ids, edges
+        LIMIT $limit
+        """
+
+        results = await self.client.execute(
+            query,
+            {"min_size": min_size, "limit": limit},
+        )
+
+        clusters = []
+        for i, r in enumerate(results):
+            node_ids = r.get("node_ids", [])
+            edges_data = r.get("edges", [])
+
+            if len(node_ids) >= min_size:
+                cluster = ContradictionCluster(
+                    cluster_id=generate_id(),
+                    capsule_ids=node_ids,
+                    edges=[],  # Would need separate query to fully hydrate
+                    overall_severity=ContradictionSeverity.MEDIUM,
+                    resolution_status=ContradictionStatus.UNRESOLVED,
+                )
+                clusters.append(cluster)
+
+        return clusters
+
+    async def get_semantic_edges(
+        self,
+        capsule_id: str,
+        rel_types: list[SemanticRelationType] | None = None,
+        include_auto_detected: bool = True,
+        limit: int = 100,
+    ) -> list[SemanticEdge]:
+        """
+        Get all semantic edges for a capsule.
+
+        Args:
+            capsule_id: Capsule ID
+            rel_types: Filter by relationship types
+            include_auto_detected: Include auto-detected edges
+            limit: Maximum results
+
+        Returns:
+            List of semantic edges
+        """
+        conditions = ["(c1.id = $id OR c2.id = $id)"]
+        params: dict[str, Any] = {"id": capsule_id, "limit": limit}
+
+        if rel_types:
+            type_values = [rt.value for rt in rel_types]
+            conditions.append(f"r.relationship_type IN {type_values}")
+
+        if not include_auto_detected:
+            conditions.append("r.auto_detected = false")
+
+        where_clause = " AND ".join(conditions)
+
+        query = f"""
+        MATCH (c1:Capsule)-[r:SEMANTIC_EDGE]->(c2:Capsule)
+        WHERE {where_clause}
+        RETURN r {{
+            .*,
+            source_id: c1.id,
+            target_id: c2.id,
+            source_title: c1.title,
+            target_title: c2.title
+        }} AS edge
+        ORDER BY r.created_at DESC
+        LIMIT $limit
+        """
+
+        results = await self.client.execute(query, params)
+
+        return [
+            self._to_semantic_edge(r["edge"])
+            for r in results
+            if r.get("edge")
+        ]
+
+    async def delete_semantic_edge(self, edge_id: str) -> bool:
+        """
+        Delete a semantic edge by ID.
+
+        Args:
+            edge_id: Edge ID to delete
+
+        Returns:
+            True if deleted
+        """
+        query = """
+        MATCH ()-[r:SEMANTIC_EDGE {id: $id}]->()
+        DELETE r
+        RETURN count(r) AS deleted
+        """
+
+        result = await self.client.execute_single(query, {"id": edge_id})
+        deleted = result.get("deleted", 0) if result else 0
+
+        if deleted > 0:
+            self.logger.info("Deleted semantic edge", edge_id=edge_id)
+
+        return deleted > 0
+
+    async def update_semantic_edge(
+        self,
+        edge_id: str,
+        confidence: float | None = None,
+        properties: dict | None = None,
+    ) -> SemanticEdge | None:
+        """
+        Update a semantic edge.
+
+        Args:
+            edge_id: Edge ID
+            confidence: New confidence value
+            properties: Properties to merge
+
+        Returns:
+            Updated edge or None
+        """
+        set_clauses = ["r.updated_at = $now"]
+        params: dict[str, Any] = {
+            "id": edge_id,
+            "now": self._now().isoformat(),
+        }
+
+        if confidence is not None:
+            set_clauses.append("r.confidence = $confidence")
+            params["confidence"] = confidence
+
+        if properties is not None:
+            set_clauses.append("r.properties = $properties")
+            params["properties"] = json.dumps(properties)
+
+        query = f"""
+        MATCH (c1)-[r:SEMANTIC_EDGE {{id: $id}}]->(c2)
+        SET {', '.join(set_clauses)}
+        RETURN r {{
+            .*,
+            source_id: c1.id,
+            target_id: c2.id
+        }} AS edge
+        """
+
+        result = await self.client.execute_single(query, params)
+
+        if result and result.get("edge"):
+            return self._to_semantic_edge(result["edge"])
+        return None
+
+    async def _get_semantic_edge(
+        self,
+        source_id: str,
+        target_id: str,
+        rel_type: SemanticRelationType,
+    ) -> SemanticEdge | None:
+        """Check if a semantic edge already exists."""
+        query = """
+        MATCH (c1:Capsule {id: $source_id})-[r:SEMANTIC_EDGE {relationship_type: $rel_type}]->(c2:Capsule {id: $target_id})
+        RETURN r {
+            .*,
+            source_id: c1.id,
+            target_id: c2.id
+        } AS edge
+        """
+
+        result = await self.client.execute_single(
+            query,
+            {
+                "source_id": source_id,
+                "target_id": target_id,
+                "rel_type": rel_type.value,
+            },
+        )
+
+        if result and result.get("edge"):
+            return self._to_semantic_edge(result["edge"])
+        return None
+
+    def _to_semantic_edge(self, record: dict) -> SemanticEdge:
+        """Convert a Neo4j record to SemanticEdge."""
+        properties = record.get("properties", "{}")
+        if isinstance(properties, str):
+            try:
+                properties = json.loads(properties)
+            except json.JSONDecodeError:
+                properties = {}
+
+        return SemanticEdge(
+            id=record["id"],
+            source_id=record["source_id"],
+            target_id=record["target_id"],
+            relationship_type=SemanticRelationType(record["relationship_type"]),
+            confidence=record.get("confidence", 1.0),
+            reason=record.get("reason"),
+            auto_detected=record.get("auto_detected", False),
+            properties=properties,
+            bidirectional=record.get("bidirectional", False),
+            created_by=record.get("created_by", ""),
+            created_at=self._parse_datetime(record.get("created_at")),
+            updated_at=self._parse_datetime(record.get("updated_at")),
+        )
+
+    def _parse_datetime(self, value: Any) -> datetime:
+        """Parse a datetime from various formats."""
+        if value is None:
+            return self._now()
+        if isinstance(value, datetime):
+            return value
+        if hasattr(value, "to_native"):
+            return value.to_native()
+        if isinstance(value, str):
+            return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        return self._now()

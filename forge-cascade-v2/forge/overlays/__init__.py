@@ -115,6 +115,29 @@ from .capsule_analyzer import (
     CapsuleAnalyzerOverlay,
 )
 
+from .graph_algorithms import (
+    GraphAlgorithmsOverlay,
+    create_graph_algorithms_overlay,
+    GraphAlgorithmError,
+    AlgorithmConfig,
+)
+
+from .knowledge_query import (
+    KnowledgeQueryOverlay,
+    create_knowledge_query_overlay,
+    QueryCompilationError,
+    QueryExecutionError,
+    QueryConfig,
+)
+
+from .temporal_tracker import (
+    TemporalTrackerOverlay,
+    create_temporal_tracker_overlay,
+    TemporalError,
+    VersionNotFoundError,
+    TemporalConfig,
+)
+
 
 __all__ = [
     # Base
@@ -179,7 +202,27 @@ __all__ = [
     
     # Performance Optimizer
     "PerformanceOptimizerOverlay",
-    
+
     # Capsule Analyzer
     "CapsuleAnalyzerOverlay",
+
+    # Graph Algorithms
+    "GraphAlgorithmsOverlay",
+    "create_graph_algorithms_overlay",
+    "GraphAlgorithmError",
+    "AlgorithmConfig",
+
+    # Knowledge Query
+    "KnowledgeQueryOverlay",
+    "create_knowledge_query_overlay",
+    "QueryCompilationError",
+    "QueryExecutionError",
+    "QueryConfig",
+
+    # Temporal Tracker
+    "TemporalTrackerOverlay",
+    "create_temporal_tracker_overlay",
+    "TemporalError",
+    "VersionNotFoundError",
+    "TemporalConfig",
 ]

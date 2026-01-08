@@ -1,0 +1,446 @@
+"""
+Knowledge Query Overlay for Forge Cascade V2
+
+Provides natural language querying of the knowledge graph.
+Users can ask questions in plain English, which are compiled
+to Cypher queries and executed against Neo4j.
+
+Pipeline:
+1. Intent extraction (LLM parses question)
+2. Schema mapping (entities → labels/properties)
+3. Cypher generation (build parameterized query)
+4. Query execution (run against Neo4j)
+5. Answer synthesis (LLM creates human-readable response)
+"""
+
+from dataclasses import dataclass, field
+from datetime import datetime
+from typing import Any, Optional
+import structlog
+
+from ..models.events import Event, EventType
+from ..models.overlay import Capability
+from ..models.query import (
+    QueryIntent,
+    CompiledQuery,
+    QueryResult,
+    GraphSchema,
+    get_default_schema
+)
+from ..services.query_compiler import QueryCompiler, KnowledgeQueryService
+from .base import (
+    BaseOverlay,
+    OverlayContext,
+    OverlayResult,
+    OverlayError
+)
+
+logger = structlog.get_logger()
+
+
+class QueryCompilationError(OverlayError):
+    """Error during query compilation."""
+    pass
+
+
+class QueryExecutionError(OverlayError):
+    """Error during query execution."""
+    pass
+
+
+@dataclass
+class QueryConfig:
+    """Configuration for knowledge queries."""
+    # Query limits
+    max_results: int = 100
+    default_limit: int = 20
+    query_timeout_ms: int = 30000
+
+    # Trust filtering
+    apply_trust_filter: bool = True
+    min_trust_level: int = 0
+
+    # Response
+    include_explanation: bool = True
+    include_cypher: bool = False  # Debug mode
+    synthesize_answer: bool = True
+
+    # Caching
+    cache_compiled_queries: bool = True
+    cache_ttl_seconds: int = 600  # 10 minutes
+
+
+@dataclass
+class QueryHistoryEntry:
+    """Record of a past query."""
+    query_id: str
+    question: str
+    compiled_cypher: str
+    result_count: int
+    execution_time_ms: float
+    user_id: Optional[str]
+    timestamp: datetime = field(default_factory=datetime.utcnow)
+
+
+class KnowledgeQueryOverlay(BaseOverlay):
+    """
+    Knowledge query overlay for natural language graph queries.
+
+    Allows users to ask questions like:
+    - "What influenced the rate limiting decision?"
+    - "Who contributed most to security knowledge?"
+    - "Find contradictions in authentication docs"
+    """
+
+    NAME = "knowledge_query"
+    VERSION = "1.0.0"
+    DESCRIPTION = "Natural language queries on the knowledge graph"
+
+    # Direct invocation - no event subscription needed
+    SUBSCRIBED_EVENTS = set()
+
+    REQUIRED_CAPABILITIES = {
+        Capability.DATABASE_READ,
+        Capability.LLM_ACCESS
+    }
+
+    def __init__(
+        self,
+        query_service: Optional[KnowledgeQueryService] = None,
+        config: Optional[QueryConfig] = None,
+        schema: Optional[GraphSchema] = None
+    ):
+        """
+        Initialize the knowledge query overlay.
+
+        Args:
+            query_service: Service for query compilation and execution
+            config: Query configuration
+            schema: Graph schema (defaults to Forge schema)
+        """
+        super().__init__()
+
+        self._query_service = query_service
+        self._config = config or QueryConfig()
+        self._schema = schema or get_default_schema()
+
+        # Query history
+        self._history: list[QueryHistoryEntry] = []
+        self._max_history = 100
+
+        # Compiled query cache
+        self._query_cache: dict[str, CompiledQuery] = {}
+
+        # Statistics
+        self._stats = {
+            "queries_processed": 0,
+            "queries_successful": 0,
+            "queries_failed": 0,
+            "avg_execution_time_ms": 0.0,
+            "cache_hits": 0
+        }
+
+        self._logger = logger.bind(overlay=self.NAME)
+
+    def set_query_service(self, service: KnowledgeQueryService) -> None:
+        """Set the query service (for dependency injection)."""
+        self._query_service = service
+
+    async def initialize(self) -> bool:
+        """Initialize the overlay."""
+        self._logger.info(
+            "knowledge_query_initialized",
+            schema_labels=len(self._schema.node_labels),
+            schema_relationships=len(self._schema.relationship_types)
+        )
+        return await super().initialize()
+
+    async def execute(
+        self,
+        context: OverlayContext,
+        event: Optional[Event] = None,
+        input_data: Optional[dict[str, Any]] = None
+    ) -> OverlayResult:
+        """
+        Execute a knowledge query.
+
+        Input data:
+        - question: Natural language question (required)
+        - limit: Max results to return
+        - explain: Whether to include query explanation
+        - raw_cypher: If true, execute raw cypher instead
+
+        Returns query results and synthesized answer.
+        """
+        if not self._query_service:
+            return OverlayResult.fail("Query service not configured")
+
+        data = input_data or {}
+        if event:
+            data.update(event.payload or {})
+
+        question = data.get("question")
+        if not question:
+            return OverlayResult.fail("No question provided")
+
+        self._stats["queries_processed"] += 1
+
+        try:
+            # Check for cached compilation
+            cache_key = self._get_cache_key(question, context.trust_flame)
+            cached_query = self._query_cache.get(cache_key)
+
+            if cached_query and self._config.cache_compiled_queries:
+                self._stats["cache_hits"] += 1
+                compiled = cached_query
+            else:
+                # Compile the question to Cypher
+                compiled = await self._query_service.compiler.compile(
+                    question=question,
+                    user_trust=context.trust_flame,
+                    schema=self._schema
+                )
+
+                # Cache the compiled query
+                if self._config.cache_compiled_queries:
+                    self._query_cache[cache_key] = compiled
+
+            # Apply limits
+            limit = min(
+                data.get("limit", self._config.default_limit),
+                self._config.max_results
+            )
+
+            # Execute and get results
+            start_time = datetime.utcnow()
+            result = await self._query_service.execute_and_answer(
+                question=question,
+                context=context,
+                compiled_query=compiled,
+                limit=limit,
+                synthesize=self._config.synthesize_answer
+            )
+            execution_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+
+            # Update stats
+            self._stats["queries_successful"] += 1
+            self._update_avg_time(execution_time)
+
+            # Record history
+            self._record_history(
+                question=question,
+                cypher=compiled.cypher,
+                result_count=result.row_count,
+                execution_time=execution_time,
+                user_id=context.user_id
+            )
+
+            # Build response
+            response_data = {
+                "question": question,
+                "answer": result.synthesized_answer,
+                "result_count": result.row_count,
+                "execution_time_ms": round(execution_time, 2),
+                "complexity": compiled.complexity
+            }
+
+            # Include results if requested
+            if data.get("include_results", True):
+                response_data["results"] = [
+                    row.data for row in result.rows[:limit]
+                ]
+
+            # Include explanation if configured
+            if self._config.include_explanation:
+                response_data["explanation"] = compiled.explanation
+
+            # Include cypher if in debug mode
+            if self._config.include_cypher or data.get("debug"):
+                response_data["cypher"] = compiled.cypher
+                response_data["parameters"] = compiled.parameters
+
+            return OverlayResult.ok(
+                data=response_data,
+                metrics={
+                    "execution_time_ms": execution_time,
+                    "result_count": result.row_count,
+                    "cache_hit": cache_key in self._query_cache
+                }
+            )
+
+        except Exception as e:
+            self._stats["queries_failed"] += 1
+            self._logger.error(
+                "query_execution_failed",
+                question=question,
+                error=str(e)
+            )
+            return OverlayResult.fail(f"Query failed: {str(e)}")
+
+    async def compile_only(
+        self,
+        question: str,
+        user_trust: int = 60
+    ) -> CompiledQuery:
+        """
+        Compile a question without executing.
+
+        Useful for debugging or query preview.
+        """
+        if not self._query_service:
+            raise QueryCompilationError("Query service not configured")
+
+        return await self._query_service.compiler.compile(
+            question=question,
+            user_trust=user_trust,
+            schema=self._schema
+        )
+
+    async def execute_raw(
+        self,
+        cypher: str,
+        parameters: Optional[dict] = None,
+        limit: int = 20
+    ) -> QueryResult:
+        """
+        Execute raw Cypher query.
+
+        For advanced users who want direct Cypher access.
+        """
+        if not self._query_service:
+            raise QueryExecutionError("Query service not configured")
+
+        return await self._query_service.execute_raw(
+            cypher=cypher,
+            parameters=parameters or {},
+            limit=limit
+        )
+
+    def get_query_history(
+        self,
+        user_id: Optional[str] = None,
+        limit: int = 20
+    ) -> list[dict]:
+        """Get recent query history."""
+        history = self._history
+
+        if user_id:
+            history = [h for h in history if h.user_id == user_id]
+
+        return [
+            {
+                "query_id": h.query_id,
+                "question": h.question,
+                "result_count": h.result_count,
+                "execution_time_ms": h.execution_time_ms,
+                "timestamp": h.timestamp.isoformat()
+            }
+            for h in history[-limit:]
+        ]
+
+    def get_suggested_queries(self) -> list[str]:
+        """Get example queries to help users."""
+        return [
+            "What are the most influential capsules?",
+            "Who created the most knowledge this month?",
+            "Find all decisions about authentication",
+            "What capsules contradict each other?",
+            "Show the lineage of capsule X",
+            "What knowledge is related to security?",
+            "Who has the highest trust flame?",
+            "Find all proposals pending approval",
+            "What overlays are currently active?",
+            "Show recent trust changes"
+        ]
+
+    def get_schema_info(self) -> dict:
+        """Get information about the queryable schema."""
+        return {
+            "node_labels": self._schema.node_labels,
+            "relationship_types": self._schema.relationship_types,
+            "node_properties": {
+                label: list(props.keys())
+                for label, props in self._schema.node_properties.items()
+            },
+            "examples": self.get_suggested_queries()
+        }
+
+    def _get_cache_key(self, question: str, trust: int) -> str:
+        """Generate cache key for a question."""
+        # Normalize question
+        normalized = question.lower().strip()
+        # Include trust bracket (0-30, 30-60, 60-80, 80-100)
+        trust_bracket = trust // 30
+        return f"{normalized}:t{trust_bracket}"
+
+    def _record_history(
+        self,
+        question: str,
+        cypher: str,
+        result_count: int,
+        execution_time: float,
+        user_id: Optional[str]
+    ) -> None:
+        """Record query in history."""
+        from uuid import uuid4
+
+        entry = QueryHistoryEntry(
+            query_id=str(uuid4()),
+            question=question,
+            compiled_cypher=cypher,
+            result_count=result_count,
+            execution_time_ms=execution_time,
+            user_id=user_id
+        )
+
+        self._history.append(entry)
+
+        # Trim history
+        if len(self._history) > self._max_history:
+            self._history = self._history[-self._max_history:]
+
+    def _update_avg_time(self, new_time: float) -> None:
+        """Update rolling average execution time."""
+        current = self._stats["avg_execution_time_ms"]
+        count = self._stats["queries_successful"]
+
+        if count == 1:
+            self._stats["avg_execution_time_ms"] = new_time
+        else:
+            # Rolling average
+            self._stats["avg_execution_time_ms"] = (
+                current * (count - 1) + new_time
+            ) / count
+
+    def clear_cache(self) -> int:
+        """Clear compiled query cache."""
+        count = len(self._query_cache)
+        self._query_cache.clear()
+        return count
+
+    def get_stats(self) -> dict:
+        """Get query statistics."""
+        return {
+            **self._stats,
+            "cache_size": len(self._query_cache),
+            "history_size": len(self._history)
+        }
+
+
+# Convenience function
+def create_knowledge_query_overlay(
+    query_service: Optional[KnowledgeQueryService] = None,
+    **kwargs
+) -> KnowledgeQueryOverlay:
+    """
+    Create a knowledge query overlay.
+
+    Args:
+        query_service: Service for query execution
+        **kwargs: Additional configuration
+
+    Returns:
+        Configured KnowledgeQueryOverlay
+    """
+    config = QueryConfig(**kwargs)
+    return KnowledgeQueryOverlay(query_service=query_service, config=config)
