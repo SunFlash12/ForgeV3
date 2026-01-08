@@ -7,7 +7,8 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  # Docker requires lowercase image names
+  IMAGE_NAME: ${{ github.repository_owner }}/forgev3
 
 jobs:
   # ===========================================================================
@@ -37,9 +38,11 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract version
+      - name: Extract version and set image name
         id: version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+        run: |
+          echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+          echo "IMAGE_NAME_LC=$(echo ${{ env.IMAGE_NAME }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
 
       - name: Build and push Cascade API
         uses: docker/build-push-action@v5
@@ -48,8 +51,8 @@ jobs:
           file: ./forge-cascade-v2/Dockerfile
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/cascade-api:${{ steps.version.outputs.VERSION }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/cascade-api:latest
+            ${{ env.REGISTRY }}/${{ steps.version.outputs.IMAGE_NAME_LC }}/cascade-api:${{ steps.version.outputs.VERSION }}
+            ${{ env.REGISTRY }}/${{ steps.version.outputs.IMAGE_NAME_LC }}/cascade-api:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -60,8 +63,8 @@ jobs:
           file: ./forge-cascade-v2/frontend/Dockerfile
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/frontend:${{ steps.version.outputs.VERSION }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/frontend:latest
+            ${{ env.REGISTRY }}/${{ steps.version.outputs.IMAGE_NAME_LC }}/frontend:${{ steps.version.outputs.VERSION }}
+            ${{ env.REGISTRY }}/${{ steps.version.outputs.IMAGE_NAME_LC }}/frontend:latest
           build-args: |
             VITE_API_URL=http://localhost:8001/api/v1
           cache-from: type=gha
@@ -90,8 +93,8 @@ jobs:
 
             ### Docker Images
             ```bash
-            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/cascade-api:${{ steps.version.outputs.VERSION }}
-            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/frontend:${{ steps.version.outputs.VERSION }}
+            docker pull ${{ env.REGISTRY }}/${{ steps.version.outputs.IMAGE_NAME_LC }}/cascade-api:${{ steps.version.outputs.VERSION }}
+            docker pull ${{ env.REGISTRY }}/${{ steps.version.outputs.IMAGE_NAME_LC }}/frontend:${{ steps.version.outputs.VERSION }}
             ```
 
             ### Changes
@@ -100,8 +103,8 @@ jobs:
             ### Quick Start
             ```bash
             # Pull images
-            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/cascade-api:${{ steps.version.outputs.VERSION }}
-            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/frontend:${{ steps.version.outputs.VERSION }}
+            docker pull ${{ env.REGISTRY }}/${{ steps.version.outputs.IMAGE_NAME_LC }}/cascade-api:${{ steps.version.outputs.VERSION }}
+            docker pull ${{ env.REGISTRY }}/${{ steps.version.outputs.IMAGE_NAME_LC }}/frontend:${{ steps.version.outputs.VERSION }}
 
             # Or use docker-compose
             docker-compose pull
