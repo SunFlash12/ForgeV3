@@ -1,4 +1,4 @@
-import React, { Component } from 'react';
+import React, { Component, useEffect, useRef, useCallback } from 'react';
 import type { ErrorInfo, ReactNode } from 'react';
 import { Loader2, TrendingUp, TrendingDown, AlertTriangle, RefreshCw } from 'lucide-react';
 import type { TrustLevel, HealthStatus, AnomalySeverity } from '../../types';
@@ -430,6 +430,35 @@ interface ModalProps {
 }
 
 export function Modal({ isOpen, onClose, title, children, footer, size = 'md' }: ModalProps) {
+  const modalRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+
+  // Handle Escape key to close modal
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      onClose();
+    }
+  }, [onClose]);
+
+  // Focus trap and keyboard handling
+  useEffect(() => {
+    if (!isOpen) return;
+
+    // Add escape key listener
+    document.addEventListener('keydown', handleKeyDown);
+
+    // Focus the close button when modal opens
+    closeButtonRef.current?.focus();
+
+    // Prevent body scroll when modal is open
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = '';
+    };
+  }, [isOpen, handleKeyDown]);
+
   if (!isOpen) return null;
 
   const sizeClasses = {
@@ -440,23 +469,35 @@ export function Modal({ isOpen, onClose, title, children, footer, size = 'md' }:
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal-title"
+    >
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
         onClick={onClose}
+        aria-hidden="true"
       />
-      
+
       {/* Modal */}
-      <div className={`relative ${sizeClasses[size]} w-full bg-white rounded-2xl shadow-2xl animate-scale-in`}>
+      <div
+        ref={modalRef}
+        className={`relative ${sizeClasses[size]} w-full bg-white rounded-2xl shadow-2xl animate-scale-in max-h-[90vh] overflow-y-auto`}
+      >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-          <h2 className="text-lg font-semibold text-slate-800">{title}</h2>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 sticky top-0 bg-white rounded-t-2xl">
+          <h2 id="modal-title" className="text-lg font-semibold text-slate-800">{title}</h2>
           <button
+            ref={closeButtonRef}
+            type="button"
             onClick={onClose}
-            className="p-2 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
+            className="p-2 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors focus:outline-none focus:ring-2 focus:ring-sky-500"
+            aria-label="Close dialog"
           >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
@@ -469,7 +510,7 @@ export function Modal({ isOpen, onClose, title, children, footer, size = 'md' }:
 
         {/* Footer */}
         {footer && (
-          <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-100 bg-slate-50 rounded-b-2xl">
+          <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-100 bg-slate-50 rounded-b-2xl sticky bottom-0">
             {footer}
           </div>
         )}

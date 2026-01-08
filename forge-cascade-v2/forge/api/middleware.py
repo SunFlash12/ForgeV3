@@ -246,8 +246,9 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
                 settings = get_settings()
                 payload = verify_token(token, settings.jwt_secret_key)
 
-                # Check if token is blacklisted (revoked)
-                if TokenBlacklist.is_blacklisted(payload.jti if hasattr(payload, 'jti') else None):
+                # Check if token is blacklisted (revoked) - async for Redis support
+                jti = payload.jti if hasattr(payload, 'jti') else None
+                if await TokenBlacklist.is_blacklisted_async(jti):
                     logger.warning(
                         "blacklisted_token_used",
                         path=request.url.path,
@@ -315,11 +316,11 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     def __init__(
         self,
         app,
-        requests_per_minute: int = 60,
-        requests_per_hour: int = 1000,
-        burst_allowance: int = 10,
-        auth_requests_per_minute: int = 10,  # Stricter for auth
-        auth_requests_per_hour: int = 50,
+        requests_per_minute: int = 120,
+        requests_per_hour: int = 3000,
+        burst_allowance: int = 30,
+        auth_requests_per_minute: int = 30,  # More lenient for development
+        auth_requests_per_hour: int = 200,
         redis_url: Optional[str] = None,
     ):
         super().__init__(app)

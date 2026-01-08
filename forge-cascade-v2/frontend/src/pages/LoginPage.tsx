@@ -1,9 +1,45 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
-import { Shield, Eye, EyeOff, Loader2, Sparkles } from 'lucide-react';
+import { Shield, Eye, EyeOff, Loader2, Sparkles, Check, X } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 
 type AuthMode = 'login' | 'register';
+
+// Password strength calculation
+interface PasswordStrength {
+  score: number; // 0-4
+  label: string;
+  color: string;
+  requirements: { met: boolean; text: string }[];
+}
+
+function calculatePasswordStrength(password: string): PasswordStrength {
+  const requirements = [
+    { met: password.length >= 8, text: 'At least 8 characters' },
+    { met: /[A-Z]/.test(password), text: 'One uppercase letter' },
+    { met: /[a-z]/.test(password), text: 'One lowercase letter' },
+    { met: /[0-9]/.test(password), text: 'One number' },
+    { met: /[^A-Za-z0-9]/.test(password), text: 'One special character' },
+  ];
+
+  const score = requirements.filter((r) => r.met).length;
+
+  const strengthMap: Record<number, { label: string; color: string }> = {
+    0: { label: 'Very Weak', color: 'bg-red-500' },
+    1: { label: 'Weak', color: 'bg-red-400' },
+    2: { label: 'Fair', color: 'bg-amber-500' },
+    3: { label: 'Good', color: 'bg-yellow-500' },
+    4: { label: 'Strong', color: 'bg-green-500' },
+    5: { label: 'Very Strong', color: 'bg-green-600' },
+  };
+
+  return {
+    score,
+    label: strengthMap[score].label,
+    color: strengthMap[score].color,
+    requirements,
+  };
+}
 
 export default function LoginPage() {
   const [mode, setMode] = useState<AuthMode>('login');
@@ -16,6 +52,14 @@ export default function LoginPage() {
 
   const { login, register, isAuthenticated, isLoading, error, clearError } = useAuthStore();
   const navigate = useNavigate();
+
+  // Calculate password strength in register mode
+  const passwordStrength = useMemo(() => {
+    if (mode === 'register' && password) {
+      return calculatePasswordStrength(password);
+    }
+    return null;
+  }, [password, mode]);
 
   if (isAuthenticated) {
     return <Navigate to="/" replace />;
@@ -198,10 +242,54 @@ export default function LoginPage() {
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
+
+              {/* Password Strength Indicator */}
+              {mode === 'register' && password && passwordStrength && (
+                <div className="mt-3 space-y-2">
+                  {/* Strength Bar */}
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 h-1.5 bg-slate-200 rounded-full overflow-hidden flex gap-0.5">
+                      {[1, 2, 3, 4, 5].map((level) => (
+                        <div
+                          key={level}
+                          className={`flex-1 h-full rounded-full transition-colors ${
+                            level <= passwordStrength.score ? passwordStrength.color : 'bg-slate-200'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                    <span className={`text-xs font-medium ${
+                      passwordStrength.score <= 1 ? 'text-red-500' :
+                      passwordStrength.score <= 2 ? 'text-amber-500' :
+                      passwordStrength.score <= 3 ? 'text-yellow-600' :
+                      'text-green-600'
+                    }`}>
+                      {passwordStrength.label}
+                    </span>
+                  </div>
+
+                  {/* Requirements List */}
+                  <div className="grid grid-cols-2 gap-1">
+                    {passwordStrength.requirements.map((req, idx) => (
+                      <div key={idx} className="flex items-center gap-1.5 text-xs">
+                        {req.met ? (
+                          <Check className="w-3.5 h-3.5 text-green-500" />
+                        ) : (
+                          <X className="w-3.5 h-3.5 text-slate-300" />
+                        )}
+                        <span className={req.met ? 'text-slate-600' : 'text-slate-400'}>
+                          {req.text}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {mode === 'register' && (

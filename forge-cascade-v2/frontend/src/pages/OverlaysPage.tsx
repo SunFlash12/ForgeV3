@@ -123,11 +123,17 @@ export default function OverlaysPage() {
 
   if (overlays.length === 0) {
     return (
-      <EmptyState
-        icon={<Layers className="w-12 h-12" />}
-        title="No Overlays"
-        description="No overlay modules have been registered in the system."
-      />
+      <div className="p-6 max-w-6xl mx-auto">
+        <div className="mb-8">
+          <h1 className="text-2xl font-bold text-slate-800 mb-2">Overlay Management</h1>
+          <p className="text-slate-500">Manage system overlays and intelligence modules</p>
+        </div>
+        <EmptyState
+          icon={<Layers className="w-12 h-12" />}
+          title="No Overlays Registered"
+          description="No overlay modules have been registered in the system yet. Overlays provide modular intelligence capabilities like security validation, ML processing, and lineage tracking."
+        />
+      </div>
     );
   }
 
@@ -153,7 +159,7 @@ export default function OverlaysPage() {
       </div>
 
       {/* Stats Row */}
-      <div className="grid grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <Card className="p-4">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-blue-500/20 rounded-lg">
@@ -256,7 +262,7 @@ export default function OverlaysPage() {
               {/* Expanded Details */}
               {isExpanded && (
                 <div className="border-t border-slate-200/50 p-4">
-                  <div className="grid grid-cols-3 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     {/* Metrics */}
                     <div>
                       <h4 className="text-sm font-medium text-slate-500 mb-3">Performance Metrics</h4>

@@ -78,10 +78,13 @@ export function Sidebar() {
           </div>
         )}
         <button
+          type="button"
           onClick={() => setCollapsed(!collapsed)}
-          className={`p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors ${collapsed ? 'hidden' : ''}`}
+          className={`p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors focus:outline-none focus:ring-2 focus:ring-sky-500 ${collapsed ? 'hidden' : ''}`}
+          aria-label="Collapse sidebar"
+          aria-expanded={!collapsed}
         >
-          <ChevronLeft size={18} />
+          <ChevronLeft size={18} aria-hidden="true" />
         </button>
       </div>
 
@@ -108,30 +111,33 @@ export function Sidebar() {
       {collapsed && (
         <div className="p-3 border-b border-slate-100">
           <button
+            type="button"
             onClick={() => setCollapsed(false)}
-            className="w-full p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors flex justify-center"
+            className="w-full p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors flex justify-center focus:outline-none focus:ring-2 focus:ring-sky-500"
+            aria-label="Expand sidebar"
+            aria-expanded={false}
           >
-            <ChevronRight size={18} />
+            <ChevronRight size={18} aria-hidden="true" />
           </button>
         </div>
       )}
 
       {/* Navigation */}
-      <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+      <nav className="flex-1 p-3 space-y-1 overflow-y-auto" aria-label="Main navigation">
         {navItems.filter(canAccess).map((item) => (
           <NavLink
             key={item.path}
             to={item.path}
             className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 ${
+              `flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-sky-500 ${
                 isActive
-                  ? 'bg-sky-50 text-sky-600 font-semibold shadow-sm'
+                  ? 'bg-sky-50 text-sky-600 font-semibold shadow-sm border-l-4 border-sky-500'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
               } ${collapsed ? 'justify-center px-2' : ''}`
             }
-            title={collapsed ? item.label : undefined}
+            aria-label={collapsed ? item.label : undefined}
           >
-            <item.icon size={20} />
+            <item.icon size={20} aria-hidden="true" />
             {!collapsed && <span className="text-sm">{item.label}</span>}
           </NavLink>
         ))}
@@ -144,27 +150,28 @@ export function Sidebar() {
             key={item.path}
             to={item.path}
             className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 ${
+              `flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-sky-500 ${
                 isActive
                   ? 'bg-sky-50 text-sky-600 font-semibold'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
               } ${collapsed ? 'justify-center px-2' : ''}`
             }
-            title={collapsed ? item.label : undefined}
+            aria-label={collapsed ? item.label : undefined}
           >
-            <item.icon size={20} />
+            <item.icon size={20} aria-hidden="true" />
             {!collapsed && <span className="text-sm">{item.label}</span>}
           </NavLink>
         ))}
-        
+
         <button
+          type="button"
           onClick={() => logout()}
-          className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-500 hover:text-red-600 hover:bg-red-50 transition-all duration-200 w-full ${
+          className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-500 hover:text-red-600 hover:bg-red-50 transition-all duration-200 w-full focus:outline-none focus:ring-2 focus:ring-red-500 ${
             collapsed ? 'justify-center px-2' : ''
           }`}
-          title={collapsed ? 'Logout' : undefined}
+          aria-label="Logout from account"
         >
-          <LogOut size={20} />
+          <LogOut size={20} aria-hidden="true" />
           {!collapsed && <span className="text-sm">Logout</span>}
         </button>
       </div>

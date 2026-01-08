@@ -680,3 +680,294 @@ select.input {
 .empty-state p {
   font-size: 14px;
 }
+
+/* ============================================================================
+   Dark Mode Styles
+   ============================================================================ */
+
+.dark body {
+  background-color: #0f172a;
+  color: #e2e8f0;
+}
+
+.dark h1, .dark h2, .dark h3, .dark h4, .dark h5, .dark h6 {
+  color: #f1f5f9;
+}
+
+/* Dark scrollbar */
+.dark ::-webkit-scrollbar-thumb {
+  background: #475569;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+
+.dark * {
+  scrollbar-color: #475569 transparent;
+}
+
+/* Dark cards */
+.dark .card,
+.dark .card-hover,
+.dark .card-accent {
+  background: #1e293b;
+  border-color: #334155;
+}
+
+.dark .card-hover:hover {
+  border-color: #0ea5e9;
+}
+
+/* Dark buttons */
+.dark .btn-secondary {
+  background: #334155;
+  color: #e2e8f0;
+  border-color: #475569;
+}
+
+.dark .btn-secondary:hover:not(:disabled) {
+  background: #475569;
+  border-color: #64748b;
+}
+
+/* Dark inputs */
+.dark .input {
+  background: #1e293b;
+  border-color: #334155;
+  color: #e2e8f0;
+}
+
+.dark .input::placeholder {
+  color: #64748b;
+}
+
+.dark .input:hover {
+  border-color: #475569;
+}
+
+.dark .input:focus {
+  border-color: #0ea5e9;
+  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.2);
+}
+
+.dark .input:disabled {
+  background: #0f172a;
+  color: #64748b;
+}
+
+.dark .label {
+  color: #94a3b8;
+}
+
+/* Dark tables */
+.dark .table-container {
+  background: #1e293b;
+  border-color: #334155;
+}
+
+.dark .table th {
+  background: #0f172a;
+  color: #94a3b8;
+  border-color: #334155;
+}
+
+.dark .table td {
+  color: #cbd5e1;
+  border-color: #1e293b;
+}
+
+.dark .table tbody tr:hover {
+  background: #0f172a;
+}
+
+/* Dark navigation */
+.dark .nav-item {
+  color: #94a3b8;
+}
+
+.dark .nav-item:hover {
+  color: #f1f5f9;
+  background: #1e293b;
+}
+
+.dark .nav-item-active {
+  color: #0ea5e9;
+  background: rgba(14, 165, 233, 0.15);
+}
+
+/* Dark badges */
+.dark .badge-neutral {
+  background: #1e293b;
+  color: #94a3b8;
+  border-color: #334155;
+}
+
+/* Dark skeleton */
+.dark .skeleton {
+  background: linear-gradient(
+    90deg,
+    #1e293b 0%,
+    #334155 50%,
+    #1e293b 100%
+  );
+  background-size: 200% 100%;
+}
+
+/* Dark glass */
+.dark .glass {
+  background: rgba(30, 41, 59, 0.8);
+  border-color: rgba(51, 65, 85, 0.5);
+}
+
+/* Dark divider */
+.dark .divider {
+  background: #334155;
+}
+
+/* Dark empty state */
+.dark .empty-state {
+  color: #64748b;
+}
+
+/* Dark modal overlay */
+.dark .modal-overlay {
+  background: rgba(0, 0, 0, 0.7);
+}
+
+/* Tailwind dark mode overrides for common utilities */
+.dark .bg-white {
+  background-color: #1e293b !important;
+}
+
+.dark .bg-gray-50,
+.dark .bg-slate-50 {
+  background-color: #0f172a !important;
+}
+
+.dark .bg-gray-100,
+.dark .bg-slate-100 {
+  background-color: #1e293b !important;
+}
+
+.dark .border-gray-200,
+.dark .border-slate-200 {
+  border-color: #334155 !important;
+}
+
+.dark .text-gray-900,
+.dark .text-slate-900 {
+  color: #f1f5f9 !important;
+}
+
+.dark .text-gray-800,
+.dark .text-slate-800 {
+  color: #e2e8f0 !important;
+}
+
+.dark .text-gray-700,
+.dark .text-slate-700 {
+  color: #cbd5e1 !important;
+}
+
+.dark .text-gray-600,
+.dark .text-slate-600 {
+  color: #94a3b8 !important;
+}
+
+.dark .text-gray-500,
+.dark .text-slate-500 {
+  color: #64748b !important;
+}
+
+/* ============================================================================
+   Compact Mode
+   ============================================================================ */
+
+.compact .card {
+  padding: 16px;
+  border-radius: 12px;
+}
+
+.compact .btn {
+  padding: 8px 16px;
+}
+
+.compact .btn-sm {
+  padding: 4px 12px;
+}
+
+.compact .input {
+  padding: 8px 12px;
+}
+
+.compact .nav-item,
+.compact .nav-item-active {
+  padding: 6px 10px;
+  gap: 8px;
+}
+
+/* ============================================================================
+   Reduce Motion
+   ============================================================================ */
+
+.reduce-motion * {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
+
+/* ============================================================================
+   High Contrast Mode
+   ============================================================================ */
+
+.high-contrast body {
+  color: #000;
+}
+
+.high-contrast .card {
+  border-width: 2px;
+  border-color: #000;
+}
+
+.high-contrast .btn-primary {
+  background: #0066cc;
+}
+
+.high-contrast .btn-secondary {
+  background: #fff;
+  color: #000;
+  border: 2px solid #000;
+}
+
+.high-contrast .input {
+  border-width: 2px;
+  border-color: #000;
+}
+
+.high-contrast .text-slate-500,
+.high-contrast .text-gray-500,
+.high-contrast .text-slate-600,
+.high-contrast .text-gray-600 {
+  color: #333 !important;
+}
+
+/* High contrast dark mode */
+.dark.high-contrast body {
+  color: #fff;
+}
+
+.dark.high-contrast .card {
+  border-color: #fff;
+}
+
+.dark.high-contrast .input {
+  border-color: #fff;
+}
+
+.dark.high-contrast .text-slate-500,
+.dark.high-contrast .text-gray-500,
+.dark.high-contrast .text-slate-600,
+.dark.high-contrast .text-gray-600 {
+  color: #ddd !important;
+}
