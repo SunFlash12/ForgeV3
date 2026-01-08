@@ -47,6 +47,15 @@ class BrokenChainError(LineageError):
 
 
 @dataclass
+class SemanticEdgeInfo:
+    """Information about a semantic edge."""
+    target_id: str
+    relationship_type: str  # SUPPORTS, CONTRADICTS, etc.
+    confidence: float = 1.0
+    bidirectional: bool = False
+
+
+@dataclass
 class LineageNode:
     """A node in the lineage graph."""
     capsule_id: str
@@ -55,15 +64,25 @@ class LineageNode:
     creator_id: Optional[str] = None
     created_at: Optional[datetime] = None
     trust_at_creation: int = 60
-    
-    # Relationships
+
+    # Derivation relationships (DERIVED_FROM)
     parent_ids: list[str] = field(default_factory=list)
     child_ids: list[str] = field(default_factory=list)
-    
+
+    # Semantic relationships
+    semantic_edges: list[SemanticEdgeInfo] = field(default_factory=list)
+    supports: list[str] = field(default_factory=list)  # IDs this capsule supports
+    supported_by: list[str] = field(default_factory=list)  # IDs that support this capsule
+    contradicts: list[str] = field(default_factory=list)  # IDs this capsule contradicts
+    elaborates: list[str] = field(default_factory=list)  # IDs this capsule elaborates
+    references: list[str] = field(default_factory=list)  # IDs this capsule references
+    related_to: list[str] = field(default_factory=list)  # Generic semantic relations
+
     # Metrics
-    depth: int = 0  # Distance from root
+    depth: int = 0  # Distance from root (derivation)
     descendant_count: int = 0
     influence_score: float = 0.0
+    semantic_connectivity: int = 0  # Total semantic edges
 
 
 @dataclass
@@ -126,6 +145,7 @@ class LineageTrackerOverlay(BaseOverlay):
         EventType.CAPSULE_UPDATED,
         EventType.CAPSULE_LINKED,
         EventType.CASCADE_TRIGGERED,
+        EventType.SEMANTIC_EDGE_CREATED,  # New: track semantic relationships
     }
     
     REQUIRED_CAPABILITIES = {
@@ -224,6 +244,8 @@ class LineageTrackerOverlay(BaseOverlay):
                 result_data = await self._handle_capsule_linked(data, context)
             elif event.event_type == EventType.CASCADE_TRIGGERED:
                 result_data = await self._handle_cascade(data, context)
+            elif event.event_type == EventType.SEMANTIC_EDGE_CREATED:
+                result_data = await self._handle_semantic_edge_created(data, context)
             else:
                 result_data = await self._get_lineage_info(data, context)
         else:
@@ -404,23 +426,224 @@ class LineageTrackerOverlay(BaseOverlay):
         """Handle cascade event - update affected lineages."""
         source_id = data.get("source_id")
         affected_ids = data.get("affected_ids", [])
-        
+
         # Update influence scores for affected nodes
         for node_id in affected_ids:
             if node_id in self._nodes:
                 self._update_influence(node_id)
-        
+
         # Compute metrics if enabled
         metrics = None
         if self._enable_metrics and source_id:
             metrics = self._compute_subtree_metrics(source_id)
-        
+
         return {
             "cascade_processed": True,
             "source_id": source_id,
             "affected_count": len(affected_ids),
             "metrics": metrics.__dict__ if metrics else None
         }
+
+    async def _handle_semantic_edge_created(
+        self,
+        data: dict,
+        context: OverlayContext
+    ) -> dict:
+        """Handle semantic edge creation event."""
+        source_id = data.get("source_id")
+        target_id = data.get("target_id")
+        relationship_type = data.get("relationship_type", "RELATED_TO")
+        confidence = data.get("confidence", 1.0)
+        bidirectional = data.get("bidirectional", False)
+
+        if not source_id or not target_id:
+            return {"error": "Missing source_id or target_id"}
+
+        # Create edge info
+        edge_info = SemanticEdgeInfo(
+            target_id=target_id,
+            relationship_type=relationship_type,
+            confidence=confidence,
+            bidirectional=bidirectional,
+        )
+
+        # Update source node
+        if source_id in self._nodes:
+            source_node = self._nodes[source_id]
+            source_node.semantic_edges.append(edge_info)
+            source_node.semantic_connectivity += 1
+
+            # Update typed lists
+            if relationship_type == "SUPPORTS":
+                source_node.supports.append(target_id)
+            elif relationship_type == "CONTRADICTS":
+                source_node.contradicts.append(target_id)
+            elif relationship_type == "ELABORATES":
+                source_node.elaborates.append(target_id)
+            elif relationship_type == "REFERENCES":
+                source_node.references.append(target_id)
+            else:
+                source_node.related_to.append(target_id)
+
+        # For bidirectional edges, also update target node
+        if bidirectional and target_id in self._nodes:
+            target_node = self._nodes[target_id]
+            reverse_edge = SemanticEdgeInfo(
+                target_id=source_id,
+                relationship_type=relationship_type,
+                confidence=confidence,
+                bidirectional=True,
+            )
+            target_node.semantic_edges.append(reverse_edge)
+            target_node.semantic_connectivity += 1
+
+            if relationship_type == "SUPPORTS":
+                target_node.supported_by.append(source_id)
+            elif relationship_type == "CONTRADICTS":
+                target_node.contradicts.append(source_id)
+
+        # Update supported_by for target if SUPPORTS relationship
+        if relationship_type == "SUPPORTS" and target_id in self._nodes:
+            self._nodes[target_id].supported_by.append(source_id)
+
+        self._logger.info(
+            "semantic_edge_tracked",
+            source_id=source_id,
+            target_id=target_id,
+            relationship_type=relationship_type,
+        )
+
+        return {
+            "edge_tracked": True,
+            "source_id": source_id,
+            "target_id": target_id,
+            "relationship_type": relationship_type,
+            "bidirectional": bidirectional,
+        }
+
+    def compute_semantic_distance(
+        self,
+        source_id: str,
+        target_id: str,
+        max_hops: int = 5
+    ) -> Optional[dict]:
+        """
+        Compute semantic distance between two capsules.
+
+        Returns the shortest path through semantic relationships
+        and the relationship types traversed.
+
+        Args:
+            source_id: Starting capsule ID
+            target_id: Target capsule ID
+            max_hops: Maximum path length
+
+        Returns:
+            Dict with distance, path, and relationship types, or None if not connected
+        """
+        if source_id not in self._nodes or target_id not in self._nodes:
+            return None
+
+        # BFS to find shortest path
+        from collections import deque
+
+        queue = deque([(source_id, [source_id], [])])
+        visited = {source_id}
+
+        while queue:
+            current_id, path, rel_types = queue.popleft()
+
+            if current_id == target_id:
+                return {
+                    "distance": len(path) - 1,
+                    "path": path,
+                    "relationship_types": rel_types,
+                    "found": True,
+                }
+
+            if len(path) > max_hops:
+                continue
+
+            node = self._nodes.get(current_id)
+            if not node:
+                continue
+
+            # Follow semantic edges
+            for edge in node.semantic_edges:
+                neighbor_id = edge.target_id
+                if neighbor_id not in visited and neighbor_id in self._nodes:
+                    visited.add(neighbor_id)
+                    queue.append((
+                        neighbor_id,
+                        path + [neighbor_id],
+                        rel_types + [edge.relationship_type]
+                    ))
+
+            # Also follow derivation edges
+            for parent_id in node.parent_ids:
+                if parent_id not in visited and parent_id in self._nodes:
+                    visited.add(parent_id)
+                    queue.append((
+                        parent_id,
+                        path + [parent_id],
+                        rel_types + ["DERIVED_FROM"]
+                    ))
+
+            for child_id in node.child_ids:
+                if child_id not in visited and child_id in self._nodes:
+                    visited.add(child_id)
+                    queue.append((
+                        child_id,
+                        path + [child_id],
+                        rel_types + ["DERIVED_TO"]
+                    ))
+
+        return {"distance": -1, "path": [], "relationship_types": [], "found": False}
+
+    def find_contradiction_clusters(self, min_size: int = 2) -> list[dict]:
+        """
+        Find clusters of mutually contradicting capsules.
+
+        Args:
+            min_size: Minimum cluster size
+
+        Returns:
+            List of contradiction clusters with their members
+        """
+        clusters = []
+        visited = set()
+
+        for node_id, node in self._nodes.items():
+            if node_id in visited or not node.contradicts:
+                continue
+
+            # BFS to find all connected contradicting nodes
+            cluster = set()
+            queue = [node_id]
+
+            while queue:
+                current = queue.pop(0)
+                if current in visited:
+                    continue
+
+                visited.add(current)
+                cluster.add(current)
+
+                current_node = self._nodes.get(current)
+                if current_node:
+                    for contra_id in current_node.contradicts:
+                        if contra_id not in visited and contra_id in self._nodes:
+                            queue.append(contra_id)
+
+            if len(cluster) >= min_size:
+                clusters.append({
+                    "cluster_id": f"contra_{len(clusters)}",
+                    "capsule_ids": list(cluster),
+                    "size": len(cluster),
+                    "severity": "high" if len(cluster) > 3 else "medium",
+                })
+
+        return clusters
     
     async def _get_lineage_info(
         self,
@@ -472,7 +695,8 @@ class LineageTrackerOverlay(BaseOverlay):
                 "trust_at_creation": node.trust_at_creation,
                 "influence_score": round(node.influence_score, 3),
                 "parent_count": len(node.parent_ids),
-                "child_count": len(node.child_ids)
+                "child_count": len(node.child_ids),
+                "semantic_connectivity": node.semantic_connectivity,
             },
             "ancestors": {
                 "count": len(ancestors),
@@ -487,6 +711,15 @@ class LineageTrackerOverlay(BaseOverlay):
                 "root_id": chain.root_id if chain else None,
                 "length": chain.total_length if chain else 0,
                 "trust_gradient": chain.trust_gradient if chain else []
+            },
+            "semantic_edges": {
+                "supports": node.supports[:10],
+                "supported_by": node.supported_by[:10],
+                "contradicts": node.contradicts[:10],
+                "elaborates": node.elaborates[:10],
+                "references": node.references[:10],
+                "related_to": node.related_to[:10],
+                "total_count": node.semantic_connectivity,
             },
             "metrics": metrics.__dict__ if metrics else None
         }
@@ -746,7 +979,25 @@ class LineageTrackerOverlay(BaseOverlay):
                     affected_nodes=[capsule_id, parent_id],
                     description=f"Parent {parent_id} not found in lineage graph"
                 ))
-        
+
+        # Check for contradiction involvement
+        if node.contradicts:
+            anomalies.append(LineageAnomaly(
+                anomaly_type="contradiction_detected",
+                severity="medium" if len(node.contradicts) == 1 else "high",
+                affected_nodes=[capsule_id] + node.contradicts[:5],
+                description=f"Capsule has {len(node.contradicts)} contradicting relationships"
+            ))
+
+        # Check for high semantic connectivity (potential knowledge hub)
+        if node.semantic_connectivity > 20:
+            anomalies.append(LineageAnomaly(
+                anomaly_type="high_connectivity",
+                severity="low",
+                affected_nodes=[capsule_id],
+                description=f"Capsule has high semantic connectivity ({node.semantic_connectivity} edges)"
+            ))
+
         return anomalies
     
     def get_roots(self) -> list[str]:

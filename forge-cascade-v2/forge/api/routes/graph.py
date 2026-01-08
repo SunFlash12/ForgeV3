@@ -24,8 +24,15 @@ from forge.api.dependencies import (
     CorrelationIdDep,
     CapsuleRepoDep,
     AuditRepoDep,
+    GraphRepoDep,
+    TemporalRepoDep,
+    OverlayManagerDep,
+    EventSystemDep,
 )
-from forge.models.base import TrustLevel
+from forge.models.base import TrustLevel, generate_id
+from forge.models.graph_analysis import NodeRanking, CommunityResult, GraphMetrics
+from forge.models.temporal import CapsuleVersion, TrustSnapshot
+from forge.models.events import Event, EventType, EventPriority
 
 router = APIRouter()
 
@@ -206,6 +213,7 @@ class ContradictionResponse(BaseModel):
 async def compute_pagerank(
     request: PageRankRequest,
     user: ActiveUserDep,
+    graph_repo: GraphRepoDep,
 ) -> list[NodeRankingResponse]:
     """
     Compute PageRank scores for nodes in the graph.
@@ -213,15 +221,29 @@ async def compute_pagerank(
     PageRank measures the importance/influence of nodes based on
     their connections. Useful for identifying key capsules or users.
     """
-    # This would be wired to the graph algorithms overlay
-    # For now, return placeholder until wiring is complete
-    return []
+    rankings = await graph_repo.compute_pagerank(
+        node_label=request.node_label,
+        relationship_type=request.relationship_type,
+        damping_factor=request.damping_factor,
+        max_iterations=request.max_iterations,
+        limit=request.limit,
+    )
+    return [
+        NodeRankingResponse(
+            node_id=r.node_id,
+            node_type=r.node_type,
+            score=r.score,
+            rank=r.rank,
+        )
+        for r in rankings
+    ]
 
 
 @router.post("/algorithms/centrality", response_model=list[NodeRankingResponse])
 async def compute_centrality(
     request: CentralityRequest,
     user: ActiveUserDep,
+    graph_repo: GraphRepoDep,
 ) -> list[NodeRankingResponse]:
     """
     Compute centrality metrics for nodes.
@@ -231,13 +253,28 @@ async def compute_centrality(
     - betweenness: Bridge nodes between communities
     - closeness: Average distance to all other nodes
     """
-    return []
+    rankings = await graph_repo.compute_centrality(
+        centrality_type=request.centrality_type,
+        node_label=request.node_label,
+        relationship_type=request.relationship_type,
+        limit=request.limit,
+    )
+    return [
+        NodeRankingResponse(
+            node_id=r.node_id,
+            node_type=r.node_type,
+            score=r.score,
+            rank=r.rank,
+        )
+        for r in rankings
+    ]
 
 
 @router.post("/algorithms/communities", response_model=list[CommunityResponse])
 async def detect_communities(
     request: CommunityDetectionRequest,
     user: ActiveUserDep,
+    graph_repo: GraphRepoDep,
 ) -> list[CommunityResponse]:
     """
     Detect communities in the knowledge graph.
@@ -245,13 +282,30 @@ async def detect_communities(
     Uses Louvain or label propagation algorithm to find
     clusters of closely related capsules.
     """
-    return []
+    communities = await graph_repo.detect_communities(
+        algorithm=request.algorithm,
+        node_label=request.node_label,
+        relationship_type=request.relationship_type,
+        min_community_size=request.min_community_size,
+        limit=request.limit,
+    )
+    return [
+        CommunityResponse(
+            community_id=c.community_id,
+            size=c.size,
+            density=c.density,
+            dominant_type=c.dominant_type,
+            node_ids=c.node_ids,
+        )
+        for c in communities
+    ]
 
 
 @router.post("/algorithms/trust-transitivity")
 async def compute_trust_transitivity(
     request: TrustTransitivityRequest,
     user: ActiveUserDep,
+    graph_repo: GraphRepoDep,
 ) -> dict[str, Any]:
     """
     Compute transitive trust between two nodes.
@@ -259,32 +313,40 @@ async def compute_trust_transitivity(
     Calculates trust through graph paths, with decay
     over distance.
     """
+    result = await graph_repo.compute_trust_transitivity(
+        source_id=request.source_id,
+        target_id=request.target_id,
+        max_hops=request.max_hops,
+        decay_factor=request.decay_factor,
+    )
     return {
         "source_id": request.source_id,
         "target_id": request.target_id,
-        "trust_score": 0.0,
-        "path_count": 0,
-        "best_path": [],
-        "best_path_length": 0
+        "trust_score": result.trust_score,
+        "path_count": result.path_count,
+        "best_path": result.best_path,
+        "best_path_length": result.best_path_length,
     }
 
 
 @router.get("/metrics", response_model=GraphMetricsResponse)
 async def get_graph_metrics(
     user: ActiveUserDep,
+    graph_repo: GraphRepoDep,
 ) -> GraphMetricsResponse:
     """
     Get overall graph statistics and metrics.
     """
+    metrics = await graph_repo.get_graph_metrics()
     return GraphMetricsResponse(
-        total_nodes=0,
-        total_edges=0,
-        density=0.0,
-        avg_clustering=0.0,
-        connected_components=0,
-        diameter=None,
-        node_distribution={},
-        edge_distribution={}
+        total_nodes=metrics.total_nodes,
+        total_edges=metrics.total_edges,
+        density=metrics.density,
+        avg_clustering=metrics.avg_clustering,
+        connected_components=metrics.connected_components,
+        diameter=metrics.diameter,
+        node_distribution=metrics.node_distribution,
+        edge_distribution=metrics.edge_distribution,
     )
 
 
@@ -296,6 +358,8 @@ async def get_graph_metrics(
 async def query_knowledge(
     request: KnowledgeQueryRequest,
     user: ActiveUserDep,
+    overlay_manager: OverlayManagerDep,
+    graph_repo: GraphRepoDep,
 ) -> KnowledgeQueryResponse:
     """
     Query the knowledge graph using natural language.
@@ -305,13 +369,52 @@ async def query_knowledge(
     - "Who contributed most to security knowledge?"
     - "Find contradictions in authentication docs"
     """
-    return KnowledgeQueryResponse(
-        question=request.question,
-        answer="Query service not yet configured",
-        result_count=0,
-        execution_time_ms=0.0,
-        complexity="unknown"
-    )
+    import time
+    start = time.time()
+
+    # Get the knowledge query overlay
+    knowledge_overlay = overlay_manager.get_overlay("knowledge_query")
+    if not knowledge_overlay:
+        return KnowledgeQueryResponse(
+            question=request.question,
+            answer="Knowledge query overlay not available",
+            result_count=0,
+            execution_time_ms=0.0,
+            complexity="unknown",
+        )
+
+    try:
+        # Use the overlay to compile and execute the query
+        from forge.overlays.knowledge_query import QueryContext
+        context = QueryContext(
+            question=request.question,
+            user_trust_level=user.trust_level.value if hasattr(user.trust_level, 'value') else user.trust_level,
+            limit=request.limit,
+            include_debug=request.debug,
+        )
+        result = await knowledge_overlay.execute_query(context, graph_repo)
+
+        execution_time = (time.time() - start) * 1000
+
+        return KnowledgeQueryResponse(
+            question=request.question,
+            answer=result.answer,
+            result_count=result.result_count,
+            execution_time_ms=execution_time,
+            complexity=result.complexity,
+            explanation=result.explanation if request.debug else None,
+            cypher=result.cypher if request.debug else None,
+            results=result.results if request.include_results else None,
+        )
+    except Exception as e:
+        execution_time = (time.time() - start) * 1000
+        return KnowledgeQueryResponse(
+            question=request.question,
+            answer=f"Error processing query: {str(e)}",
+            result_count=0,
+            execution_time_ms=execution_time,
+            complexity="error",
+        )
 
 
 @router.get("/query/suggestions")
@@ -364,12 +467,32 @@ async def get_queryable_schema(
 async def get_capsule_versions(
     capsule_id: str,
     user: ActiveUserDep,
+    temporal_repo: TemporalRepoDep,
+    capsule_repo: CapsuleRepoDep,
     limit: int = Query(default=50, ge=1, le=200),
 ) -> list[VersionResponse]:
     """
     Get version history for a capsule.
     """
-    return []
+    # Verify capsule exists
+    capsule = await capsule_repo.get_by_id(capsule_id)
+    if not capsule:
+        raise HTTPException(status_code=404, detail="Capsule not found")
+
+    versions = await temporal_repo.get_version_history(capsule_id=capsule_id, limit=limit)
+    return [
+        VersionResponse(
+            version_id=v.version_id,
+            capsule_id=v.capsule_id,
+            version_number=v.version_number,
+            snapshot_type=v.snapshot_type,
+            change_type=v.change_type,
+            created_by=v.created_by,
+            created_at=v.created_at.isoformat() if v.created_at else "",
+            content=None,  # Don't include full content in list
+        )
+        for v in versions
+    ]
 
 
 @router.get("/capsules/{capsule_id}/versions/{version_id}", response_model=VersionResponse)
@@ -377,43 +500,99 @@ async def get_capsule_version(
     capsule_id: str,
     version_id: str,
     user: ActiveUserDep,
+    temporal_repo: TemporalRepoDep,
 ) -> VersionResponse:
     """
     Get a specific version with full content.
     """
-    raise HTTPException(status_code=404, detail="Version not found")
+    version = await temporal_repo.get_version(version_id)
+    if not version or version.capsule_id != capsule_id:
+        raise HTTPException(status_code=404, detail="Version not found")
+
+    return VersionResponse(
+        version_id=version.version_id,
+        capsule_id=version.capsule_id,
+        version_number=version.version_number,
+        snapshot_type=version.snapshot_type,
+        change_type=version.change_type,
+        created_by=version.created_by,
+        created_at=version.created_at.isoformat() if version.created_at else "",
+        content=version.content,
+    )
 
 
 @router.get("/capsules/{capsule_id}/at-time")
 async def get_capsule_at_time(
     capsule_id: str,
+    user: ActiveUserDep,
+    temporal_repo: TemporalRepoDep,
     timestamp: str = Query(..., description="ISO timestamp"),
-    user: ActiveUserDep = None,
 ) -> dict[str, Any]:
     """
     Get capsule state at a specific point in time.
     """
+    from datetime import datetime as dt
+
+    try:
+        target_time = dt.fromisoformat(timestamp.replace("Z", "+00:00"))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid timestamp format. Use ISO format.")
+
+    version = await temporal_repo.get_capsule_at_time(capsule_id, target_time)
+    if not version:
+        return {
+            "capsule_id": capsule_id,
+            "timestamp": timestamp,
+            "found": False,
+        }
+
     return {
         "capsule_id": capsule_id,
         "timestamp": timestamp,
-        "found": False
+        "found": True,
+        "version": {
+            "version_id": version.version_id,
+            "version_number": version.version_number,
+            "created_at": version.created_at.isoformat() if version.created_at else None,
+            "content": version.content,
+        }
     }
 
 
 @router.get("/capsules/{capsule_id}/versions/diff")
 async def diff_capsule_versions(
     capsule_id: str,
+    user: ActiveUserDep,
+    temporal_repo: TemporalRepoDep,
     version_a: str = Query(..., description="First version ID"),
     version_b: str = Query(..., description="Second version ID"),
-    user: ActiveUserDep = None,
 ) -> dict[str, Any]:
     """
     Compare two versions of a capsule.
     """
+    # Get both versions
+    va = await temporal_repo.get_version(version_a)
+    vb = await temporal_repo.get_version(version_b)
+
+    if not va or va.capsule_id != capsule_id:
+        raise HTTPException(status_code=404, detail=f"Version {version_a} not found")
+    if not vb or vb.capsule_id != capsule_id:
+        raise HTTPException(status_code=404, detail=f"Version {version_b} not found")
+
+    diff = await temporal_repo.diff_versions(version_a, version_b)
+
     return {
-        "version_a": version_a,
-        "version_b": version_b,
-        "diff": {}
+        "version_a": {
+            "version_id": va.version_id,
+            "version_number": va.version_number,
+            "created_at": va.created_at.isoformat() if va.created_at else None,
+        },
+        "version_b": {
+            "version_id": vb.version_id,
+            "version_number": vb.version_number,
+            "created_at": vb.created_at.isoformat() if vb.created_at else None,
+        },
+        "diff": diff,
     }
 
 
@@ -426,6 +605,7 @@ async def get_trust_timeline(
     entity_type: str,
     entity_id: str,
     user: ActiveUserDep,
+    temporal_repo: TemporalRepoDep,
     start: str | None = Query(default=None, description="Start date ISO"),
     end: str | None = Query(default=None, description="End date ISO"),
 ) -> TrustTimelineResponse:
@@ -434,45 +614,123 @@ async def get_trust_timeline(
 
     entity_type: "User" or "Capsule"
     """
+    from datetime import datetime as dt, timedelta
+
+    # Validate entity type
+    if entity_type not in ["User", "Capsule"]:
+        raise HTTPException(status_code=400, detail="entity_type must be 'User' or 'Capsule'")
+
+    # Parse dates or use defaults
+    try:
+        start_dt = dt.fromisoformat(start.replace("Z", "+00:00")) if start else (dt.utcnow() - timedelta(days=30))
+        end_dt = dt.fromisoformat(end.replace("Z", "+00:00")) if end else dt.utcnow()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use ISO format.")
+
+    timeline = await temporal_repo.get_trust_timeline(
+        entity_id=entity_id,
+        entity_type=entity_type,
+        start=start_dt,
+        end=end_dt,
+    )
+
+    trust_values = [s.trust_value for s in timeline]
+
     return TrustTimelineResponse(
         entity_id=entity_id,
         entity_type=entity_type,
-        start=start or "",
-        end=end or "",
-        snapshot_count=0,
-        timeline=[],
-        trust_min=None,
-        trust_max=None,
-        trust_current=None
+        start=start_dt.isoformat(),
+        end=end_dt.isoformat(),
+        snapshot_count=len(timeline),
+        timeline=[
+            TrustSnapshotResponse(
+                trust_value=s.trust_value,
+                timestamp=s.timestamp.isoformat() if s.timestamp else "",
+                change_type=s.change_type,
+                reason=s.reason,
+            )
+            for s in timeline
+        ],
+        trust_min=min(trust_values) if trust_values else None,
+        trust_max=max(trust_values) if trust_values else None,
+        trust_current=trust_values[-1] if trust_values else None,
     )
 
 
 @router.post("/snapshots/graph")
 async def create_graph_snapshot(
     user: TrustedUserDep,
+    temporal_repo: TemporalRepoDep,
+    graph_repo: GraphRepoDep,
 ) -> dict[str, Any]:
     """
     Create a point-in-time snapshot of the graph.
 
     Requires TRUSTED trust level.
     """
+    # Get current graph metrics
+    metrics = await graph_repo.get_graph_metrics()
+
+    # Create snapshot with all metrics
+    snapshot = await temporal_repo.create_graph_snapshot(
+        metrics={
+            "total_nodes": metrics.total_nodes,
+            "total_edges": metrics.total_edges,
+            "density": metrics.density,
+            "avg_degree": metrics.avg_degree if hasattr(metrics, 'avg_degree') else 0.0,
+            "connected_components": metrics.connected_components,
+            "nodes_by_type": metrics.node_distribution,
+            "edges_by_type": metrics.edge_distribution,
+        },
+        created_by=user.id,
+    )
+
     return {
-        "snapshot_id": "",
-        "created_at": datetime.utcnow().isoformat(),
-        "metrics": {}
+        "snapshot_id": snapshot.id,
+        "created_at": snapshot.created_at.isoformat() if snapshot.created_at else datetime.utcnow().isoformat(),
+        "metrics": {
+            "total_nodes": snapshot.total_nodes,
+            "total_edges": snapshot.total_edges,
+            "density": snapshot.density,
+            "avg_degree": snapshot.avg_degree,
+            "connected_components": snapshot.connected_components,
+            "nodes_by_type": snapshot.nodes_by_type,
+            "edges_by_type": snapshot.edges_by_type,
+        },
     }
 
 
 @router.get("/snapshots/graph/latest")
 async def get_latest_graph_snapshot(
     user: ActiveUserDep,
+    temporal_repo: TemporalRepoDep,
 ) -> dict[str, Any]:
     """
     Get the most recent graph snapshot.
     """
+    snapshot = await temporal_repo.get_latest_graph_snapshot()
+    if not snapshot:
+        return {
+            "snapshot_id": None,
+            "found": False,
+        }
+
     return {
-        "snapshot_id": None,
-        "found": False
+        "snapshot_id": snapshot.id,
+        "found": True,
+        "created_at": snapshot.created_at.isoformat() if snapshot.created_at else None,
+        "metrics": {
+            "total_nodes": snapshot.total_nodes,
+            "total_edges": snapshot.total_edges,
+            "density": snapshot.density,
+            "avg_degree": snapshot.avg_degree,
+            "connected_components": snapshot.connected_components,
+            "nodes_by_type": snapshot.nodes_by_type,
+            "edges_by_type": snapshot.edges_by_type,
+            "avg_trust": snapshot.avg_trust,
+            "community_count": snapshot.community_count,
+            "active_anomalies": snapshot.active_anomalies,
+        },
     }
 
 
@@ -486,6 +744,7 @@ async def create_semantic_edge(
     user: StandardUserDep,
     capsule_repo: CapsuleRepoDep,
     audit_repo: AuditRepoDep,
+    event_system: EventSystemDep,
     correlation_id: CorrelationIdDep,
 ) -> SemanticEdgeResponse:
     """
@@ -499,6 +758,8 @@ async def create_semantic_edge(
     - REFERENCES: A cites B
     - RELATED_TO: Generic association
     """
+    from forge.models.semantic_edges import SemanticEdgeCreate, SemanticRelationType
+
     # Verify both capsules exist
     source = await capsule_repo.get_by_id(request.source_id)
     target = await capsule_repo.get_by_id(request.target_id)
@@ -516,15 +777,35 @@ async def create_semantic_edge(
             detail=f"Invalid relationship type. Must be one of: {valid_types}"
         )
 
-    # Create edge
-    edge = await capsule_repo.create_semantic_edge(
+    # Create edge using proper model
+    edge_data = SemanticEdgeCreate(
         source_id=request.source_id,
         target_id=request.target_id,
-        rel_type=request.relationship_type.upper(),
+        relationship_type=SemanticRelationType(request.relationship_type.upper()),
         properties=request.properties,
-        created_by=user.id,
-        bidirectional=request.bidirectional
     )
+    edge = await capsule_repo.create_semantic_edge(
+        data=edge_data,
+        created_by=user.id,
+    )
+
+    # Emit event for lineage tracker and other overlays
+    await event_system.publish(Event(
+        id=generate_id(),
+        type=EventType.SEMANTIC_EDGE_CREATED,
+        source="api.graph",
+        payload={
+            "edge_id": edge.id,
+            "source_id": edge.source_id,
+            "target_id": edge.target_id,
+            "relationship_type": edge.relationship_type.value,
+            "confidence": edge.confidence,
+            "bidirectional": edge.bidirectional,
+            "created_by": user.id,
+        },
+        correlation_id=correlation_id,
+        priority=EventPriority.NORMAL,
+    ))
 
     # Audit log
     await audit_repo.log_capsule_action(
@@ -747,13 +1028,251 @@ async def get_contradiction_clusters(
 @router.post("/analysis/refresh")
 async def refresh_graph_analysis(
     user: TrustedUserDep,
+    overlay_manager: OverlayManagerDep,
 ) -> dict[str, Any]:
     """
     Refresh all cached graph analysis results.
 
     Requires TRUSTED trust level.
     """
+    # Clear caches in graph algorithms overlay
+    graph_overlay = overlay_manager.get_overlay("graph_algorithms")
+    if graph_overlay:
+        await graph_overlay.clear_cache()
+
     return {
         "refreshed": True,
-        "refreshed_at": datetime.utcnow().isoformat()
+        "refreshed_at": datetime.utcnow().isoformat(),
+    }
+
+
+# =============================================================================
+# Contradiction Resolution Endpoints
+# =============================================================================
+
+
+class ContradictionResolution(BaseModel):
+    """Request to resolve a contradiction."""
+
+    resolution_type: str = Field(
+        description="How to resolve: 'keep_both', 'supersede', 'merge', 'dismiss'"
+    )
+    winning_capsule_id: str | None = Field(
+        default=None,
+        description="ID of the capsule that should be kept (for supersede)",
+    )
+    notes: str | None = Field(default=None, description="Resolution notes")
+
+
+@router.get("/contradictions/unresolved")
+async def get_unresolved_contradictions(
+    user: ActiveUserDep,
+    capsule_repo: CapsuleRepoDep,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+) -> dict[str, Any]:
+    """
+    Get all unresolved contradictions across the knowledge base.
+
+    Returns contradictions ordered by severity.
+    """
+    # Get all CONTRADICTS edges that don't have resolution_status=resolved
+    query = """
+    MATCH (a:Capsule)-[e:CONTRADICTS]->(b:Capsule)
+    WHERE e.resolution_status IS NULL OR e.resolution_status <> 'resolved'
+    OPTIONAL MATCH (a)-[:HAS_TAG]->(t1:Tag)
+    OPTIONAL MATCH (b)-[:HAS_TAG]->(t2:Tag)
+    WITH a, b, e, collect(DISTINCT t1.name) + collect(DISTINCT t2.name) AS all_tags
+    RETURN a.id AS capsule_a_id,
+           a.title AS capsule_a_title,
+           a.type AS capsule_a_type,
+           a.trust_level AS capsule_a_trust,
+           b.id AS capsule_b_id,
+           b.title AS capsule_b_title,
+           b.type AS capsule_b_type,
+           b.trust_level AS capsule_b_trust,
+           e.id AS edge_id,
+           e.created_at AS created_at,
+           e.properties AS properties,
+           all_tags AS tags
+    ORDER BY COALESCE(e.properties.severity, 'medium') DESC, e.created_at DESC
+    SKIP $offset
+    LIMIT $limit
+    """
+
+    results = await capsule_repo.client.execute(
+        query, {"limit": limit, "offset": offset}
+    )
+
+    # Count total
+    count_query = """
+    MATCH (a:Capsule)-[e:CONTRADICTS]->(b:Capsule)
+    WHERE e.resolution_status IS NULL OR e.resolution_status <> 'resolved'
+    RETURN count(e) AS total
+    """
+    count_result = await capsule_repo.client.execute_single(count_query, {})
+    total = count_result.get("total", 0) if count_result else 0
+
+    return {
+        "total": total,
+        "offset": offset,
+        "limit": limit,
+        "contradictions": [
+            {
+                "edge_id": r.get("edge_id"),
+                "capsule_a": {
+                    "id": r.get("capsule_a_id"),
+                    "title": r.get("capsule_a_title"),
+                    "type": r.get("capsule_a_type"),
+                    "trust_level": r.get("capsule_a_trust"),
+                },
+                "capsule_b": {
+                    "id": r.get("capsule_b_id"),
+                    "title": r.get("capsule_b_title"),
+                    "type": r.get("capsule_b_type"),
+                    "trust_level": r.get("capsule_b_trust"),
+                },
+                "severity": (r.get("properties") or {}).get("severity", "medium"),
+                "tags": list(set(r.get("tags", []))),
+                "created_at": r.get("created_at"),
+            }
+            for r in results
+        ],
+    }
+
+
+@router.post("/contradictions/{edge_id}/resolve")
+async def resolve_contradiction(
+    edge_id: str,
+    resolution: ContradictionResolution,
+    user: TrustedUserDep,
+    capsule_repo: CapsuleRepoDep,
+    audit_repo: AuditRepoDep,
+    correlation_id: CorrelationIdDep,
+) -> dict[str, Any]:
+    """
+    Resolve a contradiction.
+
+    Resolution types:
+    - keep_both: Mark as acknowledged but keep both capsules
+    - supersede: One capsule supersedes the other
+    - merge: Merge both capsules (future feature)
+    - dismiss: Dismiss as not a real contradiction
+
+    Requires TRUSTED trust level.
+    """
+    # Get the edge
+    edge = await capsule_repo.get_semantic_edge(edge_id)
+    if not edge:
+        raise HTTPException(status_code=404, detail="Contradiction edge not found")
+
+    if edge.relationship_type.value != "CONTRADICTS":
+        raise HTTPException(status_code=400, detail="Edge is not a contradiction")
+
+    # Update edge with resolution
+    query = """
+    MATCH ()-[e:CONTRADICTS {id: $edge_id}]->()
+    SET e.resolution_status = 'resolved',
+        e.resolution_type = $resolution_type,
+        e.resolved_by = $resolved_by,
+        e.resolved_at = datetime(),
+        e.resolution_notes = $notes
+    RETURN e.id AS id
+    """
+
+    await capsule_repo.client.execute(
+        query,
+        {
+            "edge_id": edge_id,
+            "resolution_type": resolution.resolution_type,
+            "resolved_by": user.id,
+            "notes": resolution.notes,
+        },
+    )
+
+    # Handle supersede case
+    if resolution.resolution_type == "supersede" and resolution.winning_capsule_id:
+        losing_id = (
+            edge.target_id
+            if resolution.winning_capsule_id == edge.source_id
+            else edge.source_id
+        )
+
+        # Create SUPERSEDES relationship
+        supersede_query = """
+        MATCH (winner:Capsule {id: $winner_id}), (loser:Capsule {id: $loser_id})
+        MERGE (winner)-[s:SUPERSEDES]->(loser)
+        SET s.created_at = datetime(),
+            s.created_by = $created_by,
+            s.reason = $notes
+        RETURN s
+        """
+        await capsule_repo.client.execute(
+            supersede_query,
+            {
+                "winner_id": resolution.winning_capsule_id,
+                "loser_id": losing_id,
+                "created_by": user.id,
+                "notes": resolution.notes or "Contradiction resolution",
+            },
+        )
+
+    # Audit log
+    await audit_repo.log_capsule_action(
+        actor_id=user.id,
+        capsule_id=edge.source_id,
+        action="contradiction_resolved",
+        details={
+            "edge_id": edge_id,
+            "resolution_type": resolution.resolution_type,
+            "winning_capsule_id": resolution.winning_capsule_id,
+            "notes": resolution.notes,
+        },
+        correlation_id=correlation_id,
+    )
+
+    return {
+        "resolved": True,
+        "edge_id": edge_id,
+        "resolution_type": resolution.resolution_type,
+        "resolved_by": user.id,
+        "resolved_at": datetime.utcnow().isoformat(),
+    }
+
+
+@router.get("/contradictions/stats")
+async def get_contradiction_stats(
+    user: ActiveUserDep,
+    capsule_repo: CapsuleRepoDep,
+) -> dict[str, Any]:
+    """
+    Get statistics about contradictions in the knowledge base.
+    """
+    query = """
+    MATCH (a:Capsule)-[e:CONTRADICTS]->(b:Capsule)
+    WITH e,
+         CASE WHEN e.resolution_status = 'resolved' THEN 1 ELSE 0 END AS is_resolved
+    RETURN count(e) AS total,
+           sum(is_resolved) AS resolved,
+           count(e) - sum(is_resolved) AS unresolved
+    """
+
+    result = await capsule_repo.client.execute_single(query, {})
+
+    # Get by severity
+    severity_query = """
+    MATCH ()-[e:CONTRADICTS]->()
+    WHERE e.resolution_status IS NULL OR e.resolution_status <> 'resolved'
+    RETURN COALESCE(e.properties.severity, 'medium') AS severity, count(*) AS count
+    """
+    severity_results = await capsule_repo.client.execute(severity_query, {})
+
+    return {
+        "total": result.get("total", 0) if result else 0,
+        "resolved": result.get("resolved", 0) if result else 0,
+        "unresolved": result.get("unresolved", 0) if result else 0,
+        "by_severity": {
+            r.get("severity", "medium"): r.get("count", 0)
+            for r in severity_results
+        },
     }

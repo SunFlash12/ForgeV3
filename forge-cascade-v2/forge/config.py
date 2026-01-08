@@ -221,6 +221,41 @@ class Settings(BaseSettings):
 
     sentry_dsn: str | None = Field(default=None, description="Sentry DSN")
 
+    # ═══════════════════════════════════════════════════════════════
+    # SCHEDULER
+    # ═══════════════════════════════════════════════════════════════
+    scheduler_enabled: bool = Field(
+        default=True, description="Enable background scheduler"
+    )
+    graph_snapshot_interval_minutes: int = Field(
+        default=60, ge=5, description="Interval for automatic graph snapshots"
+    )
+    graph_snapshot_enabled: bool = Field(
+        default=True, description="Enable automatic graph snapshots"
+    )
+    version_compaction_interval_hours: int = Field(
+        default=24, ge=1, description="Interval for version compaction"
+    )
+    version_compaction_enabled: bool = Field(
+        default=True, description="Enable automatic version compaction"
+    )
+    query_cache_cleanup_interval_minutes: int = Field(
+        default=30, ge=5, description="Interval for query cache cleanup"
+    )
+
+    # ═══════════════════════════════════════════════════════════════
+    # QUERY CACHING (Redis-backed NL→Cypher cache)
+    # ═══════════════════════════════════════════════════════════════
+    query_cache_enabled: bool = Field(
+        default=True, description="Enable NL→Cypher query result caching"
+    )
+    query_cache_ttl_seconds: int = Field(
+        default=3600, ge=60, description="TTL for cached query results"
+    )
+    query_cache_max_size: int = Field(
+        default=10000, ge=100, description="Max cached query entries"
+    )
+
 
 @lru_cache
 def get_settings() -> Settings:

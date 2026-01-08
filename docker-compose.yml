@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # ==========================================================================
   # Core Services
@@ -19,7 +17,20 @@ services:
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
       - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
       - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES:-60}
-      - REDIS_URL=redis://redis:6379
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-forge_redis_secret}@redis:6379
+      - LLM_PROVIDER=${LLM_PROVIDER:-mock}
+      - LLM_API_KEY=${LLM_API_KEY:-}
+      - LLM_MODEL=${LLM_MODEL:-gpt-4.1-nano}
+      - LLM_MAX_TOKENS=${LLM_MAX_TOKENS:-2000}
+      - LLM_TEMPERATURE=${LLM_TEMPERATURE:-0.4}
+      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-mock}
+      - EMBEDDING_API_KEY=${EMBEDDING_API_KEY:-}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-text-embedding-3-small}
+      - EMBEDDING_DIMENSIONS=${EMBEDDING_DIMENSIONS:-1536}
+      - OTLP_ENDPOINT=http://jaeger:4317
+      - SENTRY_DSN=${SENTRY_DSN:-}
+      - CORS_ORIGINS=${CORS_ORIGINS:-https://forgecascade.org,https://forgeshop.org,http://localhost:3000,http://localhost:5173}
+      - APP_ENV=${APP_ENV:-production}
       - PYTHONUNBUFFERED=1
     depends_on:
       redis:
@@ -33,6 +44,14 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
 
   compliance-api:
     build:
@@ -53,6 +72,14 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
 
   virtuals-api:
     build:
@@ -73,6 +100,14 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
 
   # ==========================================================================
   # Frontend
@@ -83,7 +118,7 @@ services:
       context: ./forge-cascade-v2/frontend
       dockerfile: Dockerfile
       args:
-        - VITE_API_URL=http://localhost:8001/api/v1
+        - VITE_API_URL=https://forgecascade.org/api/v1
     container_name: forge-frontend
     ports:
       - "80:80"
@@ -93,6 +128,50 @@ services:
     networks:
       - forge-network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+
+  marketplace:
+    build:
+      context: ./marketplace
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=https://forgeshop.org/api
+        - VITE_CASCADE_API_URL=https://forgecascade.org/api/v1
+        - VITE_WS_URL=wss://forgeshop.org/ws
+        - VITE_APP_NAME=Forge Shop
+    container_name: forge-marketplace
+    ports:
+      - "3001:80"
+    networks:
+      - forge-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
 
   # ==========================================================================
   # Infrastructure
@@ -109,11 +188,46 @@ services:
       - forge-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-forge_redis_secret}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 3
-    command: redis-server --appendonly yes
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-forge_redis_secret}
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: forge-jaeger
+    ports:
+      - "16686:16686"  # Jaeger UI
+      - "4317:4317"    # OTLP gRPC
+      - "4318:4318"    # OTLP HTTP
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    networks:
+      - forge-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:14269/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
 
   # ==========================================================================
   # Database Setup (run once)

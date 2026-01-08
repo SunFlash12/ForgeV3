@@ -25,7 +25,13 @@ from forge.models.graph_analysis import (
     GraphMetrics,
     NodeRanking,
     NodeRankingResult,
+    NodeSimilarityRequest,
+    NodeSimilarityResult,
     PageRankRequest,
+    PathNode,
+    ShortestPathRequest,
+    ShortestPathResult,
+    SimilarNode,
     TrustInfluence,
     TrustPath,
     TrustTransitivityRequest,
@@ -830,6 +836,390 @@ class GraphAlgorithmProvider:
             for r in results
         ]
 
+    # ═══════════════════════════════════════════════════════════════
+    # NODE SIMILARITY
+    # ═══════════════════════════════════════════════════════════════
+
+    async def compute_node_similarity(
+        self,
+        request: NodeSimilarityRequest | None = None,
+    ) -> NodeSimilarityResult:
+        """
+        Compute node similarity using GDS or Cypher fallback.
+
+        Finds similar nodes based on shared neighbors (Jaccard similarity).
+        """
+        request = request or NodeSimilarityRequest()
+        start_time = datetime.utcnow()
+        backend = await self.detect_backend()
+
+        if backend == GraphBackend.GDS:
+            result = await self._gds_node_similarity(request)
+        else:
+            result = await self._cypher_node_similarity(request)
+
+        result.computation_time_ms = (
+            datetime.utcnow() - start_time
+        ).total_seconds() * 1000
+        return result
+
+    async def _gds_node_similarity(
+        self,
+        request: NodeSimilarityRequest,
+    ) -> NodeSimilarityResult:
+        """Compute node similarity using GDS."""
+        graph_name = f"similarity_{request.node_label}"
+
+        try:
+            # Project the graph
+            await self.client.execute(
+                f"""
+                CALL gds.graph.project(
+                    '{graph_name}',
+                    '{request.node_label}',
+                    '{request.relationship_type}'
+                )
+                """
+            )
+
+            # Run node similarity
+            algo = f"gds.nodeSimilarity.stream"
+            if request.source_node_id:
+                # Similarity for a specific node
+                results = await self.client.execute(
+                    f"""
+                    MATCH (source:{request.node_label} {{id: $source_id}})
+                    CALL {algo}('{graph_name}', {{
+                        topK: $top_k,
+                        similarityCutoff: $cutoff
+                    }})
+                    YIELD node1, node2, similarity
+                    WHERE id(source) = node1
+                    WITH node2, similarity
+                    MATCH (n:{request.node_label}) WHERE id(n) = node2
+                    RETURN n.id AS node_id, n.title AS title, n.type AS node_type, similarity
+                    ORDER BY similarity DESC
+                    LIMIT $top_k
+                    """,
+                    {
+                        "source_id": request.source_node_id,
+                        "top_k": request.top_k,
+                        "cutoff": request.similarity_cutoff,
+                    },
+                )
+            else:
+                results = await self.client.execute(
+                    f"""
+                    CALL {algo}('{graph_name}', {{
+                        topK: $top_k,
+                        similarityCutoff: $cutoff
+                    }})
+                    YIELD node1, node2, similarity
+                    WITH node2, similarity
+                    MATCH (n:{request.node_label}) WHERE id(n) = node2
+                    RETURN n.id AS node_id, n.title AS title, n.type AS node_type, similarity
+                    ORDER BY similarity DESC
+                    LIMIT $top_k
+                    """,
+                    {
+                        "top_k": request.top_k,
+                        "cutoff": request.similarity_cutoff,
+                    },
+                )
+
+            similar_nodes = [
+                SimilarNode(
+                    node_id=r["node_id"],
+                    node_type=r.get("node_type", request.node_label),
+                    title=r.get("title"),
+                    similarity_score=r["similarity"],
+                )
+                for r in results
+            ]
+
+            return NodeSimilarityResult(
+                source_id=request.source_node_id,
+                similar_nodes=similar_nodes,
+                similarity_metric=request.similarity_metric,
+                top_k=request.top_k,
+                backend_used=GraphBackend.GDS,
+            )
+
+        finally:
+            try:
+                await self.client.execute(
+                    f"CALL gds.graph.drop('{graph_name}', false)"
+                )
+            except Exception:
+                pass
+
+    async def _cypher_node_similarity(
+        self,
+        request: NodeSimilarityRequest,
+    ) -> NodeSimilarityResult:
+        """
+        Compute Jaccard similarity using Cypher.
+
+        Fallback when GDS is not available.
+        """
+        if request.source_node_id:
+            # Similarity for a specific node
+            results = await self.client.execute(
+                f"""
+                MATCH (source:{request.node_label} {{id: $source_id}})-[:{request.relationship_type}]-(neighbor)
+                WITH source, collect(DISTINCT neighbor) AS source_neighbors
+                MATCH (other:{request.node_label})-[:{request.relationship_type}]-(neighbor)
+                WHERE other <> source
+                WITH source, source_neighbors, other, collect(DISTINCT neighbor) AS other_neighbors
+                WITH other,
+                     [n IN source_neighbors WHERE n IN other_neighbors] AS intersection,
+                     source_neighbors + [n IN other_neighbors WHERE NOT n IN source_neighbors] AS union_set
+                WITH other,
+                     size(intersection) AS shared,
+                     toFloat(size(intersection)) / size(union_set) AS similarity
+                WHERE similarity >= $cutoff
+                ORDER BY similarity DESC
+                LIMIT $top_k
+                MATCH (other)
+                RETURN other.id AS node_id, other.title AS title, other.type AS node_type,
+                       similarity, shared AS shared_neighbors
+                """,
+                {
+                    "source_id": request.source_node_id,
+                    "cutoff": request.similarity_cutoff,
+                    "top_k": request.top_k,
+                },
+            )
+        else:
+            results = await self.client.execute(
+                f"""
+                MATCH (n1:{request.node_label})-[:{request.relationship_type}]-(neighbor)
+                WITH n1, collect(DISTINCT neighbor) AS n1_neighbors
+                MATCH (n2:{request.node_label})-[:{request.relationship_type}]-(neighbor)
+                WHERE id(n1) < id(n2)
+                WITH n1, n2, n1_neighbors, collect(DISTINCT neighbor) AS n2_neighbors
+                WITH n1, n2,
+                     [n IN n1_neighbors WHERE n IN n2_neighbors] AS intersection,
+                     n1_neighbors + [n IN n2_neighbors WHERE NOT n IN n1_neighbors] AS union_set
+                WITH n1, n2,
+                     size(intersection) AS shared,
+                     toFloat(size(intersection)) / size(union_set) AS similarity
+                WHERE similarity >= $cutoff
+                ORDER BY similarity DESC
+                LIMIT $top_k
+                RETURN n2.id AS node_id, n2.title AS title, n2.type AS node_type,
+                       similarity, shared AS shared_neighbors
+                """,
+                {
+                    "cutoff": request.similarity_cutoff,
+                    "top_k": request.top_k,
+                },
+            )
+
+        similar_nodes = [
+            SimilarNode(
+                node_id=r["node_id"],
+                node_type=r.get("node_type", request.node_label),
+                title=r.get("title"),
+                similarity_score=r["similarity"],
+                shared_neighbors=r.get("shared_neighbors", 0),
+            )
+            for r in results
+        ]
+
+        return NodeSimilarityResult(
+            source_id=request.source_node_id,
+            similar_nodes=similar_nodes,
+            similarity_metric="jaccard",
+            top_k=request.top_k,
+            backend_used=GraphBackend.CYPHER,
+        )
+
+    # ═══════════════════════════════════════════════════════════════
+    # SHORTEST PATH
+    # ═══════════════════════════════════════════════════════════════
+
+    async def compute_shortest_path(
+        self,
+        request: ShortestPathRequest,
+    ) -> ShortestPathResult:
+        """
+        Compute shortest path between two nodes.
+
+        Uses GDS if available for weighted paths, otherwise Cypher.
+        """
+        start_time = datetime.utcnow()
+        backend = await self.detect_backend()
+
+        if request.weighted and backend == GraphBackend.GDS:
+            result = await self._gds_shortest_path(request)
+        else:
+            result = await self._cypher_shortest_path(request)
+
+        result.computation_time_ms = (
+            datetime.utcnow() - start_time
+        ).total_seconds() * 1000
+        return result
+
+    async def _gds_shortest_path(
+        self,
+        request: ShortestPathRequest,
+    ) -> ShortestPathResult:
+        """Compute weighted shortest path using GDS Dijkstra."""
+        graph_name = "shortest_path_graph"
+        rel_types = "|".join(request.relationship_types)
+
+        try:
+            # Project with trust as weight
+            await self.client.execute(
+                f"""
+                CALL gds.graph.project(
+                    '{graph_name}',
+                    'Capsule',
+                    {{
+                        {rel_types.replace('|', ',')}
+                    }},
+                    {{
+                        relationshipProperties: 'trust_weight'
+                    }}
+                )
+                """
+            )
+
+            result = await self.client.execute_single(
+                f"""
+                MATCH (source:Capsule {{id: $source_id}}), (target:Capsule {{id: $target_id}})
+                CALL gds.shortestPath.dijkstra.stream('{graph_name}', {{
+                    sourceNode: source,
+                    targetNode: target,
+                    relationshipWeightProperty: 'trust_weight'
+                }})
+                YIELD path, totalCost
+                WITH [n IN nodes(path) | n] AS pathNodes, totalCost
+                RETURN [n IN pathNodes | n.id] AS node_ids,
+                       [n IN pathNodes | n.title] AS titles,
+                       [n IN pathNodes | n.trust_level] AS trusts,
+                       size(pathNodes) - 1 AS path_length,
+                       totalCost
+                """,
+                {
+                    "source_id": request.source_id,
+                    "target_id": request.target_id,
+                },
+            )
+
+            if result:
+                node_ids = result.get("node_ids", [])
+                titles = result.get("titles", [])
+                trusts = result.get("trusts", [])
+
+                path_nodes = [
+                    PathNode(
+                        node_id=nid,
+                        node_type="Capsule",
+                        title=titles[i] if i < len(titles) else None,
+                        trust_level=trusts[i] if i < len(trusts) else None,
+                    )
+                    for i, nid in enumerate(node_ids)
+                ]
+
+                return ShortestPathResult(
+                    source_id=request.source_id,
+                    target_id=request.target_id,
+                    path_found=True,
+                    path_length=result.get("path_length", len(node_ids) - 1),
+                    path_nodes=path_nodes,
+                    total_trust=result.get("totalCost"),
+                    backend_used=GraphBackend.GDS,
+                )
+            else:
+                return ShortestPathResult(
+                    source_id=request.source_id,
+                    target_id=request.target_id,
+                    path_found=False,
+                    backend_used=GraphBackend.GDS,
+                )
+
+        finally:
+            try:
+                await self.client.execute(
+                    f"CALL gds.graph.drop('{graph_name}', false)"
+                )
+            except Exception:
+                pass
+
+    async def _cypher_shortest_path(
+        self,
+        request: ShortestPathRequest,
+    ) -> ShortestPathResult:
+        """Compute shortest path using native Cypher."""
+        rel_types = "|".join(request.relationship_types)
+
+        result = await self.client.execute_single(
+            f"""
+            MATCH path = shortestPath(
+                (source:Capsule {{id: $source_id}})-[:{rel_types}*1..{request.max_depth}]-(target:Capsule {{id: $target_id}})
+            )
+            WITH path,
+                 [n IN nodes(path) | n] AS pathNodes,
+                 [r IN relationships(path) | type(r)] AS relTypes
+            RETURN [n IN pathNodes | n.id] AS node_ids,
+                   [n IN pathNodes | n.title] AS titles,
+                   [n IN pathNodes | n.trust_level] AS trusts,
+                   [n IN pathNodes | labels(n)[0]] AS types,
+                   relTypes,
+                   length(path) AS path_length
+            """,
+            {
+                "source_id": request.source_id,
+                "target_id": request.target_id,
+            },
+        )
+
+        if result:
+            node_ids = result.get("node_ids", [])
+            titles = result.get("titles", [])
+            trusts = result.get("trusts", [])
+            types = result.get("types", [])
+            rel_types = result.get("relTypes", [])
+
+            path_nodes = [
+                PathNode(
+                    node_id=nid,
+                    node_type=types[i] if i < len(types) else "Capsule",
+                    title=titles[i] if i < len(titles) else None,
+                    trust_level=trusts[i] if i < len(trusts) else None,
+                )
+                for i, nid in enumerate(node_ids)
+            ]
+
+            # Compute total trust if weighted
+            total_trust = None
+            if request.weighted and trusts:
+                valid_trusts = [t for t in trusts if t is not None]
+                if valid_trusts:
+                    total_trust = 1.0
+                    for t in valid_trusts:
+                        total_trust *= (t / 100.0)
+
+            return ShortestPathResult(
+                source_id=request.source_id,
+                target_id=request.target_id,
+                path_found=True,
+                path_length=result.get("path_length", len(node_ids) - 1),
+                path_nodes=path_nodes,
+                path_relationships=rel_types,
+                total_trust=total_trust,
+                backend_used=GraphBackend.CYPHER,
+            )
+        else:
+            return ShortestPathResult(
+                source_id=request.source_id,
+                target_id=request.target_id,
+                path_found=False,
+                backend_used=GraphBackend.CYPHER,
+            )
+
 
 class GraphRepository:
     """
@@ -912,3 +1302,44 @@ class GraphRepository:
     async def get_metrics(self) -> GraphMetrics:
         """Get comprehensive graph metrics."""
         return await self.provider.get_graph_metrics()
+
+    async def find_similar_nodes(
+        self,
+        source_id: str | None = None,
+        top_k: int = 10,
+        min_similarity: float = 0.1,
+    ) -> list[SimilarNode]:
+        """Find nodes similar to the source node."""
+        request = NodeSimilarityRequest(
+            source_node_id=source_id,
+            top_k=top_k,
+            similarity_cutoff=min_similarity,
+        )
+        result = await self.provider.compute_node_similarity(request)
+        return result.similar_nodes
+
+    async def find_shortest_path(
+        self,
+        source_id: str,
+        target_id: str,
+        max_depth: int = 10,
+        weighted: bool = False,
+    ) -> ShortestPathResult:
+        """Find the shortest path between two nodes."""
+        request = ShortestPathRequest(
+            source_id=source_id,
+            target_id=target_id,
+            max_depth=max_depth,
+            weighted=weighted,
+        )
+        return await self.provider.compute_shortest_path(request)
+
+    async def get_gds_status(self) -> dict[str, Any]:
+        """Check if GDS is available and return status."""
+        backend = await self.provider.detect_backend()
+        return {
+            "gds_available": backend == GraphBackend.GDS,
+            "active_backend": backend.value,
+            "cache_enabled": self.provider.config.enable_caching,
+            "cache_entries": len(self.provider._cache),
+        }

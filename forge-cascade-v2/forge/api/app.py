@@ -129,6 +129,28 @@ class ForgeApp:
         except Exception as e:
             logger.warning("token_blacklist_init_failed", error=str(e))
 
+        # Initialize query cache (Redis or in-memory fallback)
+        try:
+            from forge.services.query_cache import init_query_cache
+            self.query_cache = await init_query_cache()
+            logger.info("query_cache_initialized")
+        except Exception as e:
+            logger.warning("query_cache_init_failed", error=str(e))
+            self.query_cache = None
+
+        # Initialize and start background scheduler
+        try:
+            from forge.services.scheduler import setup_scheduler
+            self.scheduler = await setup_scheduler()
+            await self.scheduler.start()
+            logger.info(
+                "scheduler_started",
+                tasks=self.scheduler.get_stats().get("tasks_registered", 0),
+            )
+        except Exception as e:
+            logger.warning("scheduler_init_failed", error=str(e))
+            self.scheduler = None
+
         self.started_at = datetime.now(timezone.utc)
         self.is_ready = True
 
@@ -136,6 +158,7 @@ class ForgeApp:
             "forge_initialized",
             overlays=len(self.overlay_manager._registry.instances) if self.overlay_manager else 0,
             resilience=self.resilience_initialized,
+            scheduler=self.scheduler is not None,
         )
     
     async def _register_core_overlays(self) -> None:
@@ -186,6 +209,23 @@ class ForgeApp:
         logger.info("forge_shutting_down")
 
         self.is_ready = False
+
+        # Stop scheduler first (prevents new background tasks)
+        if hasattr(self, 'scheduler') and self.scheduler:
+            try:
+                await self.scheduler.stop()
+                logger.info("scheduler_shutdown")
+            except Exception as e:
+                logger.warning("scheduler_shutdown_failed", error=str(e))
+
+        # Shutdown query cache
+        if hasattr(self, 'query_cache') and self.query_cache:
+            try:
+                from forge.services.query_cache import close_query_cache
+                await close_query_cache()
+                logger.info("query_cache_shutdown")
+            except Exception as e:
+                logger.warning("query_cache_shutdown_failed", error=str(e))
 
         # Shutdown resilience layer
         if self.resilience_initialized:

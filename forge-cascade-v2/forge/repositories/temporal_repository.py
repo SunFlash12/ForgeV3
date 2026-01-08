@@ -649,6 +649,7 @@ class TemporalRepository:
     async def create_graph_snapshot(
         self,
         metrics: dict[str, Any],
+        created_by: str | None = None,
     ) -> GraphSnapshot:
         """Create a point-in-time graph snapshot."""
         snapshot_id = generate_id()
@@ -672,6 +673,7 @@ class TemporalRepository:
             top_users_by_influence: $top_users,
             active_anomalies: $active_anomalies,
             anomaly_types: $anomaly_types,
+            created_by: $created_by,
             created_at: $now,
             updated_at: $now
         })
@@ -695,15 +697,36 @@ class TemporalRepository:
             "top_users": metrics.get("top_users_by_influence", []),
             "active_anomalies": metrics.get("active_anomalies", 0),
             "anomaly_types": metrics.get("anomaly_types", {}),
+            "created_by": created_by,
             "now": now.isoformat(),
         }
 
         result = await self.client.execute_single(query, params)
 
         if result and result.get("snapshot"):
+            self.logger.info(
+                "Created graph snapshot",
+                snapshot_id=snapshot_id,
+                total_nodes=metrics.get("total_nodes", 0),
+            )
             return self._to_graph_snapshot(result["snapshot"])
 
         raise RuntimeError("Failed to create graph snapshot")
+
+    async def get_latest_graph_snapshot(self) -> GraphSnapshot | None:
+        """Get the most recent graph snapshot."""
+        query = """
+        MATCH (g:GraphSnapshot)
+        RETURN g {.*} AS snapshot
+        ORDER BY g.created_at DESC
+        LIMIT 1
+        """
+
+        result = await self.client.execute_single(query, {})
+
+        if result and result.get("snapshot"):
+            return self._to_graph_snapshot(result["snapshot"])
+        return None
 
     async def get_graph_snapshots(
         self,
@@ -747,22 +770,50 @@ class TemporalRepository:
             id=record["id"],
             total_nodes=record.get("total_nodes", 0),
             total_edges=record.get("total_edges", 0),
-            nodes_by_type=record.get("nodes_by_type", {}),
-            edges_by_type=record.get("edges_by_type", {}),
+            nodes_by_type=self._parse_dict(record.get("nodes_by_type", {})),
+            edges_by_type=self._parse_dict(record.get("edges_by_type", {})),
             density=record.get("density", 0.0),
             avg_degree=record.get("avg_degree", 0.0),
             connected_components=record.get("connected_components", 0),
             avg_trust=record.get("avg_trust", 60.0),
-            trust_distribution=record.get("trust_distribution", {}),
+            trust_distribution=self._parse_dict(record.get("trust_distribution", {})),
             community_count=record.get("community_count", 0),
             modularity=record.get("modularity"),
-            top_capsules_by_pagerank=record.get("top_capsules_by_pagerank", []),
-            top_users_by_influence=record.get("top_users_by_influence", []),
+            top_capsules_by_pagerank=self._parse_list(record.get("top_capsules_by_pagerank", [])),
+            top_users_by_influence=self._parse_list(record.get("top_users_by_influence", [])),
             active_anomalies=record.get("active_anomalies", 0),
-            anomaly_types=record.get("anomaly_types", {}),
+            anomaly_types=self._parse_dict(record.get("anomaly_types", {})),
             created_at=self._parse_datetime(record.get("created_at")),
             updated_at=self._parse_datetime(record.get("updated_at")),
         )
+
+    def _parse_dict(self, value: Any) -> dict:
+        """Parse a dictionary from various formats (handles Neo4j serialization)."""
+        if value is None:
+            return {}
+        if isinstance(value, dict):
+            return value
+        if isinstance(value, str):
+            try:
+                import json
+                return json.loads(value)
+            except (json.JSONDecodeError, TypeError):
+                return {}
+        return {}
+
+    def _parse_list(self, value: Any) -> list:
+        """Parse a list from various formats (handles Neo4j serialization)."""
+        if value is None:
+            return []
+        if isinstance(value, list):
+            return value
+        if isinstance(value, str):
+            try:
+                import json
+                return json.loads(value)
+            except (json.JSONDecodeError, TypeError):
+                return []
+        return []
 
     # ═══════════════════════════════════════════════════════════════
     # COMPACTION

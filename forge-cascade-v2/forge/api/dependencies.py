@@ -29,6 +29,8 @@ from forge.repositories.user_repository import UserRepository
 from forge.repositories.governance_repository import GovernanceRepository
 from forge.repositories.overlay_repository import OverlayRepository
 from forge.repositories.audit_repository import AuditRepository
+from forge.repositories.graph_repository import GraphRepository
+from forge.repositories.temporal_repository import TemporalRepository
 from forge.security.tokens import verify_token, TokenPayload
 from forge.security.authorization import (
     TrustAuthorizer,
@@ -122,11 +124,23 @@ async def get_audit_repository(db: DbClientDep) -> AuditRepository:
     return AuditRepository(db)
 
 
+async def get_graph_repository(db: DbClientDep) -> GraphRepository:
+    """Get graph repository for graph algorithms and analysis."""
+    return GraphRepository(db)
+
+
+async def get_temporal_repository(db: DbClientDep) -> TemporalRepository:
+    """Get temporal repository for version history and trust snapshots."""
+    return TemporalRepository(db)
+
+
 CapsuleRepoDep = Annotated[CapsuleRepository, Depends(get_capsule_repository)]
 UserRepoDep = Annotated[UserRepository, Depends(get_user_repository)]
 GovernanceRepoDep = Annotated[GovernanceRepository, Depends(get_governance_repository)]
 OverlayRepoDep = Annotated[OverlayRepository, Depends(get_overlay_repository)]
 AuditRepoDep = Annotated[AuditRepository, Depends(get_audit_repository)]
+GraphRepoDep = Annotated[GraphRepository, Depends(get_graph_repository)]
+TemporalRepoDep = Annotated[TemporalRepository, Depends(get_temporal_repository)]
 
 
 # =============================================================================
@@ -251,9 +265,9 @@ async def get_token_payload(
     try:
         payload = verify_token(token, settings.jwt_secret_key)
 
-        # Check if token is blacklisted (logout)
+        # Check if token is blacklisted (logout) - async for Redis support
         if payload and payload.jti:
-            if TokenBlacklist.is_blacklisted(payload.jti):
+            if await TokenBlacklist.is_blacklisted_async(payload.jti):
                 return None
 
         return payload
@@ -468,6 +482,8 @@ __all__ = [
     "GovernanceRepoDep",
     "OverlayRepoDep",
     "AuditRepoDep",
+    "GraphRepoDep",
+    "TemporalRepoDep",
     
     # Kernel
     "EventSystemDep",
