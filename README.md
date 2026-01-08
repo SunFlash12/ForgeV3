@@ -121,7 +121,90 @@ npm run dev
 
 The frontend will be available at http://localhost:5173
 
-## Production Deployment
+## Docker Deployment (Recommended)
+
+### Quick Start with Docker
+
+```bash
+# 1. Copy environment template
+cp .env.example .env
+
+# 2. Edit .env with your configuration
+#    - Set NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD
+#    - Set JWT_SECRET_KEY (min 32 chars)
+#    - Set SEED_ADMIN_PASSWORD
+
+# 3. Build and start all services
+docker-compose up -d --build
+
+# 4. Initialize database (first time only)
+docker-compose --profile setup run --rm db-setup
+docker-compose --profile setup run --rm db-seed
+
+# 5. Access the application
+#    - Frontend: http://localhost
+#    - Cascade API: http://localhost:8001
+#    - Compliance API: http://localhost:8002
+#    - Virtuals API: http://localhost:8003
+```
+
+### Docker Services
+
+| Service | Container | Port | Description |
+|---------|-----------|------|-------------|
+| cascade-api | forge-cascade-api | 8001 | Core Forge engine |
+| compliance-api | forge-compliance-api | 8002 | GDPR compliance |
+| virtuals-api | forge-virtuals-api | 8003 | Blockchain integration |
+| frontend | forge-frontend | 80 | React dashboard |
+| redis | forge-redis | 6379 | Caching layer |
+
+### Docker Commands
+
+```bash
+# View logs
+docker-compose logs -f
+
+# View specific service logs
+docker-compose logs -f cascade-api
+
+# Stop all services
+docker-compose down
+
+# Stop and remove volumes
+docker-compose down -v
+
+# Rebuild specific service
+docker-compose up -d --build cascade-api
+
+# Scale services (if needed)
+docker-compose up -d --scale compliance-api=2
+```
+
+### Production Docker Configuration
+
+For production, consider:
+
+1. **Use external Neo4j**: Point `NEO4J_URI` to a managed Neo4j instance
+2. **Use external Redis**: For high availability, use Redis Cluster or managed Redis
+3. **Add reverse proxy**: Use Traefik or nginx-proxy for SSL termination
+4. **Set resource limits**: Add `deploy.resources` in docker-compose.yml
+
+Example production override (`docker-compose.prod.yml`):
+
+```yaml
+version: '3.8'
+services:
+  cascade-api:
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+    environment:
+      - LOG_LEVEL=WARNING
+```
+
+## Manual Production Deployment
 
 ### Build Frontend
 
