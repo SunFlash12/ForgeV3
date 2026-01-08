@@ -355,6 +355,42 @@ class ForgeApiClient {
     return response.data;
   }
 
+  async getGhostCouncilMembers(): Promise<Array<{ id: string; name: string; role: string; weight: number }>> {
+    const response = await this.client.get<Array<{ id: string; name: string; role: string; weight: number }>>('/governance/ghost-council/members');
+    return response.data;
+  }
+
+  async getGhostCouncilIssues(): Promise<Array<{
+    id: string;
+    category: string;
+    severity: string;
+    title: string;
+    description: string;
+    affected_entities: string[];
+    detected_at: string;
+    source: string;
+    resolved: boolean;
+    resolution: string | null;
+    has_ghost_council_opinion: boolean;
+  }>> {
+    const response = await this.client.get('/governance/ghost-council/issues');
+    return response.data;
+  }
+
+  async getGhostCouncilStats(): Promise<{
+    proposals_reviewed: number;
+    issues_responded: number;
+    unanimous_decisions: number;
+    split_decisions: number;
+    cache_hits: number;
+    active_issues: number;
+    total_issues_tracked: number;
+    council_members: number;
+  }> {
+    const response = await this.client.get('/governance/ghost-council/stats');
+    return response.data;
+  }
+
   async finalizeProposal(proposalId: string): Promise<Proposal> {
     const response = await this.client.post<Proposal>(`/governance/proposals/${proposalId}/finalize`);
     return response.data;

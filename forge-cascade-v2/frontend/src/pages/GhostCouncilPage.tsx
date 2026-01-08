@@ -1,332 +1,345 @@
-import { useState, useRef, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Ghost,
-  Send,
-  Sparkles,
-  MessageCircle,
-  History,
-  Brain,
-  Lightbulb,
+  Users,
   AlertTriangle,
-  BookOpen,
+  CheckCircle,
+  Clock,
+  Shield,
+  Brain,
+  GitBranch,
+  Eye,
+  Scale,
+  Activity,
+  FileText,
+  TrendingUp,
 } from 'lucide-react';
 import { api } from '../api/client';
-import { Card, Button } from '../components/common';
-import { useAuthStore } from '../stores/authStore';
+import { Card, LoadingSpinner, EmptyState } from '../components/common';
+import { Link } from 'react-router-dom';
 
-interface ChatMessage {
-  id: string;
-  role: 'user' | 'ghost';
-  content: string;
-  timestamp: Date;
-  wisdom?: {
-    type: 'insight' | 'warning' | 'lesson' | 'principle';
-    relatedCapsules?: string[];
-  };
-}
-
-// Mock responses for demonstration
-const ghostResponses = [
-  {
-    content: "The patterns in your recent governance decisions suggest a growing emphasis on transparency. This aligns with historical wisdom from successful decentralized systems.",
-    wisdom: { type: 'insight' as const, relatedCapsules: ['Transparency Framework v2'] }
-  },
-  {
-    content: "I sense uncertainty in the proposed overlay modification. Past experiences show that rapid changes to security validators often require extended testing periods.",
-    wisdom: { type: 'warning' as const, relatedCapsules: ['Security Validation Guidelines'] }
-  },
-  {
-    content: "Your question touches on fundamental principles of trust propagation. The institutional memory suggests that gradual trust building creates more resilient networks.",
-    wisdom: { type: 'principle' as const, relatedCapsules: ['Trust Architecture Design'] }
-  },
-  {
-    content: "Interesting inquiry. The collective wisdom indicates that similar challenges were overcome in Phase 3 by implementing staged rollouts with comprehensive health monitoring.",
-    wisdom: { type: 'lesson' as const, relatedCapsules: ['Deployment Best Practices'] }
-  },
-];
+// Council member icons by role
+const memberIcons: Record<string, typeof Shield> = {
+  'Ethics Advisor': Scale,
+  'Security Expert': Shield,
+  'Governance Expert': GitBranch,
+  'Technical Expert': Brain,
+  'Community Advocate': Users,
+};
 
 export default function GhostCouncilPage() {
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: 'welcome',
-      role: 'ghost',
-      content: "Greetings, seeker of wisdom. I am the Ghost Council, the symbolic voice of accumulated institutional memory. I can offer insights from past decisions, patterns across the knowledge base, and guidance drawn from collective experience. How may I illuminate your path?",
-      timestamp: new Date(),
-    }
-  ]);
-  const [input, setInput] = useState('');
-  const [isThinking, setIsThinking] = useState(false);
-  const chatEndRef = useRef<HTMLDivElement>(null);
-  const { user } = useAuthStore();
+  // Fetch council members
+  const { data: members = [], isLoading: membersLoading } = useQuery({
+    queryKey: ['ghost-council-members'],
+    queryFn: () => api.getGhostCouncilMembers(),
+  });
 
+  // Fetch active issues
+  const { data: issues = [], isLoading: issuesLoading } = useQuery({
+    queryKey: ['ghost-council-issues'],
+    queryFn: () => api.getGhostCouncilIssues(),
+  });
+
+  // Fetch council stats
+  const { data: stats } = useQuery({
+    queryKey: ['ghost-council-stats'],
+    queryFn: () => api.getGhostCouncilStats(),
+  });
+
+  // Fetch active proposals for recommendation display
   const { data: activeProposals } = useQuery({
     queryKey: ['active-proposals'],
     queryFn: () => api.getActiveProposals(),
   });
 
-  const { data: recentCapsules } = useQuery({
-    queryKey: ['recent-capsules'],
-    queryFn: () => api.getRecentCapsules(5),
-  });
+  const isLoading = membersLoading || issuesLoading;
 
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
-
-  const handleSend = async () => {
-    if (!input.trim()) return;
-
-    const userMessage: ChatMessage = {
-      id: Date.now().toString(),
-      role: 'user',
-      content: input,
-      timestamp: new Date(),
-    };
-
-    setMessages((prev) => [...prev, userMessage]);
-    setInput('');
-    setIsThinking(true);
-
-    // Simulate AI thinking time
-    await new Promise((resolve) => setTimeout(resolve, 1500 + Math.random() * 1500));
-
-    // Generate a contextual response
-    const randomResponse = ghostResponses[Math.floor(Math.random() * ghostResponses.length)];
-    
-    const ghostMessage: ChatMessage = {
-      id: (Date.now() + 1).toString(),
-      role: 'ghost',
-      content: randomResponse.content,
-      timestamp: new Date(),
-      wisdom: randomResponse.wisdom,
-    };
-
-    setMessages((prev) => [...prev, ghostMessage]);
-    setIsThinking(false);
-  };
-
-  const getWisdomIcon = (type?: string) => {
-    switch (type) {
-      case 'insight': return <Lightbulb className="w-4 h-4 text-blue-400" />;
-      case 'warning': return <AlertTriangle className="w-4 h-4 text-amber-400" />;
-      case 'lesson': return <BookOpen className="w-4 h-4 text-green-400" />;
-      case 'principle': return <Brain className="w-4 h-4 text-purple-400" />;
-      default: return <Sparkles className="w-4 h-4 text-violet-400" />;
-    }
-  };
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <LoadingSpinner size="lg" label="Loading Ghost Council..." />
+      </div>
+    );
+  }
 
   return (
-    <div className="h-[calc(100vh-8rem)] flex gap-6">
-      {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col">
-        {/* Header */}
-        <div className="mb-4">
-          <div className="flex items-center gap-3">
-            <div className="p-3 rounded-xl bg-gradient-to-br from-violet-500/20 to-sky-500/20 border border-violet-500/30">
-              <Ghost className="w-8 h-8 text-violet-400" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold text-slate-800">Ghost Council</h1>
-              <p className="text-slate-500">Symbolic Voice of Institutional Wisdom</p>
-            </div>
+    <div className="p-6 max-w-7xl mx-auto space-y-8">
+      {/* Header */}
+      <div className="flex items-center gap-4">
+        <div className="p-4 rounded-2xl bg-gradient-to-br from-violet-500/20 to-sky-500/20 border border-violet-500/30">
+          <Ghost className="w-10 h-10 text-violet-400" />
+        </div>
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800">Ghost Council</h1>
+          <p className="text-slate-500">
+            AI Advisory Board for Governance & System Issues
+          </p>
+        </div>
+      </div>
+
+      {/* Explanation Card */}
+      <Card className="bg-gradient-to-r from-violet-50 to-sky-50 border-violet-200">
+        <div className="flex gap-4">
+          <div className="flex-shrink-0">
+            <Brain className="w-8 h-8 text-violet-500" />
+          </div>
+          <div>
+            <h3 className="font-semibold text-slate-800 mb-2">What is the Ghost Council?</h3>
+            <p className="text-slate-600 text-sm leading-relaxed">
+              The Ghost Council is an AI-powered advisory board that provides recommendations on governance
+              proposals and responds to serious system issues. When critical situations arise or proposals
+              require deliberation, the council members analyze the situation from their unique perspectives
+              (ethics, security, governance, technical, and community) and provide weighted recommendations.
+            </p>
+            <p className="text-slate-500 text-xs mt-2">
+              Note: The Ghost Council provides advisory opinions only. Final decisions rest with the community through the governance process.
+            </p>
           </div>
         </div>
+      </Card>
 
-        {/* Chat Messages */}
-        <Card className="flex-1 overflow-hidden flex flex-col">
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            {messages.map((message) => (
-              <div
-                key={message.id}
-                className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-              >
-                <div
-                  className={`max-w-[80%] ${
-                    message.role === 'user'
-                      ? 'bg-sky-600/30 border-sky-500/30'
-                      : 'ghost-glow bg-white border-violet-500/30'
-                  } border rounded-xl p-4`}
-                >
-                  {message.role === 'ghost' && (
-                    <div className="flex items-center gap-2 mb-2 pb-2 border-b border-slate-200">
-                      <Ghost className="w-4 h-4 text-violet-400" />
-                      <span className="text-xs text-violet-400 font-medium">Ghost Council</span>
-                    </div>
-                  )}
-                  
-                  <p className="text-slate-700 whitespace-pre-wrap">{message.content}</p>
-                  
-                  {message.wisdom && (
-                    <div className="mt-3 pt-3 border-t border-slate-200">
-                      <div className="flex items-center gap-2 text-xs">
-                        {getWisdomIcon(message.wisdom.type)}
-                        <span className="text-slate-500 capitalize">{message.wisdom.type}</span>
+      {/* Stats Row */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card className="p-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-violet-500/20 rounded-lg">
+              <FileText className="w-5 h-5 text-violet-400" />
+            </div>
+            <div>
+              <div className="text-2xl font-bold text-slate-800">
+                {stats?.proposals_reviewed || 0}
+              </div>
+              <div className="text-sm text-slate-500">Proposals Reviewed</div>
+            </div>
+          </div>
+        </Card>
+        <Card className="p-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-amber-500/20 rounded-lg">
+              <AlertTriangle className="w-5 h-5 text-amber-400" />
+            </div>
+            <div>
+              <div className="text-2xl font-bold text-slate-800">
+                {stats?.issues_responded || 0}
+              </div>
+              <div className="text-sm text-slate-500">Issues Addressed</div>
+            </div>
+          </div>
+        </Card>
+        <Card className="p-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-green-500/20 rounded-lg">
+              <CheckCircle className="w-5 h-5 text-green-400" />
+            </div>
+            <div>
+              <div className="text-2xl font-bold text-slate-800">
+                {stats?.unanimous_decisions || 0}
+              </div>
+              <div className="text-sm text-slate-500">Unanimous Decisions</div>
+            </div>
+          </div>
+        </Card>
+        <Card className="p-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-sky-500/20 rounded-lg">
+              <TrendingUp className="w-5 h-5 text-sky-400" />
+            </div>
+            <div>
+              <div className="text-2xl font-bold text-slate-800">
+                {stats?.cache_hits || 0}
+              </div>
+              <div className="text-sm text-slate-500">Cached Opinions</div>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Council Members */}
+        <Card className="lg:col-span-1">
+          <h2 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
+            <Users className="w-5 h-5 text-violet-400" />
+            Council Members
+          </h2>
+
+          {members.length === 0 ? (
+            <p className="text-slate-500 text-sm">No council members configured</p>
+          ) : (
+            <div className="space-y-3">
+              {members.map((member) => {
+                const Icon = memberIcons[member.role] || Ghost;
+                return (
+                  <div
+                    key={member.id}
+                    className="p-3 bg-white rounded-lg border border-slate-200 hover:border-violet-300 transition"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="p-2 bg-violet-100 rounded-lg flex-shrink-0">
+                        <Icon className="w-4 h-4 text-violet-600" />
                       </div>
-                      {message.wisdom.relatedCapsules && message.wisdom.relatedCapsules.length > 0 && (
-                        <div className="mt-2 flex flex-wrap gap-1">
-                          {message.wisdom.relatedCapsules.map((capsule) => (
-                            <span
-                              key={capsule}
-                              className="inline-flex items-center px-2 py-0.5 bg-slate-100 rounded text-xs text-slate-600"
-                            >
-                              {capsule}
-                            </span>
-                          ))}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between">
+                          <h4 className="font-medium text-slate-800 truncate">{member.name}</h4>
+                          <span className="text-xs bg-violet-100 text-violet-600 px-2 py-0.5 rounded">
+                            {member.weight}x
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-500">{member.role}</p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </Card>
+
+        {/* Active Issues */}
+        <Card className="lg:col-span-2">
+          <h2 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
+            <AlertTriangle className="w-5 h-5 text-amber-400" />
+            Active Issues Requiring Attention
+          </h2>
+
+          {issues.length === 0 ? (
+            <EmptyState
+              icon={<CheckCircle className="w-10 h-10" />}
+              title="No Active Issues"
+              description="The system is running smoothly. The Ghost Council will be notified when serious issues arise."
+            />
+          ) : (
+            <div className="space-y-3">
+              {issues.map((issue) => (
+                <div
+                  key={issue.id}
+                  className={`p-4 rounded-lg border ${
+                    issue.severity === 'critical'
+                      ? 'bg-red-50 border-red-200'
+                      : issue.severity === 'high'
+                      ? 'bg-amber-50 border-amber-200'
+                      : 'bg-slate-50 border-slate-200'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded ${
+                          issue.severity === 'critical'
+                            ? 'bg-red-200 text-red-700'
+                            : issue.severity === 'high'
+                            ? 'bg-amber-200 text-amber-700'
+                            : 'bg-slate-200 text-slate-700'
+                        }`}>
+                          {issue.severity.toUpperCase()}
+                        </span>
+                        <span className="text-xs text-slate-500">{issue.category}</span>
+                      </div>
+                      <h4 className="font-medium text-slate-800">{issue.title}</h4>
+                      <p className="text-sm text-slate-600 mt-1">{issue.description}</p>
+                      <div className="flex items-center gap-4 mt-2 text-xs text-slate-500">
+                        <span>Source: {issue.source}</span>
+                        <span>Detected: {new Date(issue.detected_at).toLocaleDateString()}</span>
+                      </div>
+                    </div>
+                    <div className="flex-shrink-0">
+                      {issue.has_ghost_council_opinion ? (
+                        <div className="flex items-center gap-1 text-green-600">
+                          <CheckCircle className="w-4 h-4" />
+                          <span className="text-xs">Reviewed</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1 text-amber-600">
+                          <Clock className="w-4 h-4" />
+                          <span className="text-xs">Pending</span>
                         </div>
                       )}
                     </div>
-                  )}
-                  
-                  <p className="text-xs text-slate-500 mt-2">
-                    {message.timestamp.toLocaleTimeString()}
-                  </p>
-                </div>
-              </div>
-            ))}
-            
-            {isThinking && (
-              <div className="flex justify-start">
-                <div className="ghost-glow bg-white border border-violet-500/30 rounded-xl p-4">
-                  <div className="flex items-center gap-2">
-                    <Ghost className="w-4 h-4 text-violet-400 animate-pulse" />
-                    <span className="text-violet-400 text-sm">The Council contemplates...</span>
-                    <div className="flex gap-1">
-                      <span className="w-2 h-2 bg-violet-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                      <span className="w-2 h-2 bg-violet-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                      <span className="w-2 h-2 bg-violet-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                    </div>
                   </div>
                 </div>
-              </div>
-            )}
-            
-            <div ref={chatEndRef} />
-          </div>
-
-          {/* Input Area */}
-          <div className="p-4 border-t border-slate-200">
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleSend()}
-                placeholder="Seek wisdom from the Council..."
-                className="input flex-1"
-                disabled={isThinking}
-              />
-              <Button
-                variant="ghost"
-                onClick={handleSend}
-                disabled={!input.trim() || isThinking}
-                icon={<Send className="w-4 h-4" />}
-              >
-                Send
-              </Button>
+              ))}
             </div>
-            <p className="text-xs text-slate-500 mt-2 text-center">
-              The Ghost Council offers symbolic guidance based on accumulated institutional wisdom
-            </p>
-          </div>
+          )}
         </Card>
       </div>
 
-      {/* Sidebar - Context Panel */}
-      <div className="w-80 space-y-4">
-        {/* Active Proposals Context */}
+      {/* Proposals Awaiting Recommendation */}
+      {activeProposals && activeProposals.length > 0 && (
         <Card>
-          <h3 className="text-sm font-medium text-slate-800 mb-3 flex items-center gap-2">
-            <MessageCircle className="w-4 h-4 text-sky-400" />
-            Active Discussions
-          </h3>
-          {activeProposals && activeProposals.length > 0 ? (
-            <div className="space-y-2">
-              {activeProposals.slice(0, 3).map((proposal) => (
-                <div
-                  key={proposal.id}
-                  className="p-2 bg-white rounded-lg text-sm cursor-pointer hover:bg-slate-50"
-                  onClick={() => setInput(`What wisdom do you have regarding the proposal "${proposal.title}"?`)}
-                >
-                  <p className="text-slate-600 truncate">{proposal.title}</p>
-                  <p className="text-xs text-slate-500">{(proposal.votes_for + proposal.votes_against + proposal.votes_abstain)} voices</p>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-slate-500">No active proposals</p>
-          )}
-        </Card>
-
-        {/* Recent Knowledge */}
-        <Card>
-          <h3 className="text-sm font-medium text-slate-800 mb-3 flex items-center gap-2">
-            <History className="w-4 h-4 text-violet-400" />
-            Recent Wisdom
-          </h3>
-          {recentCapsules && recentCapsules.length > 0 ? (
-            <div className="space-y-2">
-              {recentCapsules.slice(0, 4).map((capsule) => (
-                <div
-                  key={capsule.id}
-                  className="p-2 bg-white rounded-lg text-sm cursor-pointer hover:bg-slate-50"
-                  onClick={() => setInput(`Tell me about the wisdom contained in "${capsule.title}"`)}
-                >
-                  <p className="text-slate-600 truncate">{capsule.title}</p>
-                  <p className="text-xs text-slate-500">{capsule.type}</p>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-slate-500">No recent capsules</p>
-          )}
-        </Card>
-
-        {/* Quick Actions */}
-        <Card>
-          <h3 className="text-sm font-medium text-slate-800 mb-3 flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-amber-400" />
-            Suggested Inquiries
-          </h3>
-          <div className="space-y-2">
-            {[
-              "What patterns do you see in our recent decisions?",
-              "What lessons should we remember from past mistakes?",
-              "Are there any emerging concerns I should know about?",
-              "How can I contribute more meaningfully to governance?",
-            ].map((question, idx) => (
-              <button
-                key={idx}
-                onClick={() => setInput(question)}
-                className="w-full text-left p-2 bg-white hover:bg-slate-50 rounded-lg text-sm text-slate-600 transition-colors"
+          <h2 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
+            <Scale className="w-5 h-5 text-sky-400" />
+            Proposals for Council Review
+          </h2>
+          <p className="text-sm text-slate-500 mb-4">
+            These active proposals can receive Ghost Council recommendations to help inform voting.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {activeProposals.slice(0, 6).map((proposal) => (
+              <Link
+                key={proposal.id}
+                to={`/governance?proposal=${proposal.id}`}
+                className="p-4 bg-white rounded-lg border border-slate-200 hover:border-sky-300 hover:shadow-sm transition group"
               >
-                {question}
-              </button>
+                <div className="flex items-start justify-between mb-2">
+                  <span className="text-xs bg-sky-100 text-sky-600 px-2 py-0.5 rounded">
+                    {proposal.proposal_type}
+                  </span>
+                  <Activity className="w-4 h-4 text-slate-400 group-hover:text-sky-500" />
+                </div>
+                <h4 className="font-medium text-slate-800 group-hover:text-sky-600 mb-1">
+                  {proposal.title}
+                </h4>
+                <p className="text-xs text-slate-500 line-clamp-2">
+                  {proposal.description}
+                </p>
+                <div className="flex items-center gap-3 mt-3 text-xs text-slate-500">
+                  <span className="text-green-600">{proposal.votes_for} for</span>
+                  <span className="text-red-600">{proposal.votes_against} against</span>
+                </div>
+              </Link>
             ))}
           </div>
         </Card>
+      )}
 
-        {/* User's Standing */}
-        {user && (
-          <Card>
-            <h3 className="text-sm font-medium text-slate-800 mb-3">Your Standing</h3>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-slate-500">Trust Level</span>
-                <span className="text-slate-800">{user.trust_level}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Trust Score</span>
-                <span className="text-slate-800">{user.trust_score}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Voice Weight</span>
-                <span className="text-violet-400">{((user.trust_score / 100) ** 1.5).toFixed(3)}</span>
-              </div>
+      {/* How It Works */}
+      <Card>
+        <h2 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
+          <Eye className="w-5 h-5 text-violet-400" />
+          How the Ghost Council Works
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="text-center">
+            <div className="w-12 h-12 mx-auto mb-3 bg-violet-100 rounded-full flex items-center justify-center">
+              <span className="text-xl font-bold text-violet-600">1</span>
             </div>
-          </Card>
-        )}
-      </div>
+            <h4 className="font-medium text-slate-800 mb-1">Issue Detection</h4>
+            <p className="text-sm text-slate-500">
+              The system monitors for serious issues (security threats, trust violations,
+              governance conflicts) and escalates them to the Ghost Council.
+            </p>
+          </div>
+          <div className="text-center">
+            <div className="w-12 h-12 mx-auto mb-3 bg-sky-100 rounded-full flex items-center justify-center">
+              <span className="text-xl font-bold text-sky-600">2</span>
+            </div>
+            <h4 className="font-medium text-slate-800 mb-1">AI Deliberation</h4>
+            <p className="text-sm text-slate-500">
+              Each council member analyzes the issue from their unique perspective
+              (ethics, security, governance, technical, community) and provides a weighted vote.
+            </p>
+          </div>
+          <div className="text-center">
+            <div className="w-12 h-12 mx-auto mb-3 bg-green-100 rounded-full flex items-center justify-center">
+              <span className="text-xl font-bold text-green-600">3</span>
+            </div>
+            <h4 className="font-medium text-slate-800 mb-1">Recommendation</h4>
+            <p className="text-sm text-slate-500">
+              The council reaches consensus and provides a recommendation. For proposals,
+              this informs community voting. For issues, it guides resolution.
+            </p>
+          </div>
+        </div>
+      </Card>
     </div>
   );
 }

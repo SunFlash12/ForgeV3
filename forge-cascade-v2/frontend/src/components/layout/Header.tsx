@@ -66,14 +66,15 @@ export function Header() {
   return (
     <header className="h-16 border-b border-slate-200 bg-white/80 backdrop-blur-sm px-6 flex items-center justify-between">
       {/* Search */}
-      <form onSubmit={handleSearch} className="flex-1 max-w-xl">
+      <form onSubmit={handleSearch} className="flex-1 max-w-xl" role="search">
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" aria-hidden="true" />
           <input
-            type="text"
+            type="search"
             placeholder="Search capsules, governance, or system..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
+            aria-label="Search capsules, governance, or system"
             className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100 transition-all"
           />
         </div>
@@ -83,19 +84,24 @@ export function Header() {
       <div className="flex items-center gap-3">
         {/* System Status */}
         <button
+          type="button"
           onClick={() => refetchHealth()}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl border transition-all hover:shadow-sm ${getStatusBg()}`}
-          title="Click to refresh status"
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl border transition-all hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 ${getStatusBg()}`}
+          aria-label={`System status: ${getStatusText()}. Click to refresh`}
         >
           {getStatusIcon()}
           <span className="text-sm font-medium">{getStatusText()}</span>
         </button>
 
         {/* Notifications */}
-        <button className="relative p-2.5 rounded-xl hover:bg-slate-100 transition-colors border border-transparent hover:border-slate-200">
-          <Bell className="w-5 h-5 text-slate-500" />
+        <button
+          type="button"
+          className="relative p-2.5 rounded-xl hover:bg-slate-100 transition-colors border border-transparent hover:border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2"
+          aria-label={unresolvedCount > 0 ? `Notifications: ${unresolvedCount} unresolved anomalies` : 'Notifications: No new alerts'}
+        >
+          <Bell className="w-5 h-5 text-slate-500" aria-hidden="true" />
           {unresolvedCount > 0 && (
-            <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full text-xs text-white flex items-center justify-center font-semibold shadow-lg shadow-red-500/30">
+            <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full text-xs text-white flex items-center justify-center font-semibold shadow-lg shadow-red-500/30" aria-hidden="true">
               {unresolvedCount > 9 ? '9+' : unresolvedCount}
             </span>
           )}

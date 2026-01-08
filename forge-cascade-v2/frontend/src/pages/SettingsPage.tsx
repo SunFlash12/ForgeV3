@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import axios from 'axios';
 import {
   User,
@@ -12,11 +12,15 @@ import {
   Eye,
   EyeOff,
   Save,
-  RefreshCw
+  RefreshCw,
+  Sun,
+  Moon,
+  Monitor
 } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import { Card, Button, TrustBadge, Modal } from '../components/common';
 import { api } from '../api/client';
+import { useTheme } from '../contexts/ThemeContext';
 
 /**
  * Type-safe error message extraction from unknown errors.
@@ -41,8 +45,13 @@ function getErrorMessage(error: unknown, defaultMessage: string): string {
 
 type SettingsTab = 'profile' | 'security' | 'notifications' | 'appearance' | 'data';
 
+// Storage keys for persisting preferences
+const NOTIFICATIONS_STORAGE_KEY = 'forge-notifications';
+const APPEARANCE_STORAGE_KEY = 'forge-appearance';
+
 export default function SettingsPage() {
   const { user, fetchCurrentUser, fetchTrustInfo } = useAuthStore();
+  const { theme, setTheme, resolvedTheme } = useTheme();
   const [activeTab, setActiveTab] = useState<SettingsTab>('profile');
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
@@ -58,23 +67,62 @@ export default function SettingsPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPasswords, setShowPasswords] = useState(false);
 
-  // Notification preferences
-  const [notifications, setNotifications] = useState({
-    proposalVotes: true,
-    capsuleActivity: true,
-    systemAlerts: true,
-    anomalyWarnings: true,
-    trustChanges: true,
-    ghostWisdom: false,
+  // Notification preferences - load from localStorage
+  const [notifications, setNotifications] = useState(() => {
+    const stored = localStorage.getItem(NOTIFICATIONS_STORAGE_KEY);
+    if (stored) {
+      try {
+        return JSON.parse(stored);
+      } catch {
+        // ignore parse errors
+      }
+    }
+    return {
+      proposalVotes: true,
+      capsuleActivity: true,
+      systemAlerts: true,
+      anomalyWarnings: true,
+      trustChanges: true,
+      ghostWisdom: false,
+    };
   });
 
-  // Appearance preferences  
-  const [appearance, setAppearance] = useState({
-    theme: 'dark' as 'dark' | 'light' | 'system',
-    compactMode: false,
-    animationsEnabled: true,
-    highContrast: false,
+  // Appearance preferences (excluding theme which uses ThemeContext)
+  const [appearance, setAppearance] = useState(() => {
+    const stored = localStorage.getItem(APPEARANCE_STORAGE_KEY);
+    if (stored) {
+      try {
+        return JSON.parse(stored);
+      } catch {
+        // ignore parse errors
+      }
+    }
+    return {
+      compactMode: false,
+      animationsEnabled: true,
+      highContrast: false,
+    };
   });
+
+  // Apply appearance settings to document
+  useEffect(() => {
+    const root = document.documentElement;
+    if (appearance.compactMode) {
+      root.classList.add('compact');
+    } else {
+      root.classList.remove('compact');
+    }
+    if (appearance.highContrast) {
+      root.classList.add('high-contrast');
+    } else {
+      root.classList.remove('high-contrast');
+    }
+    if (!appearance.animationsEnabled) {
+      root.classList.add('reduce-motion');
+    } else {
+      root.classList.remove('reduce-motion');
+    }
+  }, [appearance]);
 
   // Data export modal
   const [showExportModal, setShowExportModal] = useState(false);
@@ -501,7 +549,13 @@ export default function SettingsPage() {
               </div>
 
               <div className="mt-6 flex justify-end">
-                <Button onClick={() => showMessage('success', 'Notification preferences saved')} icon={<Save className="w-4 h-4" />}>
+                <Button
+                  onClick={() => {
+                    localStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(notifications));
+                    showMessage('success', 'Notification preferences saved');
+                  }}
+                  icon={<Save className="w-4 h-4" />}
+                >
                   Save Preferences
                 </Button>
               </div>
@@ -521,21 +575,29 @@ export default function SettingsPage() {
                 <div>
                   <label className="label">Theme</label>
                   <div className="flex gap-3">
-                    {(['dark', 'light', 'system'] as const).map((theme) => (
+                    {([
+                      { value: 'light' as const, label: 'Light', icon: Sun },
+                      { value: 'dark' as const, label: 'Dark', icon: Moon },
+                      { value: 'system' as const, label: 'System', icon: Monitor },
+                    ]).map(({ value, label, icon: Icon }) => (
                       <button
-                        key={theme}
-                        onClick={() => setAppearance({ ...appearance, theme })}
-                        className={`px-4 py-2 rounded-lg border transition-colors capitalize ${
-                          appearance.theme === theme
+                        key={value}
+                        onClick={() => setTheme(value)}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg border transition-colors ${
+                          theme === value
                             ? 'border-sky-500 bg-sky-500/20 text-sky-400'
                             : 'border-slate-300 text-slate-500 hover:border-slate-500'
                         }`}
                       >
-                        {theme}
+                        <Icon className="w-4 h-4" />
+                        {label}
                       </button>
                     ))}
                   </div>
-                  <p className="text-xs text-slate-500 mt-2">Note: Only dark theme is currently available</p>
+                  <p className="text-xs text-slate-500 mt-2">
+                    Current: {resolvedTheme === 'dark' ? 'Dark' : 'Light'} mode
+                    {theme === 'system' && ' (following system preference)'}
+                  </p>
                 </div>
 
                 {/* Toggle Options */}
@@ -554,7 +616,11 @@ export default function SettingsPage() {
                         <input
                           type="checkbox"
                           checked={appearance[key as keyof typeof appearance] as boolean}
-                          onChange={(e) => setAppearance({ ...appearance, [key]: e.target.checked })}
+                          onChange={(e) => {
+                            const newAppearance = { ...appearance, [key]: e.target.checked };
+                            setAppearance(newAppearance);
+                            localStorage.setItem(APPEARANCE_STORAGE_KEY, JSON.stringify(newAppearance));
+                          }}
                           className="sr-only peer"
                         />
                         <div className="w-11 h-6 bg-slate-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-sky-500/50 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-sky-500" />
@@ -564,11 +630,9 @@ export default function SettingsPage() {
                 </div>
               </div>
 
-              <div className="mt-6 flex justify-end">
-                <Button onClick={() => showMessage('success', 'Appearance settings saved')} icon={<Save className="w-4 h-4" />}>
-                  Save Settings
-                </Button>
-              </div>
+              <p className="mt-4 text-xs text-slate-500">
+                Theme and appearance settings are saved automatically to your browser.
+              </p>
             </Card>
           )}
 
@@ -615,7 +679,7 @@ export default function SettingsPage() {
               <Card className="p-6 border-red-500/30">
                 <h2 className="text-lg font-semibold text-red-400 mb-4">Danger Zone</h2>
                 <p className="text-slate-500 text-sm mb-4">
-                  Once you delete your account, there is no going back. All your capsules, votes, and contributions will be permanently removed.
+                  Once you delete your account, there is no going back. Your profile and personal data will be removed. Note: Capsules you created will remain in the system as they are permanent records, but your authorship will be anonymized.
                 </p>
                 <Button variant="danger">
                   Delete Account
