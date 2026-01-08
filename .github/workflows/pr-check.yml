@@ -70,7 +70,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build backend image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: ./forge-cascade-v2
           file: ./forge-cascade-v2/Dockerfile
@@ -79,7 +79,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Build frontend image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: ./forge-cascade-v2/frontend
           file: ./forge-cascade-v2/frontend/Dockerfile
