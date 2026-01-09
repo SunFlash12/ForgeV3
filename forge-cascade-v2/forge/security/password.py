@@ -23,8 +23,10 @@ _bcrypt_rounds = settings.password_bcrypt_rounds
 PASSWORD_MIN_LENGTH = 8
 PASSWORD_MAX_LENGTH = 128
 
-# SECURITY FIX (Audit 2): Common weak passwords blacklist
+# SECURITY FIX (Audit 2 + 3): Comprehensive common weak passwords blacklist
+# Top 200+ most common passwords from breach databases
 COMMON_WEAK_PASSWORDS = frozenset({
+    # Original list
     "password", "password1", "password123", "password!",
     "12345678", "123456789", "1234567890",
     "qwerty123", "qwertyuiop", "qwerty1234",
@@ -35,6 +37,55 @@ COMMON_WEAK_PASSWORDS = frozenset({
     "abc12345", "abcd1234", "abcdefgh",
     "passw0rd", "p@ssw0rd", "p@ssword",
     "changeme", "changeme1", "temp1234",
+    # SECURITY FIX (Audit 3): Extended common password list
+    # Top breach passwords
+    "password12", "password2", "password3",
+    "12345678!", "qwerty12", "letmein!", "welcome!", "welcome12",
+    "iloveyou", "iloveyou!", "trustno1", "trustno1!",
+    "1qaz2wsx", "1q2w3e4r", "1q2w3e4r5t", "zaq12wsx",
+    "!qaz2wsx", "qazwsx123", "1qazxsw2",
+    # Simple words with numbers
+    "dragon12", "michael1", "jennifer1", "jordan23",
+    "mustang1", "hunter12", "summer12", "winter12",
+    "charlie1", "yankees1", "rangers1", "cowboys1",
+    "superman1", "batman123", "spiderman1",
+    # Keyboard patterns
+    "asdfghjkl", "zxcvbnm1", "asdf1234", "qweasdzxc",
+    "asdfqwer", "1234qwer", "qwer1234!", "asdf!234",
+    # Common with substitutions
+    "p4ssw0rd", "passw0rd!", "pa$$word", "pa$$w0rd",
+    "l3tm31n", "w3lc0me", "adm1n123", "r00tpass",
+    # Year-based
+    "password2020", "password2021", "password2022", "password2023",
+    "password2024", "password2025", "qwerty2020", "qwerty2021",
+    "summer2020", "summer2021", "winter2020", "winter2021",
+    # Company/service patterns (will also check dynamically)
+    "admin1234!", "root1234", "test1234", "guest1234",
+    "demo1234", "user1234", "login1234", "access123",
+    # Sports teams and names
+    "yankees123", "cowboys123", "lakers123", "steelers1",
+    "patriots1", "eagles123", "broncos123", "giants123",
+    # Popular names with numbers
+    "michael123", "jennifer12", "jessica123", "ashley123",
+    "matthew123", "andrew123", "joshua123", "daniel123",
+    # More keyboard patterns
+    "qwertyui", "asdfghjk", "zxcvbnm!", "!qazxsw2",
+    "1234abcd", "abcd!234", "aaaa1111", "1111aaaa",
+    # Love/emotion patterns
+    "iloveyou!", "iloveu123", "loveyou12", "mylove123",
+    "babe1234", "honey1234", "sweetie1", "darling1",
+    # Tech patterns
+    "computer1", "internet1", "windows10", "apple123",
+    "google123", "facebook1", "twitter1", "instagram1",
+    # Animal patterns
+    "monkey123", "dragon123", "tiger1234", "lion12345",
+    "bear12345", "wolf12345", "eagle1234", "shark1234",
+})
+
+# SECURITY FIX (Audit 3): Context-aware banned substrings
+BANNED_PASSWORD_SUBSTRINGS = frozenset({
+    "forge", "cascade", "admin", "root", "test", "demo",
+    "user", "pass", "login", "guest", "temp", "default",
 })
 
 
@@ -43,7 +94,7 @@ class PasswordValidationError(Exception):
     pass
 
 
-def validate_password_strength(password: str) -> None:
+def validate_password_strength(password: str, username: str | None = None, email: str | None = None) -> None:
     """
     Validate password meets minimum security requirements.
 
@@ -51,6 +102,8 @@ def validate_password_strength(password: str) -> None:
 
     Args:
         password: Password to validate
+        username: Optional username to check password doesn't contain it
+        email: Optional email to check password doesn't contain it
 
     Raises:
         PasswordValidationError: If password doesn't meet requirements
@@ -75,8 +128,34 @@ def validate_password_strength(password: str) -> None:
         raise PasswordValidationError("Password must contain at least one special character")
 
     # SECURITY FIX (Audit 2): Check against common weak passwords blacklist
-    if password.lower() in COMMON_WEAK_PASSWORDS:
+    password_lower = password.lower()
+    if password_lower in COMMON_WEAK_PASSWORDS:
         raise PasswordValidationError("Password is too common and easily guessable")
+
+    # SECURITY FIX (Audit 3): Check for banned substrings (service/product names)
+    for banned in BANNED_PASSWORD_SUBSTRINGS:
+        if banned in password_lower:
+            raise PasswordValidationError("Password cannot contain common words like 'admin', 'password', or service names")
+
+    # SECURITY FIX (Audit 3): Context-aware validation - check username similarity
+    if username:
+        username_lower = username.lower()
+        # Check if password contains username
+        if username_lower in password_lower:
+            raise PasswordValidationError("Password cannot contain your username")
+        # Check if username contains password (reversed case)
+        if len(username_lower) >= 4 and password_lower in username_lower:
+            raise PasswordValidationError("Password is too similar to your username")
+        # Check for common variations (username123, username!, etc.)
+        if password_lower.startswith(username_lower) or password_lower.endswith(username_lower):
+            raise PasswordValidationError("Password cannot be based on your username")
+
+    # SECURITY FIX (Audit 3): Context-aware validation - check email similarity
+    if email:
+        email_lower = email.lower()
+        email_local = email_lower.split("@")[0] if "@" in email_lower else email_lower
+        if len(email_local) >= 4 and email_local in password_lower:
+            raise PasswordValidationError("Password cannot contain your email address")
 
     # Check for common weak patterns
     common_patterns = [
@@ -85,17 +164,46 @@ def validate_password_strength(password: str) -> None:
         r'^(abc|bcd|cde|def|efg|fgh|ghi|hij|ijk|jkl|klm|lmn|mno|nop|opq|pqr|qrs|rst|stu|tuv|uvw|vwx|wxy|xyz)+',  # Sequential letters
     ]
     for pattern in common_patterns:
-        if re.match(pattern, password.lower()):
+        if re.match(pattern, password_lower):
             raise PasswordValidationError("Password contains a weak pattern")
 
+    # SECURITY FIX (Audit 3): Check for repeated character patterns
+    if _has_repeated_pattern(password_lower):
+        raise PasswordValidationError("Password contains a repetitive pattern")
 
-def hash_password(password: str, validate: bool = True) -> str:
+
+def _has_repeated_pattern(password: str) -> bool:
+    """
+    Check if password has a simple repeated pattern like 'abcabc' or 'abab'.
+
+    SECURITY FIX (Audit 3): Detect repetitive patterns that reduce entropy.
+    """
+    length = len(password)
+    # Check for patterns of length 2-4 repeated
+    for pattern_len in range(2, min(5, length // 2 + 1)):
+        pattern = password[:pattern_len]
+        # Check if entire password is just this pattern repeated
+        if pattern * (length // pattern_len) == password[:pattern_len * (length // pattern_len)]:
+            # At least 3 repetitions to be considered weak
+            if length // pattern_len >= 3:
+                return True
+    return False
+
+
+def hash_password(
+    password: str,
+    validate: bool = True,
+    username: str | None = None,
+    email: str | None = None
+) -> str:
     """
     Hash a password using bcrypt.
 
     Args:
         password: Plain text password
         validate: Whether to validate password strength (default True)
+        username: Optional username for context-aware validation
+        email: Optional email for context-aware validation
 
     Returns:
         Bcrypt hash of the password
@@ -104,7 +212,7 @@ def hash_password(password: str, validate: bool = True) -> str:
         PasswordValidationError: If password doesn't meet requirements
     """
     if validate:
-        validate_password_strength(password)
+        validate_password_strength(password, username=username, email=email)
 
     password_bytes = password.encode('utf-8')
     salt = bcrypt.gensalt(rounds=_bcrypt_rounds)

@@ -409,6 +409,7 @@ def create_app(
         IdempotencyMiddleware,
         CSRFProtectionMiddleware,
         RequestTimeoutMiddleware,
+        APILimitsMiddleware,  # SECURITY FIX (Audit 3)
     )
 
     # Order matters: outer middleware runs first
@@ -424,6 +425,8 @@ def create_app(
     add_metrics_middleware(app)
 
     app.add_middleware(RequestSizeLimitMiddleware, max_content_length=10 * 1024 * 1024)  # 10MB limit
+    # SECURITY FIX (Audit 3): Add API limits for JSON depth and query params
+    app.add_middleware(APILimitsMiddleware, max_json_depth=20, max_query_params=50, max_array_length=1000)
     app.add_middleware(CSRFProtectionMiddleware, enabled=(settings.app_env != "development"))  # CSRF protection
     app.add_middleware(IdempotencyMiddleware)  # Idempotency support
     app.add_middleware(AuthenticationMiddleware)

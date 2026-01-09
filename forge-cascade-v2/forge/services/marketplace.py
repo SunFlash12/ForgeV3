@@ -93,6 +93,8 @@ class MarketplaceService:
         )
 
         self._listings[listing.id] = listing
+        # AUDIT 3 FIX (A1-D03): Persist to database
+        await self._persist_listing(listing)
         logger.info(f"Created listing {listing.id} for capsule {capsule_id}")
         return listing
 
@@ -108,6 +110,8 @@ class MarketplaceService:
 
         listing.status = ListingStatus.ACTIVE
         listing.published_at = datetime.now(timezone.utc)
+        # AUDIT 3 FIX (A1-D03): Persist status change
+        await self._persist_listing(listing)
         return listing
 
     async def get_listing(self, listing_id: str) -> CapsuleListing | None:
@@ -337,6 +341,8 @@ class MarketplaceService:
             )
 
         self._purchases[purchase.id] = purchase
+        # AUDIT 3 FIX (A1-D03): Persist purchase to database
+        await self._persist_purchase(purchase)
 
         # Create license
         license = License(
@@ -353,6 +359,8 @@ class MarketplaceService:
         # Update listing stats
         listing.purchase_count += 1
         listing.revenue_total += listing.price
+        # AUDIT 3 FIX (A1-D03): Persist listing stats update
+        await self._persist_listing(listing)
 
         logger.info(f"Purchase completed: {purchase.id} for capsule {listing.capsule_id}")
         return purchase
@@ -550,6 +558,217 @@ class MarketplaceService:
             avg_price=avg_price,
             avg_capsules_per_seller=avg_per_seller,
         )
+
+    # =========================================================================
+    # Persistence Methods (Audit 3 - A1-D03)
+    # =========================================================================
+
+    async def _persist_listing(self, listing: CapsuleListing) -> bool:
+        """
+        Persist a listing to Neo4j database.
+
+        AUDIT 3 FIX (A1-D03): Add persistent storage to marketplace service.
+        """
+        if not self.neo4j:
+            logger.debug("No Neo4j client, skipping listing persistence")
+            return False
+
+        try:
+            query = """
+            MERGE (l:MarketplaceListing {id: $id})
+            SET l.capsule_id = $capsule_id,
+                l.seller_id = $seller_id,
+                l.price = $price,
+                l.currency = $currency,
+                l.license_type = $license_type,
+                l.status = $status,
+                l.title = $title,
+                l.description = $description,
+                l.tags = $tags,
+                l.created_at = $created_at,
+                l.published_at = $published_at,
+                l.updated_at = datetime()
+            RETURN l.id as id
+            """
+            await self.neo4j.execute_write(
+                query,
+                parameters={
+                    "id": listing.id,
+                    "capsule_id": listing.capsule_id,
+                    "seller_id": listing.seller_id,
+                    "price": str(listing.price),
+                    "currency": listing.currency.value,
+                    "license_type": listing.license_type.value,
+                    "status": listing.status.value,
+                    "title": listing.title,
+                    "description": listing.description or "",
+                    "tags": listing.tags,
+                    "created_at": listing.created_at.isoformat() if listing.created_at else None,
+                    "published_at": listing.published_at.isoformat() if listing.published_at else None,
+                }
+            )
+            logger.debug(f"Persisted listing {listing.id} to database")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to persist listing {listing.id}: {e}")
+            return False
+
+    async def _persist_purchase(self, purchase: Purchase) -> bool:
+        """Persist a purchase to Neo4j database."""
+        if not self.neo4j:
+            return False
+
+        try:
+            query = """
+            MERGE (p:MarketplacePurchase {id: $id})
+            SET p.listing_id = $listing_id,
+                p.capsule_id = $capsule_id,
+                p.buyer_id = $buyer_id,
+                p.seller_id = $seller_id,
+                p.price = $price,
+                p.currency = $currency,
+                p.license_type = $license_type,
+                p.payment_status = $payment_status,
+                p.purchased_at = $purchased_at
+            RETURN p.id as id
+            """
+            await self.neo4j.execute_write(
+                query,
+                parameters={
+                    "id": purchase.id,
+                    "listing_id": purchase.listing_id,
+                    "capsule_id": purchase.capsule_id,
+                    "buyer_id": purchase.buyer_id,
+                    "seller_id": purchase.seller_id,
+                    "price": str(purchase.price),
+                    "currency": purchase.currency.value,
+                    "license_type": purchase.license_type.value,
+                    "payment_status": purchase.payment_status.value,
+                    "purchased_at": purchase.purchased_at.isoformat() if purchase.purchased_at else None,
+                }
+            )
+            return True
+        except Exception as e:
+            logger.error(f"Failed to persist purchase {purchase.id}: {e}")
+            return False
+
+    async def _persist_cart(self, cart: Cart) -> bool:
+        """Persist a cart to Neo4j database."""
+        if not self.neo4j:
+            return False
+
+        try:
+            # Store cart with items serialized as JSON
+            import json
+            items_json = json.dumps([
+                {"listing_id": item.listing_id, "quantity": item.quantity}
+                for item in cart.items
+            ])
+
+            query = """
+            MERGE (c:MarketplaceCart {user_id: $user_id})
+            SET c.items = $items,
+                c.total = $total,
+                c.updated_at = datetime()
+            RETURN c.user_id as user_id
+            """
+            await self.neo4j.execute_write(
+                query,
+                parameters={
+                    "user_id": cart.user_id,
+                    "items": items_json,
+                    "total": str(cart.total),
+                }
+            )
+            return True
+        except Exception as e:
+            logger.error(f"Failed to persist cart for user {cart.user_id}: {e}")
+            return False
+
+    async def load_from_database(self) -> int:
+        """
+        Load all marketplace data from Neo4j on startup.
+
+        Returns:
+            Number of listings loaded
+        """
+        if not self.neo4j:
+            logger.warning("No Neo4j client, cannot load marketplace data")
+            return 0
+
+        loaded = 0
+        try:
+            # Load listings
+            query = """
+            MATCH (l:MarketplaceListing)
+            RETURN l.id as id, l.capsule_id as capsule_id, l.seller_id as seller_id,
+                   l.price as price, l.currency as currency, l.license_type as license_type,
+                   l.status as status, l.title as title, l.description as description,
+                   l.tags as tags, l.created_at as created_at, l.published_at as published_at
+            """
+            results = await self.neo4j.execute_read(query)
+
+            for record in results:
+                listing = CapsuleListing(
+                    id=record["id"],
+                    capsule_id=record["capsule_id"],
+                    seller_id=record["seller_id"],
+                    price=Decimal(record["price"]) if record["price"] else Decimal("0"),
+                    currency=Currency(record["currency"]) if record["currency"] else Currency.FORGE,
+                    license_type=LicenseType(record["license_type"]) if record["license_type"] else LicenseType.PERPETUAL,
+                    status=ListingStatus(record["status"]) if record["status"] else ListingStatus.DRAFT,
+                    title=record["title"] or "",
+                    description=record["description"],
+                    tags=record["tags"] or [],
+                )
+                self._listings[listing.id] = listing
+                loaded += 1
+
+            # Load purchases
+            purchase_query = """
+            MATCH (p:MarketplacePurchase)
+            RETURN p.id as id, p.listing_id as listing_id, p.capsule_id as capsule_id,
+                   p.buyer_id as buyer_id, p.seller_id as seller_id, p.price as price,
+                   p.currency as currency, p.license_type as license_type,
+                   p.payment_status as payment_status, p.purchased_at as purchased_at
+            """
+            purchase_results = await self.neo4j.execute_read(purchase_query)
+
+            for record in purchase_results:
+                purchase = Purchase(
+                    id=record["id"],
+                    listing_id=record["listing_id"],
+                    capsule_id=record["capsule_id"],
+                    buyer_id=record["buyer_id"],
+                    seller_id=record["seller_id"],
+                    price=Decimal(record["price"]) if record["price"] else Decimal("0"),
+                    currency=Currency(record["currency"]) if record["currency"] else Currency.FORGE,
+                    license_type=LicenseType(record["license_type"]) if record["license_type"] else LicenseType.PERPETUAL,
+                    payment_status=PaymentStatus(record["payment_status"]) if record["payment_status"] else PaymentStatus.PENDING,
+                )
+                self._purchases[purchase.id] = purchase
+
+            logger.info(f"Loaded {loaded} listings and {len(self._purchases)} purchases from database")
+            return loaded
+        except Exception as e:
+            logger.error(f"Failed to load marketplace data: {e}")
+            return 0
+
+    async def _delete_listing_from_db(self, listing_id: str) -> bool:
+        """Delete a listing from the database."""
+        if not self.neo4j:
+            return False
+
+        try:
+            query = """
+            MATCH (l:MarketplaceListing {id: $id})
+            DELETE l
+            """
+            await self.neo4j.execute_write(query, parameters={"id": listing_id})
+            return True
+        except Exception as e:
+            logger.error(f"Failed to delete listing {listing_id}: {e}")
+            return False
 
 
 # Global instance

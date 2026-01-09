@@ -175,28 +175,37 @@ class LineageTrackerOverlay(BaseOverlay):
             lineage_provider: External data provider (repository)
         """
         super().__init__()
-        
+
         self._enable_anomaly_detection = enable_anomaly_detection
         self._enable_metrics = enable_metrics
         self._trust_decay_rate = trust_decay_rate
         self._max_derivations_per_day = max_derivations_per_day
         self._lineage_provider = lineage_provider
-        
-        # In-memory lineage cache
+
+        # SECURITY FIX (Audit 3): Bounded memory limits to prevent DoS
+        self._MAX_NODES: int = 100000  # Max nodes in memory
+        self._MAX_ROOTS: int = 50000  # Max roots tracked
+        self._MAX_DERIVATION_USERS: int = 10000  # Max users tracked for derivations
+        self._MAX_DERIVATIONS_PER_USER: int = 200  # Max derivations per user
+
+        # In-memory lineage cache with bounded size
         self._nodes: dict[str, LineageNode] = {}
+        self._nodes_access_order: list[str] = []  # For LRU eviction
         self._roots: set[str] = set()  # Nodes with no parents
-        
+
         # Recent derivations for anomaly detection
         self._recent_derivations: dict[str, list[datetime]] = defaultdict(list)
-        
+        self._derivation_users_order: list[str] = []  # For LRU eviction
+
         # Statistics
         self._stats = {
             "nodes_tracked": 0,
             "chains_computed": 0,
             "anomalies_detected": 0,
-            "derivations_recorded": 0
+            "derivations_recorded": 0,
+            "nodes_evicted": 0  # Track evictions
         }
-        
+
         self._logger = logger.bind(overlay=self.NAME)
     
     async def initialize(self) -> bool:
@@ -345,20 +354,49 @@ class LineageTrackerOverlay(BaseOverlay):
             # Root node
             self._roots.add(capsule_id)
         
+        # SECURITY FIX (Audit 3): Enforce bounded node cache with LRU eviction
+        if len(self._nodes) >= self._MAX_NODES:
+            self._evict_lru_nodes()
+
         # Store node
         self._nodes[capsule_id] = node
+        self._nodes_access_order.append(capsule_id)
         self._stats["nodes_tracked"] += 1
-        
+
         # Update parent relationships
         for parent_id in parent_ids:
             if parent_id in self._nodes:
                 self._nodes[parent_id].child_ids.append(capsule_id)
                 self._update_influence(parent_id)
-        
-        # Track derivation for anomaly detection
+
+        # Enforce root limit
+        if capsule_id in self._roots and len(self._roots) > self._MAX_ROOTS:
+            # Remove oldest roots (this shouldn't happen often)
+            excess = len(self._roots) - self._MAX_ROOTS
+            for _ in range(excess):
+                try:
+                    self._roots.pop()
+                except KeyError:
+                    break
+
+        # Track derivation for anomaly detection with bounded memory
         if context.user_id:
+            # SECURITY FIX (Audit 3): Enforce bounded derivation tracking
+            if context.user_id not in self._recent_derivations:
+                if len(self._recent_derivations) >= self._MAX_DERIVATION_USERS:
+                    # Evict oldest users
+                    evict_count = max(1, len(self._derivation_users_order) // 10)
+                    for old_user in self._derivation_users_order[:evict_count]:
+                        self._recent_derivations.pop(old_user, None)
+                    self._derivation_users_order = self._derivation_users_order[evict_count:]
+                self._derivation_users_order.append(context.user_id)
+
             self._recent_derivations[context.user_id].append(datetime.utcnow())
-        
+            # Enforce per-user limit
+            if len(self._recent_derivations[context.user_id]) > self._MAX_DERIVATIONS_PER_USER:
+                self._recent_derivations[context.user_id] = \
+                    self._recent_derivations[context.user_id][-self._MAX_DERIVATIONS_PER_USER:]
+
         self._stats["derivations_recorded"] += 1
         
         # Compute chain to root
@@ -1017,12 +1055,62 @@ class LineageTrackerOverlay(BaseOverlay):
             "roots_count": len(self._roots)
         }
     
+    def _evict_lru_nodes(self, count: int = 1000) -> int:
+        """
+        Evict least recently used nodes from the cache.
+
+        SECURITY FIX (Audit 3): Prevents memory exhaustion by limiting
+        the number of nodes in memory.
+
+        Args:
+            count: Number of nodes to evict
+
+        Returns:
+            Number of nodes actually evicted
+        """
+        evict_count = min(count, len(self._nodes_access_order))
+        to_evict = self._nodes_access_order[:evict_count]
+        evicted = 0
+
+        for node_id in to_evict:
+            node = self._nodes.pop(node_id, None)
+            if node:
+                evicted += 1
+                # Also remove from roots if applicable
+                self._roots.discard(node_id)
+                # Clean up references from other nodes
+                for parent_id in node.parent_ids:
+                    if parent_id in self._nodes:
+                        try:
+                            self._nodes[parent_id].child_ids.remove(node_id)
+                        except ValueError:
+                            pass
+                for child_id in node.child_ids:
+                    if child_id in self._nodes:
+                        try:
+                            self._nodes[child_id].parent_ids.remove(node_id)
+                        except ValueError:
+                            pass
+
+        self._nodes_access_order = self._nodes_access_order[evict_count:]
+        self._stats["nodes_evicted"] += evicted
+
+        self._logger.info(
+            "lineage_nodes_evicted",
+            evicted=evicted,
+            remaining=len(self._nodes)
+        )
+
+        return evicted
+
     def clear_cache(self) -> int:
         """Clear in-memory lineage cache."""
         count = len(self._nodes)
         self._nodes.clear()
+        self._nodes_access_order.clear()
         self._roots.clear()
         self._recent_derivations.clear()
+        self._derivation_users_order.clear()
         return count
 
 

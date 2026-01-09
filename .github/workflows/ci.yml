@@ -258,8 +258,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
+      # SECURITY FIX (Audit 3): Pin to specific version instead of @master
+      # TODO: Pin to SHA hash for production (e.g., aquasecurity/trivy-action@<sha>)
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.28.0
         with:
           scan-type: 'fs'
           scan-ref: '.'

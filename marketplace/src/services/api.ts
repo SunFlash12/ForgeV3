@@ -15,6 +15,7 @@ const CASCADE_API_URL = import.meta.env.VITE_CASCADE_API_URL || 'https://forgeca
 
 class ApiClient {
   private client: AxiosInstance;
+  private csrfToken: string | null = null;
 
   constructor() {
     this.client = axios.create({
@@ -24,6 +25,21 @@ class ApiClient {
         'Content-Type': 'application/json',
       },
     });
+
+    // SECURITY FIX (Audit 3): Request interceptor to add CSRF token to state-changing requests
+    this.client.interceptors.request.use(
+      (config) => {
+        // Add CSRF token for state-changing requests
+        if (['post', 'put', 'patch', 'delete'].includes(config.method?.toLowerCase() || '')) {
+          const token = this.csrfToken || this.getCsrfTokenFromCookie();
+          if (token) {
+            config.headers['X-CSRF-Token'] = token;
+          }
+        }
+        return config;
+      },
+      (error) => Promise.reject(error)
+    );
 
     // Response interceptor for error handling
     this.client.interceptors.response.use(
@@ -36,6 +52,17 @@ class ApiClient {
         return Promise.reject(error);
       }
     );
+  }
+
+  // SECURITY FIX (Audit 3): Get CSRF token from cookie
+  private getCsrfTokenFromCookie(): string | null {
+    const match = document.cookie.match(/csrf_token=([^;]+)/);
+    return match ? match[1] : null;
+  }
+
+  // SECURITY FIX (Audit 3): Set CSRF token from login response
+  setCsrfToken(token: string): void {
+    this.csrfToken = token;
   }
 
   // ==========================================================================

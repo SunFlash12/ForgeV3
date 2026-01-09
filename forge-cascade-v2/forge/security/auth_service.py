@@ -118,8 +118,9 @@ class AuthService:
         if await self.user_repo.email_exists(email):
             raise RegistrationError(f"Email '{email}' is already registered")
         
-        # Hash password
-        password_hash = hash_password(password)
+        # Hash password (with context-aware validation)
+        # SECURITY FIX (Audit 3): Pass username/email for context-aware password validation
+        password_hash = hash_password(password, username=username, email=email)
         
         # Create user
         user_create = UserCreate(
@@ -132,11 +133,14 @@ class AuthService:
         user = await self.user_repo.create(user_create, password_hash)
         
         # Log registration
+        # SECURITY FIX (Audit 3): Hash email in audit logs to prevent PII exposure
+        import hashlib
+        email_hash = hashlib.sha256(email.lower().encode()).hexdigest()[:16]
         await self.audit_repo.log_user_action(
             actor_id=user.id,
             target_user_id=user.id,
             action="created",
-            details={"username": username, "email": email},
+            details={"username": username, "email_hash": email_hash},
             ip_address=ip_address
         )
         
@@ -174,12 +178,15 @@ class AuthService:
         user = await self.user_repo.get_by_username_or_email(username_or_email)
         
         if not user:
-            # Log failed attempt (unknown user)
+            # SECURITY FIX (Audit 3): Don't log the attempted username/email to prevent
+            # user enumeration via log analysis. Hash it for correlation if needed.
+            import hashlib
+            masked_identifier = hashlib.sha256(username_or_email.encode()).hexdigest()[:16]
             await self.audit_repo.log_user_action(
                 actor_id="unknown",
                 target_user_id="unknown",
                 action="login_failed",
-                details={"reason": "user_not_found", "attempted": username_or_email},
+                details={"reason": "user_not_found", "identifier_hash": masked_identifier},
                 ip_address=ip_address,
                 user_agent=user_agent
             )
@@ -247,7 +254,8 @@ class AuthService:
         
         # Check if password needs rehashing (security upgrade)
         if needs_rehash(user.password_hash):
-            new_hash = hash_password(password)
+            # Skip validation - password was already validated when originally created
+            new_hash = hash_password(password, validate=False)
             await self.user_repo.update_password(user.id, new_hash)
         
         # Clear any lockout and record successful login
@@ -476,8 +484,9 @@ class AuthService:
             )
             raise InvalidCredentialsError("Current password is incorrect")
         
-        # Hash and update new password
-        new_hash = hash_password(new_password)
+        # Hash and update new password (with context-aware validation)
+        # SECURITY FIX (Audit 3): Pass username/email for context-aware password validation
+        new_hash = hash_password(new_password, username=user.username, email=user.email)
         await self.user_repo.update_password(user_id, new_hash)
         
         # Revoke all existing sessions for security
@@ -525,20 +534,26 @@ class AuthService:
                 expires_at=expires_at
             )
 
+            # SECURITY FIX (Audit 3): Hash email in audit logs
+            import hashlib
+            email_hash = hashlib.sha256(email.lower().encode()).hexdigest()[:16]
             await self.audit_repo.log_security_event(
                 actor_id=user.id,
                 event_name="password_reset_requested",
-                details={"email": email},
+                details={"email_hash": email_hash},
                 ip_address=ip_address
             )
 
             return plain_token
 
         # Log attempt for non-existent email (but don't reveal to caller)
+        # SECURITY FIX (Audit 3): Hash email in audit logs
+        import hashlib
+        email_hash = hashlib.sha256(email.lower().encode()).hexdigest()[:16]
         await self.audit_repo.log_security_event(
             actor_id="unknown",
             event_name="password_reset_requested_unknown_email",
-            details={"email": email},
+            details={"email_hash": email_hash},
             ip_address=ip_address
         )
 
@@ -587,8 +602,9 @@ class AuthService:
             )
             raise AuthenticationError("Invalid or expired reset token")
 
-        # Hash and update password
-        new_hash = hash_password(new_password)
+        # Hash and update password (with context-aware validation)
+        # SECURITY FIX (Audit 3): Pass username/email for context-aware password validation
+        new_hash = hash_password(new_password, username=user.username, email=user.email)
         await self.user_repo.update_password(user_id, new_hash)
 
         # Clear the reset token (one-time use)

@@ -918,6 +918,187 @@ class AuditRepository:
 
         return events, total
 
+    # =========================================================================
+    # SECURITY FIX (Audit 3): Bulk Operation & Data Export Logging
+    # =========================================================================
+
+    async def log_bulk_operation(
+        self,
+        actor_id: str,
+        operation: str,
+        resource_type: str,
+        resource_count: int,
+        resource_ids: list[str] | None = None,
+        details: dict[str, Any] | None = None,
+        correlation_id: str | None = None
+    ) -> AuditEvent:
+        """
+        SECURITY FIX (Audit 3): Log bulk operations for audit compliance.
+
+        Tracks operations that affect multiple resources at once,
+        such as bulk delete, bulk update, or batch imports.
+
+        Args:
+            actor_id: User performing the bulk operation
+            operation: Type of bulk operation (bulk_delete, bulk_update, batch_import)
+            resource_type: Type of resources affected
+            resource_count: Number of resources affected
+            resource_ids: Optional list of affected resource IDs (truncated if >100)
+            details: Additional operation details
+            correlation_id: For linking related events
+
+        Returns:
+            Created AuditEvent
+        """
+        # Truncate resource_ids if too many
+        truncated_ids = None
+        if resource_ids:
+            truncated_ids = resource_ids[:100] if len(resource_ids) > 100 else resource_ids
+
+        full_details = {
+            "operation": operation,
+            "resource_count": resource_count,
+            "resource_ids": truncated_ids,
+            "ids_truncated": len(resource_ids) > 100 if resource_ids else False,
+            **(details or {})
+        }
+
+        return await self.log(
+            event_type=EventType.SYSTEM_EVENT,
+            actor_id=actor_id,
+            action=f"Bulk {operation}",
+            resource_type=resource_type,
+            resource_id=f"bulk:{resource_count}",
+            details=full_details,
+            correlation_id=correlation_id,
+            priority=EventPriority.HIGH  # Bulk ops are high priority
+        )
+
+    async def log_data_export(
+        self,
+        actor_id: str,
+        export_type: str,
+        resource_type: str,
+        record_count: int,
+        format: str,
+        filters_applied: dict[str, Any] | None = None,
+        destination: str | None = None,
+        ip_address: str | None = None,
+        user_agent: str | None = None
+    ) -> AuditEvent:
+        """
+        SECURITY FIX (Audit 3): Log data export operations for compliance.
+
+        Tracks all data exports for GDPR/compliance requirements.
+
+        Args:
+            actor_id: User performing the export
+            export_type: Type of export (user_data, capsules, audit_logs, reports)
+            resource_type: Type of data being exported
+            record_count: Number of records exported
+            format: Export format (csv, json, xlsx, pdf)
+            filters_applied: Filters used to select the data
+            destination: Where data was exported to (email, download, api)
+            ip_address: Client IP address
+            user_agent: Client user agent
+
+        Returns:
+            Created AuditEvent
+        """
+        details = {
+            "export_type": export_type,
+            "record_count": record_count,
+            "format": format,
+            "filters_applied": filters_applied or {},
+            "destination": destination or "download"
+        }
+
+        return await self.log(
+            event_type=EventType.SYSTEM_EVENT,
+            actor_id=actor_id,
+            action=f"Data export: {export_type}",
+            resource_type=resource_type,
+            resource_id=f"export:{record_count}",
+            details=details,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            priority=EventPriority.HIGH  # Data exports are high priority for compliance
+        )
+
+    async def log_maintenance_mode(
+        self,
+        actor_id: str,
+        action: str,
+        reason: str | None = None,
+        duration_minutes: int | None = None,
+        affected_services: list[str] | None = None
+    ) -> AuditEvent:
+        """
+        SECURITY FIX (Audit 3): Log maintenance mode changes.
+
+        Args:
+            actor_id: User who changed maintenance mode
+            action: Action taken (enabled, disabled, extended)
+            reason: Reason for maintenance
+            duration_minutes: Expected duration
+            affected_services: List of affected services
+
+        Returns:
+            Created AuditEvent
+        """
+        details = {
+            "reason": reason,
+            "duration_minutes": duration_minutes,
+            "affected_services": affected_services or ["all"]
+        }
+
+        return await self.log(
+            event_type=EventType.SYSTEM_EVENT,
+            actor_id=actor_id,
+            action=f"Maintenance mode {action}",
+            resource_type="system",
+            resource_id="maintenance_mode",
+            details=details,
+            priority=EventPriority.CRITICAL  # Maintenance mode is critical
+        )
+
+    async def log_self_audit(
+        self,
+        actor_id: str,
+        action: str,
+        target_audit_ids: list[str] | None = None,
+        details: dict[str, Any] | None = None
+    ) -> AuditEvent:
+        """
+        SECURITY FIX (Audit 3): Self-audit logging for audit log operations.
+
+        Tracks operations on the audit log itself (purge, archive, export).
+
+        Args:
+            actor_id: User performing the audit log operation
+            action: Action on audit logs (purge, archive, export, query)
+            target_audit_ids: IDs of affected audit entries
+            details: Additional details
+
+        Returns:
+            Created AuditEvent
+        """
+        full_details = {
+            "target_count": len(target_audit_ids) if target_audit_ids else 0,
+            "target_sample": target_audit_ids[:10] if target_audit_ids else [],
+            **(details or {})
+        }
+
+        return await self.log(
+            event_type=EventType.SECURITY_EVENT,  # Use security event type
+            actor_id=actor_id,
+            action=f"Audit log {action}",
+            resource_type="audit_log",
+            resource_id="self",
+            details=full_details,
+            priority=EventPriority.CRITICAL  # Self-audit is critical
+        )
+
 
 # Convenience factory
 def get_audit_repository(db: Neo4jClient) -> AuditRepository:

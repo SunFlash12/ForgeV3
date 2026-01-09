@@ -201,7 +201,8 @@ class SearchService:
             results = results[request.offset:request.offset + request.limit]
             
         except Exception as e:
-            logger.error("search_failed", error=str(e), query=request.query)
+            # SECURITY FIX (Audit 3): Truncate search query in error logs to prevent sensitive data leakage
+            logger.error("search_failed", error=str(e), query=request.query[:50] + ("..." if len(request.query) > 50 else ""))
             results = []
         
         took_ms = (time.monotonic() - start_time) * 1000

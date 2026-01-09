@@ -22,6 +22,7 @@ from forge.resilience.migration.version_registry import (
     EmbeddingVersionRegistry,
     get_version_registry,
 )
+from forge.database.client import get_db_client
 
 logger = structlog.get_logger(__name__)
 
@@ -430,10 +431,93 @@ class EmbeddingMigrationService:
         """
         Get list of capsules that need migration.
 
-        In production, this would query the database.
+        Queries the database for capsules based on:
+        - Capsules with embeddings from the old version
+        - Optional filters from the job (type, owner_id, tags)
+
+        Args:
+            job: Migration job with filter criteria
+
+        Returns:
+            List of capsule dicts with id and content for migration
         """
-        # Placeholder - would query database for capsules with old version
-        return []
+        try:
+            db_client = await get_db_client()
+
+            # Build filter conditions
+            conditions = ["c.is_archived = false"]
+            params: Dict[str, Any] = {}
+
+            # Filter by embedding version if capsules track it
+            # Currently capsules may not have embedding_version field,
+            # so we migrate all capsules with embeddings
+            conditions.append("c.embedding IS NOT NULL")
+
+            # Check for embedding_version field (optional - for future support)
+            # If capsules have embedding_version, filter by from_version
+            if job.from_version:
+                # This will only match if the field exists and equals from_version
+                # Otherwise we migrate all capsules with embeddings
+                conditions.append(
+                    "(c.embedding_version IS NULL OR c.embedding_version = $from_version)"
+                )
+                params["from_version"] = job.from_version
+
+            # Apply optional filters from job
+            if job.capsule_filter:
+                if job.capsule_filter.get("type"):
+                    conditions.append("c.type = $type")
+                    params["type"] = job.capsule_filter["type"]
+
+                if job.capsule_filter.get("owner_id"):
+                    conditions.append("c.owner_id = $owner_id")
+                    params["owner_id"] = job.capsule_filter["owner_id"]
+
+                if job.capsule_filter.get("tag"):
+                    conditions.append("$tag IN c.tags")
+                    params["tag"] = job.capsule_filter["tag"]
+
+                if job.capsule_filter.get("min_trust"):
+                    conditions.append("c.trust_level >= $min_trust")
+                    params["min_trust"] = job.capsule_filter["min_trust"]
+
+            where_clause = " AND ".join(conditions)
+
+            query = f"""
+            MATCH (c:Capsule)
+            WHERE {where_clause}
+            RETURN c.id AS id, c.content AS content, c.title AS title
+            ORDER BY c.created_at ASC
+            """
+
+            results = await db_client.execute(query, params)
+
+            capsules = [
+                {
+                    "id": r["id"],
+                    "content": r["content"] or "",
+                    "title": r.get("title", ""),
+                }
+                for r in results
+                if r.get("id")
+            ]
+
+            logger.info(
+                "capsules_to_migrate_fetched",
+                job_id=job.job_id,
+                count=len(capsules),
+                filters=job.capsule_filter,
+            )
+
+            return capsules
+
+        except Exception as e:
+            logger.error(
+                "failed_to_fetch_capsules_for_migration",
+                job_id=job.job_id,
+                error=str(e),
+            )
+            raise
 
     async def _process_batch(
         self,
@@ -509,6 +593,16 @@ class EmbeddingMigrationService:
                 )
                 return False
 
+        # Update the embedding version on the capsule
+        try:
+            await self._update_capsule_embedding_version(capsule_id, to_version)
+        except Exception as e:
+            logger.warning(
+                "embedding_version_update_failed",
+                capsule_id=capsule_id,
+                error=str(e)
+            )
+
         # Cleanup old embedding
         if cleanup_old and self._cleanup_callback:
             try:
@@ -522,6 +616,42 @@ class EmbeddingMigrationService:
                 )
 
         return True
+
+    async def _update_capsule_embedding_version(
+        self,
+        capsule_id: str,
+        version: str
+    ) -> None:
+        """
+        Update the embedding version field on a capsule.
+
+        Args:
+            capsule_id: ID of the capsule to update
+            version: New embedding version
+        """
+        try:
+            db_client = await get_db_client()
+
+            query = """
+            MATCH (c:Capsule {id: $capsule_id})
+            SET c.embedding_version = $version,
+                c.updated_at = $now
+            """
+
+            from datetime import datetime
+            await db_client.execute(query, {
+                "capsule_id": capsule_id,
+                "version": version,
+                "now": datetime.utcnow().isoformat(),
+            })
+
+        except Exception as e:
+            logger.warning(
+                "failed_to_update_embedding_version",
+                capsule_id=capsule_id,
+                version=version,
+                error=str(e),
+            )
 
     def get_stats(self) -> Dict[str, Any]:
         """Get migration statistics."""

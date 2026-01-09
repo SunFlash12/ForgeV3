@@ -640,9 +640,22 @@ def shutdown_wasm_runtime() -> None:
     """Shutdown the global Wasm runtime."""
     global _wasm_runtime
     if _wasm_runtime:
-        # Terminate all instances
+        # SECURITY FIX (Audit 3): Track background tasks and handle exceptions
+        async def _safe_terminate(instance_id: str) -> None:
+            try:
+                await _wasm_runtime.terminate(instance_id)
+            except Exception as e:
+                import structlog
+                structlog.get_logger().error(
+                    "wasm_terminate_error",
+                    instance_id=instance_id,
+                    error=str(e)
+                )
+
+        # Terminate all instances with exception handling
         for instance_id in list(_wasm_runtime._instances.keys()):
-            asyncio.create_task(_wasm_runtime.terminate(instance_id))
+            task = asyncio.create_task(_safe_terminate(instance_id))
+            task.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
     _wasm_runtime = None
 
 

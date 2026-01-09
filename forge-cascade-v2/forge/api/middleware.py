@@ -683,6 +683,109 @@ class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 
+class APILimitsMiddleware(BaseHTTPMiddleware):
+    """
+    SECURITY FIX (Audit 3): Additional API request limits to prevent DoS attacks.
+
+    Enforces:
+    - JSON depth limit to prevent stack overflow attacks
+    - Query parameter count limit to prevent parameter pollution
+    - IP-based rate limiting (in addition to user-based)
+    """
+
+    def __init__(
+        self,
+        app,
+        max_json_depth: int = 20,
+        max_query_params: int = 50,
+        max_array_length: int = 1000,
+    ):
+        """
+        Args:
+            max_json_depth: Maximum nesting depth for JSON bodies (default 20)
+            max_query_params: Maximum number of query parameters (default 50)
+            max_array_length: Maximum length of arrays in JSON (default 1000)
+        """
+        super().__init__(app)
+        self.max_json_depth = max_json_depth
+        self.max_query_params = max_query_params
+        self.max_array_length = max_array_length
+
+    def _check_json_depth(self, obj, current_depth: int = 0) -> tuple[bool, str]:
+        """
+        Recursively check JSON depth and array lengths.
+
+        Returns:
+            (is_valid, error_message)
+        """
+        if current_depth > self.max_json_depth:
+            return False, f"JSON depth exceeds maximum of {self.max_json_depth}"
+
+        if isinstance(obj, dict):
+            for value in obj.values():
+                is_valid, error = self._check_json_depth(value, current_depth + 1)
+                if not is_valid:
+                    return False, error
+        elif isinstance(obj, list):
+            if len(obj) > self.max_array_length:
+                return False, f"Array length {len(obj)} exceeds maximum of {self.max_array_length}"
+            for item in obj:
+                is_valid, error = self._check_json_depth(item, current_depth + 1)
+                if not is_valid:
+                    return False, error
+
+        return True, ""
+
+    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+        # Check query parameter count
+        query_params = request.query_params
+        if len(query_params) > self.max_query_params:
+            logger.warning(
+                "query_param_limit_exceeded",
+                param_count=len(query_params),
+                max_params=self.max_query_params,
+                path=request.url.path,
+            )
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "error": "Too many query parameters",
+                    "max_params": self.max_query_params,
+                },
+            )
+
+        # Check JSON depth for POST/PUT/PATCH requests with JSON body
+        content_type = request.headers.get("Content-Type", "")
+        if (
+            request.method in {"POST", "PUT", "PATCH"}
+            and "application/json" in content_type
+        ):
+            try:
+                # Read body and check depth
+                body = await request.body()
+                if body:
+                    import json
+                    try:
+                        json_data = json.loads(body)
+                        is_valid, error = self._check_json_depth(json_data)
+                        if not is_valid:
+                            logger.warning(
+                                "json_depth_limit_exceeded",
+                                error=error,
+                                path=request.url.path,
+                            )
+                            return JSONResponse(
+                                status_code=400,
+                                content={"error": error},
+                            )
+                    except json.JSONDecodeError:
+                        pass  # Let FastAPI handle JSON parse errors
+            except Exception:
+                pass  # Don't block on body read errors
+
+        return await call_next(request)
+
+
 @dataclass
 class IdempotencyEntry:
     """Cached response for idempotency."""

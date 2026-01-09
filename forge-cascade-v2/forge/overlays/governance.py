@@ -704,13 +704,70 @@ class GovernanceOverlay(BaseOverlay):
                     }
                 )
         
+        elif action == "execute_proposal":
+            # SECURITY FIX (Audit 3): Enforce timelock before execution
+            from datetime import datetime as dt, timezone as tz
+
+            execution_allowed_after = data.get("execution_allowed_after")
+            if execution_allowed_after:
+                # Parse the datetime if it's a string
+                if isinstance(execution_allowed_after, str):
+                    try:
+                        execution_allowed_after = dt.fromisoformat(execution_allowed_after.replace('Z', '+00:00'))
+                    except ValueError:
+                        return OverlayResult(
+                            overlay_id=self.id,
+                            overlay_name=self.NAME,
+                            success=False,
+                            error="Invalid execution_allowed_after format"
+                        )
+
+                now = dt.now(tz.utc)
+                if execution_allowed_after.tzinfo is None:
+                    execution_allowed_after = execution_allowed_after.replace(tzinfo=tz.utc)
+
+                if now < execution_allowed_after:
+                    remaining_seconds = int((execution_allowed_after - now).total_seconds())
+                    self._logger.warning(
+                        "proposal_execution_blocked_timelock",
+                        proposal_id=proposal_id,
+                        remaining_seconds=remaining_seconds
+                    )
+                    return OverlayResult(
+                        overlay_id=self.id,
+                        overlay_name=self.NAME,
+                        success=False,
+                        error=f"Proposal execution blocked: timelock has {remaining_seconds} seconds remaining",
+                        data={
+                            "timelock_remaining_seconds": remaining_seconds,
+                            "execution_allowed_after": execution_allowed_after.isoformat()
+                        }
+                    )
+
+            # Timelock passed or not set - proceed with execution
+            self._logger.info(
+                "proposal_execution_allowed",
+                proposal_id=proposal_id
+            )
+            await self._update_stats("proposals_executed")
+
+            return OverlayResult(
+                overlay_id=self.id,
+                overlay_name=self.NAME,
+                success=True,
+                data={
+                    "action": "proposal_executed",
+                    "proposal_id": proposal_id
+                }
+            )
+
         return OverlayResult(
             overlay_id=self.id,
             overlay_name=self.NAME,
             success=False,
             error=f"Unknown action: {action}"
         )
-    
+
     async def _evaluate_consensus(
         self,
         data: dict,

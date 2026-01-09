@@ -256,28 +256,67 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
         if not proposal or proposal.status != ProposalStatus.VOTING:
             return None
         
-        # Determine if passed
+        # SECURITY FIX (Audit 3): Complete quorum verification
+        # Get total eligible voters and check quorum
+        eligible_voters = await self._count_eligible_voters()
+        total_votes = proposal.votes_for + proposal.votes_against + proposal.votes_abstain
+
+        # Check if quorum is met (enough voters participated)
+        quorum_met = True
+        if eligible_voters > 0:
+            participation_rate = total_votes / eligible_voters
+            quorum_met = participation_rate >= proposal.quorum_percent
+
+        # Determine if passed (must meet both quorum AND approval threshold)
         passed = (
+            quorum_met and
             proposal.approval_ratio >= proposal.pass_threshold
-            # Would also check quorum here against total eligible voters
+        )
+
+        # Log quorum status
+        self.logger.info(
+            "quorum_check",
+            proposal_id=proposal_id,
+            eligible_voters=eligible_voters,
+            total_votes=total_votes,
+            quorum_percent=proposal.quorum_percent,
+            quorum_met=quorum_met,
+            approval_ratio=proposal.approval_ratio,
+            pass_threshold=proposal.pass_threshold,
         )
         
         new_status = ProposalStatus.PASSED if passed else ProposalStatus.REJECTED
-        
+
+        # SECURITY FIX (Audit 3): Calculate timelock for passed proposals
+        from datetime import timedelta
+        now = self._now()
+        execution_allowed_after = None
+        if passed:
+            timelock_hours = getattr(proposal, 'timelock_hours', 24)
+            execution_allowed_after = now + timedelta(hours=timelock_hours)
+            self.logger.info(
+                "timelock_set",
+                proposal_id=proposal_id,
+                timelock_hours=timelock_hours,
+                execution_allowed_after=execution_allowed_after.isoformat(),
+            )
+
         query = """
         MATCH (p:Proposal {id: $id})
         SET
             p.status = $status,
-            p.updated_at = $now
+            p.updated_at = $now,
+            p.execution_allowed_after = $execution_allowed_after
         RETURN p {.*} AS entity
         """
-        
+
         result = await self.client.execute_single(
             query,
             {
                 "id": proposal_id,
                 "status": new_status.value,
-                "now": self._now().isoformat(),
+                "now": now.isoformat(),
+                "execution_allowed_after": execution_allowed_after.isoformat() if execution_allowed_after else None,
             },
         )
         
@@ -291,13 +330,40 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
             return self._to_model(result["entity"])
         return None
 
+    async def _count_eligible_voters(self, min_trust_level: int = 30) -> int:
+        """
+        Count users eligible to vote on proposals.
+
+        SECURITY FIX (Audit 3): Implement proper quorum calculation
+        by counting active users with sufficient trust level.
+
+        Args:
+            min_trust_level: Minimum trust flame required to vote (default: 30 = STANDARD)
+
+        Returns:
+            Number of eligible voters
+        """
+        query = """
+        MATCH (u:User)
+        WHERE u.is_active = true
+          AND u.trust_flame >= $min_trust
+        RETURN count(u) AS eligible_count
+        """
+
+        result = await self.client.execute_single(
+            query,
+            {"min_trust": min_trust_level},
+        )
+
+        return result.get("eligible_count", 0) if result else 0
+
     async def mark_executed(self, proposal_id: str) -> Proposal | None:
         """
         Mark a passed proposal as executed.
-        
+
         Args:
             proposal_id: Proposal ID
-            
+
         Returns:
             Updated proposal
         """

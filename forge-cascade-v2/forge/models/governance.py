@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 
 from forge.models.base import (
     ForgeModel,
@@ -27,6 +27,42 @@ class ProposalType(str, Enum):
     CAPSULE = "capsule"             # Capsule governance
     TRUST = "trust"                 # Trust level changes
     CONSTITUTIONAL = "constitutional"  # Constitutional amendments
+
+
+# SECURITY FIX (Audit 3): Define valid actions for each proposal type
+VALID_PROPOSAL_ACTIONS: dict[ProposalType, set[str]] = {
+    ProposalType.POLICY: {"update_policy", "create_policy", "remove_policy"},
+    ProposalType.SYSTEM: {"update_config", "enable_feature", "disable_feature", "set_limit"},
+    ProposalType.OVERLAY: {"enable_overlay", "disable_overlay", "update_overlay_config"},
+    ProposalType.CAPSULE: {"archive", "unarchive", "change_trust", "delete", "promote"},
+    ProposalType.TRUST: {"adjust_trust", "set_trust_level", "reset_trust"},
+    ProposalType.CONSTITUTIONAL: {"amend_constitution", "add_principle", "remove_principle"},
+}
+
+# Required fields for each action type
+REQUIRED_ACTION_FIELDS: dict[str, list[str]] = {
+    "update_policy": ["policy_id", "changes"],
+    "create_policy": ["name", "rules"],
+    "remove_policy": ["policy_id"],
+    "update_config": ["config_key", "new_value"],
+    "enable_feature": ["feature_name"],
+    "disable_feature": ["feature_name"],
+    "set_limit": ["limit_name", "limit_value"],
+    "enable_overlay": ["overlay_name"],
+    "disable_overlay": ["overlay_name"],
+    "update_overlay_config": ["overlay_name", "config"],
+    "archive": ["target_id"],
+    "unarchive": ["target_id"],
+    "change_trust": ["target_id", "new_trust"],
+    "delete": ["target_id", "reason"],
+    "promote": ["target_id", "new_type"],
+    "adjust_trust": ["user_id", "adjustment", "reason"],
+    "set_trust_level": ["user_id", "level"],
+    "reset_trust": ["user_id"],
+    "amend_constitution": ["article_id", "new_text"],
+    "add_principle": ["principle_text", "category"],
+    "remove_principle": ["principle_id", "justification"],
+}
 
 
 class VoteChoice(str, Enum):
@@ -89,6 +125,47 @@ class ProposalCreate(ProposalBase):
         description="Approval ratio needed to pass",
     )
 
+    @model_validator(mode="after")
+    def validate_action_for_type(self) -> "ProposalCreate":
+        """
+        SECURITY FIX (Audit 3): Validate action is appropriate for proposal type.
+
+        Ensures:
+        1. Action type is valid for the proposal type
+        2. Required fields are present
+        3. No unknown fields that could cause execution issues
+        """
+        if not self.action:
+            return self  # Empty action is allowed (informational proposals)
+
+        action_type = self.action.get("type")
+        if not action_type:
+            return self  # No action type means informational proposal
+
+        # Validate action type is allowed for this proposal type
+        valid_actions = VALID_PROPOSAL_ACTIONS.get(self.type, set())
+        if action_type not in valid_actions:
+            raise ValueError(
+                f"Action '{action_type}' is not valid for proposal type '{self.type.value}'. "
+                f"Valid actions: {', '.join(sorted(valid_actions))}"
+            )
+
+        # Validate required fields are present
+        required_fields = REQUIRED_ACTION_FIELDS.get(action_type, [])
+        missing_fields = [f for f in required_fields if f not in self.action]
+        if missing_fields:
+            raise ValueError(
+                f"Action '{action_type}' is missing required fields: {', '.join(missing_fields)}"
+            )
+
+        # Validate no dangerous fields
+        dangerous_fields = {"__import__", "eval", "exec", "compile", "globals", "locals"}
+        found_dangerous = dangerous_fields & set(self.action.keys())
+        if found_dangerous:
+            raise ValueError(f"Action contains forbidden fields: {', '.join(found_dangerous)}")
+
+        return self
+
 
 class Proposal(ProposalBase, TimestampMixin):
     """Complete proposal schema."""
@@ -96,12 +173,12 @@ class Proposal(ProposalBase, TimestampMixin):
     id: str
     proposer_id: str
     status: ProposalStatus = Field(default=ProposalStatus.DRAFT)
-    
+
     # Voting configuration
     voting_period_days: int = 7
     quorum_percent: float = 0.1
     pass_threshold: float = 0.5
-    
+
     # Voting results
     votes_for: int = 0
     votes_against: int = 0
@@ -109,12 +186,16 @@ class Proposal(ProposalBase, TimestampMixin):
     weight_for: float = 0.0
     weight_against: float = 0.0
     weight_abstain: float = 0.0
-    
+
     # Timestamps
     voting_starts_at: datetime | None = None
     voting_ends_at: datetime | None = None
     executed_at: datetime | None = None
-    
+
+    # SECURITY FIX (Audit 3): Timelock - delay between passing and execution
+    execution_allowed_after: datetime | None = None  # When proposal can be executed
+    timelock_hours: int = 24  # Default 24 hour delay
+
     # Constitutional AI
     constitutional_review: "ConstitutionalAnalysis | None" = None
     ghost_council_opinion: "GhostCouncilOpinion | None" = None
@@ -156,6 +237,45 @@ class Proposal(ProposalBase, TimestampMixin):
             and ends is not None
             and starts <= now <= ends
         )
+
+    @property
+    def is_execution_allowed(self) -> bool:
+        """
+        SECURITY FIX (Audit 3): Check if proposal can be executed (timelock passed).
+
+        Returns True if:
+        - Status is PASSED
+        - execution_allowed_after is set and has passed
+        """
+        from datetime import timezone
+        if self.status != ProposalStatus.PASSED:
+            return False
+        if self.execution_allowed_after is None:
+            return False
+        now = datetime.now(timezone.utc)
+        allowed_after = self.execution_allowed_after
+        if allowed_after.tzinfo is None:
+            allowed_after = allowed_after.replace(tzinfo=timezone.utc)
+        return now >= allowed_after
+
+    @property
+    def timelock_remaining_seconds(self) -> int | None:
+        """
+        SECURITY FIX (Audit 3): Get remaining timelock seconds.
+
+        Returns None if not in PASSED status or timelock already passed.
+        """
+        from datetime import timezone
+        if self.status != ProposalStatus.PASSED:
+            return None
+        if self.execution_allowed_after is None:
+            return None
+        now = datetime.now(timezone.utc)
+        allowed_after = self.execution_allowed_after
+        if allowed_after.tzinfo is None:
+            allowed_after = allowed_after.replace(tzinfo=timezone.utc)
+        remaining = (allowed_after - now).total_seconds()
+        return max(0, int(remaining))
 
 
 class VoteCreate(ForgeModel):

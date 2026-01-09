@@ -25,7 +25,13 @@ from uuid import uuid4
 CASCADE_API = os.getenv("CASCADE_API_URL", "http://localhost:8001/api/v1")
 COMPLIANCE_API = os.getenv("COMPLIANCE_API_URL", "http://localhost:8002/api/v1")
 VIRTUALS_API = os.getenv("VIRTUALS_API_URL", "http://localhost:8003/api/v1")
-ADMIN_PASSWORD = os.getenv("SEED_ADMIN_PASSWORD", "admin123")
+
+# SECURITY FIX: Require password from environment, no hardcoded defaults
+ADMIN_PASSWORD = os.getenv("SEED_ADMIN_PASSWORD")
+if not ADMIN_PASSWORD:
+    print("ERROR: SEED_ADMIN_PASSWORD environment variable is required")
+    print("Set it with: export SEED_ADMIN_PASSWORD=<your-secure-password>")
+    sys.exit(1)
 
 # Test tracking
 test_results = []

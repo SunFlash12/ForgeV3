@@ -267,8 +267,25 @@ ROLE_PERMISSIONS = {
         "can_manage_system_config": True
     },
     UserRole.SYSTEM: {
-        # System has all permissions
-        "all": True
+        # SECURITY FIX (Audit 3): Explicitly enumerate SYSTEM permissions instead of "all": True
+        # This prevents accidental permission grants if new permissions are added
+        "can_manage_own_content": True,
+        "can_view_public": True,
+        "can_report": True,
+        "can_moderate_content": True,
+        "can_warn_users": True,
+        "can_view_reports": True,
+        "can_quarantine_capsules": True,
+        "can_manage_users": True,
+        "can_adjust_trust": True,
+        "can_manage_overlays": True,
+        "can_view_audit_logs": True,
+        "can_manage_system_config": True,
+        # System-only permissions
+        "can_execute_system_tasks": True,
+        "can_manage_federation": True,
+        "can_bypass_rate_limits": True,
+        "can_access_internal_apis": True,
     }
 }
 
@@ -317,31 +334,31 @@ def require_role(required_role: UserRole):
 def get_role_permissions(role: UserRole) -> dict[str, bool]:
     """
     Get all permissions for a given role.
-    
+
     Args:
         role: User's role
-        
+
     Returns:
         Dictionary of permission flags
     """
-    if role == UserRole.SYSTEM:
-        return {"all": True}
+    # SECURITY FIX (Audit 3): Return explicit permissions for all roles including SYSTEM
     return ROLE_PERMISSIONS.get(role, {}).copy()
 
 
 def has_role_permission(role: UserRole, permission: str) -> bool:
     """
     Check if a role has a specific permission.
-    
+
     Args:
         role: User's role
         permission: Permission to check
-        
+
     Returns:
         True if role has the permission
     """
     permissions = get_role_permissions(role)
-    return permissions.get("all", False) or permissions.get(permission, False)
+    # SECURITY FIX (Audit 3): Removed "all" fallback - require explicit permission
+    return permissions.get(permission, False)
 
 
 # =============================================================================
