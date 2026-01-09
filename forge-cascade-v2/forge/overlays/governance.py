@@ -843,18 +843,28 @@ class GovernanceOverlay(BaseOverlay):
         return results
     
     def _calculate_vote_weight(self, trust_level: int) -> float:
-        """Calculate vote weight based on trust level."""
+        """
+        Calculate vote weight based on trust level.
+
+        SECURITY FIX (Audit 4 - H11): Clamp trust values to 0-100 range
+        to prevent trust_level > 100 from producing weights > 1.0,
+        which would give unfair vote amplification.
+        """
         if not self._config.enable_trust_weighting:
             return 1.0
-        
+
+        # SECURITY FIX: Clamp trust to valid range to prevent amplification
+        clamped_trust = max(0, min(trust_level, 100))
+
         # Normalize trust to 0-1 range
-        normalized = trust_level / 100.0
-        
+        normalized = clamped_trust / 100.0
+
         # Apply power function for weighting
         weight = math.pow(normalized, self._config.trust_weight_power)
-        
-        # Ensure minimum weight
-        return max(0.1, weight)
+
+        # Ensure minimum weight and maximum weight
+        # Maximum weight is 1.0 to prevent any amplification beyond equal voting
+        return max(0.1, min(weight, 1.0))
     
     def _calculate_quorum(self) -> int:
         """Calculate required quorum."""

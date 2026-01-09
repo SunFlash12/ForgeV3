@@ -464,22 +464,52 @@ class EmbeddingMigrationService:
                 params["from_version"] = job.from_version
 
             # Apply optional filters from job
+            # SECURITY FIX (Audit 4 - H17): Validate filter keys and values
             if job.capsule_filter:
+                # Define allowed filter keys to prevent injection via unexpected keys
+                ALLOWED_FILTER_KEYS = {"type", "owner_id", "tag", "min_trust"}
+
+                # Check for unexpected filter keys
+                unexpected_keys = set(job.capsule_filter.keys()) - ALLOWED_FILTER_KEYS
+                if unexpected_keys:
+                    logger.warning(
+                        "unexpected_filter_keys_rejected",
+                        job_id=job.job_id,
+                        unexpected_keys=list(unexpected_keys)
+                    )
+                    # Don't fail, just ignore unexpected keys
+
+                # Validate and apply type filter
                 if job.capsule_filter.get("type"):
-                    conditions.append("c.type = $type")
-                    params["type"] = job.capsule_filter["type"]
+                    filter_type = job.capsule_filter["type"]
+                    # Validate type is a simple string (no injection characters)
+                    if isinstance(filter_type, str) and len(filter_type) <= 64:
+                        conditions.append("c.type = $type")
+                        params["type"] = filter_type
 
+                # Validate and apply owner_id filter
                 if job.capsule_filter.get("owner_id"):
-                    conditions.append("c.owner_id = $owner_id")
-                    params["owner_id"] = job.capsule_filter["owner_id"]
+                    owner_id = job.capsule_filter["owner_id"]
+                    # Validate owner_id format (should be UUID-like)
+                    if isinstance(owner_id, str) and len(owner_id) <= 64:
+                        conditions.append("c.owner_id = $owner_id")
+                        params["owner_id"] = owner_id
 
+                # Validate and apply tag filter
                 if job.capsule_filter.get("tag"):
-                    conditions.append("$tag IN c.tags")
-                    params["tag"] = job.capsule_filter["tag"]
+                    tag = job.capsule_filter["tag"]
+                    # Validate tag is a simple string
+                    if isinstance(tag, str) and len(tag) <= 128:
+                        conditions.append("$tag IN c.tags")
+                        params["tag"] = tag
 
-                if job.capsule_filter.get("min_trust"):
-                    conditions.append("c.trust_level >= $min_trust")
-                    params["min_trust"] = job.capsule_filter["min_trust"]
+                # Validate and apply min_trust filter
+                if job.capsule_filter.get("min_trust") is not None:
+                    min_trust = job.capsule_filter["min_trust"]
+                    # Validate min_trust is a number in valid range
+                    if isinstance(min_trust, (int, float)) and 0 <= min_trust <= 100:
+                        conditions.append("c.trust_level >= $min_trust")
+                        params["min_trust"] = int(min_trust)
 
             where_clause = " AND ".join(conditions)
 

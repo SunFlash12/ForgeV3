@@ -180,6 +180,9 @@ class SyncService:
 
             return state
 
+    # SECURITY FIX (Audit 4 - H6): Maximum iterations to prevent DoS via unbounded sync loop
+    MAX_SYNC_ITERATIONS = 100  # Maximum pagination iterations per sync
+
     async def _execute_pull(self, peer: FederatedPeer, state: SyncState) -> None:
         """Pull changes from a peer."""
         state.phase = SyncPhase.FETCHING
@@ -189,9 +192,14 @@ class SyncService:
         state.sync_from = peer.last_sync_at
         state.sync_to = datetime.now(timezone.utc)
 
-        # Fetch changes
+        # SECURITY FIX (Audit 4 - H6): Add iteration counter to prevent DoS
+        # A malicious peer could claim has_more=True forever to exhaust resources
+        iterations = 0
         cursor: str | None = None
-        while True:
+
+        while iterations < self.MAX_SYNC_ITERATIONS:
+            iterations += 1
+
             payload = await self.protocol.send_sync_request(
                 peer=peer,
                 since=state.sync_from,
@@ -201,6 +209,16 @@ class SyncService:
 
             if not payload:
                 raise RuntimeError("Failed to fetch changes from peer")
+
+            # SECURITY FIX (Audit 4 - H7): Verify content hash against actual content
+            if hasattr(payload, 'content_hash') and payload.content_hash:
+                computed_hash = self._compute_content_hash(payload.capsules, payload.edges, payload.deletions)
+                if computed_hash != payload.content_hash:
+                    logger.error(
+                        f"Content hash mismatch from peer {peer.name}: "
+                        f"claimed={payload.content_hash[:16]}..., computed={computed_hash[:16]}..."
+                    )
+                    raise RuntimeError("Content hash verification failed - possible tampering")
 
             state.capsules_fetched += len(payload.capsules)
             state.edges_fetched += len(payload.edges)
@@ -220,6 +238,13 @@ class SyncService:
                 break
             # Note: cursor pagination not yet implemented in protocol
             cursor = payload.next_cursor
+
+        # SECURITY FIX (Audit 4 - H6): Log if we hit the iteration limit
+        if iterations >= self.MAX_SYNC_ITERATIONS:
+            logger.warning(
+                f"Sync with peer {peer.name} hit maximum iteration limit ({self.MAX_SYNC_ITERATIONS}). "
+                "This may indicate a malicious peer or very large sync backlog."
+            )
 
         state.phase = SyncPhase.FINALIZING
         peer.capsules_received += state.capsules_fetched
@@ -730,6 +755,40 @@ class SyncService:
         except Exception as e:
             logger.error(f"Failed to delete peer {peer_id}: {e}")
             return False
+
+    def _compute_content_hash(
+        self,
+        capsules: list[dict[str, Any]],
+        edges: list[dict[str, Any]],
+        deletions: list[str]
+    ) -> str:
+        """
+        SECURITY FIX (Audit 4 - H7): Compute content hash for verification.
+
+        Computes a SHA-256 hash of the content to verify against claimed hash.
+        This prevents accepting tampered content from malicious peers.
+
+        Args:
+            capsules: List of capsule dictionaries
+            edges: List of edge dictionaries
+            deletions: List of deleted capsule IDs
+
+        Returns:
+            Hex string of SHA-256 hash
+        """
+        import hashlib
+        import json
+
+        # Build content dictionary in canonical order
+        content = {
+            "capsules": capsules,
+            "edges": edges or [],
+            "deletions": deletions or [],
+        }
+
+        # Serialize with sorted keys for deterministic output
+        content_str = json.dumps(content, sort_keys=True)
+        return hashlib.sha256(content_str.encode('utf-8')).hexdigest()
 
     async def persist_trust_score(self, peer_id: str, trust_score: float, reason: str) -> bool:
         """
