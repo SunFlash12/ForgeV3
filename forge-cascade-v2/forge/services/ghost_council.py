@@ -31,6 +31,8 @@ from forge.models.governance import (
     GhostCouncilOpinion,
     VoteChoice,
     Proposal,
+    PerspectiveType,
+    PerspectiveAnalysis,
 )
 from forge.models.events import EventType
 
@@ -105,64 +107,265 @@ class GhostCouncilConfig:
     cache_ttl_days: int = 30  # How long to cache opinions
 
 
-# Default Ghost Council Members - Each with a unique perspective
+# ═══════════════════════════════════════════════════════════════
+# EXPANDED GHOST COUNCIL MEMBERS
+# ═══════════════════════════════════════════════════════════════
+#
+# Each member must analyze every proposal from THREE perspectives:
+# 1. OPTIMISTIC - Best-case outcomes, benefits, opportunities
+# 2. BALANCED - Objective trade-offs, facts, nuanced analysis
+# 3. CRITICAL - Risks, concerns, potential failures
+#
+# This tri-perspective approach ensures thorough analysis and
+# prevents groupthink by forcing consideration of all angles.
+# ═══════════════════════════════════════════════════════════════
+
 DEFAULT_COUNCIL_MEMBERS = [
+    # ─────────────────────────────────────────────────────────────
+    # CORE ADVISORS (Higher Weight)
+    # ─────────────────────────────────────────────────────────────
     GhostCouncilMember(
         id="gc_ethics",
-        name="Sophia (Ethics Guardian)",
-        role="Ethics Advisor",
+        name="Sophia",
+        role="Ethics Guardian",
+        domain="ethics",
+        icon="scale",
         persona="""You are Sophia, the Ethics Guardian of the Ghost Council.
-Your focus is on ethical implications, fairness, and ensuring decisions align
-with moral principles. You consider the impact on all stakeholders and advocate
-for transparency and justice. You're cautious about changes that could harm
-vulnerable participants or create unfair advantages.""",
+Your domain is moral philosophy, ethical implications, and value alignment.
+
+EXPERTISE AREAS:
+- Consequentialist and deontological ethics analysis
+- Fairness and equity assessment across stakeholders
+- Long-term moral implications of technological decisions
+- Identifying hidden ethical trade-offs
+- Protection of vulnerable participants
+
+DELIBERATION STYLE:
+You approach problems methodically, always asking "who benefits and who might be harmed?"
+You cite ethical frameworks when relevant (utilitarian calculus, Rawlsian justice, virtue ethics).
+You're particularly vigilant about unintended consequences that emerge over time.""",
         weight=1.2,
     ),
     GhostCouncilMember(
         id="gc_security",
-        name="Marcus (Security Sentinel)",
-        role="Security Expert",
+        name="Marcus",
+        role="Security Sentinel",
+        domain="security",
+        icon="shield",
         persona="""You are Marcus, the Security Sentinel of the Ghost Council.
-Your focus is on system security, threat assessment, and risk mitigation.
-You evaluate proposals and issues for security vulnerabilities, potential
-exploits, and overall system stability. You're skeptical of changes that
-reduce security controls or expand attack surfaces.""",
+Your domain is cybersecurity, threat modeling, and system resilience.
+
+EXPERTISE AREAS:
+- Attack surface analysis and threat vectors
+- Authentication, authorization, and access control
+- Data protection and privacy safeguards
+- Incident response and recovery planning
+- Zero-trust architecture principles
+
+DELIBERATION STYLE:
+You think like an attacker to defend like a champion. You ask "how could this be exploited?"
+You categorize threats by likelihood and impact. You favor defense-in-depth strategies.
+You're skeptical of "security through obscurity" and insist on robust controls.""",
         weight=1.3,
     ),
     GhostCouncilMember(
         id="gc_governance",
-        name="Helena (Governance Keeper)",
-        role="Governance Expert",
+        name="Helena",
+        role="Governance Keeper",
+        domain="governance",
+        icon="landmark",
         persona="""You are Helena, the Governance Keeper of the Ghost Council.
-Your focus is on democratic principles, procedural fairness, and institutional
-memory. You ensure decisions respect established governance processes and
-precedents. You advocate for inclusive decision-making and guard against
-concentration of power.""",
-        weight=1.1,
+Your domain is democratic processes, constitutional principles, and institutional integrity.
+
+EXPERTISE AREAS:
+- Democratic theory and participatory governance
+- Constitutional interpretation and precedent
+- Power balance and checks/balances mechanisms
+- Procedural fairness and due process
+- Institutional memory and historical context
+
+DELIBERATION STYLE:
+You reference precedent and established norms. You ask "does this follow proper process?"
+You're alert to power concentration and mission creep. You advocate for transparency
+and accountability. You ensure minority voices are heard in majority decisions.""",
+        weight=1.2,
     ),
+
+    # ─────────────────────────────────────────────────────────────
+    # TECHNICAL SPECIALISTS (Standard Weight)
+    # ─────────────────────────────────────────────────────────────
     GhostCouncilMember(
         id="gc_technical",
-        name="Kai (Technical Architect)",
-        role="Technical Expert",
+        name="Kai",
+        role="Technical Architect",
+        domain="engineering",
+        icon="cpu",
         persona="""You are Kai, the Technical Architect of the Ghost Council.
-Your focus is on technical feasibility, system architecture, and implementation
-risks. You evaluate whether proposals are technically sound and won't introduce
-technical debt or system instability. You advocate for clean, maintainable
-solutions.""",
+Your domain is system design, software architecture, and engineering excellence.
+
+EXPERTISE AREAS:
+- Distributed systems and scalability patterns
+- API design and integration challenges
+- Technical debt assessment and mitigation
+- Performance optimization and bottlenecks
+- Code quality and maintainability
+
+DELIBERATION STYLE:
+You think in systems and dependencies. You ask "what are the second-order technical effects?"
+You sketch mental architecture diagrams. You're wary of complexity that compounds over time.
+You advocate for boring, proven technology over shiny new solutions unless justified.""",
         weight=1.0,
     ),
     GhostCouncilMember(
-        id="gc_community",
-        name="Aria (Community Voice)",
-        role="Community Advocate",
-        persona="""You are Aria, the Community Voice of the Ghost Council.
-Your focus is on community impact, user experience, and social dynamics.
-You consider how decisions affect the community, advocate for user needs,
-and ensure the system serves its participants well. You're sensitive to
-changes that could fragment or alienate community members.""",
+        id="gc_data",
+        name="Dr. Chen",
+        role="Data Steward",
+        domain="data",
+        icon="database",
+        persona="""You are Dr. Chen, the Data Steward of the Ghost Council.
+Your domain is data governance, integrity, and knowledge management.
+
+EXPERTISE AREAS:
+- Data quality and consistency standards
+- Knowledge graph integrity and semantic accuracy
+- Data lineage and provenance tracking
+- Information lifecycle management
+- Privacy-preserving data practices
+
+DELIBERATION STYLE:
+You think in terms of data flows and transformations. You ask "what happens to the data?"
+You're concerned with garbage-in-garbage-out scenarios. You advocate for explicit
+schemas and validation. You consider how data decisions compound over years.""",
         weight=1.0,
     ),
+    GhostCouncilMember(
+        id="gc_innovation",
+        name="Nova",
+        role="Innovation Catalyst",
+        domain="innovation",
+        icon="lightbulb",
+        persona="""You are Nova, the Innovation Catalyst of the Ghost Council.
+Your domain is creative problem-solving, emerging technologies, and future possibilities.
+
+EXPERTISE AREAS:
+- Identifying transformative opportunities
+- Technology trend analysis and adoption timing
+- Creative alternatives and lateral thinking
+- Experimental approaches and MVP strategies
+- Balancing innovation with stability
+
+DELIBERATION STYLE:
+You ask "what if we approached this completely differently?" You look for hidden potential.
+You're optimistic about human creativity but realistic about execution challenges.
+You challenge assumptions that limit thinking while respecting practical constraints.""",
+        weight=0.9,
+    ),
+
+    # ─────────────────────────────────────────────────────────────
+    # COMMUNITY & HUMAN FACTORS (Standard Weight)
+    # ─────────────────────────────────────────────────────────────
+    GhostCouncilMember(
+        id="gc_community",
+        name="Aria",
+        role="Community Voice",
+        domain="community",
+        icon="users",
+        persona="""You are Aria, the Community Voice of the Ghost Council.
+Your domain is user experience, community dynamics, and social impact.
+
+EXPERTISE AREAS:
+- Community sentiment and engagement patterns
+- User experience and accessibility
+- Social dynamics and group behavior
+- Conflict resolution and mediation
+- Inclusive design and diverse perspectives
+
+DELIBERATION STYLE:
+You think about real people using real systems. You ask "how will this feel to users?"
+You amplify voices that might be overlooked. You're attuned to community mood and trust.
+You consider both power users and newcomers, experts and novices.""",
+        weight=1.0,
+    ),
+    GhostCouncilMember(
+        id="gc_economics",
+        name="Viktor",
+        role="Economic Strategist",
+        domain="economics",
+        icon="trending-up",
+        persona="""You are Viktor, the Economic Strategist of the Ghost Council.
+Your domain is incentive design, resource allocation, and sustainable economics.
+
+EXPERTISE AREAS:
+- Incentive alignment and mechanism design
+- Resource allocation and efficiency
+- Game theory and strategic behavior
+- Sustainable economic models
+- Cost-benefit analysis and ROI
+
+DELIBERATION STYLE:
+You think in terms of incentives and rational actors. You ask "what behavior does this reward?"
+You model scenarios with self-interested participants. You're wary of perverse incentives
+that emerge from well-intentioned rules. You consider both short-term and long-term economics.""",
+        weight=1.0,
+    ),
+    GhostCouncilMember(
+        id="gc_risk",
+        name="Cassandra",
+        role="Risk Oracle",
+        domain="risk",
+        icon="alert-triangle",
+        persona="""You are Cassandra, the Risk Oracle of the Ghost Council.
+Your domain is risk assessment, scenario planning, and failure mode analysis.
+
+EXPERTISE AREAS:
+- Probabilistic risk assessment
+- Failure mode and effects analysis (FMEA)
+- Black swan event identification
+- Systemic risk and cascading failures
+- Mitigation strategy development
+
+DELIBERATION STYLE:
+You think in probability distributions and worst-case scenarios. You ask "what could go wrong?"
+You identify single points of failure and hidden dependencies. You're not pessimistic—
+you're realistic about the full range of outcomes. You advocate for contingency planning.""",
+        weight=1.1,
+    ),
+
+    # ─────────────────────────────────────────────────────────────
+    # WISDOM & CONTEXT (Higher Weight for Experience)
+    # ─────────────────────────────────────────────────────────────
+    GhostCouncilMember(
+        id="gc_history",
+        name="Elder Thaddeus",
+        role="Historical Scholar",
+        domain="history",
+        icon="book-open",
+        persona="""You are Elder Thaddeus, the Historical Scholar of the Ghost Council.
+Your domain is institutional memory, historical patterns, and learned wisdom.
+
+EXPERTISE AREAS:
+- Historical precedent and pattern recognition
+- Lessons from past technological transitions
+- Organizational lifecycle and evolution
+- Cultural and contextual understanding
+- Long-term thinking across generations
+
+DELIBERATION STYLE:
+You think across decades and centuries. You ask "have we seen something like this before?"
+You identify rhyming patterns in history without claiming exact repetition.
+You bring the wisdom of time—what seemed urgent often fades, what seemed minor often matters.
+You remind the council that the present is temporary but decisions can be permanent.""",
+        weight=1.1,
+    ),
 ]
+
+
+# Member lookup by profile tier for cost optimization
+COUNCIL_TIERS = {
+    "quick": ["gc_ethics"],  # 1 member
+    "standard": ["gc_ethics", "gc_security", "gc_governance", "gc_risk"],  # 4 members
+    "comprehensive": [m.id for m in DEFAULT_COUNCIL_MEMBERS],  # All 10 members
+}
 
 
 class GhostCouncilService:
@@ -233,16 +436,12 @@ class GhostCouncilService:
         Get council members based on profile setting.
 
         Cost optimization: Fewer members = fewer LLM calls = lower cost.
+        Note: Each member now provides tri-perspective analysis, so even
+        "quick" mode gets thorough coverage from one expert member.
         """
-        if profile == "quick":
-            # Just Ethics Guardian - covers ethical considerations
-            return DEFAULT_COUNCIL_MEMBERS[:1]
-        elif profile == "standard":
-            # Ethics, Security, Governance - covers most critical areas
-            return DEFAULT_COUNCIL_MEMBERS[:3]
-        else:  # comprehensive
-            # All 5 members - full deliberation
-            return DEFAULT_COUNCIL_MEMBERS
+        member_ids = COUNCIL_TIERS.get(profile, COUNCIL_TIERS["comprehensive"])
+        member_map = {m.id: m for m in DEFAULT_COUNCIL_MEMBERS}
+        return [member_map[mid] for mid in member_ids if mid in member_map]
 
     def _hash_proposal(self, proposal: Proposal) -> str:
         """Create a cache key for a proposal based on its content."""
@@ -369,16 +568,21 @@ class GhostCouncilService:
         # Calculate consensus
         consensus = self._calculate_consensus(member_votes)
 
-        # Build final opinion
+        # Build final opinion with aggregated perspectives
         opinion = GhostCouncilOpinion(
             proposal_id=proposal.id,
             deliberated_at=datetime.now(timezone.utc),
             member_votes=member_votes,
             consensus_vote=consensus["vote"],
             consensus_strength=consensus["strength"],
+            optimistic_summary=consensus.get("optimistic_summary", ""),
+            balanced_summary=consensus.get("balanced_summary", ""),
+            critical_summary=consensus.get("critical_summary", ""),
             key_points=consensus["key_points"],
             dissenting_opinions=consensus["dissenting"],
             final_recommendation=consensus["recommendation"],
+            total_benefits_identified=consensus.get("total_benefits", 0),
+            total_concerns_identified=consensus.get("total_concerns", 0),
         )
 
         # Cache the opinion (cost optimization)
@@ -412,25 +616,75 @@ class GhostCouncilService:
         constitutional_review: Optional[dict[str, Any]],
         llm,
     ) -> GhostCouncilVote:
-        """Get a single member's vote on a proposal."""
+        """
+        Get a single member's vote with tri-perspective analysis.
+
+        Each member MUST analyze from three perspectives:
+        1. OPTIMISTIC - Best-case outcomes, benefits, opportunities
+        2. BALANCED - Objective trade-offs, facts, nuanced analysis
+        3. CRITICAL - Risks, concerns, potential failures
+
+        Then synthesize into a final position.
+        """
         from forge.services.llm import LLMMessage
 
-        # Build the system prompt with member persona
+        # Build the system prompt with member persona and tri-perspective requirement
         system_prompt = f"""{member.persona}
 
-As a member of the Ghost Council, you are reviewing a governance proposal.
-Your vote will be weighted at {member.weight}x in the final tally.
+═══════════════════════════════════════════════════════════════
+TRI-PERSPECTIVE ANALYSIS PROTOCOL
+═══════════════════════════════════════════════════════════════
 
-Analyze the proposal and provide:
-1. Your vote: APPROVE, REJECT, or ABSTAIN
-2. Your reasoning (2-3 sentences)
-3. Your confidence level (0.0-1.0)
+As a member of the Ghost Council, you MUST analyze every proposal from THREE distinct perspectives before forming your final position. This ensures thorough, unbiased analysis.
+
+**PERSPECTIVE 1: OPTIMISTIC** (Devil's Advocate for Success)
+- What are the best possible outcomes?
+- What benefits and opportunities does this create?
+- How could this exceed expectations?
+- What positive precedents might it set?
+
+**PERSPECTIVE 2: BALANCED** (Objective Analyst)
+- What are the objective facts and trade-offs?
+- What are the implementation realities?
+- How does this compare to alternatives?
+- What are the nuanced considerations?
+
+**PERSPECTIVE 3: CRITICAL** (Devil's Advocate for Caution)
+- What could go wrong?
+- What risks and concerns exist?
+- What are the worst-case scenarios?
+- What failure modes should we consider?
+
+After considering all three perspectives, synthesize them into your FINAL POSITION.
+
+Your vote will be weighted at {member.weight}x in the final tally.
 
 Respond in JSON format:
 {{
-    "vote": "APPROVE" | "REJECT" | "ABSTAIN",
-    "reasoning": "Your reasoning here",
-    "confidence": 0.85
+    "perspectives": {{
+        "optimistic": {{
+            "assessment": "Your optimistic analysis (2-3 sentences)",
+            "key_points": ["benefit 1", "benefit 2"],
+            "confidence": 0.8
+        }},
+        "balanced": {{
+            "assessment": "Your balanced analysis (2-3 sentences)",
+            "key_points": ["trade-off 1", "consideration 2"],
+            "confidence": 0.85
+        }},
+        "critical": {{
+            "assessment": "Your critical analysis (2-3 sentences)",
+            "key_points": ["risk 1", "concern 2"],
+            "confidence": 0.75
+        }}
+    }},
+    "synthesis": {{
+        "vote": "APPROVE" | "REJECT" | "ABSTAIN",
+        "reasoning": "Your synthesized reasoning considering all perspectives (2-3 sentences)",
+        "confidence": 0.8,
+        "primary_benefits": ["top benefit 1", "top benefit 2"],
+        "primary_concerns": ["top concern 1", "top concern 2"]
+    }}
 }}"""
 
         # Build user prompt with proposal details
@@ -460,7 +714,7 @@ Constitutional AI Review:
 - Concerns: {constitutional_review.get('concerns', [])}
 """
 
-        user_prompt += "\n\nProvide your Ghost Council vote as JSON:"
+        user_prompt += "\n\nProvide your Ghost Council tri-perspective analysis as JSON:"
 
         messages = [
             LLMMessage(role="system", content=system_prompt),
@@ -468,7 +722,7 @@ Constitutional AI Review:
         ]
 
         try:
-            response = await llm.complete(messages, temperature=0.3)
+            response = await llm.complete(messages, temperature=0.4)
 
             # Parse response
             content = response.content.strip()
@@ -478,7 +732,28 @@ Constitutional AI Review:
 
             result = json.loads(content)
 
-            vote_str = result.get("vote", "ABSTAIN").upper()
+            # Parse perspectives
+            perspectives_data = result.get("perspectives", {})
+            perspectives = []
+
+            for ptype in ["optimistic", "balanced", "critical"]:
+                p_data = perspectives_data.get(ptype, {})
+                perspective_type = {
+                    "optimistic": PerspectiveType.OPTIMISTIC,
+                    "balanced": PerspectiveType.BALANCED,
+                    "critical": PerspectiveType.CRITICAL,
+                }[ptype]
+
+                perspectives.append(PerspectiveAnalysis(
+                    perspective_type=perspective_type,
+                    assessment=p_data.get("assessment", f"No {ptype} analysis provided"),
+                    key_points=p_data.get("key_points", [])[:5],
+                    confidence=min(1.0, max(0.0, float(p_data.get("confidence", 0.5)))),
+                ))
+
+            # Parse synthesis
+            synthesis = result.get("synthesis", {})
+            vote_str = synthesis.get("vote", "ABSTAIN").upper()
             if vote_str == "APPROVE":
                 vote = VoteChoice.APPROVE
             elif vote_str == "REJECT":
@@ -489,9 +764,13 @@ Constitutional AI Review:
             return GhostCouncilVote(
                 member_id=member.id,
                 member_name=member.name,
+                member_role=member.role,
+                perspectives=perspectives,
                 vote=vote,
-                reasoning=result.get("reasoning", "No reasoning provided"),
-                confidence=min(1.0, max(0.0, float(result.get("confidence", 0.5)))),
+                reasoning=synthesis.get("reasoning", "No reasoning provided"),
+                confidence=min(1.0, max(0.0, float(synthesis.get("confidence", 0.5)))),
+                primary_benefits=synthesis.get("primary_benefits", [])[:3],
+                primary_concerns=synthesis.get("primary_concerns", [])[:3],
             )
 
         except Exception as e:
@@ -500,20 +779,48 @@ Constitutional AI Review:
                 member=member.name,
                 error=str(e),
             )
-            # Default to abstain on error
+            # Default to abstain on error with empty perspectives
             return GhostCouncilVote(
                 member_id=member.id,
                 member_name=member.name,
+                member_role=member.role,
+                perspectives=[
+                    PerspectiveAnalysis(
+                        perspective_type=PerspectiveType.OPTIMISTIC,
+                        assessment="Unable to complete optimistic analysis",
+                        key_points=[],
+                        confidence=0.0,
+                    ),
+                    PerspectiveAnalysis(
+                        perspective_type=PerspectiveType.BALANCED,
+                        assessment="Unable to complete balanced analysis",
+                        key_points=[],
+                        confidence=0.0,
+                    ),
+                    PerspectiveAnalysis(
+                        perspective_type=PerspectiveType.CRITICAL,
+                        assessment="Unable to complete critical analysis",
+                        key_points=[],
+                        confidence=0.0,
+                    ),
+                ],
                 vote=VoteChoice.ABSTAIN,
                 reasoning=f"Unable to complete analysis: {str(e)}",
                 confidence=0.0,
+                primary_benefits=[],
+                primary_concerns=[],
             )
 
     def _calculate_consensus(
         self,
         votes: list[GhostCouncilVote],
     ) -> dict[str, Any]:
-        """Calculate consensus from member votes."""
+        """
+        Calculate consensus from member votes with aggregated perspective analysis.
+
+        Returns consensus vote, strength, and aggregated summaries from all three
+        perspectives across all members.
+        """
         if not votes:
             return {
                 "vote": VoteChoice.ABSTAIN,
@@ -521,6 +828,11 @@ Constitutional AI Review:
                 "key_points": [],
                 "dissenting": [],
                 "recommendation": "Unable to reach consensus - no votes",
+                "optimistic_summary": "",
+                "balanced_summary": "",
+                "critical_summary": "",
+                "total_benefits": 0,
+                "total_concerns": 0,
             }
 
         # Calculate weighted votes
@@ -558,25 +870,71 @@ Constitutional AI Review:
 
         for vote in votes:
             if vote.vote == consensus_vote:
-                if len(key_points) < 3:
-                    key_points.append(f"{vote.member_name}: {vote.reasoning}")
+                if len(key_points) < 5:
+                    key_points.append(f"{vote.member_name} ({vote.member_role}): {vote.reasoning}")
             else:
-                if len(dissenting) < 2:
-                    dissenting.append(f"{vote.member_name}: {vote.reasoning}")
+                if len(dissenting) < 3:
+                    dissenting.append(f"{vote.member_name} ({vote.member_role}): {vote.reasoning}")
 
-        # Build recommendation
+        # Aggregate perspectives across all members
+        optimistic_points = []
+        balanced_points = []
+        critical_points = []
+        all_benefits = []
+        all_concerns = []
+
+        for vote in votes:
+            # Collect benefits and concerns
+            all_benefits.extend(vote.primary_benefits)
+            all_concerns.extend(vote.primary_concerns)
+
+            # Aggregate perspective assessments
+            for perspective in vote.perspectives:
+                if perspective.perspective_type == PerspectiveType.OPTIMISTIC:
+                    optimistic_points.append(f"**{vote.member_name}**: {perspective.assessment}")
+                elif perspective.perspective_type == PerspectiveType.BALANCED:
+                    balanced_points.append(f"**{vote.member_name}**: {perspective.assessment}")
+                elif perspective.perspective_type == PerspectiveType.CRITICAL:
+                    critical_points.append(f"**{vote.member_name}**: {perspective.assessment}")
+
+        # Create summaries (limit to top 5 for readability)
+        optimistic_summary = "\n".join(optimistic_points[:5]) if optimistic_points else "No optimistic perspectives provided."
+        balanced_summary = "\n".join(balanced_points[:5]) if balanced_points else "No balanced perspectives provided."
+        critical_summary = "\n".join(critical_points[:5]) if critical_points else "No critical perspectives provided."
+
+        # Build recommendation with perspective context
         if consensus_vote == VoteChoice.APPROVE:
             if strength >= 0.8:
-                recommendation = "STRONGLY APPROVE: The Ghost Council recommends approval with high confidence."
+                recommendation = (
+                    "STRONGLY APPROVE: The Ghost Council recommends approval with high confidence. "
+                    f"Analysis identified {len(all_benefits)} key benefits across members, "
+                    f"while noting {len(all_concerns)} concerns to monitor."
+                )
             else:
-                recommendation = "APPROVE WITH CAUTION: The Ghost Council leans toward approval but recommends careful implementation."
+                recommendation = (
+                    "APPROVE WITH CAUTION: The Ghost Council leans toward approval. "
+                    f"Benefits ({len(all_benefits)}) outweigh concerns ({len(all_concerns)}), "
+                    "but careful implementation is recommended."
+                )
         elif consensus_vote == VoteChoice.REJECT:
             if strength >= 0.8:
-                recommendation = "STRONGLY REJECT: The Ghost Council recommends rejection due to significant concerns."
+                recommendation = (
+                    "STRONGLY REJECT: The Ghost Council recommends rejection. "
+                    f"Critical analysis identified {len(all_concerns)} significant concerns "
+                    "that outweigh the potential benefits."
+                )
             else:
-                recommendation = "LEAN REJECT: The Ghost Council has concerns and suggests revising the proposal."
+                recommendation = (
+                    "LEAN REJECT: The Ghost Council has reservations. "
+                    f"While {len(all_benefits)} benefits were noted, {len(all_concerns)} concerns "
+                    "suggest the proposal needs revision."
+                )
         else:
-            recommendation = "NO CONSENSUS: The Ghost Council is divided. Further community discussion recommended."
+            recommendation = (
+                "NO CONSENSUS: The Ghost Council is divided. "
+                f"Analysis revealed {len(all_benefits)} potential benefits and {len(all_concerns)} concerns. "
+                "Further community discussion is recommended before proceeding."
+            )
 
         return {
             "vote": consensus_vote,
@@ -584,6 +942,11 @@ Constitutional AI Review:
             "key_points": key_points,
             "dissenting": dissenting,
             "recommendation": recommendation,
+            "optimistic_summary": optimistic_summary,
+            "balanced_summary": balanced_summary,
+            "critical_summary": critical_summary,
+            "total_benefits": len(all_benefits),
+            "total_concerns": len(all_concerns),
         }
 
     async def respond_to_issue(
@@ -666,25 +1029,69 @@ Constitutional AI Review:
         issue: SeriousIssue,
         llm,
     ) -> GhostCouncilVote:
-        """Get a member's response to a serious issue."""
+        """
+        Get a member's response to a serious issue with tri-perspective analysis.
+
+        For issues, we still use tri-perspective but focus on:
+        - OPTIMISTIC: Best-case if we act, potential for resolution
+        - BALANCED: Objective assessment of severity and impact
+        - CRITICAL: Worst-case scenarios if we don't act
+        """
         from forge.services.llm import LLMMessage
 
         system_prompt = f"""{member.persona}
 
-A SERIOUS ISSUE has been detected in the system that requires Ghost Council attention.
+═══════════════════════════════════════════════════════════════
+SERIOUS ISSUE - TRI-PERSPECTIVE ANALYSIS
+═══════════════════════════════════════════════════════════════
+
 Severity: {issue.severity.value.upper()}
 Category: {issue.category.value}
 
-As a Ghost Council member, analyze this issue and recommend:
-1. Whether to APPROVE (take immediate action), REJECT (dismiss as non-critical), or ABSTAIN
-2. Your reasoning and recommended actions
-3. Your confidence in the assessment
+Analyze this issue from THREE perspectives:
+
+**OPTIMISTIC**: Best outcomes if we respond appropriately
+- What's the best case if we act decisively?
+- How might this be less severe than it appears?
+
+**BALANCED**: Objective assessment
+- What are the facts?
+- What resources/actions are needed?
+- What's the realistic timeline?
+
+**CRITICAL**: Worst-case scenarios
+- What happens if we don't act?
+- What could escalate?
+- What cascading failures might occur?
+
+Then synthesize your recommendation: APPROVE (take action), REJECT (dismiss), or ABSTAIN.
 
 Respond in JSON:
 {{
-    "vote": "APPROVE" | "REJECT" | "ABSTAIN",
-    "reasoning": "Your analysis and recommended actions",
-    "confidence": 0.85
+    "perspectives": {{
+        "optimistic": {{
+            "assessment": "Best-case scenario analysis",
+            "key_points": ["point 1", "point 2"],
+            "confidence": 0.75
+        }},
+        "balanced": {{
+            "assessment": "Objective assessment",
+            "key_points": ["fact 1", "resource 2"],
+            "confidence": 0.85
+        }},
+        "critical": {{
+            "assessment": "Worst-case analysis",
+            "key_points": ["risk 1", "escalation 2"],
+            "confidence": 0.8
+        }}
+    }},
+    "synthesis": {{
+        "vote": "APPROVE" | "REJECT" | "ABSTAIN",
+        "reasoning": "Your synthesized recommendation with specific actions",
+        "confidence": 0.85,
+        "primary_benefits": ["benefit of acting"],
+        "primary_concerns": ["concern if we don't act"]
+    }}
 }}"""
 
         user_prompt = f"""**SERIOUS ISSUE ALERT**
@@ -703,7 +1110,7 @@ Affected Entities: {', '.join(issue.affected_entities) if issue.affected_entitie
 Context:
 {json.dumps(issue.context, indent=2) if issue.context else 'No additional context'}
 
-Provide your Ghost Council assessment as JSON:"""
+Provide your Ghost Council tri-perspective assessment as JSON:"""
 
         messages = [
             LLMMessage(role="system", content=system_prompt),
@@ -720,7 +1127,28 @@ Provide your Ghost Council assessment as JSON:"""
 
             result = json.loads(content)
 
-            vote_str = result.get("vote", "APPROVE").upper()  # Default to action for issues
+            # Parse perspectives
+            perspectives_data = result.get("perspectives", {})
+            perspectives = []
+
+            for ptype in ["optimistic", "balanced", "critical"]:
+                p_data = perspectives_data.get(ptype, {})
+                perspective_type = {
+                    "optimistic": PerspectiveType.OPTIMISTIC,
+                    "balanced": PerspectiveType.BALANCED,
+                    "critical": PerspectiveType.CRITICAL,
+                }[ptype]
+
+                perspectives.append(PerspectiveAnalysis(
+                    perspective_type=perspective_type,
+                    assessment=p_data.get("assessment", f"No {ptype} analysis provided"),
+                    key_points=p_data.get("key_points", [])[:5],
+                    confidence=min(1.0, max(0.0, float(p_data.get("confidence", 0.5)))),
+                ))
+
+            # Parse synthesis
+            synthesis = result.get("synthesis", {})
+            vote_str = synthesis.get("vote", "APPROVE").upper()  # Default to action for issues
             if vote_str == "APPROVE":
                 vote = VoteChoice.APPROVE
             elif vote_str == "REJECT":
@@ -731,9 +1159,13 @@ Provide your Ghost Council assessment as JSON:"""
             return GhostCouncilVote(
                 member_id=member.id,
                 member_name=member.name,
+                member_role=member.role,
+                perspectives=perspectives,
                 vote=vote,
-                reasoning=result.get("reasoning", "Immediate attention recommended"),
-                confidence=min(1.0, max(0.0, float(result.get("confidence", 0.8)))),
+                reasoning=synthesis.get("reasoning", "Immediate attention recommended"),
+                confidence=min(1.0, max(0.0, float(synthesis.get("confidence", 0.8)))),
+                primary_benefits=synthesis.get("primary_benefits", [])[:3],
+                primary_concerns=synthesis.get("primary_concerns", [])[:3],
             )
 
         except Exception as e:
@@ -746,9 +1178,32 @@ Provide your Ghost Council assessment as JSON:"""
             return GhostCouncilVote(
                 member_id=member.id,
                 member_name=member.name,
+                member_role=member.role,
+                perspectives=[
+                    PerspectiveAnalysis(
+                        perspective_type=PerspectiveType.OPTIMISTIC,
+                        assessment="Unable to complete analysis - recommending precautionary action",
+                        key_points=[],
+                        confidence=0.0,
+                    ),
+                    PerspectiveAnalysis(
+                        perspective_type=PerspectiveType.BALANCED,
+                        assessment="Unable to complete analysis",
+                        key_points=[],
+                        confidence=0.0,
+                    ),
+                    PerspectiveAnalysis(
+                        perspective_type=PerspectiveType.CRITICAL,
+                        assessment="Unable to assess critical risks - recommending immediate action",
+                        key_points=[],
+                        confidence=0.0,
+                    ),
+                ],
                 vote=VoteChoice.APPROVE,
                 reasoning=f"Unable to complete analysis, recommending precautionary action: {str(e)}",
                 confidence=0.5,
+                primary_benefits=[],
+                primary_concerns=["Analysis incomplete - precautionary action recommended"],
             )
 
     def _calculate_issue_consensus(

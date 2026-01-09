@@ -262,39 +262,71 @@ class ConstitutionalAnalysis(ForgeModel):
 # ═══════════════════════════════════════════════════════════════
 
 
+class PerspectiveType(str, Enum):
+    """The three perspectives each council member must consider."""
+
+    OPTIMISTIC = "optimistic"   # Best-case scenario, benefits, opportunities
+    BALANCED = "balanced"       # Objective analysis, trade-offs, facts
+    CRITICAL = "critical"       # Risks, concerns, worst-case scenarios
+
+
+class PerspectiveAnalysis(ForgeModel):
+    """A single perspective analysis from a council member."""
+
+    perspective_type: PerspectiveType
+    assessment: str = Field(description="Analysis from this perspective")
+    key_points: list[str] = Field(default_factory=list, max_length=5)
+    confidence: float = Field(ge=0.0, le=1.0, default=0.7)
+
+
 class GhostCouncilMember(ForgeModel):
     """A member of the Ghost Council (AI advisory board)."""
 
     id: str
     name: str
     role: str = Field(description="e.g., Ethics Advisor, Technical Expert")
+    domain: str = Field(default="general", description="Area of expertise")
     persona: str = Field(description="AI persona description")
     weight: float = Field(
         default=1.0,
         ge=0.0,
         description="Voting weight in council",
     )
+    icon: str = Field(default="user", description="Icon identifier for UI")
 
 
 class GhostCouncilVote(ForgeModel):
-    """A Ghost Council member's vote on a proposal."""
+    """A Ghost Council member's vote on a proposal with tri-perspective analysis."""
 
     member_id: str
     member_name: str
+    member_role: str = Field(default="Advisor")
+
+    # The three perspectives (each member analyzes from all three angles)
+    perspectives: list[PerspectiveAnalysis] = Field(
+        default_factory=list,
+        description="Analysis from optimistic, balanced, and critical viewpoints",
+    )
+
+    # Final synthesized position after considering all perspectives
     vote: VoteChoice
-    reasoning: str
+    reasoning: str = Field(description="Synthesized reasoning considering all perspectives")
     confidence: float = Field(ge=0.0, le=1.0)
+
+    # Key concerns and benefits identified across perspectives
+    primary_benefits: list[str] = Field(default_factory=list, max_length=3)
+    primary_concerns: list[str] = Field(default_factory=list, max_length=3)
 
 
 class GhostCouncilOpinion(ForgeModel):
-    """Collective opinion from the Ghost Council."""
+    """Collective opinion from the Ghost Council with multi-perspective analysis."""
 
     proposal_id: str
     deliberated_at: datetime = Field(default_factory=datetime.utcnow)
-    
-    # Member votes
+
+    # Member votes with full perspective analysis
     member_votes: list[GhostCouncilVote] = Field(default_factory=list)
-    
+
     # Consensus
     consensus_vote: VoteChoice
     consensus_strength: float = Field(
@@ -302,11 +334,29 @@ class GhostCouncilOpinion(ForgeModel):
         le=1.0,
         description="How strong the consensus is",
     )
-    
+
+    # Aggregated perspective summaries
+    optimistic_summary: str = Field(
+        default="",
+        description="Aggregated best-case analysis from all members",
+    )
+    balanced_summary: str = Field(
+        default="",
+        description="Aggregated objective analysis from all members",
+    )
+    critical_summary: str = Field(
+        default="",
+        description="Aggregated risk analysis from all members",
+    )
+
     # Summary
     key_points: list[str] = Field(default_factory=list)
     dissenting_opinions: list[str] = Field(default_factory=list)
     final_recommendation: str
+
+    # Aggregate metrics
+    total_benefits_identified: int = Field(default=0)
+    total_concerns_identified: int = Field(default=0)
 
 
 # ═══════════════════════════════════════════════════════════════
