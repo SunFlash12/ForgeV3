@@ -105,15 +105,54 @@ class AgentGatewayService:
         self.query_compiler = query_compiler
         self.event_system = event_system
 
-        # In-memory storage (would be Redis in production)
+        # SECURITY FIX (Audit 4 - H10): Bounded in-memory storage
+        # Use LRU-style eviction with size limits to prevent memory exhaustion DoS
+        from collections import OrderedDict
+
+        # Maximum sizes for in-memory caches
+        self.MAX_SESSIONS = 10000
+        self.MAX_API_KEYS = 10000
+        self.MAX_RATE_LIMIT_ENTRIES = 10000
+        self.MAX_QUERY_CACHE = 5000
+        self.MAX_ACCESS_LOGS = 10000
+
+        # In-memory storage with bounded sizes (would be Redis in production)
         self._sessions: dict[str, AgentSession] = {}
         self._api_keys: dict[str, str] = {}  # hash -> session_id
         self._rate_limits: dict[str, list[datetime]] = {}  # session_id -> request times
-        self._query_cache: dict[str, QueryResult] = {}
+        self._query_cache: OrderedDict[str, QueryResult] = OrderedDict()
         self._access_logs: list[CapsuleAccess] = []
 
         # Stats
         self._stats = GatewayStats()
+
+    def _enforce_cache_limits(self) -> None:
+        """
+        SECURITY FIX (Audit 4 - H10): Enforce size limits on all caches.
+        Evicts oldest entries when limits are exceeded.
+        """
+        # Evict oldest sessions if over limit
+        while len(self._sessions) > self.MAX_SESSIONS:
+            oldest_key = next(iter(self._sessions))
+            del self._sessions[oldest_key]
+
+        # Evict oldest API keys if over limit
+        while len(self._api_keys) > self.MAX_API_KEYS:
+            oldest_key = next(iter(self._api_keys))
+            del self._api_keys[oldest_key]
+
+        # Evict oldest rate limit entries if over limit
+        while len(self._rate_limits) > self.MAX_RATE_LIMIT_ENTRIES:
+            oldest_key = next(iter(self._rate_limits))
+            del self._rate_limits[oldest_key]
+
+        # Evict oldest query cache entries (LRU via OrderedDict)
+        while len(self._query_cache) > self.MAX_QUERY_CACHE:
+            self._query_cache.popitem(last=False)
+
+        # Trim access logs to keep only most recent
+        if len(self._access_logs) > self.MAX_ACCESS_LOGS:
+            self._access_logs = self._access_logs[-self.MAX_ACCESS_LOGS:]
 
     # =========================================================================
     # Session Management

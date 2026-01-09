@@ -192,8 +192,14 @@ class PartitionManager:
 
         Returns:
             Created partition
+
+        SECURITY FIX (Audit 4 - H16): Uses SHA-256 with longer prefix instead
+        of MD5 with 8 chars to reduce collision probability.
         """
-        partition_id = f"p_{hashlib.md5(name.encode()).hexdigest()[:8]}"
+        # SECURITY FIX: Use SHA-256 with 16 chars (64 bits) instead of MD5 with 8 chars (32 bits)
+        # MD5 with 8 hex chars has ~50% collision probability at ~65k partitions (birthday paradox)
+        # SHA-256 with 16 hex chars has ~50% collision probability at ~4 billion partitions
+        partition_id = f"p_{hashlib.sha256(name.encode()).hexdigest()[:16]}"
 
         partition = Partition(
             partition_id=partition_id,

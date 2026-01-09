@@ -484,6 +484,9 @@ class EmbeddingService:
         
         return result
     
+    # SECURITY FIX (Audit 4 - H25): Maximum batch size to prevent cost abuse
+    MAX_BATCH_SIZE = 10000
+
     async def embed_batch(
         self,
         texts: list[str],
@@ -491,16 +494,34 @@ class EmbeddingService:
     ) -> list[EmbeddingResult]:
         """
         Generate embeddings for multiple texts.
-        
+
+        SECURITY FIX (Audit 4 - H25): Now limits batch size to prevent
+        cost abuse via unbounded embedding requests.
+
         Args:
-            texts: List of texts to embed
+            texts: List of texts to embed (max 10,000)
             show_progress: Whether to log progress
-            
+
         Returns:
             List of EmbeddingResults in same order as input
+
+        Raises:
+            ValueError: If batch size exceeds MAX_BATCH_SIZE
         """
         if not texts:
             return []
+
+        # SECURITY FIX (Audit 4 - H25): Enforce maximum batch size
+        if len(texts) > self.MAX_BATCH_SIZE:
+            logger.warning(
+                "embedding_batch_size_exceeded",
+                requested=len(texts),
+                max_allowed=self.MAX_BATCH_SIZE
+            )
+            raise ValueError(
+                f"Batch size {len(texts)} exceeds maximum of {self.MAX_BATCH_SIZE}. "
+                "Please split your request into smaller batches."
+            )
         
         results: list[Optional[EmbeddingResult]] = [None] * len(texts)
         texts_to_embed: list[tuple[int, str]] = []

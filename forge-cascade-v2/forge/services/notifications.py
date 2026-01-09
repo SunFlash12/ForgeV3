@@ -733,17 +733,46 @@ class NotificationService:
             logger.error(f"Failed to persist notification {notification.id}: {e}")
             return False
 
+    def _hash_webhook_secret(self, secret: str) -> str:
+        """
+        SECURITY FIX (Audit 4 - H18): Hash webhook secrets before storage.
+
+        Uses bcrypt for secure hashing. The original secret cannot be recovered
+        but can be verified when webhooks are triggered.
+        """
+        import bcrypt
+        # Generate a salt and hash the secret
+        salt = bcrypt.gensalt(rounds=12)
+        hashed = bcrypt.hashpw(secret.encode('utf-8'), salt)
+        return hashed.decode('utf-8')
+
+    def _verify_webhook_secret(self, secret: str, hashed_secret: str) -> bool:
+        """Verify a webhook secret against its hash."""
+        import bcrypt
+        try:
+            return bcrypt.checkpw(secret.encode('utf-8'), hashed_secret.encode('utf-8'))
+        except Exception:
+            return False
+
     async def _persist_webhook(self, webhook: WebhookSubscription) -> bool:
-        """Persist a webhook subscription to Neo4j database."""
+        """
+        Persist a webhook subscription to Neo4j database.
+
+        SECURITY FIX (Audit 4 - H18): Webhook secrets are now hashed with
+        bcrypt before storage. The plaintext secret is never stored.
+        """
         if not self.neo4j:
             return False
 
         try:
+            # SECURITY FIX: Hash the secret before storing
+            hashed_secret = self._hash_webhook_secret(webhook.secret) if webhook.secret else None
+
             query = """
             MERGE (w:WebhookSubscription {id: $id})
             SET w.user_id = $user_id,
                 w.url = $url,
-                w.secret = $secret,
+                w.secret_hash = $secret_hash,
                 w.active = $active,
                 w.events = $events,
                 w.created_at = $created_at
@@ -755,7 +784,7 @@ class NotificationService:
                     "id": webhook.id,
                     "user_id": webhook.user_id,
                     "url": webhook.url,
-                    "secret": webhook.secret,
+                    "secret_hash": hashed_secret,  # SECURITY FIX: Store hash, not plaintext
                     "active": webhook.active,
                     "events": [e.value for e in webhook.events] if webhook.events else [],
                     "created_at": webhook.created_at.isoformat() if webhook.created_at else None,
