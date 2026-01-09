@@ -416,6 +416,111 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
         WHERE toLower(u.email) = toLower($email)
         RETURN count(u) > 0 AS exists
         """
-        
+
         result = await self.client.execute_single(query, {"email": email})
         return result.get("exists", False) if result else False
+
+    async def get_refresh_token(self, user_id: str) -> str | None:
+        """Get the stored refresh token for a user."""
+        query = """
+        MATCH (u:User {id: $id})
+        RETURN u.refresh_token AS refresh_token
+        """
+
+        result = await self.client.execute_single(query, {"id": user_id})
+        return result.get("refresh_token") if result else None
+
+    async def validate_refresh_token(self, user_id: str, token: str) -> bool:
+        """
+        Validate that the provided refresh token matches the stored one.
+
+        This prevents use of old/revoked refresh tokens.
+        """
+        stored_token = await self.get_refresh_token(user_id)
+        if stored_token is None:
+            return False
+        return stored_token == token
+
+    # =========================================================================
+    # Password Reset Token Management
+    # =========================================================================
+
+    async def store_password_reset_token(
+        self,
+        user_id: str,
+        token_hash: str,
+        expires_at: datetime,
+    ) -> bool:
+        """
+        Store a hashed password reset token for a user.
+
+        Args:
+            user_id: User ID
+            token_hash: SHA-256 hash of the reset token
+            expires_at: When the token expires
+
+        Returns:
+            True if stored successfully
+        """
+        query = """
+        MATCH (u:User {id: $id})
+        SET u.password_reset_token = $token_hash,
+            u.password_reset_expires = $expires_at,
+            u.updated_at = $now
+        RETURN u.id AS id
+        """
+
+        result = await self.client.execute_single(
+            query,
+            {
+                "id": user_id,
+                "token_hash": token_hash,
+                "expires_at": expires_at.isoformat(),
+                "now": self._now().isoformat(),
+            },
+        )
+
+        return result is not None and result.get("id") == user_id
+
+    async def validate_password_reset_token(
+        self,
+        user_id: str,
+        token_hash: str,
+    ) -> bool:
+        """
+        Validate a password reset token.
+
+        Args:
+            user_id: User ID
+            token_hash: SHA-256 hash of the provided token
+
+        Returns:
+            True if token is valid and not expired
+        """
+        query = """
+        MATCH (u:User {id: $id})
+        WHERE u.password_reset_token = $token_hash
+          AND u.password_reset_expires > $now
+        RETURN u.id AS id
+        """
+
+        result = await self.client.execute_single(
+            query,
+            {
+                "id": user_id,
+                "token_hash": token_hash,
+                "now": self._now().isoformat(),
+            },
+        )
+
+        return result is not None and result.get("id") == user_id
+
+    async def clear_password_reset_token(self, user_id: str) -> None:
+        """Clear password reset token after use or expiry."""
+        query = """
+        MATCH (u:User {id: $id})
+        SET u.password_reset_token = null,
+            u.password_reset_expires = null
+        """
+
+        await self.client.execute(query, {"id": user_id})

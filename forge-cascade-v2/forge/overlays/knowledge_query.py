@@ -27,7 +27,12 @@ from ..models.query import (
     GraphSchema,
     get_default_schema
 )
-from ..services.query_compiler import QueryCompiler, KnowledgeQueryService
+from ..services.query_compiler import (
+    QueryCompiler,
+    KnowledgeQueryService,
+    CypherValidator,
+    CypherSecurityError,
+)
 from .base import (
     BaseOverlay,
     OverlayContext,
@@ -45,6 +50,11 @@ class QueryCompilationError(OverlayError):
 
 class QueryExecutionError(OverlayError):
     """Error during query execution."""
+    pass
+
+
+class QuerySecurityError(OverlayError):
+    """Error when query fails security validation."""
     pass
 
 
@@ -306,9 +316,26 @@ class KnowledgeQueryOverlay(BaseOverlay):
         Execute raw Cypher query.
 
         For advanced users who want direct Cypher access.
+
+        SECURITY: All raw queries are validated before execution.
+        Only read operations are allowed. Write, delete, and
+        administrative operations will be rejected.
         """
         if not self._query_service:
             raise QueryExecutionError("Query service not configured")
+
+        # SECURITY: Validate raw Cypher before execution
+        try:
+            CypherValidator.validate(cypher, allow_writes=False)
+            if parameters:
+                CypherValidator.validate_parameters(parameters)
+        except CypherSecurityError as e:
+            self._logger.warning(
+                "raw_query_rejected",
+                reason=str(e),
+                cypher_preview=cypher[:100] if cypher else ""
+            )
+            raise QuerySecurityError(f"Query rejected for security reasons: {e}")
 
         return await self._query_service.execute_raw(
             cypher=cypher,

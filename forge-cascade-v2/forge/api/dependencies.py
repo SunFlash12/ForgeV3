@@ -12,6 +12,8 @@ Provides:
 
 from __future__ import annotations
 
+import ipaddress
+import re
 from functools import lru_cache
 from typing import Annotated, Any, AsyncGenerator
 
@@ -440,21 +442,105 @@ class ClientInfo:
         self.user_agent = user_agent
 
 
-async def get_client_info(request: Request) -> ClientInfo:
-    """Extract client IP and user agent from request."""
-    # Get IP from various headers (proxy-aware)
+# Trusted proxy IP ranges (Docker internal networks, localhost, common load balancers)
+# In production, configure this via settings
+TRUSTED_PROXY_RANGES = [
+    "127.0.0.0/8",      # Localhost
+    "10.0.0.0/8",       # Private Class A
+    "172.16.0.0/12",    # Private Class B (Docker default)
+    "192.168.0.0/16",   # Private Class C
+    "169.254.0.0/16",   # Link-local
+]
+
+# IP address validation regex
+_IP_PATTERN = re.compile(
+    r'^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}'
+    r'(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$'
+)
+
+_IPV6_PATTERN = re.compile(
+    r'^(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$|'
+    r'^::(?:[0-9a-fA-F]{1,4}:){0,6}[0-9a-fA-F]{1,4}$|'
+    r'^[0-9a-fA-F]{1,4}::(?:[0-9a-fA-F]{1,4}:){0,5}[0-9a-fA-F]{1,4}$'
+)
+
+
+def _is_valid_ip(ip: str) -> bool:
+    """Validate IP address format."""
+    if not ip:
+        return False
+    try:
+        ipaddress.ip_address(ip)
+        return True
+    except ValueError:
+        return False
+
+
+def _is_trusted_proxy(ip: str) -> bool:
+    """Check if IP is from a trusted proxy."""
+    if not _is_valid_ip(ip):
+        return False
+    try:
+        client_ip = ipaddress.ip_address(ip)
+        for range_str in TRUSTED_PROXY_RANGES:
+            if client_ip in ipaddress.ip_network(range_str, strict=False):
+                return True
+        return False
+    except ValueError:
+        return False
+
+
+def _get_real_client_ip(request: Request) -> str:
+    """
+    Securely extract real client IP from request.
+
+    Only trusts X-Forwarded-For and X-Real-IP when the direct client
+    is a trusted proxy. Otherwise, uses the direct client IP.
+    """
+    # Get direct client IP
+    direct_ip = request.client.host if request.client else None
+
+    # If direct IP is not from a trusted proxy, use it directly
+    # (don't trust forwarded headers from untrusted sources)
+    if direct_ip and not _is_trusted_proxy(direct_ip):
+        return direct_ip if _is_valid_ip(direct_ip) else "unknown"
+
+    # Direct connection is from trusted proxy - check forwarded headers
+    # Priority: X-Forwarded-For > X-Real-IP > direct connection
+
     forwarded_for = request.headers.get("X-Forwarded-For")
     if forwarded_for:
-        ip_address = forwarded_for.split(",")[0].strip()
-    else:
-        real_ip = request.headers.get("X-Real-IP")
-        if real_ip:
-            ip_address = real_ip
-        elif request.client:
-            ip_address = request.client.host
-        else:
-            ip_address = "unknown"
+        # X-Forwarded-For can contain multiple IPs: client, proxy1, proxy2...
+        # The first non-proxy IP (from the right) is the real client
+        ips = [ip.strip() for ip in forwarded_for.split(",")]
 
+        # Walk from right to left, find the first IP that's not a trusted proxy
+        for ip in reversed(ips):
+            if _is_valid_ip(ip) and not _is_trusted_proxy(ip):
+                return ip
+
+        # If all are proxies, take the leftmost (original client)
+        if ips and _is_valid_ip(ips[0]):
+            return ips[0]
+
+    # Check X-Real-IP header
+    real_ip = request.headers.get("X-Real-IP")
+    if real_ip and _is_valid_ip(real_ip):
+        return real_ip
+
+    # Fall back to direct connection
+    return direct_ip if direct_ip and _is_valid_ip(direct_ip) else "unknown"
+
+
+async def get_client_info(request: Request) -> ClientInfo:
+    """
+    Extract client IP and user agent from request.
+
+    SECURITY: Only trusts proxy headers (X-Forwarded-For, X-Real-IP)
+    when the direct connection is from a trusted proxy IP range.
+    This prevents IP spoofing from untrusted clients.
+    """
+    ip_address = _get_real_client_ip(request)
     user_agent = request.headers.get("User-Agent")
 
     return ClientInfo(ip_address=ip_address, user_agent=user_agent)

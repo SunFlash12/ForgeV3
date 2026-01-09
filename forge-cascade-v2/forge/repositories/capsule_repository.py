@@ -617,6 +617,112 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
         results = await self.client.execute(query, {"limit": limit})
         return self._to_models([r["capsule"] for r in results if r.get("capsule")])
 
+    async def get_changes_since(
+        self,
+        since: datetime | None,
+        types: list[str] | None = None,
+        min_trust: int = 0,
+        limit: int = 100,
+    ) -> tuple[list[Capsule], list[str]]:
+        """
+        Get capsules that changed since a timestamp (for federation sync).
+
+        Args:
+            since: Get changes after this timestamp (None = all)
+            types: Filter by capsule types
+            min_trust: Minimum trust level
+            limit: Maximum results
+
+        Returns:
+            Tuple of (changed capsules, deleted capsule IDs)
+        """
+        conditions = [
+            "c.is_archived = false",
+            "c.trust_level >= $min_trust",
+        ]
+        params: dict[str, Any] = {"min_trust": min_trust, "limit": limit}
+
+        if since:
+            conditions.append("c.updated_at > $since")
+            params["since"] = since.isoformat()
+
+        if types:
+            conditions.append("c.type IN $types")
+            params["types"] = types
+
+        where_clause = " AND ".join(conditions)
+
+        query = f"""
+        MATCH (c:Capsule)
+        WHERE {where_clause}
+        RETURN c {{.*}} AS capsule
+        ORDER BY c.updated_at ASC
+        LIMIT $limit
+        """
+
+        results = await self.client.execute(query, params)
+        capsules = self._to_models([r["capsule"] for r in results if r.get("capsule")])
+
+        # Get deleted capsules since timestamp
+        deleted_ids: list[str] = []
+        if since:
+            # Check for archived capsules that were archived after the since timestamp
+            archive_query = """
+            MATCH (c:Capsule)
+            WHERE c.is_archived = true AND c.updated_at > $since
+            RETURN c.id AS id
+            LIMIT $limit
+            """
+            archive_results = await self.client.execute(
+                archive_query,
+                {"since": since.isoformat(), "limit": limit},
+            )
+            deleted_ids = [r["id"] for r in archive_results if r.get("id")]
+
+        return capsules, deleted_ids
+
+    async def get_edges_since(
+        self,
+        since: datetime | None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        """
+        Get edges (relationships) that changed since a timestamp.
+
+        Args:
+            since: Get changes after this timestamp (None = all)
+            limit: Maximum results
+
+        Returns:
+            List of edge dictionaries
+        """
+        conditions = []
+        params: dict[str, Any] = {"limit": limit}
+
+        if since:
+            conditions.append("r.timestamp > $since")
+            params["since"] = since.isoformat()
+
+        where_clause = "WHERE " + " AND ".join(conditions) if conditions else ""
+
+        query = f"""
+        MATCH (source:Capsule)-[r:DERIVED_FROM]->(target:Capsule)
+        {where_clause}
+        RETURN {{
+            id: source.id + '->' + target.id,
+            source_id: source.id,
+            target_id: target.id,
+            relationship_type: 'DERIVED_FROM',
+            timestamp: r.timestamp,
+            reason: r.reason
+        }} AS edge
+        ORDER BY r.timestamp ASC
+        LIMIT $limit
+        """
+
+        results = await self.client.execute(query, params)
+        return [r["edge"] for r in results if r.get("edge")]
+
     async def find_similar_by_embedding(
         self,
         embedding: list[float],

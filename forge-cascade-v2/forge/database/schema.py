@@ -409,12 +409,42 @@ class SchemaManager:
         
         return results
 
-    async def drop_all(self) -> dict[str, bool]:
+    async def drop_all(self, force: bool = False) -> dict[str, bool]:
         """
         Drop all schema elements (for testing/reset).
-        
+
         WARNING: This will delete all constraints and indexes!
+
+        Args:
+            force: Must be True to allow execution in production
+
+        Raises:
+            RuntimeError: If called in production without force=True
         """
+        from forge.config import get_settings
+
+        settings = get_settings()
+
+        # SECURITY: Block dangerous operations in production
+        if settings.app_env == "production" and not force:
+            logger.error(
+                "drop_all_blocked",
+                reason="Cannot drop schema in production without force=True",
+                environment=settings.app_env
+            )
+            raise RuntimeError(
+                "drop_all() is blocked in production environment. "
+                "Set force=True only if you absolutely need to reset the schema. "
+                "This action is irreversible and will delete all constraints and indexes."
+            )
+
+        logger.warning(
+            "drop_all_executing",
+            environment=settings.app_env,
+            force=force,
+            warning="Dropping all schema elements - this action is destructive"
+        )
+
         results = {}
         
         # Get all constraints

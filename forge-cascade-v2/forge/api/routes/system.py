@@ -51,6 +51,46 @@ router = APIRouter(tags=["system"])
 
 
 # ============================================================================
+# Global Maintenance Mode State
+# ============================================================================
+
+import threading
+
+_maintenance_state = {
+    "enabled": False,
+    "enabled_at": None,
+    "enabled_by": None,
+    "message": "System is under maintenance. Please try again later.",
+}
+_maintenance_lock = threading.Lock()
+
+
+def is_maintenance_mode() -> bool:
+    """Check if maintenance mode is enabled."""
+    return _maintenance_state["enabled"]
+
+
+def get_maintenance_message() -> str:
+    """Get the maintenance mode message."""
+    return _maintenance_state["message"]
+
+
+def set_maintenance_mode(enabled: bool, user_id: str | None = None, message: str | None = None) -> None:
+    """Set maintenance mode state."""
+    with _maintenance_lock:
+        _maintenance_state["enabled"] = enabled
+        if enabled:
+            _maintenance_state["enabled_at"] = datetime.now(timezone.utc)
+            _maintenance_state["enabled_by"] = user_id
+            if message:
+                _maintenance_state["message"] = message
+        else:
+            _maintenance_state["enabled_at"] = None
+            _maintenance_state["enabled_by"] = None
+            _maintenance_state["message"] = "System is under maintenance. Please try again later."
+
+
+# ============================================================================
 # Request/Response Models
 # ============================================================================
 
@@ -866,39 +906,84 @@ async def get_recent_events(
 # ============================================================================
 
 
+class MaintenanceModeRequest(BaseModel):
+    """Request to enable/disable maintenance mode."""
+    message: Optional[str] = Field(
+        default=None,
+        max_length=500,
+        description="Custom maintenance message to display"
+    )
+
+
+class MaintenanceModeResponse(BaseModel):
+    """Maintenance mode status response."""
+    enabled: bool
+    enabled_at: Optional[datetime] = None
+    enabled_by: Optional[str] = None
+    message: str
+
+
 @router.post(
     "/maintenance/enable",
+    response_model=MaintenanceModeResponse,
     summary="Enable maintenance mode",
     description="Put the system into maintenance mode (ADMIN only)"
 )
 async def enable_maintenance_mode(
     user: AdminUserDep,
     event_system: EventSystemDep,
-) -> dict[str, str]:
-    """Enable maintenance mode."""
+    request: Optional[MaintenanceModeRequest] = None,
+) -> MaintenanceModeResponse:
+    """
+    Enable maintenance mode.
+
+    When enabled:
+    - Non-admin API requests will receive 503 Service Unavailable
+    - Health endpoints remain accessible
+    - Admin users can still access all endpoints
+    """
+    custom_message = request.message if request else None
+
+    # Set the maintenance mode state
+    set_maintenance_mode(
+        enabled=True,
+        user_id=str(user.id),
+        message=custom_message
+    )
 
     # Resilience: Record maintenance mode change metric
     record_maintenance_mode_changed(enabled=True)
 
     await event_system.emit(
         "MAINTENANCE_MODE_ENABLED",
-        {"enabled_by": str(user.id)}
+        {
+            "enabled_by": str(user.id),
+            "message": custom_message or get_maintenance_message()
+        }
     )
 
-    # In a real implementation, this would set a flag
-    return {"status": "maintenance_mode_enabled"}
+    return MaintenanceModeResponse(
+        enabled=True,
+        enabled_at=_maintenance_state["enabled_at"],
+        enabled_by=str(user.id),
+        message=get_maintenance_message()
+    )
 
 
 @router.post(
     "/maintenance/disable",
+    response_model=MaintenanceModeResponse,
     summary="Disable maintenance mode",
     description="Take the system out of maintenance mode (ADMIN only)"
 )
 async def disable_maintenance_mode(
     user: AdminUserDep,
     event_system: EventSystemDep,
-) -> dict[str, str]:
-    """Disable maintenance mode."""
+) -> MaintenanceModeResponse:
+    """Disable maintenance mode and restore normal operations."""
+
+    # Set the maintenance mode state
+    set_maintenance_mode(enabled=False, user_id=str(user.id))
 
     # Resilience: Record maintenance mode change metric
     record_maintenance_mode_changed(enabled=False)
@@ -908,24 +993,135 @@ async def disable_maintenance_mode(
         {"disabled_by": str(user.id)}
     )
 
-    return {"status": "maintenance_mode_disabled"}
+    return MaintenanceModeResponse(
+        enabled=False,
+        enabled_at=None,
+        enabled_by=None,
+        message="System is operational"
+    )
+
+
+@router.get(
+    "/maintenance/status",
+    response_model=MaintenanceModeResponse,
+    summary="Get maintenance mode status",
+    description="Check if maintenance mode is enabled"
+)
+async def get_maintenance_status() -> MaintenanceModeResponse:
+    """Get current maintenance mode status."""
+    return MaintenanceModeResponse(
+        enabled=_maintenance_state["enabled"],
+        enabled_at=_maintenance_state["enabled_at"],
+        enabled_by=_maintenance_state["enabled_by"],
+        message=get_maintenance_message() if _maintenance_state["enabled"] else "System is operational"
+    )
+
+
+class CacheClearRequest(BaseModel):
+    """Request to clear specific caches."""
+    caches: Optional[list[str]] = Field(
+        default=None,
+        description="Specific caches to clear. If empty/null, clears all caches."
+    )
+
+
+class CacheClearResponse(BaseModel):
+    """Cache clear operation response."""
+    status: str
+    caches_cleared: list[str]
+    errors: list[str] = Field(default_factory=list)
 
 
 @router.post(
     "/cache/clear",
+    response_model=CacheClearResponse,
     summary="Clear system caches",
     description="Clear various system caches (CORE+ only)"
 )
 async def clear_caches(
     user: CoreUserDep,
     event_system: EventSystemDep,
-) -> dict[str, Any]:
-    """Clear system caches."""
+    request: Optional[CacheClearRequest] = None,
+) -> CacheClearResponse:
+    """
+    Clear system caches.
 
+    Available caches:
+    - token_blacklist: In-memory token blacklist (Redis is separate)
+    - query_cache: Query result caches
+    - health_cache: Cached health check results
+    - metrics_cache: Cached system metrics
+    - embedding_cache: Cached embeddings (if using local cache)
+
+    If no specific caches are specified, all caches are cleared.
+    """
     cleared = []
+    errors = []
 
-    # Clear various caches as available
-    # These would be actual cache clearing operations in a real implementation
+    # Determine which caches to clear
+    requested_caches = request.caches if request and request.caches else None
+    clear_all = requested_caches is None
+
+    # Clear token blacklist in-memory cache
+    if clear_all or "token_blacklist" in (requested_caches or []):
+        try:
+            from forge.security.tokens import TokenBlacklist
+            with TokenBlacklist._lock:
+                count = len(TokenBlacklist._blacklist)
+                TokenBlacklist._blacklist.clear()
+                TokenBlacklist._expiry_times.clear()
+                cleared.append(f"token_blacklist ({count} entries)")
+        except Exception as e:
+            errors.append(f"token_blacklist: {str(e)}")
+
+    # Clear query cache (from resilience integration)
+    if clear_all or "query_cache" in (requested_caches or []):
+        try:
+            from forge.resilience.integration import clear_query_cache
+            count = clear_query_cache()
+            cleared.append(f"query_cache ({count} entries)")
+        except ImportError:
+            # Function not available
+            pass
+        except Exception as e:
+            errors.append(f"query_cache: {str(e)}")
+
+    # Clear health status cache
+    if clear_all or "health_cache" in (requested_caches or []):
+        try:
+            # Clear the cached health status
+            from forge.resilience.integration import _health_cache
+            if hasattr(_health_cache, "clear"):
+                _health_cache.clear()
+                cleared.append("health_cache")
+        except ImportError:
+            pass
+        except Exception as e:
+            errors.append(f"health_cache: {str(e)}")
+
+    # Clear metrics cache
+    if clear_all or "metrics_cache" in (requested_caches or []):
+        try:
+            from forge.resilience.integration import _metrics_cache
+            if hasattr(_metrics_cache, "clear"):
+                _metrics_cache.clear()
+                cleared.append("metrics_cache")
+        except ImportError:
+            pass
+        except Exception as e:
+            errors.append(f"metrics_cache: {str(e)}")
+
+    # Clear embedding service cache if available
+    if clear_all or "embedding_cache" in (requested_caches or []):
+        try:
+            from forge.services.embedding import get_embedding_service
+            svc = get_embedding_service()
+            if hasattr(svc, "_cache") and svc._cache is not None:
+                count = len(svc._cache)
+                svc._cache.clear()
+                cleared.append(f"embedding_cache ({count} entries)")
+        except Exception as e:
+            errors.append(f"embedding_cache: {str(e)}")
 
     # Resilience: Record cache clear metric
     record_cache_cleared(cleared)
@@ -935,14 +1131,16 @@ async def clear_caches(
         {
             "event_name": "caches_cleared",
             "cleared_by": str(user.id),
-            "caches": cleared
+            "caches": cleared,
+            "errors": errors
         }
     )
 
-    return {
-        "status": "caches_cleared",
-        "caches_cleared": cleared
-    }
+    return CacheClearResponse(
+        status="completed" if not errors else "partial",
+        caches_cleared=cleared,
+        errors=errors
+    )
 
 
 @router.get(

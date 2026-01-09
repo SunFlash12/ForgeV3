@@ -5,6 +5,8 @@ Provides high-level authentication operations including login,
 registration, token refresh, and session management.
 """
 
+import secrets
+import hashlib
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -287,34 +289,51 @@ class AuthService:
     ) -> Token:
         """
         Refresh access token using refresh token.
-        
+
+        Implements secure token rotation: the old refresh token is invalidated
+        and a new one is issued. This prevents token replay attacks.
+
         Args:
             refresh_token: Valid refresh token
             ip_address: Client IP for audit logging
-            
+
         Returns:
             New Token pair
-            
+
         Raises:
-            TokenError: If refresh token is invalid
+            TokenError: If refresh token is invalid or doesn't match stored token
         """
-        # Verify refresh token
+        # Verify refresh token signature and expiry
         payload = verify_refresh_token(refresh_token)
-        
-        # Get user and verify refresh token matches
+
+        # Get user
         user = await self.user_repo.get_by_id(payload.sub)
-        
+
         if not user:
             raise TokenInvalidError("User not found")
-        
-        # NOTE: Refresh token validation against stored token is disabled
-        # The User model doesn't store refresh_token. JWT signature validation is sufficient.
-        # Future enhancement: implement refresh token rotation with token storage
-        
+
+        # SECURITY: Validate refresh token against stored token
+        # This prevents use of old/revoked refresh tokens
+        is_valid = await self.user_repo.validate_refresh_token(user.id, refresh_token)
+        if not is_valid:
+            # Log potential token theft attempt
+            await self.audit_repo.log_security_event(
+                actor_id=user.id,
+                event_name="refresh_token_mismatch",
+                details={
+                    "reason": "token_not_matching_stored",
+                    "user_id": user.id,
+                },
+                ip_address=ip_address
+            )
+            # Revoke all tokens for this user as a precaution
+            await self.user_repo.update_refresh_token(user.id, None)
+            raise TokenInvalidError("Refresh token has been revoked or is invalid")
+
         if not user.is_active:
             raise AccountDeactivatedError("Account has been deactivated")
-        
-        # Create new token pair
+
+        # Create new token pair (token rotation)
         role_value = user.role.value if hasattr(user.role, 'value') else user.role
         new_token = create_token_pair(
             user_id=user.id,
@@ -322,10 +341,10 @@ class AuthService:
             role=role_value,
             trust_flame=user.trust_flame
         )
-        
-        # Update stored refresh token
+
+        # Update stored refresh token (old token is now invalid)
         await self.user_repo.update_refresh_token(user.id, new_token.refresh_token)
-        
+
         return new_token
     
     async def validate_access_token(
@@ -334,22 +353,34 @@ class AuthService:
     ) -> AuthorizationContext:
         """
         Validate access token and return authorization context.
-        
+
         Args:
             access_token: JWT access token
-            
+
         Returns:
             AuthorizationContext for the user
-            
+
         Raises:
-            TokenError: If token is invalid or expired
+            TokenError: If token is invalid, expired, or missing required claims
         """
         payload = verify_access_token(access_token)
-        
+
+        # SECURITY FIX: Reject tokens with missing required claims
+        # Do NOT use default values - this prevents privilege escalation
+        # from tokens that have been tampered with to remove claims
+        if payload.trust_flame is None:
+            raise TokenInvalidError("Token missing required trust_flame claim")
+
+        if payload.role is None:
+            raise TokenInvalidError("Token missing required role claim")
+
+        if not payload.sub:
+            raise TokenInvalidError("Token missing required sub (user_id) claim")
+
         return create_auth_context(
             user_id=payload.sub,
-            trust_flame=payload.trust_flame or 60,  # Default to STANDARD
-            role=payload.role or "user",
+            trust_flame=payload.trust_flame,
+            role=payload.role,
             capabilities=None  # Will be auto-populated from trust level
         )
     
@@ -367,14 +398,14 @@ class AuthService:
             access_token: Current access token to blacklist
             ip_address: Client IP for audit logging
         """
-        # Blacklist the current access token if provided
+        # Blacklist the current access token if provided (async for Redis support)
         if access_token:
             try:
                 claims = get_token_claims(access_token)
                 jti = claims.get("jti")
                 exp = claims.get("exp")
                 if jti:
-                    TokenBlacklist.add(jti, exp)
+                    await TokenBlacklist.add_async(jti, exp)
             except Exception:
                 pass  # Token may already be invalid
 
@@ -459,39 +490,116 @@ class AuthService:
             ip_address=ip_address
         )
     
+    async def request_password_reset(
+        self,
+        email: str,
+        ip_address: Optional[str] = None
+    ) -> Optional[str]:
+        """
+        Request a password reset token.
+
+        Generates a secure random token, stores its hash, and returns the
+        plain token to be sent to the user (typically via email).
+
+        Args:
+            email: User's email address
+            ip_address: Client IP for audit logging
+
+        Returns:
+            Plain text reset token if user exists, None otherwise
+            (Always returns in constant time to prevent email enumeration)
+        """
+        # Always generate a token to prevent timing attacks
+        plain_token = secrets.token_urlsafe(32)
+        token_hash = hashlib.sha256(plain_token.encode()).hexdigest()
+
+        user = await self.user_repo.get_by_email(email)
+
+        if user:
+            # Token expires in 1 hour
+            expires_at = datetime.utcnow() + timedelta(hours=1)
+
+            await self.user_repo.store_password_reset_token(
+                user_id=user.id,
+                token_hash=token_hash,
+                expires_at=expires_at
+            )
+
+            await self.audit_repo.log_security_event(
+                actor_id=user.id,
+                event_name="password_reset_requested",
+                details={"email": email},
+                ip_address=ip_address
+            )
+
+            return plain_token
+
+        # Log attempt for non-existent email (but don't reveal to caller)
+        await self.audit_repo.log_security_event(
+            actor_id="unknown",
+            event_name="password_reset_requested_unknown_email",
+            details={"email": email},
+            ip_address=ip_address
+        )
+
+        return None
+
     async def reset_password(
         self,
         user_id: str,
         new_password: str,
-        reset_token: str,  # Would be validated against stored token
+        reset_token: str,
         ip_address: Optional[str] = None
     ) -> None:
         """
-        Reset password using reset token.
-        
-        Note: This is a simplified version. In production, you'd want to:
-        - Generate secure reset tokens
-        - Store them with expiration
-        - Send via email
-        - Validate before allowing reset
+        Reset password using a valid reset token.
+
+        The token is validated against the stored hash and checked for expiry.
+        After successful reset, the token is invalidated (one-time use).
+
+        Args:
+            user_id: User ID
+            new_password: New password to set
+            reset_token: Plain text reset token
+            ip_address: Client IP for audit logging
+
+        Raises:
+            AuthenticationError: If user not found or token invalid
         """
-        # In a real implementation, validate reset_token here
-        
         user = await self.user_repo.get_by_id(user_id)
-        
+
         if not user:
             raise AuthenticationError("User not found")
-        
+
+        # Hash the provided token and validate against stored hash
+        token_hash = hashlib.sha256(reset_token.encode()).hexdigest()
+        is_valid = await self.user_repo.validate_password_reset_token(
+            user_id=user_id,
+            token_hash=token_hash
+        )
+
+        if not is_valid:
+            await self.audit_repo.log_security_event(
+                actor_id=user_id,
+                event_name="password_reset_failed",
+                details={"reason": "invalid_or_expired_token"},
+                ip_address=ip_address
+            )
+            raise AuthenticationError("Invalid or expired reset token")
+
         # Hash and update password
         new_hash = hash_password(new_password)
         await self.user_repo.update_password(user_id, new_hash)
-        
+
+        # Clear the reset token (one-time use)
+        await self.user_repo.clear_password_reset_token(user_id)
+
         # Revoke all sessions
         await self.user_repo.update_refresh_token(user_id, None)
-        
+
         # Clear any lockout
         await self.user_repo.clear_lockout(user_id)
-        
+
         await self.audit_repo.log_security_event(
             actor_id=user_id,
             event_name="password_reset",

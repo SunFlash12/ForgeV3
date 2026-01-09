@@ -128,19 +128,25 @@ class Neo4jClient:
     async def transaction(self) -> AsyncGenerator[AsyncTransaction, None]:
         """
         Get a Neo4j transaction.
-        
+
         Usage:
             async with client.transaction() as tx:
                 await tx.run("CREATE (n:Node {name: $name})", name="test")
+
+        Note: Transaction commits automatically on successful context exit.
+        Rollback happens automatically on exception.
         """
         async with self.session() as session:
-            async with session.begin_transaction() as tx:
-                try:
-                    yield tx
-                    await tx.commit()
-                except Exception:
+            tx = await session.begin_transaction()
+            try:
+                yield tx
+                # Commit on successful exit
+                await tx.commit()
+            except Exception:
+                # Rollback on error - check if transaction is still open
+                if tx.closed() is False:
                     await tx.rollback()
-                    raise
+                raise
 
     @retry(
         stop=stop_after_attempt(3),
@@ -266,29 +272,49 @@ class Neo4jClient:
 # CLIENT SINGLETON
 # ═══════════════════════════════════════════════════════════════
 
+import asyncio
 
 _db_client: Neo4jClient | None = None
+_db_client_lock: asyncio.Lock | None = None
+
+
+def _get_lock() -> asyncio.Lock:
+    """Get or create the singleton lock (must be called from async context)."""
+    global _db_client_lock
+    if _db_client_lock is None:
+        _db_client_lock = asyncio.Lock()
+    return _db_client_lock
 
 
 async def get_db_client() -> Neo4jClient:
     """
     Get the global database client instance.
-    
+
     Creates and connects the client on first call.
+    Thread-safe using asyncio.Lock to prevent race conditions.
     """
     global _db_client
-    
-    if _db_client is None:
-        _db_client = Neo4jClient()
-        await _db_client.connect()
-    
+
+    # Fast path - already initialized
+    if _db_client is not None:
+        return _db_client
+
+    # Slow path - needs initialization with lock
+    async with _get_lock():
+        # Double-check after acquiring lock
+        if _db_client is None:
+            client = Neo4jClient()
+            await client.connect()
+            _db_client = client
+
     return _db_client
 
 
 async def close_db_client() -> None:
     """Close the global database client."""
     global _db_client
-    
-    if _db_client is not None:
-        await _db_client.close()
-        _db_client = None
+
+    async with _get_lock():
+        if _db_client is not None:
+            await _db_client.close()
+            _db_client = None

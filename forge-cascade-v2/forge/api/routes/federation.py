@@ -28,6 +28,8 @@ from forge.federation.models import (
 from forge.federation.protocol import FederationProtocol
 from forge.federation.sync import SyncService
 from forge.federation.trust import PeerTrustManager
+from forge.repositories.capsule_repository import CapsuleRepository
+from forge.database.client import get_db_client
 
 logger = logging.getLogger(__name__)
 
@@ -172,13 +174,26 @@ async def get_sync_service() -> SyncService:
     if not _sync_service:
         protocol = await get_protocol()
         trust_manager = await get_trust_manager()
+        capsule_repo = await get_capsule_repository()
         _sync_service = SyncService(
             protocol=protocol,
             trust_manager=trust_manager,
-            capsule_repository=None,  # TODO: Inject
-            neo4j_driver=None,  # TODO: Inject
+            capsule_repository=capsule_repo,
+            neo4j_driver=None,  # TODO: Inject if needed for raw queries
         )
     return _sync_service
+
+
+_capsule_repository: CapsuleRepository | None = None
+
+
+async def get_capsule_repository() -> CapsuleRepository:
+    """Get capsule repository for federation operations."""
+    global _capsule_repository
+    if not _capsule_repository:
+        db_client = await get_db_client()
+        _capsule_repository = CapsuleRepository(db_client)
+    return _capsule_repository
 
 
 # ============================================================================
@@ -682,6 +697,7 @@ async def get_changes(
     x_forge_public_key: str = Header(None),
     protocol: FederationProtocol = Depends(get_protocol),
     sync_service: SyncService = Depends(get_sync_service),
+    capsule_repo: CapsuleRepository = Depends(get_capsule_repository),
 ):
     """
     Get changes for a peer to pull.
@@ -719,17 +735,60 @@ async def get_changes(
     if not permissions.get("can_pull"):
         raise HTTPException(status_code=403, detail="Peer not authorized to pull")
 
-    # TODO: Query capsule changes since timestamp, filtered by types
     # Apply max_capsules_per_sync from permissions
     max_capsules = permissions.get("max_capsules_per_sync", 100)
     actual_limit = min(limit, max_capsules)
 
+    # Parse types if provided
+    type_list = types.split(",") if types else None
+
+    # Query capsule changes since timestamp
+    capsules, deleted_ids = await capsule_repo.get_changes_since(
+        since=since,
+        types=type_list,
+        min_trust=peer.min_trust_to_sync,
+        limit=actual_limit + 1,  # +1 to check if there's more
+    )
+
+    # Get edge changes
+    edges = await capsule_repo.get_edges_since(since=since, limit=actual_limit)
+
+    # Check if there are more results
+    has_more = len(capsules) > actual_limit
+    if has_more:
+        capsules = capsules[:actual_limit]
+
+    # Convert capsules to dict format for federation
+    capsule_dicts = [
+        {
+            "id": c.id,
+            "content": c.content,
+            "type": c.type.value if hasattr(c.type, 'value') else c.type,
+            "title": c.title,
+            "summary": c.summary,
+            "tags": c.tags,
+            "trust_level": c.trust_level,
+            "owner_id": c.owner_id,
+            "parent_id": c.parent_id,
+            "version": c.version,
+            "created_at": c.created_at.isoformat() if c.created_at else None,
+            "updated_at": c.updated_at.isoformat() if c.updated_at else None,
+            "content_hash": hash(c.content) if c.content else None,  # Simple hash for now
+        }
+        for c in capsules
+    ]
+
+    logger.info(
+        f"Federation get_changes: returning {len(capsule_dicts)} capsules, "
+        f"{len(edges)} edges, {len(deleted_ids)} deletions for peer {peer.name}"
+    )
+
     return {
-        "capsules": [],
-        "edges": [],
-        "deletions": [],
-        "has_more": False,
-        "next_cursor": None,
+        "capsules": capsule_dicts,
+        "edges": edges,
+        "deletions": deleted_ids,
+        "has_more": has_more,
+        "next_cursor": capsules[-1].updated_at.isoformat() if has_more and capsules else None,
     }
 
 
@@ -739,6 +798,7 @@ async def receive_capsules(
     x_forge_public_key: str = Header(None),
     protocol: FederationProtocol = Depends(get_protocol),
     sync_service: SyncService = Depends(get_sync_service),
+    capsule_repo: CapsuleRepository = Depends(get_capsule_repository),
 ):
     """
     Receive capsules pushed from a peer.
@@ -765,7 +825,6 @@ async def receive_capsules(
         raise HTTPException(status_code=403, detail="Unknown peer")
 
     # Check if peer is allowed to push
-    from forge.federation.trust import PeerTrustManager
     trust_manager = await get_trust_manager()
     can_sync, reason = await trust_manager.can_sync(peer)
     if not can_sync:
@@ -775,10 +834,119 @@ async def receive_capsules(
     if not permissions.get("can_push"):
         raise HTTPException(status_code=403, detail="Peer not authorized to push")
 
-    # TODO: Process incoming capsules via sync_service
-    # For now, return placeholder response
+    # Process incoming capsules
+    accepted = 0
+    rejected = 0
+    conflicts = 0
+
+    from forge.models.capsule import CapsuleCreate
+    from forge.models.base import CapsuleType
+
+    for remote_capsule in payload.capsules:
+        try:
+            remote_id = remote_capsule.get("id")
+            if not remote_id:
+                rejected += 1
+                continue
+
+            # Check trust threshold
+            remote_trust = remote_capsule.get("trust_level", 0)
+            if remote_trust < peer.min_trust_to_sync:
+                logger.debug(f"Skipping capsule {remote_id}: trust {remote_trust} < {peer.min_trust_to_sync}")
+                rejected += 1
+                continue
+
+            # Check if capsule already exists locally (by checking federated records)
+            fed_capsule = await sync_service._find_federated_capsule(peer.id, remote_id)
+
+            if fed_capsule and fed_capsule.local_capsule_id:
+                # Capsule exists - check for conflict
+                local = await capsule_repo.get_by_id(fed_capsule.local_capsule_id)
+                if local:
+                    remote_hash = remote_capsule.get("content_hash")
+                    local_hash = hash(local.content) if local.content else None
+
+                    if remote_hash != local_hash:
+                        # Conflict - resolve based on policy
+                        if peer.conflict_resolution == ConflictResolution.REMOTE_WINS:
+                            # Update local capsule
+                            from forge.models.capsule import CapsuleUpdate
+                            update_data = CapsuleUpdate(
+                                content=remote_capsule.get("content"),
+                                title=remote_capsule.get("title"),
+                                summary=remote_capsule.get("summary"),
+                                tags=remote_capsule.get("tags"),
+                            )
+                            await capsule_repo.update(fed_capsule.local_capsule_id, update_data)
+                            accepted += 1
+                        elif peer.conflict_resolution == ConflictResolution.HIGHER_TRUST:
+                            if remote_trust > (local.trust_level or 0):
+                                from forge.models.capsule import CapsuleUpdate
+                                update_data = CapsuleUpdate(
+                                    content=remote_capsule.get("content"),
+                                    title=remote_capsule.get("title"),
+                                )
+                                await capsule_repo.update(fed_capsule.local_capsule_id, update_data)
+                                accepted += 1
+                            else:
+                                conflicts += 1
+                        else:
+                            # LOCAL_WINS or MANUAL_REVIEW - record conflict
+                            conflicts += 1
+                    else:
+                        # No change
+                        accepted += 1
+                else:
+                    rejected += 1
+            else:
+                # New capsule - create local copy
+                try:
+                    capsule_type = remote_capsule.get("type", "KNOWLEDGE")
+                    if isinstance(capsule_type, str):
+                        try:
+                            capsule_type = CapsuleType(capsule_type)
+                        except ValueError:
+                            capsule_type = CapsuleType.KNOWLEDGE
+
+                    create_data = CapsuleCreate(
+                        content=remote_capsule.get("content", ""),
+                        type=capsule_type,
+                        title=remote_capsule.get("title"),
+                        summary=remote_capsule.get("summary"),
+                        tags=remote_capsule.get("tags", []),
+                        parent_id=None,  # Don't preserve remote parent relationships
+                    )
+
+                    # Create with a federation system user
+                    new_capsule = await capsule_repo.create(
+                        data=create_data,
+                        owner_id=f"federation:{peer.id}",
+                    )
+
+                    # Track the federation mapping
+                    await sync_service._create_local_capsule(peer, remote_capsule)
+
+                    accepted += 1
+                    logger.info(f"Created federated capsule {new_capsule.id} from peer {peer.name}")
+                except Exception as e:
+                    logger.error(f"Failed to create capsule from {remote_id}: {e}")
+                    rejected += 1
+
+        except Exception as e:
+            logger.error(f"Error processing incoming capsule: {e}")
+            rejected += 1
+
+    # Update peer stats
+    peer.capsules_received += accepted
+    peer.last_seen_at = datetime.now(timezone.utc)
+
+    logger.info(
+        f"Federation receive_capsules from {peer.name}: "
+        f"{accepted} accepted, {rejected} rejected, {conflicts} conflicts"
+    )
+
     return {
-        "accepted": 0,
-        "rejected": 0,
-        "conflicts": 0,
+        "accepted": accepted,
+        "rejected": rejected,
+        "conflicts": conflicts,
     }

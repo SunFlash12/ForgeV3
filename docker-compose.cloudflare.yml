@@ -1,0 +1,200 @@
+# =============================================================================
+# FORGE CASCADE - CLOUDFLARE TUNNEL DEPLOYMENT
+# Free hosting using Cloudflare Tunnel (no VPS required!)
+# Domains: forgecascade.org, forgeshop.org
+# =============================================================================
+
+services:
+  # ===========================================================================
+  # Cloudflare Tunnel - Exposes services to the internet
+  # ===========================================================================
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: forge-cloudflared
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - cascade-api
+      - frontend
+      - marketplace
+    networks:
+      - forge-network
+    restart: unless-stopped
+
+  # ===========================================================================
+  # Core API Services
+  # ===========================================================================
+
+  cascade-api:
+    build:
+      context: ./forge-cascade-v2
+      dockerfile: Dockerfile
+    container_name: forge-cascade-api
+    expose:
+      - "8001"
+    environment:
+      - NEO4J_URI=${NEO4J_URI}
+      - NEO4J_USERNAME=${NEO4J_USERNAME}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
+      - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES:-60}
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-forge_redis_secret}@redis:6379
+      - LLM_PROVIDER=${LLM_PROVIDER:-anthropic}
+      - LLM_API_KEY=${LLM_API_KEY}
+      - LLM_MODEL=${LLM_MODEL:-claude-sonnet-4-20250514}
+      - LLM_MAX_TOKENS=${LLM_MAX_TOKENS:-4096}
+      - LLM_TEMPERATURE=${LLM_TEMPERATURE:-0.4}
+      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-openai}
+      - EMBEDDING_API_KEY=${EMBEDDING_API_KEY}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-text-embedding-3-small}
+      - EMBEDDING_DIMENSIONS=${EMBEDDING_DIMENSIONS:-1536}
+      - OTLP_ENDPOINT=http://jaeger:4317
+      - SENTRY_DSN=${SENTRY_DSN}
+      - ENVIRONMENT=production
+      - CORS_ORIGINS=https://forgecascade.org,https://forgeshop.org
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - forge-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  compliance-api:
+    build:
+      context: ./forge-cascade-v2
+      dockerfile: Dockerfile
+    container_name: forge-compliance-api
+    command: ["python", "run_compliance.py"]
+    expose:
+      - "8002"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - SENTRY_DSN=${SENTRY_DSN}
+    networks:
+      - forge-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  virtuals-api:
+    build:
+      context: ./forge-cascade-v2
+      dockerfile: Dockerfile
+    container_name: forge-virtuals-api
+    command: ["python", "run_virtuals.py"]
+    expose:
+      - "8003"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - SENTRY_DSN=${SENTRY_DSN}
+    networks:
+      - forge-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ===========================================================================
+  # Frontends
+  # ===========================================================================
+
+  frontend:
+    build:
+      context: ./forge-cascade-v2/frontend
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=https://forgecascade.org/api/v1
+        - VITE_WS_URL=wss://forgecascade.org/ws
+        - VITE_APP_NAME=Forge Cascade
+    container_name: forge-frontend
+    expose:
+      - "80"
+    networks:
+      - forge-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  marketplace:
+    build:
+      context: ./marketplace
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=https://forgeshop.org/api
+        - VITE_CASCADE_API_URL=https://forgecascade.org/api/v1
+        - VITE_WS_URL=wss://forgeshop.org/ws
+        - VITE_APP_NAME=Forge Shop
+    container_name: forge-marketplace
+    expose:
+      - "80"
+    networks:
+      - forge-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ===========================================================================
+  # Infrastructure
+  # ===========================================================================
+
+  redis:
+    image: redis:7-alpine
+    container_name: forge-redis
+    volumes:
+      - redis-data:/data
+    networks:
+      - forge-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-forge_redis_secret}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru --requirepass ${REDIS_PASSWORD:-forge_redis_secret}
+
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: forge-jaeger
+    expose:
+      - "16686"
+      - "4317"
+      - "4318"
+    ports:
+      - "16686:16686"  # Jaeger UI (local access only)
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    networks:
+      - forge-network
+    restart: unless-stopped
+
+networks:
+  forge-network:
+    driver: bridge
+
+volumes:
+  redis-data:
