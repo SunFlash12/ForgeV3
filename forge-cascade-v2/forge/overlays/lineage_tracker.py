@@ -13,7 +13,7 @@ Responsibilities:
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Optional
 from collections import defaultdict
 import structlog
@@ -946,7 +946,8 @@ class LineageTrackerOverlay(BaseOverlay):
         if node.creator_id:
             recent = self._recent_derivations.get(node.creator_id, [])
             # Clean old entries (last 24h)
-            cutoff = datetime.utcnow() - __import__('datetime').timedelta(hours=24)
+            # SECURITY FIX (Audit 2): Removed unsafe __import__() usage
+            cutoff = datetime.utcnow() - timedelta(hours=24)
             recent = [t for t in recent if t > cutoff]
             self._recent_derivations[node.creator_id] = recent
             

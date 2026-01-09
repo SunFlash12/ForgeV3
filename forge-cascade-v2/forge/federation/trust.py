@@ -3,8 +3,12 @@ Federation Trust Manager
 
 Manages trust relationships between federated Forge instances.
 Trust is earned through successful interactions and can be adjusted by governance.
+
+SECURITY FIX (Audit 2): Added asyncio locks to prevent race conditions
+in trust score updates.
 """
 
+import asyncio
 import logging
 from datetime import datetime, timezone, timedelta
 from typing import Any
@@ -75,64 +79,84 @@ class PeerTrustManager:
     def __init__(self):
         self._trust_history: list[TrustEvent] = []
         self._peer_trust_cache: dict[str, float] = {}
+        # SECURITY FIX (Audit 2): Lock to prevent race conditions in trust updates
+        self._trust_lock = asyncio.Lock()
+        self._peer_locks: dict[str, asyncio.Lock] = {}  # Per-peer locks for fine-grained concurrency
+
+    async def _get_peer_lock(self, peer_id: str) -> asyncio.Lock:
+        """Get or create a lock for a specific peer."""
+        # SECURITY FIX (Audit 2): Use global lock to protect peer_locks dict creation
+        async with self._trust_lock:
+            if peer_id not in self._peer_locks:
+                self._peer_locks[peer_id] = asyncio.Lock()
+            return self._peer_locks[peer_id]
 
     async def initialize_peer_trust(self, peer: FederatedPeer) -> None:
         """Set initial trust for a new peer."""
-        # Only set initial trust if peer hasn't been initialized yet (not in cache)
-        if peer.id not in self._peer_trust_cache:
-            if peer.trust_score == 0:
-                peer.trust_score = self.INITIAL_TRUST
+        # SECURITY FIX (Audit 2): Use per-peer lock to prevent race conditions
+        peer_lock = await self._get_peer_lock(peer.id)
+        async with peer_lock:
+            # Only set initial trust if peer hasn't been initialized yet (not in cache)
+            if peer.id not in self._peer_trust_cache:
+                if peer.trust_score == 0:
+                    peer.trust_score = self.INITIAL_TRUST
 
-        self._peer_trust_cache[peer.id] = peer.trust_score
-        self._record_event(
-            peer.id,
-            "initialized",
-            0,
-            f"Peer registered with initial trust {peer.trust_score:.2f}"
-        )
-        logger.info(f"Initialized trust for {peer.name}: {peer.trust_score:.2f}")
+            self._peer_trust_cache[peer.id] = peer.trust_score
+            self._record_event(
+                peer.id,
+                "initialized",
+                0,
+                f"Peer registered with initial trust {peer.trust_score:.2f}"
+            )
+            logger.info(f"Initialized trust for {peer.name}: {peer.trust_score:.2f}")
 
     async def record_successful_sync(self, peer: FederatedPeer) -> float:
         """Record a successful sync and increase trust."""
-        old_trust = peer.trust_score
-        new_trust = min(1.0, old_trust + self.SYNC_SUCCESS_BONUS)
+        # SECURITY FIX (Audit 2): Use per-peer lock to prevent race conditions
+        peer_lock = await self._get_peer_lock(peer.id)
+        async with peer_lock:
+            old_trust = peer.trust_score
+            new_trust = min(1.0, old_trust + self.SYNC_SUCCESS_BONUS)
 
-        peer.trust_score = new_trust
-        self._peer_trust_cache[peer.id] = new_trust
+            peer.trust_score = new_trust
+            self._peer_trust_cache[peer.id] = new_trust
 
-        self._record_event(
-            peer.id,
-            "sync_success",
-            self.SYNC_SUCCESS_BONUS,
-            f"Successful sync increased trust from {old_trust:.2f} to {new_trust:.2f}"
-        )
+            self._record_event(
+                peer.id,
+                "sync_success",
+                self.SYNC_SUCCESS_BONUS,
+                f"Successful sync increased trust from {old_trust:.2f} to {new_trust:.2f}"
+            )
 
-        logger.debug(f"Trust increased for {peer.name}: {old_trust:.2f} -> {new_trust:.2f}")
-        return new_trust
+            logger.debug(f"Trust increased for {peer.name}: {old_trust:.2f} -> {new_trust:.2f}")
+            return new_trust
 
     async def record_failed_sync(self, peer: FederatedPeer) -> float:
         """Record a failed sync and decrease trust."""
-        old_trust = peer.trust_score
-        new_trust = max(0.0, old_trust - self.SYNC_FAILURE_PENALTY)
+        # SECURITY FIX (Audit 2): Use per-peer lock to prevent race conditions
+        peer_lock = await self._get_peer_lock(peer.id)
+        async with peer_lock:
+            old_trust = peer.trust_score
+            new_trust = max(0.0, old_trust - self.SYNC_FAILURE_PENALTY)
 
-        peer.trust_score = new_trust
-        self._peer_trust_cache[peer.id] = new_trust
+            peer.trust_score = new_trust
+            self._peer_trust_cache[peer.id] = new_trust
 
-        self._record_event(
-            peer.id,
-            "sync_failure",
-            -self.SYNC_FAILURE_PENALTY,
-            f"Failed sync decreased trust from {old_trust:.2f} to {new_trust:.2f}"
-        )
+            self._record_event(
+                peer.id,
+                "sync_failure",
+                -self.SYNC_FAILURE_PENALTY,
+                f"Failed sync decreased trust from {old_trust:.2f} to {new_trust:.2f}"
+            )
 
-        logger.warning(f"Trust decreased for {peer.name}: {old_trust:.2f} -> {new_trust:.2f}")
+            logger.warning(f"Trust decreased for {peer.name}: {old_trust:.2f} -> {new_trust:.2f}")
 
-        # Check if we need to change status
-        if new_trust < self.QUARANTINE_THRESHOLD:
-            peer.status = PeerStatus.SUSPENDED
-            logger.warning(f"Peer {peer.name} suspended due to low trust")
+            # Check if we need to change status
+            if new_trust < self.QUARANTINE_THRESHOLD:
+                peer.status = PeerStatus.SUSPENDED
+                logger.warning(f"Peer {peer.name} suspended due to low trust")
 
-        return new_trust
+            return new_trust
 
     async def record_conflict(
         self,
@@ -141,22 +165,25 @@ class PeerTrustManager:
         resolved: bool,
     ) -> float:
         """Record a sync conflict."""
-        penalty = self.CONFLICT_PENALTY if not resolved else 0
+        # SECURITY FIX (Audit 2): Use per-peer lock to prevent race conditions
+        peer_lock = await self._get_peer_lock(peer.id)
+        async with peer_lock:
+            penalty = self.CONFLICT_PENALTY if not resolved else 0
 
-        old_trust = peer.trust_score
-        new_trust = max(0.0, old_trust - penalty)
+            old_trust = peer.trust_score
+            new_trust = max(0.0, old_trust - penalty)
 
-        peer.trust_score = new_trust
-        self._peer_trust_cache[peer.id] = new_trust
+            peer.trust_score = new_trust
+            self._peer_trust_cache[peer.id] = new_trust
 
-        self._record_event(
-            peer.id,
-            "conflict",
-            -penalty,
-            f"Conflict ({conflict_type}), resolved={resolved}"
-        )
+            self._record_event(
+                peer.id,
+                "conflict",
+                -penalty,
+                f"Conflict ({conflict_type}), resolved={resolved}"
+            )
 
-        return new_trust
+            return new_trust
 
     async def manual_adjustment(
         self,
@@ -166,28 +193,31 @@ class PeerTrustManager:
         adjusted_by: str,
     ) -> float:
         """Manual trust adjustment by governance."""
-        old_trust = peer.trust_score
-        new_trust = max(0.0, min(1.0, old_trust + delta))
+        # SECURITY FIX (Audit 2): Use per-peer lock to prevent race conditions
+        peer_lock = await self._get_peer_lock(peer.id)
+        async with peer_lock:
+            old_trust = peer.trust_score
+            new_trust = max(0.0, min(1.0, old_trust + delta))
 
-        peer.trust_score = new_trust
-        self._peer_trust_cache[peer.id] = new_trust
+            peer.trust_score = new_trust
+            self._peer_trust_cache[peer.id] = new_trust
 
-        self._record_event(
-            peer.id,
-            "manual_adjustment",
-            delta,
-            f"Manual adjustment by {adjusted_by}: {reason}"
-        )
+            self._record_event(
+                peer.id,
+                "manual_adjustment",
+                delta,
+                f"Manual adjustment by {adjusted_by}: {reason}"
+            )
 
-        logger.info(
-            f"Manual trust adjustment for {peer.name} by {adjusted_by}: "
-            f"{old_trust:.2f} -> {new_trust:.2f} ({reason})"
-        )
+            logger.info(
+                f"Manual trust adjustment for {peer.name} by {adjusted_by}: "
+                f"{old_trust:.2f} -> {new_trust:.2f} ({reason})"
+            )
 
-        # Update status based on new trust
-        await self._update_peer_status(peer)
+            # Update status based on new trust
+            await self._update_peer_status(peer)
 
-        return new_trust
+            return new_trust
 
     async def apply_inactivity_decay(self, peer: FederatedPeer) -> float:
         """Apply trust decay for inactive peers."""
@@ -202,25 +232,28 @@ class PeerTrustManager:
         if inactive_weeks < 1:
             return peer.trust_score
 
-        # Apply decay
-        decay = self.INACTIVITY_DECAY_RATE * inactive_weeks
-        old_trust = peer.trust_score
-        new_trust = max(self.INITIAL_TRUST, old_trust - decay)  # Don't decay below initial
+        # SECURITY FIX (Audit 2): Use per-peer lock to prevent race conditions
+        peer_lock = await self._get_peer_lock(peer.id)
+        async with peer_lock:
+            # Apply decay
+            decay = self.INACTIVITY_DECAY_RATE * inactive_weeks
+            old_trust = peer.trust_score
+            new_trust = max(self.INITIAL_TRUST, old_trust - decay)  # Don't decay below initial
 
-        if new_trust != old_trust:
-            peer.trust_score = new_trust
-            self._peer_trust_cache[peer.id] = new_trust
+            if new_trust != old_trust:
+                peer.trust_score = new_trust
+                self._peer_trust_cache[peer.id] = new_trust
 
-            self._record_event(
-                peer.id,
-                "inactivity_decay",
-                -decay,
-                f"Inactive for {inactive_weeks:.1f} weeks"
-            )
+                self._record_event(
+                    peer.id,
+                    "inactivity_decay",
+                    -decay,
+                    f"Inactive for {inactive_weeks:.1f} weeks"
+                )
 
-            logger.info(f"Trust decay for {peer.name}: {old_trust:.2f} -> {new_trust:.2f}")
+                logger.info(f"Trust decay for {peer.name}: {old_trust:.2f} -> {new_trust:.2f}")
 
-        return new_trust
+            return new_trust
 
     async def get_trust_tier(self, peer: FederatedPeer) -> str:
         """Get the trust tier for a peer."""

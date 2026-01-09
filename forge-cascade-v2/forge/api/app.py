@@ -408,10 +408,12 @@ def create_app(
         RequestSizeLimitMiddleware,
         IdempotencyMiddleware,
         CSRFProtectionMiddleware,
+        RequestTimeoutMiddleware,
     )
 
     # Order matters: outer middleware runs first
     app.add_middleware(SecurityHeadersMiddleware, enable_hsts=(settings.app_env == "production"))
+    app.add_middleware(RequestTimeoutMiddleware, default_timeout=30.0, extended_timeout=120.0)  # Request timeout (Audit 2)
     app.add_middleware(CorrelationIdMiddleware)
     app.add_middleware(RequestLoggingMiddleware)
 
@@ -449,11 +451,24 @@ def create_app(
     
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(request: Request, exc: RequestValidationError):
+        # SECURITY FIX (Audit 2): Sanitize validation errors to not leak schema details
+        # Only return field location and generic error type, not attempted values
+        sanitized_errors = []
+        for error in exc.errors():
+            sanitized_error = {
+                "loc": error.get("loc", []),
+                "type": error.get("type", "unknown"),
+                "msg": error.get("msg", "Validation failed"),
+            }
+            # Omit 'input' field (contains user-submitted values)
+            # Omit 'ctx' field (may contain internal details)
+            sanitized_errors.append(sanitized_error)
+
         return JSONResponse(
             status_code=422,
             content={
                 "error": "Validation error",
-                "details": exc.errors(),
+                "details": sanitized_errors,
                 "path": str(request.url.path),
             },
         )

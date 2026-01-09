@@ -147,14 +147,16 @@ class RegisterRequest(BaseModel):
     """User registration request."""
     username: str = Field(..., min_length=3, max_length=50, pattern=r"^[a-zA-Z0-9_-]+$")
     email: EmailStr
-    password: str = Field(..., min_length=8)
-    display_name: str | None = None
+    # SECURITY FIX (Audit 2): Add max_length to prevent DoS via large payloads
+    password: str = Field(..., min_length=8, max_length=128)
+    display_name: str | None = Field(default=None, max_length=100)
 
 
 class LoginRequest(BaseModel):
     """User login request."""
-    username: str
-    password: str
+    # SECURITY FIX (Audit 2): Add length limits to prevent DoS
+    username: str = Field(..., min_length=1, max_length=255)
+    password: str = Field(..., min_length=1, max_length=128)
 
 
 class TokenResponse(BaseModel):
@@ -167,13 +169,15 @@ class TokenResponse(BaseModel):
 
 class RefreshRequest(BaseModel):
     """Token refresh request."""
-    refresh_token: str
+    # SECURITY FIX (Audit 2): Add max_length to prevent DoS
+    refresh_token: str = Field(..., max_length=1024)
 
 
 class ChangePasswordRequest(BaseModel):
     """Password change request."""
-    current_password: str
-    new_password: str = Field(..., min_length=8)
+    # SECURITY FIX (Audit 2): Add length limits to both password fields
+    current_password: str = Field(..., min_length=1, max_length=128)
+    new_password: str = Field(..., min_length=8, max_length=128)
 
 
 # Reserved metadata keys that could cause security issues (prototype pollution, etc.)
@@ -506,9 +510,9 @@ async def logout(
         try:
             claims = get_token_claims(token_to_blacklist)
             if claims.get("jti"):
-                # Blacklist with expiry matching token expiry
+                # Blacklist with expiry matching token expiry (async for Redis support)
                 expires_at = claims.get("exp")
-                TokenBlacklist.add(claims["jti"], expires_at)
+                await TokenBlacklist.add_async(claims["jti"], expires_at)
         except Exception:
             pass  # Token parsing failed, but still clear cookies
 
@@ -599,6 +603,13 @@ async def change_password(
     """
     # Verify current password
     if not verify_password(request.current_password, user.password_hash):
+        # SECURITY FIX (Audit 2): Log failed password change attempts for security monitoring
+        await audit_repo.log_user_action(
+            actor_id=user.id,
+            target_user_id=user.id,
+            action="password_change_failed",
+            details={"reason": "incorrect_current_password"},
+        )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Current password is incorrect",
