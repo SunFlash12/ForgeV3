@@ -15,7 +15,7 @@ Responsibilities:
 
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Any, Optional, Callable
+from typing import Any, Optional, Union
 from enum import Enum
 import math
 import structlog
@@ -70,22 +70,146 @@ class VotingStatus(str, Enum):
     EXPIRED = "expired"
 
 
+class ConditionOperator(str, Enum):
+    """
+    Safe condition operators for policy rules.
+
+    SECURITY: Only these operators are allowed - no arbitrary code execution.
+    """
+    # Comparison operators
+    EQ = "eq"           # ==
+    NE = "ne"           # !=
+    GT = "gt"           # >
+    GE = "ge"           # >=
+    LT = "lt"           # <
+    LE = "le"           # <=
+
+    # Existence operators
+    EXISTS = "exists"           # Field is truthy
+    NOT_EXISTS = "not_exists"   # Field is falsy
+
+    # Logical operators (for combining conditions)
+    AND = "and"
+    OR = "or"
+
+
+@dataclass
+class SafeCondition:
+    """
+    A safe, declarative condition for policy rules.
+
+    SECURITY: This replaces arbitrary Callable to prevent code injection.
+    Conditions are evaluated using only whitelisted operations.
+
+    Examples:
+        # Check if proposer_trust >= 50
+        SafeCondition("proposer_trust", ConditionOperator.GE, 50)
+
+        # Check if title exists
+        SafeCondition("title", ConditionOperator.EXISTS)
+
+        # Combine conditions with AND
+        SafeCondition.and_conditions([cond1, cond2])
+    """
+    field: str
+    operator: ConditionOperator
+    value: Optional[Any] = None
+    sub_conditions: Optional[list["SafeCondition"]] = None
+
+    def evaluate(self, context: dict) -> bool:
+        """
+        Safely evaluate this condition against the context.
+
+        SECURITY: Only allows whitelisted operations on context data.
+        """
+        # Handle logical operators
+        if self.operator == ConditionOperator.AND:
+            if not self.sub_conditions:
+                return True
+            return all(c.evaluate(context) for c in self.sub_conditions)
+
+        if self.operator == ConditionOperator.OR:
+            if not self.sub_conditions:
+                return False
+            return any(c.evaluate(context) for c in self.sub_conditions)
+
+        # Get field value safely - only allow string keys
+        if not isinstance(self.field, str):
+            return False
+
+        # SECURITY: Prevent path traversal in field names
+        if ".." in self.field or "/" in self.field or "\\" in self.field:
+            return False
+
+        field_value = context.get(self.field)
+
+        # Existence operators
+        if self.operator == ConditionOperator.EXISTS:
+            return bool(field_value)
+
+        if self.operator == ConditionOperator.NOT_EXISTS:
+            return not bool(field_value)
+
+        # Comparison operators - handle None safely
+        if field_value is None:
+            return False
+
+        try:
+            if self.operator == ConditionOperator.EQ:
+                return field_value == self.value
+            elif self.operator == ConditionOperator.NE:
+                return field_value != self.value
+            elif self.operator == ConditionOperator.GT:
+                return field_value > self.value
+            elif self.operator == ConditionOperator.GE:
+                return field_value >= self.value
+            elif self.operator == ConditionOperator.LT:
+                return field_value < self.value
+            elif self.operator == ConditionOperator.LE:
+                return field_value <= self.value
+        except (TypeError, ValueError):
+            # Incompatible types for comparison
+            return False
+
+        return False
+
+    @classmethod
+    def and_conditions(cls, conditions: list["SafeCondition"]) -> "SafeCondition":
+        """Create an AND condition combining multiple conditions."""
+        return cls(field="", operator=ConditionOperator.AND, sub_conditions=conditions)
+
+    @classmethod
+    def or_conditions(cls, conditions: list["SafeCondition"]) -> "SafeCondition":
+        """Create an OR condition combining multiple conditions."""
+        return cls(field="", operator=ConditionOperator.OR, sub_conditions=conditions)
+
+
 @dataclass
 class PolicyRule:
-    """A governance policy rule."""
+    """
+    A governance policy rule with safe condition evaluation.
+
+    SECURITY: Uses SafeCondition instead of arbitrary Callable to prevent
+    remote code execution through policy injection.
+    """
     name: str
     description: str
-    condition: Callable[[dict], bool]  # Returns True if rule passes
+    condition: SafeCondition  # Safe declarative condition
     required_trust: int = TrustLevel.STANDARD.value
     applies_to: list[ProposalType] = field(default_factory=list)
-    
+
     def evaluate(self, context: dict) -> tuple[bool, Optional[str]]:
-        """Evaluate rule against context."""
+        """Evaluate rule against context using safe condition evaluation."""
         try:
-            if self.condition(context):
+            if self.condition.evaluate(context):
                 return True, None
             return False, f"Policy rule '{self.name}' failed"
         except Exception as e:
+            logger.warning(
+                "policy_rule_evaluation_error",
+                rule=self.name,
+                error=str(e)
+            )
             return False, f"Policy rule '{self.name}' error: {str(e)}"
 
 
@@ -241,30 +365,41 @@ class GovernanceOverlay(BaseOverlay):
         self._logger = logger.bind(overlay=self.NAME)
     
     def _add_default_policies(self) -> None:
-        """Add default governance policies."""
-        # Trust threshold policy
+        """Add default governance policies using safe conditions."""
+        # Trust threshold policy: proposer_trust >= STANDARD
         self._policies.append(PolicyRule(
             name="trust_threshold",
             description="Proposer must have sufficient trust",
-            condition=lambda ctx: ctx.get("proposer_trust", 0) >= TrustLevel.STANDARD.value,
+            condition=SafeCondition(
+                field="proposer_trust",
+                operator=ConditionOperator.GE,
+                value=TrustLevel.STANDARD.value
+            ),
             required_trust=0,
             applies_to=[ProposalType.POLICY, ProposalType.SYSTEM]
         ))
-        
-        # Content policy
+
+        # Content policy: title AND description must exist
         self._policies.append(PolicyRule(
             name="proposal_content",
             description="Proposal must have title and description",
-            condition=lambda ctx: bool(ctx.get("title")) and bool(ctx.get("description")),
+            condition=SafeCondition.and_conditions([
+                SafeCondition("title", ConditionOperator.EXISTS),
+                SafeCondition("description", ConditionOperator.EXISTS),
+            ]),
             required_trust=0,
             applies_to=[]  # All types
         ))
-        
-        # Resource limits policy
+
+        # Resource limits policy: estimated_resources <= 1000
         self._policies.append(PolicyRule(
             name="resource_limits",
             description="Proposal must not exceed resource limits",
-            condition=lambda ctx: ctx.get("estimated_resources", 0) <= 1000,
+            condition=SafeCondition(
+                field="estimated_resources",
+                operator=ConditionOperator.LE,
+                value=1000
+            ),
             required_trust=TrustLevel.TRUSTED.value,
             applies_to=[ProposalType.SYSTEM]
         ))
@@ -793,8 +928,70 @@ class GovernanceOverlay(BaseOverlay):
         }
     
     def add_policy(self, policy: PolicyRule) -> None:
-        """Add a governance policy."""
+        """
+        Add a governance policy.
+
+        SECURITY: Validates that the policy uses SafeCondition, not arbitrary callables.
+        """
+        # SECURITY: Ensure condition is a SafeCondition, not an arbitrary callable
+        if not isinstance(policy.condition, SafeCondition):
+            raise PolicyViolationError(
+                f"Policy '{policy.name}' must use SafeCondition, not arbitrary callables. "
+                "This is a security requirement to prevent code injection."
+            )
+
+        # Validate SafeCondition structure
+        self._validate_safe_condition(policy.condition)
+
         self._policies.append(policy)
+        self._logger.info(
+            "policy_added",
+            policy_name=policy.name,
+            description=policy.description
+        )
+
+    def _validate_safe_condition(self, condition: SafeCondition, depth: int = 0) -> None:
+        """
+        Recursively validate a SafeCondition structure.
+
+        SECURITY: Prevents malformed conditions and limits recursion depth.
+        """
+        # Limit recursion depth to prevent stack overflow attacks
+        MAX_DEPTH = 10
+        if depth > MAX_DEPTH:
+            raise PolicyViolationError(
+                f"SafeCondition nesting depth exceeds maximum of {MAX_DEPTH}"
+            )
+
+        # Validate operator is from our enum (not an arbitrary value)
+        if not isinstance(condition.operator, ConditionOperator):
+            raise PolicyViolationError(
+                f"Invalid condition operator: {condition.operator}"
+            )
+
+        # For logical operators, validate sub-conditions
+        if condition.operator in (ConditionOperator.AND, ConditionOperator.OR):
+            if condition.sub_conditions:
+                for sub in condition.sub_conditions:
+                    if not isinstance(sub, SafeCondition):
+                        raise PolicyViolationError(
+                            "Sub-conditions must be SafeCondition instances"
+                        )
+                    self._validate_safe_condition(sub, depth + 1)
+        else:
+            # For comparison operators, validate field name
+            if not isinstance(condition.field, str) or not condition.field:
+                raise PolicyViolationError(
+                    "Condition field must be a non-empty string"
+                )
+
+            # SECURITY: Block potentially dangerous field patterns
+            dangerous_patterns = ["..", "__", "\\", "/", "\x00"]
+            for pattern in dangerous_patterns:
+                if pattern in condition.field:
+                    raise PolicyViolationError(
+                        f"Condition field contains forbidden pattern: {pattern}"
+                    )
     
     def remove_policy(self, policy_name: str) -> bool:
         """Remove a policy by name."""

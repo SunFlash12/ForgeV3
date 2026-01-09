@@ -3,6 +3,9 @@ Knowledge Query Compiler
 
 Translates natural language questions into Cypher queries
 against the Forge knowledge graph.
+
+SECURITY: All generated Cypher is validated before execution
+to prevent injection attacks.
 """
 
 from __future__ import annotations
@@ -15,6 +18,195 @@ from typing import Any
 import structlog
 
 from forge.database.client import Neo4jClient
+
+
+# =============================================================================
+# CYPHER SECURITY VALIDATION
+# =============================================================================
+
+class CypherSecurityError(Exception):
+    """Raised when Cypher query fails security validation."""
+    pass
+
+
+class CypherValidator:
+    """
+    Validates Cypher queries to prevent injection attacks.
+
+    SECURITY: All Cypher queries should be validated before execution.
+    This prevents:
+    - Data destruction (DELETE, REMOVE, DROP)
+    - Schema modification (CREATE INDEX, CREATE CONSTRAINT)
+    - Arbitrary writes (CREATE, MERGE, SET without allowlist)
+    - APOC procedure abuse
+    - Shell command execution
+    """
+
+    # Dangerous keywords that are NEVER allowed
+    FORBIDDEN_KEYWORDS = frozenset({
+        # Destructive operations
+        "DELETE", "DETACH DELETE", "REMOVE", "DROP",
+        # Schema modifications
+        "CREATE INDEX", "DROP INDEX", "CREATE CONSTRAINT", "DROP CONSTRAINT",
+        # Dangerous procedures
+        "CALL apoc", "CALL db.", "CALL dbms.",
+        # Shell/file operations
+        "apoc.load.json", "apoc.import", "apoc.export",
+        "apoc.do.when", "apoc.cypher.run", "apoc.cypher.doIt",
+    })
+
+    # Patterns that indicate injection attempts
+    INJECTION_PATTERNS = [
+        # Comment injection to bypass validation
+        r'//.*DELETE',
+        r'/\*.*DELETE.*\*/',
+        r'//.*REMOVE',
+        r'/\*.*REMOVE.*\*/',
+        # String escape attempts
+        r"\\x[0-9a-fA-F]{2}",  # Hex escapes
+        r"\\u[0-9a-fA-F]{4}",  # Unicode escapes
+        # Multiple statement injection
+        r';\s*(CREATE|DELETE|DROP|REMOVE|MERGE|SET)\b',
+        # Property injection via string concatenation
+        r'\+\s*[\'"].*[\'"]',
+    ]
+
+    # Whitelisted write operations (only for specific internal use)
+    ALLOWED_WRITE_LABELS = frozenset({"Capsule", "User", "Vote", "Proposal"})
+
+    @classmethod
+    def validate(
+        cls,
+        cypher: str,
+        allow_writes: bool = False,
+        allowed_labels: frozenset[str] | None = None
+    ) -> None:
+        """
+        Validate a Cypher query for security issues.
+
+        Args:
+            cypher: The Cypher query to validate
+            allow_writes: Whether to allow write operations
+            allowed_labels: Labels that can be modified (if writes allowed)
+
+        Raises:
+            CypherSecurityError: If the query fails validation
+        """
+        if not cypher or not cypher.strip():
+            raise CypherSecurityError("Empty query")
+
+        # Normalize for checking
+        normalized = cypher.upper()
+
+        # Check for forbidden keywords
+        for keyword in cls.FORBIDDEN_KEYWORDS:
+            if keyword.upper() in normalized:
+                raise CypherSecurityError(
+                    f"Forbidden Cypher keyword detected: {keyword}"
+                )
+
+        # Check for injection patterns
+        for pattern in cls.INJECTION_PATTERNS:
+            if re.search(pattern, cypher, re.IGNORECASE | re.DOTALL):
+                raise CypherSecurityError(
+                    f"Potential Cypher injection detected"
+                )
+
+        # Check for write operations
+        write_keywords = {"CREATE", "MERGE", "SET"}
+        has_writes = any(kw in normalized for kw in write_keywords)
+
+        if has_writes and not allow_writes:
+            raise CypherSecurityError(
+                "Write operations not allowed in this context. "
+                "Use parameterized queries through the appropriate service."
+            )
+
+        # If writes are allowed, validate labels
+        if has_writes and allowed_labels:
+            cls._validate_write_labels(cypher, allowed_labels)
+
+        # Check for multiple statements (;)
+        if ';' in cypher:
+            # Allow semicolon in strings but not as statement separator
+            # Simple check: no semicolon outside of quotes
+            in_string = False
+            string_char = None
+            for i, char in enumerate(cypher):
+                if char in ('"', "'") and (i == 0 or cypher[i-1] != '\\'):
+                    if not in_string:
+                        in_string = True
+                        string_char = char
+                    elif char == string_char:
+                        in_string = False
+                elif char == ';' and not in_string:
+                    raise CypherSecurityError(
+                        "Multiple statements not allowed"
+                    )
+
+        # Check for unbalanced quotes (potential injection)
+        if cypher.count("'") % 2 != 0 or cypher.count('"') % 2 != 0:
+            raise CypherSecurityError(
+                "Unbalanced quotes detected - potential injection"
+            )
+
+    @classmethod
+    def _validate_write_labels(
+        cls,
+        cypher: str,
+        allowed_labels: frozenset[str]
+    ) -> None:
+        """Validate that writes only target allowed labels."""
+        # Extract labels from CREATE/MERGE patterns
+        label_pattern = r'(?:CREATE|MERGE)\s*\(\s*\w*\s*:\s*(\w+)'
+        matches = re.findall(label_pattern, cypher, re.IGNORECASE)
+
+        for label in matches:
+            if label not in allowed_labels:
+                raise CypherSecurityError(
+                    f"Write to label '{label}' not allowed"
+                )
+
+    @classmethod
+    def validate_parameters(cls, params: dict[str, Any]) -> None:
+        """
+        Validate query parameters for potential injection.
+
+        Args:
+            params: Parameters to validate
+
+        Raises:
+            CypherSecurityError: If parameters contain injection attempts
+        """
+        for key, value in params.items():
+            # Check key is a valid identifier
+            if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', key):
+                raise CypherSecurityError(
+                    f"Invalid parameter name: {key}"
+                )
+
+            # Check string values for injection
+            if isinstance(value, str):
+                # Look for Cypher injection in strings
+                dangerous_patterns = [
+                    r'\}\s*\)\s*(DELETE|REMOVE|DROP)',  # Closing pattern + destructive
+                    r'CALL\s+\w+\.',  # Procedure calls
+                    r'//.*$',  # Line comments that could hide code
+                ]
+                for pattern in dangerous_patterns:
+                    if re.search(pattern, value, re.IGNORECASE):
+                        raise CypherSecurityError(
+                            f"Suspicious content in parameter '{key}'"
+                        )
+
+    @classmethod
+    def is_read_only(cls, cypher: str) -> bool:
+        """Check if a query is read-only."""
+        normalized = cypher.upper()
+        write_keywords = {"CREATE", "MERGE", "SET", "DELETE", "REMOVE", "DROP"}
+        return not any(kw in normalized for kw in write_keywords)
+
+
 from forge.models.query import (
     Aggregation,
     AggregationType,
@@ -553,6 +745,28 @@ class KnowledgeQueryService:
             question=question[:50],
             complexity=compiled.estimated_complexity.value,
         )
+
+        # SECURITY: Validate compiled query before execution
+        try:
+            CypherValidator.validate(compiled.cypher, allow_writes=False)
+            CypherValidator.validate_parameters(compiled.parameters)
+        except CypherSecurityError as e:
+            self.logger.error(
+                "Query failed security validation",
+                question=question[:50],
+                error=str(e)
+            )
+            return QueryResult(
+                id="",
+                query=compiled,
+                original_question=question,
+                rows=[],
+                total_count=0,
+                truncated=False,
+                answer=f"Query rejected: {str(e)}",
+                confidence=0.0,
+                execution_time_ms=0.0,
+            )
 
         # Execute query
         exec_start = datetime.utcnow()

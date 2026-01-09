@@ -7,14 +7,26 @@ Tests that resilience features are properly integrated into all API routes:
 - Content validation
 
 Verifies the resilience module is working across all route files.
+
+SECURITY: Requires SEED_ADMIN_PASSWORD environment variable to be set.
+Never commit hardcoded credentials to version control.
 """
 
+import os
+import sys
 import requests
 import time
 from datetime import datetime
 
 BASE_URL = "http://localhost:8001/api/v1"
-ADMIN_PASSWORD = "dyxIiN95JaM8hu3Fdl!mog*G"
+
+# SECURITY: Load password from environment variable only
+ADMIN_PASSWORD = os.environ.get("SEED_ADMIN_PASSWORD")
+if not ADMIN_PASSWORD:
+    print("ERROR: SEED_ADMIN_PASSWORD environment variable is required")
+    print("Set it before running tests:")
+    print("  export SEED_ADMIN_PASSWORD=your_admin_password")
+    sys.exit(1)
 
 test_results = []
 

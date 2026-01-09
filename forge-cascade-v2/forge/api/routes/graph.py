@@ -206,6 +206,230 @@ class ContradictionResponse(BaseModel):
 
 
 # =============================================================================
+# Graph Explorer Endpoints
+# =============================================================================
+
+
+class GraphExplorerResponse(BaseModel):
+    """Response for graph exploration."""
+    nodes: list[dict[str, Any]]
+    edges: list[dict[str, Any]]
+    communities: list[dict[str, Any]]
+    metrics: dict[str, Any]
+
+
+@router.get("/explore", response_model=GraphExplorerResponse)
+async def explore_graph(
+    user: ActiveUserDep,
+    graph_repo: GraphRepoDep,
+    type: str | None = Query(default=None, description="Filter by capsule type"),
+    community: int | None = Query(default=None, description="Filter by community ID"),
+    min_trust: int = Query(default=0, ge=0, le=100, description="Minimum trust level"),
+    limit: int = Query(default=200, ge=10, le=1000, description="Max nodes to return"),
+) -> GraphExplorerResponse:
+    """
+    Get graph data for interactive visualization.
+
+    Returns nodes with their PageRank scores, community assignments,
+    and edges with relationship types.
+    """
+    # Build filter query
+    filters = []
+    params: dict[str, Any] = {"limit": limit}
+
+    if type:
+        filters.append("c.type = $type")
+        params["type"] = type
+    if community is not None:
+        filters.append("c.community_id = $community")
+        params["community"] = community
+    if min_trust > 0:
+        filters.append("c.trust_level >= $min_trust")
+        params["min_trust"] = min_trust
+
+    where_clause = f"WHERE {' AND '.join(filters)}" if filters else ""
+
+    # Get nodes with metrics
+    node_query = f"""
+    MATCH (c:Capsule)
+    {where_clause}
+    OPTIONAL MATCH (c)-[r]-()
+    WITH c, count(r) as connection_count
+    RETURN c.id AS id,
+           c.title AS label,
+           c.type AS type,
+           COALESCE(c.trust_level, 50) AS trust_level,
+           COALESCE(c.pagerank_score, 0.0) AS pagerank_score,
+           COALESCE(c.community_id, 0) AS community_id,
+           c.created_at AS created_at,
+           LEFT(c.content, 200) AS content_preview,
+           connection_count
+    ORDER BY c.pagerank_score DESC
+    LIMIT $limit
+    """
+
+    nodes = await graph_repo.client.execute(node_query, params)
+
+    # Get node IDs for edge query
+    node_ids = [n["id"] for n in nodes]
+
+    # Get edges between these nodes
+    edge_query = """
+    MATCH (a:Capsule)-[r]->(b:Capsule)
+    WHERE a.id IN $node_ids AND b.id IN $node_ids
+    RETURN id(r) AS id,
+           a.id AS source,
+           b.id AS target,
+           type(r) AS relationship_type,
+           COALESCE(r.weight, 1.0) AS weight
+    """
+
+    edges = await graph_repo.client.execute(edge_query, {"node_ids": node_ids})
+
+    # Get communities
+    community_query = """
+    MATCH (c:Capsule)
+    WHERE c.id IN $node_ids
+    WITH c.community_id AS cid, collect(c) AS members
+    RETURN cid AS id,
+           size(members) AS size,
+           [m IN members | m.type][0] AS dominant_type,
+           1.0 AS density
+    ORDER BY size DESC
+    """
+
+    communities = await graph_repo.client.execute(community_query, {"node_ids": node_ids})
+
+    # Get metrics
+    metrics = await graph_repo.get_graph_metrics()
+
+    return GraphExplorerResponse(
+        nodes=[dict(n) for n in nodes],
+        edges=[dict(e) for e in edges],
+        communities=[dict(c) for c in communities if c["id"] is not None],
+        metrics={
+            "total_nodes": metrics.total_nodes,
+            "total_edges": metrics.total_edges,
+            "density": metrics.density,
+            "connected_components": metrics.connected_components,
+        }
+    )
+
+
+@router.get("/node/{node_id}/neighbors")
+async def get_node_neighbors(
+    node_id: str,
+    user: ActiveUserDep,
+    graph_repo: GraphRepoDep,
+    limit: int = Query(default=20, ge=1, le=100),
+) -> dict[str, Any]:
+    """
+    Get detailed information about a node and its neighbors.
+    """
+    # Get node details
+    node_query = """
+    MATCH (c:Capsule {id: $node_id})
+    RETURN c.id AS id,
+           c.title AS title,
+           c.type AS type,
+           c.content AS content,
+           COALESCE(c.trust_level, 50) AS trust_level,
+           COALESCE(c.pagerank_score, 0.0) AS pagerank_score,
+           COALESCE(c.community_id, 0) AS community_id,
+           c.created_at AS created_at
+    """
+
+    node = await graph_repo.client.execute_single(node_query, {"node_id": node_id})
+    if not node:
+        raise HTTPException(status_code=404, detail="Node not found")
+
+    # Get neighbors
+    neighbor_query = """
+    MATCH (c:Capsule {id: $node_id})-[r]-(n:Capsule)
+    RETURN n.id AS id,
+           n.title AS label,
+           n.type AS type,
+           COALESCE(n.trust_level, 50) AS trust_level,
+           COALESCE(n.pagerank_score, 0.0) AS pagerank_score,
+           COALESCE(n.community_id, 0) AS community_id,
+           type(r) AS relationship,
+           CASE WHEN startNode(r) = c THEN 'out' ELSE 'in' END AS direction
+    LIMIT $limit
+    """
+
+    neighbors = await graph_repo.client.execute(
+        neighbor_query, {"node_id": node_id, "limit": limit}
+    )
+
+    return {
+        "id": node["id"],
+        "title": node["title"],
+        "type": node["type"],
+        "content": node["content"],
+        "trust_level": node["trust_level"],
+        "pagerank_score": node["pagerank_score"],
+        "community_id": node["community_id"],
+        "neighbors": [
+            {
+                "node": {
+                    "id": n["id"],
+                    "label": n["label"],
+                    "type": n["type"],
+                    "trust_level": n["trust_level"],
+                    "pagerank_score": n["pagerank_score"],
+                    "community_id": n["community_id"],
+                },
+                "relationship": n["relationship"],
+                "direction": n["direction"],
+            }
+            for n in neighbors
+        ],
+    }
+
+
+@router.get("/paths/{source_id}/{target_id}")
+async def find_paths(
+    source_id: str,
+    target_id: str,
+    user: ActiveUserDep,
+    graph_repo: GraphRepoDep,
+    max_hops: int = Query(default=5, ge=1, le=10),
+    limit: int = Query(default=5, ge=1, le=20),
+) -> dict[str, Any]:
+    """
+    Find shortest paths between two nodes.
+    """
+    path_query = """
+    MATCH path = shortestPath(
+        (source:Capsule {id: $source_id})-[*1..$max_hops]-(target:Capsule {id: $target_id})
+    )
+    RETURN [n IN nodes(path) | {id: n.id, title: n.title, type: n.type}] AS nodes,
+           [r IN relationships(path) | {type: type(r)}] AS relationships,
+           length(path) AS path_length
+    LIMIT $limit
+    """
+
+    paths = await graph_repo.client.execute(
+        path_query,
+        {"source_id": source_id, "target_id": target_id, "max_hops": max_hops, "limit": limit}
+    )
+
+    return {
+        "source_id": source_id,
+        "target_id": target_id,
+        "paths_found": len(paths),
+        "paths": [
+            {
+                "nodes": p["nodes"],
+                "relationships": p["relationships"],
+                "length": p["path_length"],
+            }
+            for p in paths
+        ],
+    }
+
+
+# =============================================================================
 # Graph Algorithm Endpoints
 # =============================================================================
 

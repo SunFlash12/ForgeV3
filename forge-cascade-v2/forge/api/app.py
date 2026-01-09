@@ -18,9 +18,9 @@ from datetime import datetime, timezone
 from typing import Any, AsyncGenerator
 
 import structlog
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -34,6 +34,21 @@ from forge.resilience.integration import (
     ObservabilityMiddleware,
     initialize_resilience,
     shutdown_resilience,
+)
+from forge.monitoring import (
+    configure_logging,
+    add_metrics_middleware,
+    create_metrics_endpoint,
+)
+
+# Configure logging early - before any other logging occurs
+_settings = get_settings()
+configure_logging(
+    level=_settings.log_level if hasattr(_settings, 'log_level') else "INFO",
+    json_output=_settings.app_env == "production",
+    include_timestamps=True,
+    include_service_info=True,
+    sanitize_logs=True,
 )
 
 logger = structlog.get_logger(__name__)
@@ -403,6 +418,9 @@ def create_app(
     # Resilience: Observability middleware for tracing and metrics
     app.add_middleware(ObservabilityMiddleware)
 
+    # Prometheus metrics collection middleware
+    add_metrics_middleware(app)
+
     app.add_middleware(RequestSizeLimitMiddleware, max_content_length=10 * 1024 * 1024)  # 10MB limit
     app.add_middleware(CSRFProtectionMiddleware, enabled=(settings.app_env != "development"))  # CSRF protection
     app.add_middleware(IdempotencyMiddleware)  # Idempotency support
@@ -501,14 +519,38 @@ def create_app(
                 content={"status": "not_ready"},
             )
         return {"status": "ready"}
-    
+
+    # Prometheus metrics endpoint
+    # Returns metrics in Prometheus text format for scraping
+    metrics_response = create_metrics_endpoint()
+
+    @app.get("/metrics", include_in_schema=False)
+    async def metrics():
+        """
+        Prometheus metrics endpoint.
+
+        Returns all collected metrics in Prometheus text format.
+        Configure your prometheus.yml to scrape this endpoint:
+
+            scrape_configs:
+              - job_name: 'forge-cascade'
+                static_configs:
+                  - targets: ['localhost:8000']
+                metrics_path: '/metrics'
+        """
+        return Response(
+            content=metrics_response(),
+            media_type="text/plain; charset=utf-8",
+        )
+
     logger.info(
         "fastapi_app_created",
         title=title,
         version=version,
         docs_url=docs_url,
+        metrics_enabled=True,
     )
-    
+
     return app
 
 

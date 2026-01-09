@@ -7,7 +7,7 @@ for user authentication.
 Includes:
 - Token creation (access and refresh)
 - Token validation
-- Token blacklisting for revocation
+- Token blacklisting for revocation (Redis-backed for distributed deployments)
 """
 
 from datetime import datetime, timedelta
@@ -15,38 +15,163 @@ from typing import Any, Optional, Set
 from uuid import uuid4
 import threading
 import time
+import asyncio
 
 from jose import JWTError, jwt
 from pydantic import ValidationError
+import structlog
 
 from ..config import get_settings
 from ..models.user import TokenPayload, Token
 
 settings = get_settings()
+logger = structlog.get_logger(__name__)
+
+# Try to import redis for distributed blacklist
+try:
+    import redis.asyncio as aioredis
+    REDIS_AVAILABLE = True
+except ImportError:
+    aioredis = None
+    REDIS_AVAILABLE = False
 
 
 class TokenBlacklist:
     """
-    In-memory token blacklist for revocation.
+    Hybrid token blacklist with Redis support for distributed deployments.
 
-    In production, this should be backed by Redis for distributed deployments.
+    Uses Redis when available for distributed token revocation across
+    multiple API instances. Falls back to in-memory storage when Redis
+    is unavailable.
+
     Tokens are identified by their JTI (JWT ID) claim.
     """
 
+    # In-memory fallback storage
     _blacklist: Set[str] = set()
     _expiry_times: dict[str, float] = {}
     _lock = threading.Lock()
     _last_cleanup: float = 0
     _cleanup_interval: float = 300  # 5 minutes
 
+    # Redis connection
+    _redis_client: Optional[Any] = None
+    _redis_initialized: bool = False
+    _redis_prefix: str = "forge:token:blacklist:"
+
     @classmethod
-    def add(cls, jti: str, expires_at: Optional[float] = None) -> None:
+    async def initialize(cls, redis_url: Optional[str] = None) -> bool:
         """
-        Add a token to the blacklist.
+        Initialize Redis connection for distributed blacklist.
+
+        Args:
+            redis_url: Redis URL (uses settings if not provided)
+
+        Returns:
+            True if Redis connection successful, False otherwise
+        """
+        if cls._redis_initialized:
+            return cls._redis_client is not None
+
+        if not REDIS_AVAILABLE:
+            logger.warning("token_blacklist_redis_unavailable", reason="redis library not installed")
+            cls._redis_initialized = True
+            return False
+
+        url = redis_url or settings.redis_url
+        if not url:
+            logger.info("token_blacklist_memory_mode", reason="no redis URL configured")
+            cls._redis_initialized = True
+            return False
+
+        try:
+            cls._redis_client = aioredis.from_url(
+                url,
+                encoding="utf-8",
+                decode_responses=True,
+                socket_timeout=5.0,
+                socket_connect_timeout=5.0,
+            )
+            # Test connection
+            await cls._redis_client.ping()
+            cls._redis_initialized = True
+            logger.info("token_blacklist_redis_connected", redis_url=url[:20] + "...")
+            return True
+        except Exception as e:
+            logger.warning("token_blacklist_redis_failed", error=str(e))
+            cls._redis_client = None
+            cls._redis_initialized = True
+            return False
+
+    @classmethod
+    async def add_async(cls, jti: str, expires_at: Optional[float] = None) -> None:
+        """
+        Add a token to the blacklist (async version).
 
         Args:
             jti: JWT ID to blacklist
             expires_at: Unix timestamp when this entry can be removed
+        """
+        if not jti:
+            return
+
+        # Calculate TTL in seconds
+        ttl = None
+        if expires_at:
+            ttl = int(expires_at - time.time())
+            if ttl <= 0:
+                return  # Already expired, no need to blacklist
+
+        # Try Redis first
+        if cls._redis_client:
+            try:
+                key = f"{cls._redis_prefix}{jti}"
+                if ttl:
+                    await cls._redis_client.setex(key, ttl, "1")
+                else:
+                    # Default 24 hour TTL if none specified
+                    await cls._redis_client.setex(key, 86400, "1")
+                logger.debug("token_blacklisted_redis", jti=jti[:8] + "...")
+                return
+            except Exception as e:
+                logger.warning("token_blacklist_redis_error", error=str(e), operation="add")
+                # Fall through to in-memory
+
+        # In-memory fallback
+        with cls._lock:
+            cls._blacklist.add(jti)
+            if expires_at:
+                cls._expiry_times[jti] = expires_at
+            cls._maybe_cleanup()
+            logger.debug("token_blacklisted_memory", jti=jti[:8] + "...")
+
+    @classmethod
+    async def is_blacklisted_async(cls, jti: Optional[str]) -> bool:
+        """Check if a token is blacklisted (async version)."""
+        if not jti:
+            return False
+
+        # Try Redis first
+        if cls._redis_client:
+            try:
+                key = f"{cls._redis_prefix}{jti}"
+                result = await cls._redis_client.exists(key)
+                return bool(result)
+            except Exception as e:
+                logger.warning("token_blacklist_redis_error", error=str(e), operation="check")
+                # Fall through to in-memory
+
+        # In-memory fallback
+        with cls._lock:
+            cls._maybe_cleanup()
+            return jti in cls._blacklist
+
+    @classmethod
+    def add(cls, jti: str, expires_at: Optional[float] = None) -> None:
+        """
+        Add a token to the blacklist (sync version for backwards compatibility).
+
+        Note: This only adds to in-memory storage. Use add_async for Redis support.
         """
         if not jti:
             return
@@ -59,7 +184,7 @@ class TokenBlacklist:
 
     @classmethod
     def is_blacklisted(cls, jti: Optional[str]) -> bool:
-        """Check if a token is blacklisted."""
+        """Check if a token is blacklisted (sync version)."""
         if not jti:
             return False
 
@@ -75,8 +200,24 @@ class TokenBlacklist:
             cls._expiry_times.pop(jti, None)
 
     @classmethod
+    async def remove_async(cls, jti: str) -> None:
+        """Remove a token from the blacklist (async version)."""
+        # Remove from Redis if available
+        if cls._redis_client:
+            try:
+                key = f"{cls._redis_prefix}{jti}"
+                await cls._redis_client.delete(key)
+            except Exception as e:
+                logger.warning("token_blacklist_redis_error", error=str(e), operation="remove")
+
+        # Also remove from in-memory
+        with cls._lock:
+            cls._blacklist.discard(jti)
+            cls._expiry_times.pop(jti, None)
+
+    @classmethod
     def _maybe_cleanup(cls) -> None:
-        """Remove expired entries from the blacklist."""
+        """Remove expired entries from the in-memory blacklist."""
         now = time.time()
         if now - cls._last_cleanup < cls._cleanup_interval:
             return
@@ -96,6 +237,40 @@ class TokenBlacklist:
         with cls._lock:
             cls._blacklist.clear()
             cls._expiry_times.clear()
+
+    @classmethod
+    async def clear_async(cls) -> None:
+        """Clear the entire blacklist including Redis (for testing)."""
+        # Clear Redis keys with our prefix
+        if cls._redis_client:
+            try:
+                cursor = 0
+                while True:
+                    cursor, keys = await cls._redis_client.scan(
+                        cursor, match=f"{cls._redis_prefix}*", count=100
+                    )
+                    if keys:
+                        await cls._redis_client.delete(*keys)
+                    if cursor == 0:
+                        break
+            except Exception as e:
+                logger.warning("token_blacklist_redis_error", error=str(e), operation="clear")
+
+        # Clear in-memory
+        with cls._lock:
+            cls._blacklist.clear()
+            cls._expiry_times.clear()
+
+    @classmethod
+    async def close(cls) -> None:
+        """Close Redis connection."""
+        if cls._redis_client:
+            try:
+                await cls._redis_client.close()
+            except Exception:
+                pass
+            cls._redis_client = None
+        cls._redis_initialized = False
 
 
 class TokenError(Exception):
@@ -255,7 +430,10 @@ def decode_token(token: str, verify_exp: bool = True) -> TokenPayload:
 
 def verify_access_token(token: str) -> TokenPayload:
     """
-    Verify an access token.
+    Verify an access token (sync version).
+
+    NOTE: This sync version only checks in-memory blacklist.
+    For full Redis blacklist support, use verify_access_token_async().
 
     Args:
         token: JWT access token
@@ -271,12 +449,76 @@ def verify_access_token(token: str) -> TokenPayload:
     if payload.type != "access":
         raise TokenInvalidError("Not an access token")
 
-    # SECURITY FIX: Require trust_flame to be present and valid
-    # This prevents attacks where trust_flame is removed from token
+    # SECURITY FIX: Check token blacklist (sync - in-memory only)
+    # For Redis support, use verify_access_token_async()
+    if TokenBlacklist.is_blacklisted(payload.jti):
+        logger.warning(
+            "blacklisted_token_rejected",
+            jti=payload.jti[:8] + "..." if payload.jti else "none",
+            user_id=payload.sub
+        )
+        raise TokenInvalidError("Token has been revoked")
+
+    # SECURITY FIX: Require all essential claims to be present
+    # This prevents attacks where claims are removed from token
+    if not payload.sub:
+        raise TokenInvalidError("Token missing required sub claim")
+
     if payload.trust_flame is None:
         raise TokenInvalidError("Token missing required trust_flame claim")
 
-    # Clamp trust_flame to valid range
+    if payload.role is None:
+        raise TokenInvalidError("Token missing required role claim")
+
+    # Validate trust_flame is within valid range
+    if not (0 <= payload.trust_flame <= 100):
+        raise TokenInvalidError("Invalid trust_flame value in token")
+
+    return payload
+
+
+async def verify_access_token_async(token: str) -> TokenPayload:
+    """
+    Verify an access token (async version with full blacklist support).
+
+    This version checks both Redis and in-memory blacklists for
+    token revocation. Use this in async API endpoints.
+
+    Args:
+        token: JWT access token
+
+    Returns:
+        TokenPayload if valid
+
+    Raises:
+        TokenError: If token is invalid, blacklisted, or not an access token
+    """
+    payload = decode_token(token)
+
+    if payload.type != "access":
+        raise TokenInvalidError("Not an access token")
+
+    # SECURITY FIX: Check token blacklist (async - Redis + in-memory)
+    if await TokenBlacklist.is_blacklisted_async(payload.jti):
+        logger.warning(
+            "blacklisted_token_rejected",
+            jti=payload.jti[:8] + "..." if payload.jti else "none",
+            user_id=payload.sub
+        )
+        raise TokenInvalidError("Token has been revoked")
+
+    # SECURITY FIX: Require all essential claims to be present
+    # This prevents attacks where claims are removed from token
+    if not payload.sub:
+        raise TokenInvalidError("Token missing required sub claim")
+
+    if payload.trust_flame is None:
+        raise TokenInvalidError("Token missing required trust_flame claim")
+
+    if payload.role is None:
+        raise TokenInvalidError("Token missing required role claim")
+
+    # Validate trust_flame is within valid range
     if not (0 <= payload.trust_flame <= 100):
         raise TokenInvalidError("Invalid trust_flame value in token")
 
@@ -449,9 +691,14 @@ class TokenService:
     
     @staticmethod
     def verify_access_token(token: str) -> TokenPayload:
-        """Verify an access token."""
+        """Verify an access token (sync - in-memory blacklist only)."""
         return verify_access_token(token)
-    
+
+    @staticmethod
+    async def verify_access_token_async(token: str) -> TokenPayload:
+        """Verify an access token (async - full Redis blacklist support)."""
+        return await verify_access_token_async(token)
+
     @staticmethod
     def verify_refresh_token(token: str) -> TokenPayload:
         """Verify a refresh token."""
