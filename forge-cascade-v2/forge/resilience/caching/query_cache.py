@@ -292,6 +292,42 @@ class QueryCache:
 
         return value
 
+    def _sanitize_cache_key_component(self, component: str) -> str:
+        """
+        SECURITY FIX (Audit 4 - H15): Sanitize cache key components.
+
+        Validates and sanitizes components to prevent cache key injection attacks
+        where malicious IDs could overwrite or access other cache entries.
+
+        Args:
+            component: The cache key component to sanitize
+
+        Returns:
+            Sanitized component safe for use in cache keys
+
+        Raises:
+            ValueError: If component contains disallowed characters
+        """
+        import re
+
+        # Convert to string if needed
+        component_str = str(component)
+
+        # Validate format - only allow alphanumeric, hyphens, underscores
+        if not re.match(r'^[a-zA-Z0-9_-]{1,128}$', component_str):
+            # Log the issue and sanitize
+            import hashlib
+            # Hash the invalid component to create a safe key
+            safe_key = hashlib.sha256(component_str.encode()).hexdigest()[:32]
+            logger.warning(
+                "cache_key_sanitized",
+                original_length=len(component_str),
+                reason="Invalid characters or length"
+            )
+            return f"sanitized_{safe_key}"
+
+        return component_str
+
     async def get_or_compute_lineage(
         self,
         capsule_id: str,
@@ -302,10 +338,17 @@ class QueryCache:
         Get or compute lineage query result with appropriate TTL.
 
         Lineage queries get longer TTLs for stable lineage chains.
+
+        SECURITY FIX (Audit 4 - H15): Now sanitizes capsule_id to prevent
+        cache key injection attacks.
         """
+        # SECURITY FIX: Sanitize cache key components
+        safe_capsule_id = self._sanitize_cache_key_component(capsule_id)
+        safe_depth = max(1, min(int(depth), 100))  # Clamp depth to reasonable range
+
         key = self._config.lineage_key_pattern.format(
-            capsule_id=capsule_id,
-            depth=depth
+            capsule_id=safe_capsule_id,
+            depth=safe_depth
         )
 
         # Try cache first

@@ -470,19 +470,22 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
     ) -> Vote | None:
         """
         Cast a vote on a proposal.
-        
+
+        SECURITY FIX (Audit 4 - H20): Now verifies voter's actual trust level
+        instead of accepting trust_weight parameter blindly.
+
         Args:
             proposal_id: Proposal ID
             voter_id: Voter's user ID
             vote_data: Vote choice and optional reason
-            trust_weight: Voter's trust-based weight
-            
+            trust_weight: Voter's trust-based weight (will be verified)
+
         Returns:
             Created vote or None if already voted
         """
         now = self._now().isoformat()
         vote_id = self._generate_id()
-        
+
         # Check if already voted
         existing = await self.get_vote(proposal_id, voter_id)
         if existing:
@@ -492,8 +495,42 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
                 voter_id=voter_id,
             )
             return None
-        
+
+        # SECURITY FIX (Audit 4 - H20): Verify voter's actual trust level
+        # Don't trust the trust_weight parameter - fetch from database
+        verify_query = """
+        MATCH (u:User {id: $voter_id})
+        RETURN u.trust_flame AS trust_flame
+        """
+        verify_result = await self.client.execute_single(verify_query, {"voter_id": voter_id})
+
+        if not verify_result:
+            self.logger.warning(
+                "Voter not found",
+                voter_id=voter_id,
+            )
+            return None
+
+        # Calculate verified weight from actual trust level
+        actual_trust = verify_result.get("trust_flame", 0) or 0
+
+        # Clamp trust to valid range and calculate weight
+        clamped_trust = max(0, min(actual_trust, 100))
+        verified_weight = clamped_trust / 100.0  # Normalize to 0-1
+
+        # Log if there's a mismatch between claimed and actual weight
+        if abs(trust_weight - verified_weight) > 0.01:
+            self.logger.warning(
+                "trust_weight_mismatch_corrected",
+                proposal_id=proposal_id,
+                voter_id=voter_id,
+                claimed_weight=trust_weight,
+                verified_weight=verified_weight,
+                actual_trust=actual_trust
+            )
+
         # Create vote and update proposal tallies atomically
+        # Use verified_weight instead of untrusted trust_weight parameter
         query = """
         MATCH (p:Proposal {id: $proposal_id})
         WHERE p.status = 'voting'
@@ -518,7 +555,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
             p.updated_at = $now
         RETURN v {.*} AS vote
         """
-        
+
         # Handle both string and enum choice
         choice_val = vote_data.choice.value if hasattr(vote_data.choice, 'value') else str(vote_data.choice)
 
@@ -529,7 +566,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
                 "vote_id": vote_id,
                 "voter_id": voter_id,
                 "choice": choice_val,
-                "weight": trust_weight,
+                "weight": verified_weight,  # SECURITY FIX: Use verified weight
                 "reason": vote_data.reason,
                 "now": now,
             },
@@ -541,7 +578,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
                 proposal_id=proposal_id,
                 voter_id=voter_id,
                 choice=choice_val,
-                weight=trust_weight,
+                weight=verified_weight,  # SECURITY FIX: Log verified weight
             )
             return Vote.model_validate(result["vote"])
         return None
