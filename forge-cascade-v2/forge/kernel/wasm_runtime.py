@@ -37,6 +37,15 @@ logger = structlog.get_logger(__name__)
 T = TypeVar("T")
 
 
+class SecurityError(Exception):
+    """
+    Raised when a security constraint is violated.
+
+    SECURITY FIX (Audit 4): Explicit exception for security violations.
+    """
+    pass
+
+
 class Capability(str, Enum):
     """
     Overlay capabilities - explicit permissions required for operations.
@@ -99,11 +108,23 @@ class FuelBudget:
         return self.remaining_fuel <= 0
 
 
+class OverlaySecurityMode(str, Enum):
+    """
+    Security mode for overlay execution.
+
+    SECURITY FIX (Audit 4): Explicit security mode to prevent sandbox escape.
+    """
+    WASM_STRICT = "wasm_strict"        # Full WASM isolation (default, safest)
+    WASM_RELAXED = "wasm_relaxed"      # WASM with some relaxed constraints
+    PYTHON_TRUSTED = "python_trusted"  # Python mode - ONLY for internal trusted overlays
+    # Note: There is NO "python_untrusted" mode - untrusted code MUST use WASM
+
+
 @dataclass
 class OverlayManifest:
     """
     Manifest describing an overlay's requirements and metadata.
-    
+
     In full Wasm implementation, this would be loaded from manifest.json
     and the wasm_path would point to compiled .wasm binary.
     """
@@ -114,7 +135,12 @@ class OverlayManifest:
     capabilities: set[Capability] = field(default_factory=set)
     dependencies: list[str] = field(default_factory=list)
     trust_required: int = 60
-    
+
+    # SECURITY FIX (Audit 4): Explicit security mode to prevent sandbox escape
+    security_mode: OverlaySecurityMode = OverlaySecurityMode.WASM_STRICT
+    # For Python mode, require explicit attestation that overlay is trusted
+    is_internal_trusted: bool = False
+
     # Wasm-specific (for future implementation)
     wasm_path: Optional[Path] = None
     source_hash: Optional[str] = None
@@ -404,16 +430,40 @@ class WasmOverlayRuntime:
     ) -> str:
         """
         Load and instantiate an overlay.
-        
+
         Args:
             manifest: Overlay manifest
             python_overlay: Python overlay instance (current mode)
-            
+
         Returns:
             Instance ID
+
+        Raises:
+            SecurityError: If Python overlay is provided without proper trust settings
         """
+        # SECURITY FIX (Audit 4): Validate security settings at load time
+        if python_overlay is not None:
+            if manifest.security_mode != OverlaySecurityMode.PYTHON_TRUSTED:
+                raise SecurityError(
+                    f"Cannot load Python overlay '{manifest.name}' with security_mode "
+                    f"'{manifest.security_mode.value}'. "
+                    f"Python overlays MUST have security_mode=PYTHON_TRUSTED."
+                )
+            if not manifest.is_internal_trusted:
+                raise SecurityError(
+                    f"Cannot load Python overlay '{manifest.name}' without "
+                    f"is_internal_trusted=True. Python overlays are only allowed "
+                    f"for internal trusted code."
+                )
+            logger.warning(
+                "loading_python_overlay",
+                overlay_name=manifest.name,
+                warning="Loading Python overlay - bypasses WASM isolation. "
+                        "Only use for internal trusted overlays.",
+            )
+
         instance_id = f"{manifest.id}-{int(time.time() * 1000)}"
-        
+
         # Create instance
         instance = WasmInstance(
             id=instance_id,
@@ -422,10 +472,10 @@ class WasmOverlayRuntime:
                 total_fuel=manifest.fuel_budgets.get("run", 5_000_000),
             ),
         )
-        
+
         # Create host functions based on capabilities
         instance.host_functions = self._create_host_functions(instance)
-        
+
         # Store Python overlay reference (current mode)
         instance._python_overlay = python_overlay
         
@@ -483,8 +533,44 @@ class WasmOverlayRuntime:
         start_time = time.monotonic()
         
         try:
-            # Execute (Python mode - call method on overlay)
+            # SECURITY FIX (Audit 4): Enforce security mode to prevent sandbox escape
+            # Python mode ONLY allowed for explicitly trusted internal overlays
             if instance._python_overlay:
+                # Check if Python execution is allowed
+                if instance.manifest.security_mode != OverlaySecurityMode.PYTHON_TRUSTED:
+                    logger.error(
+                        "python_execution_blocked_wrong_mode",
+                        instance_id=instance_id,
+                        overlay_name=instance.manifest.name,
+                        security_mode=instance.manifest.security_mode.value,
+                        required_mode=OverlaySecurityMode.PYTHON_TRUSTED.value,
+                    )
+                    raise SecurityError(
+                        f"Overlay '{instance.manifest.name}' has Python overlay but security_mode "
+                        f"is '{instance.manifest.security_mode.value}'. "
+                        f"Python execution requires PYTHON_TRUSTED mode."
+                    )
+
+                if not instance.manifest.is_internal_trusted:
+                    logger.error(
+                        "python_execution_blocked_not_trusted",
+                        instance_id=instance_id,
+                        overlay_name=instance.manifest.name,
+                    )
+                    raise SecurityError(
+                        f"Overlay '{instance.manifest.name}' is not marked as internally trusted. "
+                        f"Python execution is only allowed for internal trusted overlays. "
+                        f"Untrusted overlays MUST be compiled to WebAssembly."
+                    )
+
+                logger.warning(
+                    "python_mode_execution",
+                    instance_id=instance_id,
+                    overlay_name=instance.manifest.name,
+                    warning="Running in Python mode - no WASM isolation. Only for trusted internal overlays.",
+                )
+
+                # Execute Python method (only for trusted internal overlays)
                 method = getattr(instance._python_overlay, function, None)
                 if method:
                     if asyncio.iscoroutinefunction(method):
@@ -660,6 +746,8 @@ def shutdown_wasm_runtime() -> None:
 
 
 __all__ = [
+    "SecurityError",
+    "OverlaySecurityMode",
     "Capability",
     "ExecutionState",
     "FuelBudget",

@@ -243,33 +243,57 @@ class EVMChainClient(BaseChainClient):
             )
         return await self.get_wallet_balance(address, virtual_address)
     
-    async def create_wallet(self) -> WalletInfo:
+    async def create_wallet(self) -> tuple[WalletInfo, str]:
         """
-        Create a new wallet on this chain.
-        
-        Generates a new random Ethereum account. The private key should be
-        stored securely using the application's key management system.
-        
+        SECURITY FIX (Audit 4): Create a new wallet and return private key.
+
+        Generates a new random Ethereum account. The private key is returned
+        and MUST be stored securely using a key management system or HSM.
+
+        CRITICAL: The private key is returned ONLY ONCE. If not stored,
+        funds sent to this wallet will be PERMANENTLY LOST.
+
         Returns:
-            WalletInfo with the new wallet details
-        
+            Tuple of (WalletInfo, private_key_hex)
+            - WalletInfo: Wallet metadata
+            - private_key_hex: The private key as hex string (STORE SECURELY!)
+
         Note:
             This creates an externally owned account (EOA). Token-bound
             accounts (TBAs) are created differently through the ERC-6551
             factory contract.
+
+        Security Warning:
+            - NEVER log the private key
+            - NEVER store in plaintext
+            - Use HSM or encrypted key storage
+            - Consider using a key derivation path instead for HD wallets
         """
         self._ensure_initialized()
-        
+
         # Generate a new random account
         account = Account.create()
-        
-        return WalletInfo(
+
+        # SECURITY FIX (Audit 4): Return private key so it can be stored
+        private_key_hex = account.key.hex()
+
+        import structlog
+        structlog.get_logger().info(
+            "wallet_created",
+            address=account.address,
+            chain=self.chain.value,
+            warning="Private key returned - MUST be stored securely by caller!",
+        )
+
+        wallet_info = WalletInfo(
             address=account.address,
             chain=self.chain.value,
             wallet_type="eoa",
             is_token_bound=False,
             balance_virtual=0.0,
         )
+
+        return wallet_info, private_key_hex
     
     # ==================== Transaction Operations ====================
     

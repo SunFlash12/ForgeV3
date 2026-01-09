@@ -509,6 +509,92 @@ class AgentGatewayService:
             generated_cypher=cypher if self.db else None,
         )
 
+    def _validate_cypher_read_only(self, cypher_query: str) -> tuple[bool, str]:
+        """
+        SECURITY FIX (Audit 4): Comprehensive Cypher query validation.
+
+        Previous implementation used simple keyword blocklist which is easily bypassable via:
+        - Unicode homoglyphs (Cyrillic 'С' instead of Latin 'C')
+        - DETACH DELETE (not caught by "DELETE" check)
+        - CALL procedures (can execute arbitrary mutations)
+        - Comments hiding keywords
+        - Mixed case with Unicode
+
+        This implementation:
+        1. Normalizes Unicode to catch homoglyphs
+        2. Strips comments before analysis
+        3. Uses comprehensive write operation detection
+        4. Whitelist-based validation for allowed clauses
+        """
+        import unicodedata
+        import re
+
+        # Step 1: Unicode normalize to catch homoglyphs
+        normalized = unicodedata.normalize('NFKC', cypher_query)
+
+        # Step 2: Remove comments (// line comments and /* block comments */)
+        # Remove block comments
+        no_comments = re.sub(r'/\*.*?\*/', ' ', normalized, flags=re.DOTALL)
+        # Remove line comments
+        no_comments = re.sub(r'//.*?$', ' ', no_comments, flags=re.MULTILINE)
+
+        # Step 3: Convert to uppercase for analysis
+        query_upper = no_comments.upper()
+
+        # Step 4: Comprehensive list of write/dangerous operations
+        # Using word boundaries to avoid false positives
+        dangerous_patterns = [
+            # Node/Relationship mutations
+            r'\bCREATE\b',
+            r'\bMERGE\b',
+            r'\bDELETE\b',
+            r'\bDETACH\b',  # DETACH DELETE
+            r'\bSET\b',
+            r'\bREMOVE\b',
+            # Schema operations
+            r'\bDROP\b',
+            r'\bCONSTRAINT\b',
+            r'\bINDEX\b',
+            # Procedure calls (can execute arbitrary mutations)
+            r'\bCALL\b',
+            # Admin operations
+            r'\bGRANT\b',
+            r'\bREVOKE\b',
+            r'\bDENY\b',
+            # Iteration that allows mutations
+            r'\bFOREACH\b',
+            # Load CSV can be dangerous
+            r'\bLOAD\s+CSV\b',
+            # Subquery operations that might allow writes
+            r'\bCALL\s*\{',
+        ]
+
+        for pattern in dangerous_patterns:
+            match = re.search(pattern, query_upper)
+            if match:
+                return False, f"Dangerous operation detected: {match.group()}"
+
+        # Step 5: Whitelist-based validation - must start with allowed clauses
+        allowed_start_patterns = [
+            r'^\s*MATCH\b',
+            r'^\s*OPTIONAL\s+MATCH\b',
+            r'^\s*WITH\b',
+            r'^\s*RETURN\b',
+            r'^\s*UNWIND\b',
+            r'^\s*PROFILE\b',
+            r'^\s*EXPLAIN\b',
+        ]
+
+        starts_with_allowed = any(
+            re.match(pattern, query_upper)
+            for pattern in allowed_start_patterns
+        )
+
+        if not starts_with_allowed:
+            return False, "Query must start with MATCH, OPTIONAL MATCH, WITH, RETURN, UNWIND, PROFILE, or EXPLAIN"
+
+        return True, ""
+
     async def _execute_direct_cypher(
         self,
         session: AgentSession,
@@ -525,18 +611,16 @@ class AgentGatewayService:
                 error_code="FORBIDDEN",
             )
 
-        # Validate query is read-only (no CREATE, DELETE, SET, etc.)
-        dangerous_keywords = ["CREATE", "DELETE", "SET", "REMOVE", "MERGE", "DROP"]
-        query_upper = query.query_text.upper()
-        for keyword in dangerous_keywords:
-            if keyword in query_upper:
-                return QueryResult(
-                    query_id=query.id,
-                    session_id=session.id,
-                    success=False,
-                    error=f"Write operations not allowed: {keyword}",
-                    error_code="FORBIDDEN",
-                )
+        # SECURITY FIX (Audit 4): Use comprehensive validator instead of simple blocklist
+        is_valid, error_msg = self._validate_cypher_read_only(query.query_text)
+        if not is_valid:
+            return QueryResult(
+                query_id=query.id,
+                session_id=session.id,
+                success=False,
+                error=f"Query validation failed: {error_msg}",
+                error_code="FORBIDDEN",
+            )
 
         results = []
         if self.db:

@@ -175,26 +175,55 @@ class SolanaChainClient(BaseChainClient):
             )
         return await self.get_wallet_balance(address, virtual_address)
     
-    async def create_wallet(self) -> WalletInfo:
+    async def create_wallet(self) -> tuple[WalletInfo, str]:
         """
-        Create a new Solana wallet.
-        
-        Generates a new Ed25519 keypair. The secret key should be stored
-        securely using the application's key management system.
+        SECURITY FIX (Audit 4): Create a new Solana wallet and return secret key.
+
+        Generates a new Ed25519 keypair. The secret key is returned
+        and MUST be stored securely using a key management system or HSM.
+
+        CRITICAL: The secret key is returned ONLY ONCE. If not stored,
+        funds sent to this wallet will be PERMANENTLY LOST.
+
+        Returns:
+            Tuple of (WalletInfo, secret_key_base58)
+            - WalletInfo: Wallet metadata
+            - secret_key_base58: The secret key as base58 string (STORE SECURELY!)
+
+        Security Warning:
+            - NEVER log the secret key
+            - NEVER store in plaintext
+            - Use HSM or encrypted key storage
         """
         self._ensure_initialized()
         from solders.keypair import Keypair
-        
+        import base58
+
         # Generate a new random keypair
         keypair = Keypair()
-        
-        return WalletInfo(
+
+        # SECURITY FIX (Audit 4): Return secret key so it can be stored
+        # Solana secret keys are typically represented as base58
+        secret_key_bytes = bytes(keypair)
+        secret_key_base58 = base58.b58encode(secret_key_bytes).decode('ascii')
+
+        import structlog
+        structlog.get_logger().info(
+            "wallet_created",
+            address=str(keypair.pubkey()),
+            chain=self.chain.value,
+            warning="Secret key returned - MUST be stored securely by caller!",
+        )
+
+        wallet_info = WalletInfo(
             address=str(keypair.pubkey()),
             chain=self.chain.value,
             wallet_type="eoa",
             is_token_bound=False,
             balance_virtual=0.0,
         )
+
+        return wallet_info, secret_key_base58
     
     # ==================== Transaction Operations ====================
     

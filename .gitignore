@@ -25,6 +25,12 @@ secrets/
 *password*.txt
 *secret*.txt
 
+# SECURITY FIX (Audit 4): Credential files - NEVER COMMIT
+.seed_credentials
+**/scripts/.seed_credentials
+**/.seed_*
+*seed_credentials*
+
 # Claude Code
 .claude/settings.local.json
 
