@@ -8,8 +8,12 @@ services:
       context: ./forge-cascade-v2
       dockerfile: Dockerfile
     container_name: forge-cascade-api
+    # SECURITY FIX: Bind to localhost for development, use reverse proxy in production
     ports:
-      - "8001:8001"
+      - "127.0.0.1:8001:8001"
+    # SECURITY FIX: Add security options
+    security_opt:
+      - no-new-privileges:true
     environment:
       - NEO4J_URI=${NEO4J_URI}
       - NEO4J_USERNAME=${NEO4J_USERNAME}
@@ -17,7 +21,8 @@ services:
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
       - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
       - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES:-60}
-      - REDIS_URL=redis://:${REDIS_PASSWORD:-forge_redis_secret}@redis:6379
+      # SECURITY FIX: REDIS_PASSWORD must be set, no default
+      - REDIS_URL=redis://:${REDIS_PASSWORD:?REDIS_PASSWORD environment variable is required}@redis:6379
       - LLM_PROVIDER=${LLM_PROVIDER:-mock}
       - LLM_API_KEY=${LLM_API_KEY:-}
       - LLM_MODEL=${LLM_MODEL:-gpt-4.1-nano}
@@ -59,8 +64,12 @@ services:
       dockerfile: Dockerfile
     container_name: forge-compliance-api
     command: ["python", "run_compliance.py"]
+    # SECURITY FIX: Bind to localhost for development
     ports:
-      - "8002:8002"
+      - "127.0.0.1:8002:8002"
+    # SECURITY FIX: Add security options
+    security_opt:
+      - no-new-privileges:true
     environment:
       - PYTHONUNBUFFERED=1
     networks:
@@ -87,8 +96,12 @@ services:
       dockerfile: Dockerfile
     container_name: forge-virtuals-api
     command: ["python", "run_virtuals.py"]
+    # SECURITY FIX: Bind to localhost for development
     ports:
-      - "8003:8003"
+      - "127.0.0.1:8003:8003"
+    # SECURITY FIX: Add security options
+    security_opt:
+      - no-new-privileges:true
     environment:
       - PYTHONUNBUFFERED=1
     networks:
@@ -122,6 +135,9 @@ services:
     container_name: forge-frontend
     ports:
       - "80:80"
+    # SECURITY FIX: Add security options
+    security_opt:
+      - no-new-privileges:true
     depends_on:
       cascade-api:
         condition: service_healthy
@@ -155,6 +171,9 @@ services:
     container_name: forge-marketplace
     ports:
       - "3001:80"
+    # SECURITY FIX: Add security options
+    security_opt:
+      - no-new-privileges:true
     networks:
       - forge-network
     restart: unless-stopped
@@ -178,21 +197,32 @@ services:
   # ==========================================================================
 
   redis:
-    image: redis:7-alpine
+    # SECURITY FIX: Pin image version instead of using floating tag
+    image: redis:7.4.1-alpine
     container_name: forge-redis
-    ports:
-      - "6379:6379"
+    # SECURITY FIX: Remove external port exposure - Redis should only be accessible internally
+    # ports:
+    #   - "6379:6379"  # Commented out for security - use expose instead for internal access
+    expose:
+      - "6379"  # Only expose internally within Docker network
     volumes:
       - redis-data:/data
     networks:
       - forge-network
     restart: unless-stopped
+    # SECURITY FIX: Run as non-root user
+    user: "999:999"  # Redis user in Alpine image
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-forge_redis_secret}", "ping"]
+      # SECURITY FIX: REDIS_PASSWORD must be set, no default
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:?REDIS_PASSWORD required}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 3
-    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-forge_redis_secret}
+    # SECURITY FIX: REDIS_PASSWORD must be set, no default
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD required}
+    # SECURITY FIX: Add security options
+    security_opt:
+      - no-new-privileges:true
     deploy:
       resources:
         limits:
@@ -203,12 +233,15 @@ services:
           memory: 64M
 
   jaeger:
-    image: jaegertracing/all-in-one:latest
+    # SECURITY FIX: Pin image version instead of using :latest
+    image: jaegertracing/all-in-one:1.63.0
     container_name: forge-jaeger
+    # SECURITY FIX: Only expose Jaeger UI externally, OTLP ports should be internal only
     ports:
-      - "16686:16686"  # Jaeger UI
-      - "4317:4317"    # OTLP gRPC
-      - "4318:4318"    # OTLP HTTP
+      - "127.0.0.1:16686:16686"  # Jaeger UI - bind to localhost only
+    expose:
+      - "4317"    # OTLP gRPC - internal only
+      - "4318"    # OTLP HTTP - internal only
     environment:
       - COLLECTOR_OTLP_ENABLED=true
     networks:
@@ -220,6 +253,9 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+    # SECURITY FIX: Add security options
+    security_opt:
+      - no-new-privileges:true
     deploy:
       resources:
         limits:

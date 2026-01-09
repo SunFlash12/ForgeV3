@@ -525,7 +525,19 @@ async def get_capsules_by_owner(
 ) -> CapsuleListResponse:
     """
     Get capsules by a specific owner.
+
+    Regular users can only view their own capsules.
+    Admins can view any user's capsules.
     """
+    from forge.security.authorization import is_admin
+
+    # SECURITY FIX (Audit 2): Add IDOR protection
+    if user.id != owner_id and not is_admin(user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Can only view your own capsules",
+        )
+
     capsules, total = await capsule_repo.list(
         offset=pagination.offset,
         limit=pagination.per_page,

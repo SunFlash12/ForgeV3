@@ -23,6 +23,20 @@ _bcrypt_rounds = settings.password_bcrypt_rounds
 PASSWORD_MIN_LENGTH = 8
 PASSWORD_MAX_LENGTH = 128
 
+# SECURITY FIX (Audit 2): Common weak passwords blacklist
+COMMON_WEAK_PASSWORDS = frozenset({
+    "password", "password1", "password123", "password!",
+    "12345678", "123456789", "1234567890",
+    "qwerty123", "qwertyuiop", "qwerty1234",
+    "letmein1", "welcome1", "admin123", "admin1234",
+    "iloveyou1", "sunshine1", "princess1",
+    "football1", "baseball1", "dragon123",
+    "master123", "monkey123", "shadow123",
+    "abc12345", "abcd1234", "abcdefgh",
+    "passw0rd", "p@ssw0rd", "p@ssword",
+    "changeme", "changeme1", "temp1234",
+})
+
 
 class PasswordValidationError(Exception):
     """Password does not meet requirements."""
@@ -55,6 +69,14 @@ def validate_password_strength(password: str) -> None:
 
     if not any(c.isdigit() for c in password):
         raise PasswordValidationError("Password must contain at least one digit")
+
+    # SECURITY FIX (Audit 2): Require at least one special character
+    if not any(not c.isalnum() for c in password):
+        raise PasswordValidationError("Password must contain at least one special character")
+
+    # SECURITY FIX (Audit 2): Check against common weak passwords blacklist
+    if password.lower() in COMMON_WEAK_PASSWORDS:
+        raise PasswordValidationError("Password is too common and easily guessable")
 
     # Check for common weak patterns
     common_patterns = [

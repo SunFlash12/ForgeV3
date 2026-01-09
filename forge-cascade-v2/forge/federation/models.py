@@ -266,6 +266,13 @@ class PeerHandshake(ForgeModel):
     signature: str
     timestamp: datetime
 
+    # SECURITY FIX (Audit 2): Nonce for replay attack prevention
+    # Optional for backward compatibility with older peers
+    nonce: str | None = Field(
+        default=None,
+        description="Cryptographic nonce to prevent replay attacks (32 hex chars)"
+    )
+
 
 class SyncPayload(ForgeModel):
     """
@@ -288,6 +295,13 @@ class SyncPayload(ForgeModel):
     # Integrity
     content_hash: str
     signature: str
+
+    # SECURITY FIX (Audit 2): Nonce for replay attack prevention
+    # Optional for backward compatibility with older peers
+    nonce: str | None = Field(
+        default=None,
+        description="Cryptographic nonce to prevent replay attacks (32 hex chars)"
+    )
 
 
 class FederationStats(ForgeModel):

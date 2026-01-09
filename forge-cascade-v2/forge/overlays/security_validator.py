@@ -17,8 +17,10 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any, Optional
 from collections import defaultdict
+import asyncio
 import re
 import hashlib
+import threading
 import structlog
 
 from ..models.events import Event, EventType
@@ -110,40 +112,56 @@ class TrustRule(ValidationRule):
 
 @dataclass
 class RateLimitRule(ValidationRule):
-    """Rate limiting validation rule."""
+    """
+    Rate limiting validation rule.
+
+    SECURITY FIX (Audit 2): Uses proper locking to prevent race conditions
+    that could allow rate limit bypass through concurrent requests.
+    """
     requests_per_minute: int = 60
     requests_per_hour: int = 1000
-    
+
     # These get populated by the overlay
     minute_counts: dict = field(default_factory=lambda: defaultdict(int))
     hour_counts: dict = field(default_factory=lambda: defaultdict(int))
     minute_reset: datetime = field(default_factory=datetime.utcnow)
     hour_reset: datetime = field(default_factory=datetime.utcnow)
-    
+
+    # SECURITY FIX: Lock to ensure atomic check-and-increment
+    _lock: threading.Lock = field(default_factory=threading.Lock)
+
     def validate(self, data: dict) -> tuple[bool, Optional[str]]:
         user_id = data.get("user_id", "anonymous")
         now = datetime.utcnow()
-        
-        # Reset counters if needed
-        if now - self.minute_reset > timedelta(minutes=1):
-            self.minute_counts.clear()
-            self.minute_reset = now
-        
-        if now - self.hour_reset > timedelta(hours=1):
-            self.hour_counts.clear()
-            self.hour_reset = now
-        
-        # Check limits
-        if self.minute_counts[user_id] >= self.requests_per_minute:
-            return False, f"Rate limit exceeded: {self.requests_per_minute}/min"
-        
-        if self.hour_counts[user_id] >= self.requests_per_hour:
-            return False, f"Rate limit exceeded: {self.requests_per_hour}/hour"
-        
-        # Increment counters
-        self.minute_counts[user_id] += 1
-        self.hour_counts[user_id] += 1
-        
+
+        # SECURITY FIX: Use lock to make check-and-increment atomic
+        # This prevents race conditions where concurrent requests could
+        # bypass rate limits by reading the same counter value
+        with self._lock:
+            # Reset counters if needed
+            if now - self.minute_reset > timedelta(minutes=1):
+                self.minute_counts.clear()
+                self.minute_reset = now
+
+            if now - self.hour_reset > timedelta(hours=1):
+                self.hour_counts.clear()
+                self.hour_reset = now
+
+            # Get current counts
+            current_minute = self.minute_counts[user_id]
+            current_hour = self.hour_counts[user_id]
+
+            # Check limits BEFORE incrementing (within lock for atomicity)
+            if current_minute >= self.requests_per_minute:
+                return False, f"Rate limit exceeded: {self.requests_per_minute}/min"
+
+            if current_hour >= self.requests_per_hour:
+                return False, f"Rate limit exceeded: {self.requests_per_hour}/hour"
+
+            # Increment counters ATOMICALLY with check
+            self.minute_counts[user_id] = current_minute + 1
+            self.hour_counts[user_id] = current_hour + 1
+
         return True, None
 
 

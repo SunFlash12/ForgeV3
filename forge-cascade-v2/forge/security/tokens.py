@@ -8,16 +8,23 @@ Includes:
 - Token creation (access and refresh)
 - Token validation
 - Token blacklisting for revocation (Redis-backed for distributed deployments)
+
+SECURITY FIXES (Audit 2):
+- Replaced python-jose with PyJWT>=2.8.0 (CVE-2022-29217 fix)
+- Replaced threading.Lock with asyncio.Lock for async methods
+- Hardcoded algorithm list to prevent algorithm confusion attacks
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional, Set
 from uuid import uuid4
 import threading
 import time
 import asyncio
 
-from jose import JWTError, jwt
+# SECURITY FIX: Use PyJWT instead of abandoned python-jose
+import jwt as pyjwt
+from jwt.exceptions import ExpiredSignatureError, InvalidTokenError, DecodeError
 from pydantic import ValidationError
 import structlog
 
@@ -45,12 +52,16 @@ class TokenBlacklist:
     is unavailable.
 
     Tokens are identified by their JTI (JWT ID) claim.
+
+    SECURITY FIX (Audit 2): Uses asyncio.Lock for async methods to prevent
+    blocking the event loop. threading.Lock retained for sync methods only.
     """
 
     # In-memory fallback storage
     _blacklist: Set[str] = set()
     _expiry_times: dict[str, float] = {}
-    _lock = threading.Lock()
+    _sync_lock = threading.Lock()  # For sync methods only
+    _async_lock: Optional[asyncio.Lock] = None  # Lazy-initialized for async methods
     _last_cleanup: float = 0
     _cleanup_interval: float = 300  # 5 minutes
 
@@ -58,6 +69,13 @@ class TokenBlacklist:
     _redis_client: Optional[Any] = None
     _redis_initialized: bool = False
     _redis_prefix: str = "forge:token:blacklist:"
+
+    @classmethod
+    def _get_async_lock(cls) -> asyncio.Lock:
+        """Get or create the async lock (must be called from async context)."""
+        if cls._async_lock is None:
+            cls._async_lock = asyncio.Lock()
+        return cls._async_lock
 
     @classmethod
     async def initialize(cls, redis_url: Optional[str] = None) -> bool:
@@ -137,12 +155,12 @@ class TokenBlacklist:
                 logger.warning("token_blacklist_redis_error", error=str(e), operation="add")
                 # Fall through to in-memory
 
-        # In-memory fallback
-        with cls._lock:
+        # In-memory fallback (SECURITY FIX: use async lock)
+        async with cls._get_async_lock():
             cls._blacklist.add(jti)
             if expires_at:
                 cls._expiry_times[jti] = expires_at
-            cls._maybe_cleanup()
+            cls._maybe_cleanup_unlocked()
             logger.debug("token_blacklisted_memory", jti=jti[:8] + "...")
 
     @classmethod
@@ -161,9 +179,9 @@ class TokenBlacklist:
                 logger.warning("token_blacklist_redis_error", error=str(e), operation="check")
                 # Fall through to in-memory
 
-        # In-memory fallback
-        with cls._lock:
-            cls._maybe_cleanup()
+        # In-memory fallback (SECURITY FIX: use async lock)
+        async with cls._get_async_lock():
+            cls._maybe_cleanup_unlocked()
             return jti in cls._blacklist
 
     @classmethod
@@ -176,11 +194,11 @@ class TokenBlacklist:
         if not jti:
             return
 
-        with cls._lock:
+        with cls._sync_lock:
             cls._blacklist.add(jti)
             if expires_at:
                 cls._expiry_times[jti] = expires_at
-            cls._maybe_cleanup()
+            cls._maybe_cleanup_unlocked()
 
     @classmethod
     def is_blacklisted(cls, jti: Optional[str]) -> bool:
@@ -188,14 +206,14 @@ class TokenBlacklist:
         if not jti:
             return False
 
-        with cls._lock:
-            cls._maybe_cleanup()
+        with cls._sync_lock:
+            cls._maybe_cleanup_unlocked()
             return jti in cls._blacklist
 
     @classmethod
     def remove(cls, jti: str) -> None:
         """Remove a token from the blacklist."""
-        with cls._lock:
+        with cls._sync_lock:
             cls._blacklist.discard(jti)
             cls._expiry_times.pop(jti, None)
 
@@ -210,14 +228,18 @@ class TokenBlacklist:
             except Exception as e:
                 logger.warning("token_blacklist_redis_error", error=str(e), operation="remove")
 
-        # Also remove from in-memory
-        with cls._lock:
+        # Also remove from in-memory (SECURITY FIX: use async lock)
+        async with cls._get_async_lock():
             cls._blacklist.discard(jti)
             cls._expiry_times.pop(jti, None)
 
     @classmethod
-    def _maybe_cleanup(cls) -> None:
-        """Remove expired entries from the in-memory blacklist."""
+    def _maybe_cleanup_unlocked(cls) -> None:
+        """
+        Remove expired entries from the in-memory blacklist.
+
+        Note: Caller must hold the lock (sync or async).
+        """
         now = time.time()
         if now - cls._last_cleanup < cls._cleanup_interval:
             return
@@ -234,7 +256,7 @@ class TokenBlacklist:
     @classmethod
     def clear(cls) -> None:
         """Clear the entire blacklist (for testing)."""
-        with cls._lock:
+        with cls._sync_lock:
             cls._blacklist.clear()
             cls._expiry_times.clear()
 
@@ -256,8 +278,8 @@ class TokenBlacklist:
             except Exception as e:
                 logger.warning("token_blacklist_redis_error", error=str(e), operation="clear")
 
-        # Clear in-memory
-        with cls._lock:
+        # Clear in-memory (SECURITY FIX: use async lock)
+        async with cls._get_async_lock():
             cls._blacklist.clear()
             cls._expiry_times.clear()
 
@@ -288,6 +310,10 @@ class TokenInvalidError(TokenError):
     pass
 
 
+# SECURITY FIX: Hardcoded allowed algorithms to prevent algorithm confusion attacks
+ALLOWED_JWT_ALGORITHMS = ["HS256", "HS384", "HS512"]
+
+
 def create_access_token(
     user_id: str,
     username: str,
@@ -297,34 +323,36 @@ def create_access_token(
 ) -> str:
     """
     Create a JWT access token.
-    
+
     Args:
         user_id: User's unique identifier
         username: User's username
         role: User's role (user, moderator, admin, system)
         trust_flame: User's trust score (0-100)
         additional_claims: Extra claims to include in token
-        
+
     Returns:
         Encoded JWT access token
     """
-    expire = datetime.utcnow() + timedelta(minutes=settings.jwt_access_token_expire_minutes)
-    
+    now = datetime.now(timezone.utc)
+    expire = now + timedelta(minutes=settings.jwt_access_token_expire_minutes)
+
     payload = {
         "sub": user_id,
         "username": username,
         "role": role,
         "trust_flame": trust_flame,
         "exp": expire,
-        "iat": datetime.utcnow(),
+        "iat": now,
         "jti": str(uuid4()),  # JWT ID for token revocation
         "type": "access"
     }
-    
+
     if additional_claims:
         payload.update(additional_claims)
-    
-    return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
+
+    # SECURITY FIX: Use PyJWT instead of python-jose
+    return pyjwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
 
 
 def create_refresh_token(
@@ -333,28 +361,30 @@ def create_refresh_token(
 ) -> str:
     """
     Create a JWT refresh token.
-    
+
     Refresh tokens have longer expiration and are used to get new access tokens.
-    
+
     Args:
         user_id: User's unique identifier
         username: User's username
-        
+
     Returns:
         Encoded JWT refresh token
     """
-    expire = datetime.utcnow() + timedelta(days=settings.jwt_refresh_token_expire_days)
-    
+    now = datetime.now(timezone.utc)
+    expire = now + timedelta(days=settings.jwt_refresh_token_expire_days)
+
     payload = {
         "sub": user_id,
         "username": username,
         "exp": expire,
-        "iat": datetime.utcnow(),
+        "iat": now,
         "jti": str(uuid4()),
         "type": "refresh"
     }
-    
-    return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
+
+    # SECURITY FIX: Use PyJWT instead of python-jose
+    return pyjwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
 
 
 def create_token_pair(
@@ -389,26 +419,36 @@ def create_token_pair(
 def decode_token(token: str, verify_exp: bool = True) -> TokenPayload:
     """
     Decode and validate a JWT token.
-    
+
     Args:
         token: JWT token string
         verify_exp: Whether to verify expiration (default True)
-        
+
     Returns:
         TokenPayload with decoded claims
-        
+
     Raises:
         TokenExpiredError: If token has expired
         TokenInvalidError: If token is invalid
     """
     try:
-        payload = jwt.decode(
+        # SECURITY FIX: Use PyJWT with hardcoded algorithm whitelist
+        # This prevents algorithm confusion attacks (CVE-2022-29217)
+        algorithm = settings.jwt_algorithm
+        if algorithm not in ALLOWED_JWT_ALGORITHMS:
+            raise TokenInvalidError(f"Disallowed algorithm: {algorithm}")
+
+        options = {}
+        if not verify_exp:
+            options["verify_exp"] = False
+
+        payload = pyjwt.decode(
             token,
             settings.jwt_secret_key,
-            algorithms=[settings.jwt_algorithm],
-            options={"verify_exp": verify_exp}
+            algorithms=ALLOWED_JWT_ALGORITHMS,  # Hardcoded whitelist
+            options=options
         )
-        
+
         return TokenPayload(
             sub=payload["sub"],
             username=payload.get("username"),
@@ -419,10 +459,10 @@ def decode_token(token: str, verify_exp: bool = True) -> TokenPayload:
             jti=payload.get("jti"),
             type=payload.get("type", "access")
         )
-        
-    except jwt.ExpiredSignatureError:
+
+    except ExpiredSignatureError:
         raise TokenExpiredError("Token has expired")
-    except JWTError as e:
+    except (InvalidTokenError, DecodeError) as e:
         raise TokenInvalidError(f"Invalid token: {str(e)}")
     except ValidationError as e:
         raise TokenInvalidError(f"Token payload validation failed: {str(e)}")
@@ -542,15 +582,15 @@ def get_token_claims(token: str) -> dict[str, Any]:
         TokenInvalidError: If token cannot be decoded at all
     """
     try:
-        # Decode without verification to extract claims
-        payload = jwt.decode(
+        # SECURITY FIX: Use PyJWT with algorithm whitelist even for extraction
+        payload = pyjwt.decode(
             token,
             settings.jwt_secret_key,
-            algorithms=[settings.jwt_algorithm],
+            algorithms=ALLOWED_JWT_ALGORITHMS,
             options={"verify_exp": False}
         )
         return payload
-    except JWTError as e:
+    except (InvalidTokenError, DecodeError) as e:
         raise TokenInvalidError(f"Cannot decode token: {str(e)}")
 
 

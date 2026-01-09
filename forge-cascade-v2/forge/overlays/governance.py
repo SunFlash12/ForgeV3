@@ -11,12 +11,16 @@ Responsibilities:
 - Trust-weighted consensus calculation
 - Ghost Council coordination
 - Policy rule evaluation
+
+SECURITY FIX (Audit 2): Added asyncio locks to prevent race conditions
+in vote processing and proposal management.
 """
 
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Any, Optional, Union
+from typing import Any, Callable, Optional, Union
 from enum import Enum
+import asyncio
 import math
 import structlog
 
@@ -350,7 +354,11 @@ class GovernanceOverlay(BaseOverlay):
         
         # Active votes cache
         self._active_proposals: dict[str, list[VoteRecord]] = {}
-        
+
+        # SECURITY FIX (Audit 2): Add locks to prevent race conditions
+        self._proposals_lock = asyncio.Lock()  # Global lock for proposals dict
+        self._proposal_locks: dict[str, asyncio.Lock] = {}  # Per-proposal locks
+
         # Statistics
         self._stats = {
             "proposals_evaluated": 0,
@@ -358,11 +366,24 @@ class GovernanceOverlay(BaseOverlay):
             "consensus_reached": 0,
             "policies_enforced": 0
         }
+        self._stats_lock = asyncio.Lock()  # Lock for stats updates
         
         # Add default policies
         self._add_default_policies()
-        
+
         self._logger = logger.bind(overlay=self.NAME)
+
+    async def _get_proposal_lock(self, proposal_id: str) -> asyncio.Lock:
+        """Get or create a lock for a specific proposal."""
+        async with self._proposals_lock:
+            if proposal_id not in self._proposal_locks:
+                self._proposal_locks[proposal_id] = asyncio.Lock()
+            return self._proposal_locks[proposal_id]
+
+    async def _update_stats(self, key: str, delta: int = 1) -> None:
+        """Thread-safe stats update."""
+        async with self._stats_lock:
+            self._stats[key] = self._stats.get(key, 0) + delta
     
     def _add_default_policies(self) -> None:
         """Add default governance policies using safe conditions."""
@@ -473,13 +494,14 @@ class GovernanceOverlay(BaseOverlay):
     ) -> OverlayResult:
         """Handle new proposal creation."""
         proposal_id = data.get("proposal_id")
-        
+
         # Evaluate policies
         policy_results = self._evaluate_policies(data)
         all_passed = all(passed for passed, _ in policy_results.values())
-        
-        self._stats["proposals_evaluated"] += 1
-        self._stats["policies_enforced"] += len(policy_results)
+
+        # SECURITY FIX (Audit 2): Use thread-safe stats update
+        await self._update_stats("proposals_evaluated")
+        await self._update_stats("policies_enforced", len(policy_results))
         
         if not all_passed:
             failed_policies = [
@@ -508,9 +530,11 @@ class GovernanceOverlay(BaseOverlay):
                 }]
             )
         
-        # Initialize voting
-        self._active_proposals[proposal_id] = []
-        
+        # SECURITY FIX (Audit 2): Use lock for initializing proposal voting
+        proposal_lock = await self._get_proposal_lock(proposal_id)
+        async with proposal_lock:
+            self._active_proposals[proposal_id] = []
+
         # Calculate voting end time
         voting_ends_at = datetime.utcnow() + timedelta(
             hours=self._config.voting_period_hours
@@ -573,23 +597,30 @@ class GovernanceOverlay(BaseOverlay):
             timestamp=datetime.utcnow(),
             comment=comment
         )
-        
-        # Store vote
-        if proposal_id not in self._active_proposals:
-            self._active_proposals[proposal_id] = []
-        
-        # Remove previous vote from same voter
-        self._active_proposals[proposal_id] = [
-            v for v in self._active_proposals[proposal_id]
-            if v.voter_id != voter_id
-        ]
-        self._active_proposals[proposal_id].append(vote_record)
-        
-        self._stats["votes_processed"] += 1
-        
-        # Calculate current consensus
+
+        # SECURITY FIX (Audit 2): Use per-proposal lock to prevent race conditions
+        proposal_lock = await self._get_proposal_lock(proposal_id)
+        async with proposal_lock:
+            # Store vote
+            if proposal_id not in self._active_proposals:
+                self._active_proposals[proposal_id] = []
+
+            # Remove previous vote from same voter (atomic with lock)
+            self._active_proposals[proposal_id] = [
+                v for v in self._active_proposals[proposal_id]
+                if v.voter_id != voter_id
+            ]
+            self._active_proposals[proposal_id].append(vote_record)
+
+            # Get a copy of votes for consensus calculation
+            votes_copy = list(self._active_proposals[proposal_id])
+
+        # Update stats outside lock
+        await self._update_stats("votes_processed")
+
+        # Calculate current consensus with the copy
         consensus = self._calculate_consensus(
-            self._active_proposals[proposal_id],
+            votes_copy,
             data.get("created_at")
         )
         
@@ -600,8 +631,11 @@ class GovernanceOverlay(BaseOverlay):
             VotingStatus.CONSENSUS_FAILED,
             VotingStatus.EXPIRED
         }:
-            decision = self._make_decision(proposal_id, consensus, {})
-        
+            decision, consensus_reached = self._make_decision(proposal_id, consensus, {})
+            # SECURITY FIX (Audit 2): Thread-safe stats update
+            if consensus_reached:
+                await self._update_stats("consensus_reached")
+
         return OverlayResult(
             overlay_id=self.id,
             overlay_name=self.NAME,
@@ -641,14 +675,24 @@ class GovernanceOverlay(BaseOverlay):
             return await self._evaluate_consensus(data, context)
         
         elif action == "close_voting":
-            if proposal_id in self._active_proposals:
-                votes = self._active_proposals[proposal_id]
-                consensus = self._calculate_consensus(votes, data.get("created_at"))
-                decision = self._make_decision(proposal_id, consensus, {})
-                
-                # Clean up
-                del self._active_proposals[proposal_id]
-                
+            # SECURITY FIX (Audit 2): Use lock for closing voting
+            proposal_lock = await self._get_proposal_lock(proposal_id)
+            decision = None
+            consensus_reached = False
+            async with proposal_lock:
+                if proposal_id in self._active_proposals:
+                    votes = list(self._active_proposals[proposal_id])
+                    consensus = self._calculate_consensus(votes, data.get("created_at"))
+                    decision, consensus_reached = self._make_decision(proposal_id, consensus, {})
+
+                    # Clean up
+                    del self._active_proposals[proposal_id]
+
+            if decision:
+                # SECURITY FIX (Audit 2): Thread-safe stats update outside lock
+                if consensus_reached:
+                    await self._update_stats("consensus_reached")
+
                 return OverlayResult(
                     overlay_id=self.id,
                     overlay_name=self.NAME,
@@ -674,25 +718,30 @@ class GovernanceOverlay(BaseOverlay):
     ) -> OverlayResult:
         """Evaluate current consensus state."""
         proposal_id = data.get("proposal_id")
-        
+
         if not proposal_id:
-            # Return overview of all active proposals
-            active_summary = {}
-            for pid, votes in self._active_proposals.items():
-                consensus = self._calculate_consensus(votes, None)
-                active_summary[pid] = self._consensus_to_dict(consensus)
-            
+            # SECURITY FIX (Audit 2): Use lock for reading all proposals
+            async with self._proposals_lock:
+                active_summary = {}
+                for pid, votes in self._active_proposals.items():
+                    consensus = self._calculate_consensus(list(votes), None)
+                    active_summary[pid] = self._consensus_to_dict(consensus)
+                num_active = len(self._active_proposals)
+
             return OverlayResult(
                 overlay_id=self.id,
                 overlay_name=self.NAME,
                 success=True,
                 data={
-                    "active_proposals": len(self._active_proposals),
+                    "active_proposals": num_active,
                     "summary": active_summary
                 }
             )
-        
-        votes = self._active_proposals.get(proposal_id, [])
+
+        # SECURITY FIX (Audit 2): Use per-proposal lock for reading votes
+        proposal_lock = await self._get_proposal_lock(proposal_id)
+        async with proposal_lock:
+            votes = list(self._active_proposals.get(proposal_id, []))
         consensus = self._calculate_consensus(votes, data.get("created_at"))
         
         # Get Ghost Council recommendation if enabled
@@ -843,10 +892,8 @@ class GovernanceOverlay(BaseOverlay):
         # Special: Core rejection blocks
         if self._config.require_core_approval and result.has_core_rejection:
             result.status = VotingStatus.CONSENSUS_FAILED
-        
-        if result.status == VotingStatus.CONSENSUS_REACHED:
-            self._stats["consensus_reached"] += 1
-        
+
+        # NOTE: Stats update moved to _make_decision to avoid double-counting
         return result
     
     def _make_decision(
@@ -854,11 +901,19 @@ class GovernanceOverlay(BaseOverlay):
         proposal_id: str,
         consensus: ConsensusResult,
         policy_results: dict
-    ) -> GovernanceDecision:
-        """Make final governance decision."""
+    ) -> tuple[GovernanceDecision, bool]:
+        """
+        Make final governance decision.
+
+        Returns:
+            Tuple of (decision, consensus_reached) where consensus_reached indicates
+            if stats should be updated (caller should call _update_stats).
+        """
+        consensus_reached = False
         if consensus.status == VotingStatus.CONSENSUS_REACHED:
             decision_str = "approved"
             rationale = f"Consensus reached with {consensus.approval_percentage:.1%} approval"
+            consensus_reached = True
         elif consensus.status == VotingStatus.CONSENSUS_FAILED:
             decision_str = "rejected"
             rationale = f"Consensus failed - {consensus.rejection_percentage:.1%} rejection"
@@ -869,7 +924,7 @@ class GovernanceOverlay(BaseOverlay):
             decision_str = "pending"
             rationale = f"Voting in progress - {consensus.total_votes} votes cast"
         
-        return GovernanceDecision(
+        decision = GovernanceDecision(
             proposal_id=proposal_id,
             decision=decision_str,
             consensus=consensus,
@@ -877,7 +932,8 @@ class GovernanceOverlay(BaseOverlay):
             effective_at=datetime.utcnow() if decision_str == "approved" else None,
             rationale=rationale
         )
-    
+        return decision, consensus_reached
+
     def _get_ghost_council_recommendation(
         self,
         data: dict,

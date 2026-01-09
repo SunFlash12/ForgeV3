@@ -2,16 +2,25 @@
 Federation API Routes
 
 REST API for managing federated peers and sync operations.
+
+SECURITY FIX (Audit 2):
+- Added authentication to peer management routes
+- Require admin role for peer registration/modification/deletion
+- Added rate limiting to public federation endpoints
 """
 
 import logging
+import time
 import uuid
+from collections import defaultdict
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Annotated
 
-from fastapi import APIRouter, HTTPException, Depends, Query, Header
+from fastapi import APIRouter, HTTPException, Depends, Query, Header, Request
 from pydantic import BaseModel, Field
 
+from forge.api.dependencies import get_current_user, get_current_active_user
+from forge.models.user import User
 from forge.federation.models import (
     FederatedPeer,
     FederatedCapsule,
@@ -34,6 +43,130 @@ from forge.database.client import get_db_client
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/federation", tags=["Federation"])
+
+
+# ============================================================================
+# SECURITY FIX (Audit 2): Rate Limiting for Federation Endpoints
+# ============================================================================
+
+class FederationRateLimiter:
+    """
+    Rate limiter for federation endpoints.
+
+    Applies stricter limits to prevent abuse from external peers.
+    Uses in-memory storage (for distributed deployments, use Redis).
+    """
+
+    def __init__(
+        self,
+        requests_per_minute: int = 30,
+        requests_per_hour: int = 500,
+        handshake_per_hour: int = 10,  # Stricter for handshakes
+    ):
+        self.requests_per_minute = requests_per_minute
+        self.requests_per_hour = requests_per_hour
+        self.handshake_per_hour = handshake_per_hour
+        self._minute_counts: dict[str, tuple[float, int]] = {}
+        self._hour_counts: dict[str, tuple[float, int]] = {}
+        self._handshake_counts: dict[str, tuple[float, int]] = {}
+
+    def _get_client_key(self, request: Request, public_key: str | None = None) -> str:
+        """Get rate limit key from peer public key or IP."""
+        if public_key:
+            return f"peer:{public_key[:32]}"
+        # Fall back to IP
+        forwarded = request.headers.get("X-Forwarded-For")
+        if forwarded:
+            return f"ip:{forwarded.split(',')[0].strip()}"
+        if request.client:
+            return f"ip:{request.client.host}"
+        return "ip:unknown"
+
+    def check_rate_limit(
+        self,
+        request: Request,
+        public_key: str | None = None,
+        is_handshake: bool = False,
+    ) -> tuple[bool, int]:
+        """
+        Check if request is within rate limits.
+
+        Returns (allowed, retry_after_seconds).
+        """
+        now = time.time()
+        key = self._get_client_key(request, public_key)
+
+        # Check minute limit
+        if key in self._minute_counts:
+            window_start, count = self._minute_counts[key]
+            if now - window_start < 60:
+                if count >= self.requests_per_minute:
+                    return False, int(60 - (now - window_start))
+            else:
+                self._minute_counts[key] = (now, 0)
+
+        # Check hour limit
+        if key in self._hour_counts:
+            window_start, count = self._hour_counts[key]
+            if now - window_start < 3600:
+                if count >= self.requests_per_hour:
+                    return False, int(3600 - (now - window_start))
+            else:
+                self._hour_counts[key] = (now, 0)
+
+        # Special stricter limit for handshakes
+        if is_handshake:
+            if key in self._handshake_counts:
+                window_start, count = self._handshake_counts[key]
+                if now - window_start < 3600:
+                    if count >= self.handshake_per_hour:
+                        logger.warning(
+                            f"Federation handshake rate limit exceeded for {key}"
+                        )
+                        return False, int(3600 - (now - window_start))
+                else:
+                    self._handshake_counts[key] = (now, 0)
+
+        # Increment counters
+        if key not in self._minute_counts:
+            self._minute_counts[key] = (now, 0)
+        if key not in self._hour_counts:
+            self._hour_counts[key] = (now, 0)
+        if is_handshake and key not in self._handshake_counts:
+            self._handshake_counts[key] = (now, 0)
+
+        _, minute_count = self._minute_counts[key]
+        self._minute_counts[key] = (self._minute_counts[key][0], minute_count + 1)
+
+        _, hour_count = self._hour_counts[key]
+        self._hour_counts[key] = (self._hour_counts[key][0], hour_count + 1)
+
+        if is_handshake:
+            _, handshake_count = self._handshake_counts[key]
+            self._handshake_counts[key] = (self._handshake_counts[key][0], handshake_count + 1)
+
+        return True, 0
+
+
+# Global rate limiter instance
+_federation_rate_limiter = FederationRateLimiter()
+
+
+async def check_federation_rate_limit(
+    request: Request,
+    x_forge_public_key: str | None = Header(default=None),
+) -> None:
+    """Dependency to check federation rate limits."""
+    is_handshake = request.url.path.endswith("/handshake")
+    allowed, retry_after = _federation_rate_limiter.check_rate_limit(
+        request, x_forge_public_key, is_handshake
+    )
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail="Federation rate limit exceeded",
+            headers={"Retry-After": str(retry_after)},
+        )
 
 
 # ============================================================================
@@ -200,9 +333,23 @@ async def get_capsule_repository() -> CapsuleRepository:
 # Peer Management Routes
 # ============================================================================
 
+# Type alias for admin user dependency
+AdminUserDep = Annotated[User, Depends(get_current_active_user)]
+
+
+def require_admin_role(user: User) -> None:
+    """Verify user has admin role. Raises HTTPException if not."""
+    if user.role not in ("admin", "system"):
+        raise HTTPException(
+            status_code=403,
+            detail="Admin privileges required for federation management"
+        )
+
+
 @router.post("/peers", response_model=PeerResponse)
 async def register_peer(
     request: PeerRegistrationRequest,
+    current_user: AdminUserDep,  # SECURITY FIX: Require authentication
     protocol: FederationProtocol = Depends(get_protocol),
     sync_service: SyncService = Depends(get_sync_service),
     trust_manager: PeerTrustManager = Depends(get_trust_manager),
@@ -212,7 +359,11 @@ async def register_peer(
 
     This initiates a handshake with the remote peer to exchange public keys
     and establish trust.
+
+    Requires admin authentication.
     """
+    # SECURITY FIX: Require admin role for peer registration
+    require_admin_role(current_user)
     # Attempt handshake with peer
     handshake_result = await protocol.initiate_handshake(request.url)
 
@@ -367,10 +518,13 @@ async def get_peer(
 async def update_peer(
     peer_id: str,
     request: PeerUpdateRequest,
+    current_user: AdminUserDep,  # SECURITY FIX: Require authentication
     sync_service: SyncService = Depends(get_sync_service),
     trust_manager: PeerTrustManager = Depends(get_trust_manager),
 ):
-    """Update peer settings."""
+    """Update peer settings. Requires admin authentication."""
+    # SECURITY FIX: Require admin role for peer modification
+    require_admin_role(current_user)
     peer = await sync_service.get_peer(peer_id)
     if not peer:
         raise HTTPException(status_code=404, detail="Peer not found")
@@ -426,9 +580,12 @@ async def update_peer(
 @router.delete("/peers/{peer_id}")
 async def remove_peer(
     peer_id: str,
+    current_user: AdminUserDep,  # SECURITY FIX: Require authentication
     sync_service: SyncService = Depends(get_sync_service),
 ):
-    """Remove a federated peer."""
+    """Remove a federated peer. Requires admin authentication."""
+    # SECURITY FIX: Require admin role for peer removal
+    require_admin_role(current_user)
     peer = await sync_service.get_peer(peer_id)
     if not peer:
         raise HTTPException(status_code=404, detail="Peer not found")
@@ -447,10 +604,13 @@ async def remove_peer(
 async def adjust_peer_trust(
     peer_id: str,
     request: TrustAdjustmentRequest,
+    current_user: AdminUserDep,  # SECURITY FIX: Require authentication
     sync_service: SyncService = Depends(get_sync_service),
     trust_manager: PeerTrustManager = Depends(get_trust_manager),
 ):
-    """Manually adjust a peer's trust score."""
+    """Manually adjust a peer's trust score. Requires admin authentication."""
+    # SECURITY FIX: Require admin role for trust adjustment
+    require_admin_role(current_user)
     peer = await sync_service.get_peer(peer_id)
     if not peer:
         raise HTTPException(status_code=404, detail="Peer not found")
@@ -460,7 +620,7 @@ async def adjust_peer_trust(
         peer=peer,
         delta=request.delta,
         reason=request.reason,
-        adjusted_by="api_user",  # TODO: Get from auth
+        adjusted_by=current_user.username,  # Use authenticated user
     )
 
     return {
@@ -659,7 +819,7 @@ async def get_federation_stats(
 # Incoming Routes (for other peers to call)
 # ============================================================================
 
-@router.post("/handshake")
+@router.post("/handshake", dependencies=[Depends(check_federation_rate_limit)])
 async def handle_handshake(
     handshake: PeerHandshake,
     protocol: FederationProtocol = Depends(get_protocol),
@@ -678,7 +838,7 @@ async def handle_handshake(
     return our_handshake.model_dump(mode='json')
 
 
-@router.get("/health")
+@router.get("/health", dependencies=[Depends(check_federation_rate_limit)])
 async def federation_health():
     """Health check endpoint for peers."""
     return {
@@ -688,7 +848,7 @@ async def federation_health():
     }
 
 
-@router.get("/changes")
+@router.get("/changes", dependencies=[Depends(check_federation_rate_limit)])
 async def get_changes(
     since: datetime | None = None,
     types: str | None = None,
@@ -792,7 +952,7 @@ async def get_changes(
     }
 
 
-@router.post("/incoming/capsules")
+@router.post("/incoming/capsules", dependencies=[Depends(check_federation_rate_limit)])
 async def receive_capsules(
     payload: SyncPayload,
     x_forge_public_key: str = Header(None),

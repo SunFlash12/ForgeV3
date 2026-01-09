@@ -5,6 +5,7 @@ Manages database schema including constraints, indexes, and vector indexes
 for semantic search. Based on V2 specification requirements.
 """
 
+import re
 from typing import Any
 
 import structlog
@@ -12,6 +13,22 @@ from forge.database.client import Neo4jClient
 from forge.config import settings
 
 logger = structlog.get_logger(__name__)
+
+
+# SECURITY FIX (Audit 2): Validate identifiers before using in schema operations
+# Neo4j identifiers must be alphanumeric with underscores only
+_SAFE_IDENTIFIER_PATTERN = re.compile(r'^[a-zA-Z_][a-zA-Z0-9_]*$')
+
+
+def _validate_identifier(name: str) -> bool:
+    """
+    Validate that an identifier (constraint/index name) is safe for use in queries.
+
+    Returns True if safe, False otherwise.
+    """
+    if not name or len(name) > 128:
+        return False
+    return bool(_SAFE_IDENTIFIER_PATTERN.match(name))
 
 
 class SchemaManager:
@@ -455,6 +472,11 @@ class SchemaManager:
         for constraint in constraints:
             name = constraint.get("name")
             if name:
+                # SECURITY FIX (Audit 2): Validate identifier before using in DROP
+                if not _validate_identifier(name):
+                    logger.warning(f"Skipping invalid constraint name: {name[:50]}")
+                    results[f"drop_constraint_invalid"] = False
+                    continue
                 try:
                     await self.client.execute(f"DROP CONSTRAINT {name} IF EXISTS")
                     results[f"drop_constraint_{name}"] = True
@@ -470,6 +492,11 @@ class SchemaManager:
         for index in indexes:
             name = index.get("name")
             if name:
+                # SECURITY FIX (Audit 2): Validate identifier before using in DROP
+                if not _validate_identifier(name):
+                    logger.warning(f"Skipping invalid index name: {name[:50]}")
+                    results[f"drop_index_invalid"] = False
+                    continue
                 try:
                     await self.client.execute(f"DROP INDEX {name} IF EXISTS")
                     results[f"drop_index_{name}"] = True

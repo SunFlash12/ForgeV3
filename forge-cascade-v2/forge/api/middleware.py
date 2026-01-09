@@ -13,6 +13,7 @@ Provides:
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
 import re
@@ -506,7 +507,12 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     - Referrer-Policy
     - Content-Security-Policy
     - Strict-Transport-Security (HSTS) - configurable
+    - API versioning headers (Audit 2)
     """
+
+    # SECURITY FIX (Audit 2): API version for client compatibility tracking
+    API_VERSION = "2.0.0"
+    API_MIN_SUPPORTED_VERSION = "2.0.0"
 
     def __init__(self, app, enable_hsts: bool = False):
         super().__init__(app)
@@ -545,6 +551,10 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "accelerometer=(), camera=(), geolocation=(), gyroscope=(), "
             "magnetometer=(), microphone=(), payment=(), usb=()"
         )
+
+        # SECURITY FIX (Audit 2): API versioning headers for client compatibility
+        response.headers["X-API-Version"] = self.API_VERSION
+        response.headers["X-API-Min-Version"] = self.API_MIN_SUPPORTED_VERSION
 
         return response
 
@@ -797,21 +807,76 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
 class CompressionMiddleware(BaseHTTPMiddleware):
     """
     Handle response compression.
-    
+
     Note: For production, use GZipMiddleware from starlette or nginx.
     This is a placeholder showing where compression would go.
     """
-    
+
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         # Check if client accepts gzip
         accept_encoding = request.headers.get("Accept-Encoding", "")
-        
+
         response = await call_next(request)
-        
+
         # In production, actual compression would happen here
         # For now, just pass through
-        
+
         return response
+
+
+class RequestTimeoutMiddleware(BaseHTTPMiddleware):
+    """
+    Enforce request timeout to prevent slow requests from holding resources.
+
+    SECURITY FIX (Audit 2): Prevent slowloris and resource exhaustion attacks
+    by enforcing a maximum request processing time.
+    """
+
+    # Paths that may need longer timeouts (e.g., file uploads, cascade processing)
+    EXTENDED_TIMEOUT_PATHS = {
+        "/api/v1/cascade/trigger",
+        "/api/v1/graph/pagerank",
+        "/api/v1/graph/communities",
+    }
+
+    def __init__(
+        self,
+        app,
+        default_timeout: float = 30.0,  # 30 seconds default
+        extended_timeout: float = 120.0,  # 2 minutes for long operations
+    ):
+        super().__init__(app)
+        self.default_timeout = default_timeout
+        self.extended_timeout = extended_timeout
+
+    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+        # Determine timeout for this request
+        timeout = self.default_timeout
+        for path in self.EXTENDED_TIMEOUT_PATHS:
+            if request.url.path.startswith(path):
+                timeout = self.extended_timeout
+                break
+
+        try:
+            response = await asyncio.wait_for(
+                call_next(request),
+                timeout=timeout,
+            )
+            return response
+        except asyncio.TimeoutError:
+            logger.warning(
+                "request_timeout",
+                path=request.url.path,
+                method=request.method,
+                timeout=timeout,
+            )
+            return JSONResponse(
+                status_code=504,
+                content={
+                    "error": "Request timeout",
+                    "detail": "The request took too long to process",
+                },
+            )
 
 
 __all__ = [
@@ -820,7 +885,9 @@ __all__ = [
     "AuthenticationMiddleware",
     "RateLimitMiddleware",
     "SecurityHeadersMiddleware",
+    "CSRFProtectionMiddleware",
     "RequestSizeLimitMiddleware",
     "IdempotencyMiddleware",
     "CompressionMiddleware",
+    "RequestTimeoutMiddleware",
 ]

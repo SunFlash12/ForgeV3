@@ -7,10 +7,70 @@ Provides graph algorithm computations with a layered backend approach:
 3. NetworkX - Full algorithm support, in-memory fallback
 """
 
+import re
 from datetime import datetime
 from typing import Any
 
 import structlog
+
+
+# SECURITY FIX: Pattern for validating Neo4j identifiers (labels, relationship types, graph names)
+# Only allows alphanumeric characters and underscores to prevent Cypher injection
+_SAFE_IDENTIFIER_PATTERN = re.compile(r'^[a-zA-Z][a-zA-Z0-9_]*$')
+
+
+def validate_neo4j_identifier(value: str, identifier_type: str = "identifier") -> str:
+    """
+    Validate a Neo4j identifier (label, relationship type, or graph name).
+
+    SECURITY: Prevents Cypher/GDS injection attacks by ensuring identifiers
+    only contain safe characters (alphanumeric + underscore, starting with letter).
+
+    Args:
+        value: The identifier value to validate
+        identifier_type: Description for error messages (e.g., "node_label", "relationship_type")
+
+    Returns:
+        The validated value
+
+    Raises:
+        ValueError: If the identifier contains unsafe characters
+    """
+    if not value:
+        raise ValueError(f"{identifier_type} cannot be empty")
+
+    if len(value) > 128:
+        raise ValueError(f"{identifier_type} exceeds maximum length of 128 characters")
+
+    if not _SAFE_IDENTIFIER_PATTERN.match(value):
+        raise ValueError(
+            f"Invalid {identifier_type}: '{value}'. "
+            f"Must start with a letter and contain only alphanumeric characters and underscores."
+        )
+
+    return value
+
+
+def validate_relationship_pattern(rel_types: list[str]) -> str:
+    """
+    Validate and join multiple relationship types into a safe pattern.
+
+    SECURITY: Validates each type before joining with | for Cypher patterns.
+
+    Args:
+        rel_types: List of relationship type names
+
+    Returns:
+        Safe pattern string like "TYPE1|TYPE2|TYPE3"
+
+    Raises:
+        ValueError: If any relationship type is invalid
+    """
+    if not rel_types:
+        raise ValueError("At least one relationship type must be provided")
+
+    validated = [validate_neo4j_identifier(rt, "relationship_type") for rt in rel_types]
+    return "|".join(validated)
 
 from forge.database.client import Neo4jClient
 from forge.models.graph_analysis import (
@@ -143,7 +203,10 @@ class GraphAlgorithmProvider:
 
     async def _gds_pagerank(self, request: PageRankRequest) -> NodeRankingResult:
         """Compute PageRank using Neo4j GDS."""
-        graph_name = f"pagerank_{request.node_label}_{request.relationship_type}"
+        # SECURITY FIX: Validate all user-controlled identifiers to prevent Cypher injection
+        node_label = validate_neo4j_identifier(request.node_label, "node_label")
+        relationship_type = validate_neo4j_identifier(request.relationship_type, "relationship_type")
+        graph_name = f"pagerank_{node_label}_{relationship_type}"
 
         try:
             # Project the graph
@@ -151,8 +214,8 @@ class GraphAlgorithmProvider:
                 f"""
                 CALL gds.graph.project(
                     '{graph_name}',
-                    '{request.node_label}',
-                    '{request.relationship_type}'
+                    '{node_label}',
+                    '{relationship_type}'
                 )
                 """
             )
@@ -169,7 +232,7 @@ class GraphAlgorithmProvider:
                 WITH nodeId, score
                 ORDER BY score DESC
                 LIMIT $limit
-                MATCH (n:{request.node_label}) WHERE id(n) = nodeId
+                MATCH (n:{node_label}) WHERE id(n) = nodeId
                 RETURN n.id AS node_id, n.title AS title, n.trust_level AS trust_level, score
                 """,
                 {
@@ -183,7 +246,7 @@ class GraphAlgorithmProvider:
             rankings = [
                 NodeRanking(
                     node_id=r["node_id"],
-                    node_type=request.node_label,
+                    node_type=node_label,
                     score=r["score"],
                     rank=i + 1,
                     title=r.get("title"),
@@ -194,7 +257,7 @@ class GraphAlgorithmProvider:
 
             # Get total node count
             count_result = await self.client.execute_single(
-                f"MATCH (n:{request.node_label}) RETURN count(n) AS count"
+                f"MATCH (n:{node_label}) RETURN count(n) AS count"
             )
             total_nodes = count_result.get("count", 0) if count_result else 0
 
@@ -224,12 +287,16 @@ class GraphAlgorithmProvider:
 
         This is a simplified approximation suitable for smaller graphs.
         """
+        # SECURITY FIX: Validate all user-controlled identifiers to prevent Cypher injection
+        node_label = validate_neo4j_identifier(request.node_label, "node_label")
+        relationship_type = validate_neo4j_identifier(request.relationship_type, "relationship_type")
+
         # Get all nodes with their relationships
         results = await self.client.execute(
             f"""
-            MATCH (n:{request.node_label})
-            OPTIONAL MATCH (n)<-[:{request.relationship_type}]-(incoming)
-            OPTIONAL MATCH (n)-[:{request.relationship_type}]->(outgoing)
+            MATCH (n:{node_label})
+            OPTIONAL MATCH (n)<-[:{relationship_type}]-(incoming)
+            OPTIONAL MATCH (n)-[:{relationship_type}]->(outgoing)
             WITH n,
                  count(DISTINCT incoming) AS in_degree,
                  count(DISTINCT outgoing) AS out_degree
@@ -254,7 +321,7 @@ class GraphAlgorithmProvider:
         rankings = [
             NodeRanking(
                 node_id=r["node_id"],
-                node_type=request.node_label,
+                node_type=node_label,
                 score=r["score"],
                 rank=i + 1,
                 title=r.get("title"),
@@ -264,7 +331,7 @@ class GraphAlgorithmProvider:
         ]
 
         count_result = await self.client.execute_single(
-            f"MATCH (n:{request.node_label}) RETURN count(n) AS count"
+            f"MATCH (n:{node_label}) RETURN count(n) AS count"
         )
         total_nodes = count_result.get("count", 0) if count_result else 0
 
@@ -318,11 +385,16 @@ class GraphAlgorithmProvider:
         request: CentralityRequest,
     ) -> NodeRankingResult:
         """Compute degree centrality (works with pure Cypher)."""
-        rel_clause = f":{request.relationship_type}" if request.relationship_type else ""
+        # SECURITY FIX: Validate all user-controlled identifiers to prevent Cypher injection
+        node_label = validate_neo4j_identifier(request.node_label, "node_label")
+        rel_clause = ""
+        if request.relationship_type:
+            relationship_type = validate_neo4j_identifier(request.relationship_type, "relationship_type")
+            rel_clause = f":{relationship_type}"
 
         results = await self.client.execute(
             f"""
-            MATCH (n:{request.node_label})
+            MATCH (n:{node_label})
             OPTIONAL MATCH (n)-[r{rel_clause}]-()
             WITH n, count(r) AS degree
             ORDER BY degree DESC
@@ -341,7 +413,7 @@ class GraphAlgorithmProvider:
         rankings = [
             NodeRanking(
                 node_id=r["node_id"],
-                node_type=request.node_label,
+                node_type=node_label,
                 score=r["score"] / max_score if request.normalized else r["score"],
                 rank=i + 1,
                 title=r.get("title"),
@@ -351,7 +423,7 @@ class GraphAlgorithmProvider:
         ]
 
         count_result = await self.client.execute_single(
-            f"MATCH (n:{request.node_label}) RETURN count(n) AS count"
+            f"MATCH (n:{node_label}) RETURN count(n) AS count"
         )
 
         return NodeRankingResult(
@@ -364,8 +436,12 @@ class GraphAlgorithmProvider:
 
     async def _gds_centrality(self, request: CentralityRequest) -> NodeRankingResult:
         """Compute centrality using GDS."""
-        graph_name = f"centrality_{request.node_label}"
-        rel_type = request.relationship_type or "*"
+        # SECURITY FIX: Validate all user-controlled identifiers to prevent Cypher injection
+        node_label = validate_neo4j_identifier(request.node_label, "node_label")
+        rel_type = "*"
+        if request.relationship_type:
+            rel_type = validate_neo4j_identifier(request.relationship_type, "relationship_type")
+        graph_name = f"centrality_{node_label}"
 
         algo_map = {
             AlgorithmType.BETWEENNESS_CENTRALITY: "gds.betweenness.stream",
@@ -380,7 +456,7 @@ class GraphAlgorithmProvider:
                 f"""
                 CALL gds.graph.project(
                     '{graph_name}',
-                    '{request.node_label}',
+                    '{node_label}',
                     '{rel_type}'
                 )
                 """
@@ -393,7 +469,7 @@ class GraphAlgorithmProvider:
                 WITH nodeId, score
                 ORDER BY score DESC
                 LIMIT $limit
-                MATCH (n:{request.node_label}) WHERE id(n) = nodeId
+                MATCH (n:{node_label}) WHERE id(n) = nodeId
                 RETURN n.id AS node_id, n.title AS title, n.trust_level AS trust_level, score
                 """,
                 {"limit": request.limit},
@@ -402,7 +478,7 @@ class GraphAlgorithmProvider:
             rankings = [
                 NodeRanking(
                     node_id=r["node_id"],
-                    node_type=request.node_label,
+                    node_type=node_label,
                     score=r["score"],
                     rank=i + 1,
                     title=r.get("title"),
@@ -412,7 +488,7 @@ class GraphAlgorithmProvider:
             ]
 
             count_result = await self.client.execute_single(
-                f"MATCH (n:{request.node_label}) RETURN count(n) AS count"
+                f"MATCH (n:{node_label}) RETURN count(n) AS count"
             )
 
             return NodeRankingResult(
@@ -481,8 +557,9 @@ class GraphAlgorithmProvider:
     ) -> CommunityDetectionResult:
         """Detect communities using GDS Louvain."""
         graph_name = "community_detection"
-        node_label = request.node_label or "Capsule"
-        rel_type = request.relationship_type or "DERIVED_FROM"
+        # SECURITY FIX: Validate all user-controlled identifiers to prevent Cypher injection
+        node_label = validate_neo4j_identifier(request.node_label or "Capsule", "node_label")
+        rel_type = validate_neo4j_identifier(request.relationship_type or "DERIVED_FROM", "relationship_type")
 
         try:
             await self.client.execute(
@@ -574,8 +651,9 @@ class GraphAlgorithmProvider:
 
         This is a fallback when GDS is not available.
         """
-        node_label = request.node_label or "Capsule"
-        rel_type = request.relationship_type or "DERIVED_FROM"
+        # SECURITY FIX: Validate all user-controlled identifiers to prevent Cypher injection
+        node_label = validate_neo4j_identifier(request.node_label or "Capsule", "node_label")
+        rel_type = validate_neo4j_identifier(request.relationship_type or "DERIVED_FROM", "relationship_type")
 
         # Find connected components using path traversal
         results = await self.client.execute(
@@ -649,12 +727,15 @@ class GraphAlgorithmProvider:
         """
         start_time = datetime.utcnow()
 
-        # Build relationship pattern
-        rel_types = "|".join(request.relationship_types)
+        # SECURITY FIX: Validate all user-controlled identifiers to prevent Cypher injection
+        rel_types = validate_relationship_pattern(request.relationship_types)
+
+        # SECURITY FIX: Validate max_hops is a safe integer value
+        max_hops = max(1, min(int(request.max_hops), 20))  # Clamp between 1 and 20
 
         results = await self.client.execute(
             f"""
-            MATCH path = (source:Capsule {{id: $source_id}})-[:{rel_types}*1..{request.max_hops}]-(target:Capsule {{id: $target_id}})
+            MATCH path = (source:Capsule {{id: $source_id}})-[:{rel_types}*1..{max_hops}]-(target:Capsule {{id: $target_id}})
             WITH path,
                  [n IN nodes(path) | n.trust_level] AS trusts,
                  length(path) AS path_length
@@ -802,9 +883,12 @@ class GraphAlgorithmProvider:
         limit: int = 50,
     ) -> list[TrustInfluence]:
         """Get nodes ranked by their influence on trust propagation."""
+        # SECURITY FIX: Validate all user-controlled identifiers to prevent Cypher injection
+        validated_node_label = validate_neo4j_identifier(node_label, "node_label")
+
         results = await self.client.execute(
             f"""
-            MATCH (n:{node_label})
+            MATCH (n:{validated_node_label})
             OPTIONAL MATCH (n)<-[:DERIVED_FROM*1..5]-(downstream)
             OPTIONAL MATCH (n)-[:DERIVED_FROM*1..5]->(upstream)
             WITH n,
@@ -868,7 +952,10 @@ class GraphAlgorithmProvider:
         request: NodeSimilarityRequest,
     ) -> NodeSimilarityResult:
         """Compute node similarity using GDS."""
-        graph_name = f"similarity_{request.node_label}"
+        # SECURITY FIX: Validate all user-controlled identifiers to prevent Cypher injection
+        node_label = validate_neo4j_identifier(request.node_label, "node_label")
+        relationship_type = validate_neo4j_identifier(request.relationship_type, "relationship_type")
+        graph_name = f"similarity_{node_label}"
 
         try:
             # Project the graph
@@ -876,19 +963,19 @@ class GraphAlgorithmProvider:
                 f"""
                 CALL gds.graph.project(
                     '{graph_name}',
-                    '{request.node_label}',
-                    '{request.relationship_type}'
+                    '{node_label}',
+                    '{relationship_type}'
                 )
                 """
             )
 
             # Run node similarity
-            algo = f"gds.nodeSimilarity.stream"
+            algo = "gds.nodeSimilarity.stream"
             if request.source_node_id:
                 # Similarity for a specific node
                 results = await self.client.execute(
                     f"""
-                    MATCH (source:{request.node_label} {{id: $source_id}})
+                    MATCH (source:{node_label} {{id: $source_id}})
                     CALL {algo}('{graph_name}', {{
                         topK: $top_k,
                         similarityCutoff: $cutoff
@@ -896,7 +983,7 @@ class GraphAlgorithmProvider:
                     YIELD node1, node2, similarity
                     WHERE id(source) = node1
                     WITH node2, similarity
-                    MATCH (n:{request.node_label}) WHERE id(n) = node2
+                    MATCH (n:{node_label}) WHERE id(n) = node2
                     RETURN n.id AS node_id, n.title AS title, n.type AS node_type, similarity
                     ORDER BY similarity DESC
                     LIMIT $top_k
@@ -916,7 +1003,7 @@ class GraphAlgorithmProvider:
                     }})
                     YIELD node1, node2, similarity
                     WITH node2, similarity
-                    MATCH (n:{request.node_label}) WHERE id(n) = node2
+                    MATCH (n:{node_label}) WHERE id(n) = node2
                     RETURN n.id AS node_id, n.title AS title, n.type AS node_type, similarity
                     ORDER BY similarity DESC
                     LIMIT $top_k
@@ -930,7 +1017,7 @@ class GraphAlgorithmProvider:
             similar_nodes = [
                 SimilarNode(
                     node_id=r["node_id"],
-                    node_type=r.get("node_type", request.node_label),
+                    node_type=r.get("node_type", node_label),
                     title=r.get("title"),
                     similarity_score=r["similarity"],
                 )
@@ -962,13 +1049,17 @@ class GraphAlgorithmProvider:
 
         Fallback when GDS is not available.
         """
+        # SECURITY FIX: Validate all user-controlled identifiers to prevent Cypher injection
+        node_label = validate_neo4j_identifier(request.node_label, "node_label")
+        relationship_type = validate_neo4j_identifier(request.relationship_type, "relationship_type")
+
         if request.source_node_id:
             # Similarity for a specific node
             results = await self.client.execute(
                 f"""
-                MATCH (source:{request.node_label} {{id: $source_id}})-[:{request.relationship_type}]-(neighbor)
+                MATCH (source:{node_label} {{id: $source_id}})-[:{relationship_type}]-(neighbor)
                 WITH source, collect(DISTINCT neighbor) AS source_neighbors
-                MATCH (other:{request.node_label})-[:{request.relationship_type}]-(neighbor)
+                MATCH (other:{node_label})-[:{relationship_type}]-(neighbor)
                 WHERE other <> source
                 WITH source, source_neighbors, other, collect(DISTINCT neighbor) AS other_neighbors
                 WITH other,
@@ -993,9 +1084,9 @@ class GraphAlgorithmProvider:
         else:
             results = await self.client.execute(
                 f"""
-                MATCH (n1:{request.node_label})-[:{request.relationship_type}]-(neighbor)
+                MATCH (n1:{node_label})-[:{relationship_type}]-(neighbor)
                 WITH n1, collect(DISTINCT neighbor) AS n1_neighbors
-                MATCH (n2:{request.node_label})-[:{request.relationship_type}]-(neighbor)
+                MATCH (n2:{node_label})-[:{relationship_type}]-(neighbor)
                 WHERE id(n1) < id(n2)
                 WITH n1, n2, n1_neighbors, collect(DISTINCT neighbor) AS n2_neighbors
                 WITH n1, n2,
@@ -1019,7 +1110,7 @@ class GraphAlgorithmProvider:
         similar_nodes = [
             SimilarNode(
                 node_id=r["node_id"],
-                node_type=r.get("node_type", request.node_label),
+                node_type=r.get("node_type", node_label),
                 title=r.get("title"),
                 similarity_score=r["similarity"],
                 shared_neighbors=r.get("shared_neighbors", 0),
@@ -1067,7 +1158,9 @@ class GraphAlgorithmProvider:
     ) -> ShortestPathResult:
         """Compute weighted shortest path using GDS Dijkstra."""
         graph_name = "shortest_path_graph"
-        rel_types = "|".join(request.relationship_types)
+        # SECURITY FIX: Validate all user-controlled identifiers to prevent Cypher injection
+        rel_types_list = [validate_neo4j_identifier(rt, "relationship_type") for rt in request.relationship_types]
+        rel_types_for_projection = ", ".join(rel_types_list)
 
         try:
             # Project with trust as weight
@@ -1077,7 +1170,7 @@ class GraphAlgorithmProvider:
                     '{graph_name}',
                     'Capsule',
                     {{
-                        {rel_types.replace('|', ',')}
+                        {rel_types_for_projection}
                     }},
                     {{
                         relationshipProperties: 'trust_weight'
@@ -1153,12 +1246,16 @@ class GraphAlgorithmProvider:
         request: ShortestPathRequest,
     ) -> ShortestPathResult:
         """Compute shortest path using native Cypher."""
-        rel_types = "|".join(request.relationship_types)
+        # SECURITY FIX: Validate all user-controlled identifiers to prevent Cypher injection
+        rel_types = validate_relationship_pattern(request.relationship_types)
+
+        # SECURITY FIX: Validate max_depth is a safe integer value
+        max_depth = max(1, min(int(request.max_depth), 20))  # Clamp between 1 and 20
 
         result = await self.client.execute_single(
             f"""
             MATCH path = shortestPath(
-                (source:Capsule {{id: $source_id}})-[:{rel_types}*1..{request.max_depth}]-(target:Capsule {{id: $target_id}})
+                (source:Capsule {{id: $source_id}})-[:{rel_types}*1..{max_depth}]-(target:Capsule {{id: $target_id}})
             )
             WITH path,
                  [n IN nodes(path) | n] AS pathNodes,

@@ -215,7 +215,19 @@ async def get_user_capsules(
 ) -> UserCapsulesResponse:
     """
     Get user's capsules.
+
+    Regular users can only view their own capsules.
+    Admins can view any user's capsules.
     """
+    from forge.security.authorization import is_admin
+
+    # SECURITY FIX (Audit 2): Add IDOR protection
+    if current_user.id != user_id and not is_admin(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Can only view your own capsules",
+        )
+
     # Verify user exists
     user = await user_repo.get_by_id(user_id)
     if not user:
@@ -306,7 +318,22 @@ async def get_user_governance(
 ) -> UserGovernanceResponse:
     """
     Get user's governance participation.
+
+    Regular users can only view their own governance participation.
+    Admins can view any user's governance participation.
+
+    Note: For full transparency, governance proposals and votes are
+    publicly visible through the /governance endpoints.
     """
+    from forge.security.authorization import is_admin
+
+    # SECURITY FIX (Audit 2): Add IDOR protection
+    if current_user.id != user_id and not is_admin(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Can only view your own governance participation",
+        )
+
     # Verify user exists
     user = await user_repo.get_by_id(user_id)
     if not user:

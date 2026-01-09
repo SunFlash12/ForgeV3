@@ -465,27 +465,68 @@ async def authenticate_websocket(
 ) -> Optional[str]:
     """
     Authenticate a WebSocket connection.
-    
+
+    Authentication methods (in order of preference):
+    1. Cookie-based (access_token cookie) - Most secure, recommended
+    2. Authorization header - Secure for programmatic clients
+    3. Query parameter - DEPRECATED, logged for security monitoring
+
     Returns user_id if authenticated, None otherwise.
+
+    SECURITY FIX (Audit 2): Prioritize secure auth methods, warn on query param usage
     """
-    
+    token_source = None
+
+    # 1. PREFERRED: Try to get token from httpOnly cookie (most secure)
     if not token:
-        # Try to get token from query params
-        token = websocket.query_params.get("token")
-    
+        cookie_token = websocket.cookies.get("access_token")
+        if cookie_token:
+            token = cookie_token
+            token_source = "cookie"
+
+    # 2. SECURE: Try to get from Authorization header
     if not token:
-        # Try to get from headers (some clients support this)
         auth_header = websocket.headers.get("authorization", "")
         if auth_header.startswith("Bearer "):
             token = auth_header[7:]
-    
+            token_source = "header"
+
+    # 3. DEPRECATED: Fall back to query params (for backwards compatibility only)
+    # SECURITY WARNING: Query params can leak tokens in logs, browser history, referers
+    if not token:
+        query_token = websocket.query_params.get("token")
+        if query_token:
+            token = query_token
+            token_source = "query_param"
+            # Log security warning for monitoring
+            logger.warning(
+                "websocket_token_in_query_param",
+                path=str(websocket.url.path),
+                client=websocket.client.host if websocket.client else "unknown",
+                warning="Token passed via query parameter is insecure. Use cookies or Authorization header instead.",
+            )
+
     if not token:
         return None
-    
+
     try:
         payload = verify_token(token, expected_type="access")
-        return payload.get("sub")
-    except Exception:
+        user_id = payload.get("sub")
+
+        if user_id:
+            logger.debug(
+                "websocket_authenticated",
+                user_id=user_id,
+                auth_method=token_source,
+            )
+
+        return user_id
+    except Exception as e:
+        logger.warning(
+            "websocket_auth_failed",
+            auth_method=token_source,
+            error=str(e)[:100],
+        )
         return None
 
 

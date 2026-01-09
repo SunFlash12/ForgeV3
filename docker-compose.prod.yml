@@ -9,7 +9,8 @@ services:
   # ===========================================================================
 
   nginx:
-    image: nginx:alpine
+    # SECURITY FIX: Pin image version instead of using floating tag
+    image: nginx:1.27.3-alpine
     container_name: forge-nginx
     ports:
       - "80:80"
@@ -26,6 +27,9 @@ services:
     networks:
       - forge-network
     restart: unless-stopped
+    # SECURITY FIX: Add security options
+    security_opt:
+      - no-new-privileges:true
     healthcheck:
       test: ["CMD", "nginx", "-t"]
       interval: 30s
@@ -33,7 +37,8 @@ services:
       retries: 3
 
   certbot:
-    image: certbot/certbot
+    # SECURITY FIX: Pin image version
+    image: certbot/certbot:v3.0.1
     container_name: forge-certbot
     volumes:
       - ./deploy/certbot/conf:/etc/letsencrypt
@@ -41,6 +46,9 @@ services:
     entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
     networks:
       - forge-network
+    # SECURITY FIX: Add security options
+    security_opt:
+      - no-new-privileges:true
 
   # ===========================================================================
   # Core API Services
@@ -54,6 +62,9 @@ services:
     container_name: forge-cascade-api
     expose:
       - "8001"
+    # SECURITY FIX: Add security options
+    security_opt:
+      - no-new-privileges:true
     environment:
       - NEO4J_URI=${NEO4J_URI}
       - NEO4J_USERNAME=${NEO4J_USERNAME}
@@ -61,7 +72,8 @@ services:
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
       - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
       - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES:-60}
-      - REDIS_URL=redis://:${REDIS_PASSWORD:-forge_redis_secret}@redis:6379
+      # SECURITY FIX: REDIS_PASSWORD must be set, no default
+      - REDIS_URL=redis://:${REDIS_PASSWORD:?REDIS_PASSWORD required}@redis:6379
       - LLM_PROVIDER=${LLM_PROVIDER:-anthropic}
       - LLM_API_KEY=${LLM_API_KEY}
       - LLM_MODEL=${LLM_MODEL:-claude-sonnet-4-20250514}
@@ -106,6 +118,9 @@ services:
     command: ["python", "run_compliance.py"]
     expose:
       - "8002"
+    # SECURITY FIX: Add security options
+    security_opt:
+      - no-new-privileges:true
     environment:
       - PYTHONUNBUFFERED=1
       - SENTRY_DSN=${SENTRY_DSN}
@@ -128,6 +143,9 @@ services:
     command: ["python", "run_virtuals.py"]
     expose:
       - "8003"
+    # SECURITY FIX: Add security options
+    security_opt:
+      - no-new-privileges:true
     environment:
       - PYTHONUNBUFFERED=1
       - SENTRY_DSN=${SENTRY_DSN}
@@ -157,6 +175,9 @@ services:
     container_name: forge-frontend
     expose:
       - "80"
+    # SECURITY FIX: Add security options
+    security_opt:
+      - no-new-privileges:true
     networks:
       - forge-network
     restart: unless-stopped
@@ -180,6 +201,9 @@ services:
     container_name: forge-marketplace
     expose:
       - "80"
+    # SECURITY FIX: Add security options
+    security_opt:
+      - no-new-privileges:true
     networks:
       - forge-network
     restart: unless-stopped
@@ -195,38 +219,50 @@ services:
   # ===========================================================================
 
   redis:
-    image: redis:7-alpine
+    # SECURITY FIX: Pin image version instead of using floating tag
+    image: redis:7.4.1-alpine
     container_name: forge-redis
     volumes:
       - redis-data:/data
     networks:
       - forge-network
     restart: unless-stopped
+    # SECURITY FIX: Run as non-root user
+    user: "999:999"
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-forge_redis_secret}", "ping"]
+      # SECURITY FIX: REDIS_PASSWORD must be set, no default
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:?REDIS_PASSWORD required}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 3
-    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru --requirepass ${REDIS_PASSWORD:-forge_redis_secret}
+    # SECURITY FIX: REDIS_PASSWORD must be set, no default
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD required}
+    # SECURITY FIX: Add security options
+    security_opt:
+      - no-new-privileges:true
     deploy:
       resources:
         limits:
           memory: 512M
 
   jaeger:
-    image: jaegertracing/all-in-one:latest
+    # SECURITY FIX: Pin image version instead of using :latest
+    image: jaegertracing/all-in-one:1.63.0
     container_name: forge-jaeger
     expose:
-      - "16686"
       - "4317"
       - "4318"
+    # SECURITY FIX: Only expose Jaeger UI internally via localhost
     ports:
-      - "16686:16686"  # Jaeger UI (only expose internally or via VPN)
+      - "127.0.0.1:16686:16686"  # Jaeger UI (bind to localhost only)
     environment:
       - COLLECTOR_OTLP_ENABLED=true
     networks:
       - forge-network
     restart: unless-stopped
+    # SECURITY FIX: Add security options
+    security_opt:
+      - no-new-privileges:true
     deploy:
       resources:
         limits:

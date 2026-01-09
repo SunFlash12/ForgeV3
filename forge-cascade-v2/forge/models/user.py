@@ -89,8 +89,22 @@ class UserBase(ForgeModel):
     avatar_url: str | None = Field(
         default=None,
         max_length=500,
-        description="Avatar image URL",
+        description="Avatar image URL (must be http or https)",
     )
+
+    # SECURITY FIX (Audit 2): Validate avatar_url to prevent XSS via javascript:/data: URIs
+    @field_validator("avatar_url")
+    @classmethod
+    def validate_avatar_url(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        v = v.strip()
+        if not v:
+            return None
+        # Only allow http and https schemes
+        if not v.lower().startswith(("http://", "https://")):
+            raise ValueError("Avatar URL must use http or https scheme")
+        return v
 
 
 class UserCreate(UserBase):
