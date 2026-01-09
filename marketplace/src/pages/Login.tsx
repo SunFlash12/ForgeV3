@@ -55,10 +55,38 @@ export default function Login() {
   };
 
   const handleCascadeLogin = () => {
-    // Redirect to Forge Cascade for OAuth login
+    // SECURITY FIX (Audit 4 - H22): Validate OAuth URL against allowlist
+    // to prevent open redirect attacks
+    const TRUSTED_CASCADE_DOMAINS = [
+      'forgecascade.org',
+      'api.forgecascade.org',
+      'localhost',
+      '127.0.0.1',
+    ];
+
     const cascadeUrl = import.meta.env.VITE_CASCADE_API_URL || 'https://forgecascade.org/api/v1';
-    const returnUrl = encodeURIComponent(window.location.origin + '/auth/callback');
-    window.location.href = `${cascadeUrl}/auth/oauth/authorize?redirect_uri=${returnUrl}`;
+
+    // Validate the URL is from a trusted domain
+    try {
+      const url = new URL(cascadeUrl);
+      const hostname = url.hostname.toLowerCase();
+
+      const isTrusted = TRUSTED_CASCADE_DOMAINS.some(domain =>
+        hostname === domain || hostname.endsWith('.' + domain)
+      );
+
+      if (!isTrusted) {
+        console.error('SECURITY: Blocked redirect to untrusted OAuth server:', hostname);
+        setError('Configuration error: Invalid OAuth server');
+        return;
+      }
+
+      const returnUrl = encodeURIComponent(window.location.origin + '/auth/callback');
+      window.location.href = `${cascadeUrl}/auth/oauth/authorize?redirect_uri=${returnUrl}`;
+    } catch (err) {
+      console.error('Invalid OAuth URL:', err);
+      setError('Configuration error: Invalid OAuth URL');
+    }
   };
 
   return (

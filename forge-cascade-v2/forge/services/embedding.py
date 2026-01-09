@@ -35,11 +35,16 @@ class EmbeddingProvider(str, Enum):
 
 @dataclass
 class EmbeddingConfig:
-    """Configuration for embedding service."""
+    """
+    Configuration for embedding service.
+
+    SECURITY FIX (Audit 4 - H24): API keys are loaded from environment
+    variables and are redacted in logs/repr to prevent exposure.
+    """
     provider: EmbeddingProvider = EmbeddingProvider.MOCK
     model: str = "text-embedding-3-small"
     dimensions: int = 1536
-    api_key: Optional[str] = None
+    api_key: Optional[str] = None  # SECURITY: Load from env, redact in logs
     api_base: Optional[str] = None
     batch_size: int = 100
     max_retries: int = 3
@@ -48,6 +53,26 @@ class EmbeddingConfig:
     normalize: bool = True
     # Cost optimization: Configurable cache size (default 50000 for better hit rates)
     cache_size: int = 50000
+
+    def __repr__(self) -> str:
+        """SECURITY FIX: Redact API key in repr/logs."""
+        return (
+            f"EmbeddingConfig(provider={self.provider}, model={self.model}, "
+            f"dimensions={self.dimensions}, api_key={'[REDACTED]' if self.api_key else None}, "
+            f"batch_size={self.batch_size})"
+        )
+
+    def to_safe_dict(self) -> dict:
+        """Return config dict with sensitive values redacted."""
+        return {
+            "provider": self.provider.value if hasattr(self.provider, 'value') else str(self.provider),
+            "model": self.model,
+            "dimensions": self.dimensions,
+            "api_key": "[REDACTED]" if self.api_key else None,
+            "api_base": self.api_base,
+            "batch_size": self.batch_size,
+            "cache_enabled": self.cache_enabled,
+        }
 
 
 @dataclass
