@@ -26,11 +26,9 @@ import {
   ThumbsDown,
   Minus,
   Sparkles,
-  Target,
-  Zap,
 } from 'lucide-react';
 import { api } from '../api/client';
-import { Card, LoadingSpinner, EmptyState, Button } from '../components/common';
+import { Card, LoadingSpinner, EmptyState } from '../components/common';
 import { Link } from 'react-router-dom';
 
 // Council member icons by icon field (new mapping for expanded council)

@@ -508,6 +508,35 @@ class ForgeApiClient {
     const response = await this.client.get<Record<string, unknown>>('/system/info');
     return response.data;
   }
+
+  // ============================================================================
+  // Generic HTTP Methods (for custom endpoints)
+  // ============================================================================
+
+  async get<T = unknown>(url: string, params?: Record<string, unknown>): Promise<T> {
+    const response = await this.client.get<T>(url, { params });
+    return response.data;
+  }
+
+  async post<T = unknown>(url: string, data?: unknown): Promise<T> {
+    const response = await this.client.post<T>(url, data);
+    return response.data;
+  }
+
+  async put<T = unknown>(url: string, data?: unknown): Promise<T> {
+    const response = await this.client.put<T>(url, data);
+    return response.data;
+  }
+
+  async patch<T = unknown>(url: string, data?: unknown): Promise<T> {
+    const response = await this.client.patch<T>(url, data);
+    return response.data;
+  }
+
+  async delete<T = unknown>(url: string): Promise<T> {
+    const response = await this.client.delete<T>(url);
+    return response.data;
+  }
 }
 
 // Export singleton instance

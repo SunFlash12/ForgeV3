@@ -68,15 +68,23 @@ export default function VersionHistoryPage() {
   const [selectedVersionA, setSelectedVersionA] = useState<string | null>(null);
   const [selectedVersionB, setSelectedVersionB] = useState<string | null>(null);
 
+  // Capsule type for display
+  interface CapsuleDetails {
+    id: string;
+    title: string;
+    type: string;
+    trust_level: number;
+  }
+
   // Fetch capsule details
-  const { data: capsule, isLoading: capsuleLoading } = useQuery({
+  const { data: capsule, isLoading: capsuleLoading } = useQuery<CapsuleDetails>({
     queryKey: ['capsule', capsuleId],
     queryFn: () => api.get(`/capsules/${capsuleId}`),
     enabled: !!capsuleId,
   });
 
   // Fetch version history
-  const { data: versionsData, isLoading: versionsLoading, refetch } = useQuery({
+  const { data: versionsData, isLoading: versionsLoading, refetch } = useQuery<{ versions: CapsuleVersion[] }>({
     queryKey: ['versions', capsuleId],
     queryFn: () => api.get(`/graph/temporal/versions/${capsuleId}`),
     enabled: !!capsuleId,
@@ -168,7 +176,7 @@ export default function VersionHistoryPage() {
       {/* Version Timeline */}
       {versions.length === 0 ? (
         <EmptyState
-          icon={History}
+          icon={<History className="w-10 h-10" />}
           title="No Version History"
           description="This capsule has no recorded version history yet."
         />
