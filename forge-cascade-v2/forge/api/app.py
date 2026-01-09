@@ -347,6 +347,22 @@ def create_app(
                 "name": "graph",
                 "description": "Graph analysis, queries, and temporal operations",
             },
+            {
+                "name": "Federation",
+                "description": "Federated knowledge sharing between Forge instances",
+            },
+            {
+                "name": "Notifications",
+                "description": "In-app notifications and webhook subscriptions",
+            },
+            {
+                "name": "Marketplace",
+                "description": "Knowledge capsule marketplace for buying and selling capsules",
+            },
+            {
+                "name": "Agent Gateway",
+                "description": "AI agent access to the knowledge graph",
+            },
         ],
     )
     
@@ -441,6 +457,7 @@ def create_app(
     
     # Include routers
     from forge.api.routes import auth, capsules, cascade, governance, overlays, system, graph
+    from forge.api.routes import federation, notifications, marketplace, agent_gateway
 
     app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
     app.include_router(capsules.router, prefix="/api/v1/capsules", tags=["capsules"])
@@ -449,7 +466,11 @@ def create_app(
     app.include_router(overlays.router, prefix="/api/v1/overlays", tags=["overlays"])
     app.include_router(system.router, prefix="/api/v1/system", tags=["system"])
     app.include_router(graph.router, prefix="/api/v1/graph", tags=["graph"])
-    
+    app.include_router(federation.router, prefix="/api/v1", tags=["Federation"])
+    app.include_router(notifications.router, prefix="/api/v1", tags=["Notifications"])
+    app.include_router(marketplace.router, prefix="/api/v1", tags=["Marketplace"])
+    app.include_router(agent_gateway.router, prefix="/api/v1", tags=["Agent Gateway"])
+
     # WebSocket endpoints
     from forge.api.websocket import websocket_router
     

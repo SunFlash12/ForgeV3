@@ -11,6 +11,8 @@ import {
   Shield,
   ChevronLeft,
   ChevronRight,
+  Globe,
+  GitBranch,
 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuthStore } from '../../stores/authStore';
@@ -25,9 +27,11 @@ interface NavItem {
 const navItems: NavItem[] = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
   { icon: Database, label: 'Capsules', path: '/capsules' },
+  { icon: GitBranch, label: 'Graph Explorer', path: '/graph' },
   { icon: Vote, label: 'Governance', path: '/governance' },
   { icon: Ghost, label: 'Ghost Council', path: '/ghost-council' },
   { icon: Layers, label: 'Overlays', path: '/overlays', requiredTrust: ['TRUSTED', 'CORE'] },
+  { icon: Globe, label: 'Federation', path: '/federation', requiredTrust: ['TRUSTED', 'CORE'] },
   { icon: Activity, label: 'System', path: '/system', requiredTrust: ['TRUSTED', 'CORE'] },
 ];
 

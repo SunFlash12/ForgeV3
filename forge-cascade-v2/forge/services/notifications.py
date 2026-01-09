@@ -1,0 +1,608 @@
+"""
+Notification Service
+
+Handles notification delivery through multiple channels:
+- In-app notifications
+- Webhook delivery
+- Future: Email, Slack, etc.
+"""
+
+import asyncio
+import hashlib
+import hmac
+import json
+import logging
+from datetime import datetime, timezone, timedelta
+from typing import Any
+
+import httpx
+
+from forge.models.notifications import (
+    Notification,
+    NotificationEvent,
+    NotificationPriority,
+    WebhookSubscription,
+    WebhookDelivery,
+    WebhookPayload,
+    NotificationPreferences,
+    DeliveryChannel,
+)
+from forge.models.base import generate_id
+
+logger = logging.getLogger(__name__)
+
+
+class NotificationService:
+    """
+    Central service for managing and delivering notifications.
+    """
+
+    WEBHOOK_TIMEOUT = 10  # seconds
+    MAX_RETRIES = 3
+    RETRY_DELAYS = [60, 300, 900]  # 1min, 5min, 15min
+
+    def __init__(self, redis_client=None):
+        self.redis = redis_client
+        self._http_client: httpx.AsyncClient | None = None
+
+        # In-memory storage (would use database in production)
+        self._notifications: dict[str, Notification] = {}
+        self._webhooks: dict[str, WebhookSubscription] = {}
+        self._deliveries: dict[str, WebhookDelivery] = {}
+        self._preferences: dict[str, NotificationPreferences] = {}
+
+        # Queues for async processing
+        self._webhook_queue: asyncio.Queue = asyncio.Queue()
+        self._retry_queue: asyncio.Queue = asyncio.Queue()
+
+        # Background tasks
+        self._webhook_worker_task: asyncio.Task | None = None
+        self._retry_worker_task: asyncio.Task | None = None
+
+    async def start(self) -> None:
+        """Start the notification service."""
+        self._http_client = httpx.AsyncClient(
+            timeout=httpx.Timeout(self.WEBHOOK_TIMEOUT),
+            follow_redirects=False,
+        )
+
+        # Start background workers
+        self._webhook_worker_task = asyncio.create_task(self._webhook_worker())
+        self._retry_worker_task = asyncio.create_task(self._retry_worker())
+
+        logger.info("Notification service started")
+
+    async def stop(self) -> None:
+        """Stop the notification service."""
+        if self._webhook_worker_task:
+            self._webhook_worker_task.cancel()
+        if self._retry_worker_task:
+            self._retry_worker_task.cancel()
+        if self._http_client:
+            await self._http_client.aclose()
+
+        logger.info("Notification service stopped")
+
+    # =========================================================================
+    # Notification Creation & Delivery
+    # =========================================================================
+
+    async def notify(
+        self,
+        user_id: str,
+        event_type: NotificationEvent,
+        title: str,
+        message: str,
+        data: dict[str, Any] | None = None,
+        priority: NotificationPriority = NotificationPriority.NORMAL,
+        related_entity_id: str | None = None,
+        related_entity_type: str | None = None,
+        action_url: str | None = None,
+        source: str = "system",
+    ) -> Notification:
+        """
+        Create and deliver a notification to a user.
+
+        Handles routing to appropriate channels based on user preferences.
+        """
+        notification = Notification(
+            user_id=user_id,
+            event_type=event_type,
+            title=title,
+            message=message,
+            priority=priority,
+            data=data or {},
+            related_entity_id=related_entity_id,
+            related_entity_type=related_entity_type,
+            action_url=action_url,
+            source=source,
+        )
+
+        # Store in-app notification
+        self._notifications[notification.id] = notification
+
+        # Get user preferences
+        prefs = await self.get_user_preferences(user_id)
+
+        # Check mute status
+        if prefs.mute_all or (prefs.mute_until and prefs.mute_until > datetime.now(timezone.utc)):
+            logger.debug(f"User {user_id} has notifications muted")
+            return notification
+
+        # Get channels for this event type
+        channels = prefs.channel_preferences.get(
+            event_type.value,
+            prefs.default_channels
+        )
+
+        # Deliver to webhooks if enabled
+        if DeliveryChannel.WEBHOOK in channels:
+            await self._queue_webhooks(user_id, notification)
+
+        logger.info(f"Notification sent to {user_id}: {event_type.value}")
+        return notification
+
+    async def notify_many(
+        self,
+        user_ids: list[str],
+        event_type: NotificationEvent,
+        title: str,
+        message: str,
+        data: dict[str, Any] | None = None,
+        priority: NotificationPriority = NotificationPriority.NORMAL,
+    ) -> list[Notification]:
+        """Send notification to multiple users."""
+        notifications = []
+        for user_id in user_ids:
+            n = await self.notify(
+                user_id=user_id,
+                event_type=event_type,
+                title=title,
+                message=message,
+                data=data,
+                priority=priority,
+            )
+            notifications.append(n)
+        return notifications
+
+    async def broadcast(
+        self,
+        event_type: NotificationEvent,
+        title: str,
+        message: str,
+        data: dict[str, Any] | None = None,
+        priority: NotificationPriority = NotificationPriority.NORMAL,
+        user_filter: callable | None = None,
+    ) -> int:
+        """
+        Broadcast notification to all users.
+
+        Args:
+            user_filter: Optional function to filter users
+        """
+        # In production, get users from database
+        # For now, send to all webhook subscribers
+        sent = 0
+        webhook_users = set(w.user_id for w in self._webhooks.values() if w.active)
+
+        for user_id in webhook_users:
+            if user_filter and not user_filter(user_id):
+                continue
+            await self.notify(
+                user_id=user_id,
+                event_type=event_type,
+                title=title,
+                message=message,
+                data=data,
+                priority=priority,
+            )
+            sent += 1
+
+        return sent
+
+    # =========================================================================
+    # In-App Notifications
+    # =========================================================================
+
+    async def get_notifications(
+        self,
+        user_id: str,
+        unread_only: bool = False,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[Notification]:
+        """Get notifications for a user."""
+        notifications = [
+            n for n in self._notifications.values()
+            if n.user_id == user_id and not n.dismissed
+            and (not unread_only or not n.read)
+        ]
+        notifications.sort(key=lambda n: n.created_at, reverse=True)
+        return notifications[offset:offset + limit]
+
+    async def get_unread_count(self, user_id: str) -> int:
+        """Get count of unread notifications."""
+        return sum(
+            1 for n in self._notifications.values()
+            if n.user_id == user_id and not n.read and not n.dismissed
+        )
+
+    async def mark_as_read(self, notification_id: str, user_id: str) -> bool:
+        """Mark a notification as read."""
+        notification = self._notifications.get(notification_id)
+        if notification and notification.user_id == user_id:
+            notification.read = True
+            notification.read_at = datetime.now(timezone.utc)
+            return True
+        return False
+
+    async def mark_all_as_read(self, user_id: str) -> int:
+        """Mark all notifications as read for a user."""
+        count = 0
+        now = datetime.now(timezone.utc)
+        for n in self._notifications.values():
+            if n.user_id == user_id and not n.read:
+                n.read = True
+                n.read_at = now
+                count += 1
+        return count
+
+    async def dismiss(self, notification_id: str, user_id: str) -> bool:
+        """Dismiss a notification."""
+        notification = self._notifications.get(notification_id)
+        if notification and notification.user_id == user_id:
+            notification.dismissed = True
+            notification.dismissed_at = datetime.now(timezone.utc)
+            return True
+        return False
+
+    # =========================================================================
+    # Webhook Management
+    # =========================================================================
+
+    async def create_webhook(
+        self,
+        user_id: str,
+        url: str,
+        secret: str,
+        events: list[NotificationEvent] | None = None,
+        name: str = "",
+    ) -> WebhookSubscription:
+        """Create a new webhook subscription."""
+        webhook = WebhookSubscription(
+            user_id=user_id,
+            url=url,
+            secret=secret,
+            events=events or [],
+            name=name,
+        )
+
+        self._webhooks[webhook.id] = webhook
+
+        # Optionally verify the webhook
+        await self._verify_webhook(webhook)
+
+        logger.info(f"Webhook created: {webhook.id} for user {user_id}")
+        return webhook
+
+    async def get_webhooks(self, user_id: str) -> list[WebhookSubscription]:
+        """Get all webhooks for a user."""
+        return [w for w in self._webhooks.values() if w.user_id == user_id]
+
+    async def get_webhook(self, webhook_id: str) -> WebhookSubscription | None:
+        """Get a specific webhook."""
+        return self._webhooks.get(webhook_id)
+
+    async def update_webhook(
+        self,
+        webhook_id: str,
+        user_id: str,
+        updates: dict[str, Any],
+    ) -> WebhookSubscription | None:
+        """Update a webhook."""
+        webhook = self._webhooks.get(webhook_id)
+        if not webhook or webhook.user_id != user_id:
+            return None
+
+        for key, value in updates.items():
+            if hasattr(webhook, key):
+                setattr(webhook, key, value)
+
+        return webhook
+
+    async def delete_webhook(self, webhook_id: str, user_id: str) -> bool:
+        """Delete a webhook."""
+        webhook = self._webhooks.get(webhook_id)
+        if webhook and webhook.user_id == user_id:
+            del self._webhooks[webhook_id]
+            return True
+        return False
+
+    async def _verify_webhook(self, webhook: WebhookSubscription) -> bool:
+        """Verify a webhook endpoint by sending a ping."""
+        try:
+            payload = {
+                "event": "webhook.verify",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "webhook_id": webhook.id,
+            }
+
+            signature = self._sign_payload(payload, webhook.secret)
+
+            if self._http_client:
+                response = await self._http_client.post(
+                    webhook.url,
+                    json=payload,
+                    headers={
+                        "Content-Type": "application/json",
+                        "X-Forge-Signature": signature,
+                        "X-Forge-Event": "webhook.verify",
+                    },
+                )
+
+                if response.status_code == 200:
+                    webhook.verified = True
+                    return True
+
+        except Exception as e:
+            logger.warning(f"Webhook verification failed: {e}")
+
+        return False
+
+    # =========================================================================
+    # Webhook Delivery
+    # =========================================================================
+
+    async def _queue_webhooks(self, user_id: str, notification: Notification) -> None:
+        """Queue webhook deliveries for a notification."""
+        webhooks = [
+            w for w in self._webhooks.values()
+            if w.user_id == user_id and w.active
+        ]
+
+        for webhook in webhooks:
+            # Check event filter
+            if webhook.events and notification.event_type not in webhook.events:
+                continue
+
+            # Check priority filter
+            priority_order = {
+                NotificationPriority.LOW: 0,
+                NotificationPriority.NORMAL: 1,
+                NotificationPriority.HIGH: 2,
+                NotificationPriority.CRITICAL: 3,
+            }
+            if priority_order[notification.priority] < priority_order[webhook.filter_min_priority]:
+                continue
+
+            # Queue delivery
+            await self._webhook_queue.put((webhook, notification))
+
+    async def _webhook_worker(self) -> None:
+        """Background worker for processing webhook queue."""
+        while True:
+            try:
+                webhook, notification = await self._webhook_queue.get()
+                await self._deliver_webhook(webhook, notification)
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Webhook worker error: {e}")
+
+    async def _deliver_webhook(
+        self,
+        webhook: WebhookSubscription,
+        notification: Notification,
+    ) -> WebhookDelivery:
+        """Deliver a notification to a webhook endpoint."""
+        delivery_id = generate_id()
+
+        payload = WebhookPayload(
+            event=notification.event_type.value,
+            timestamp=datetime.now(timezone.utc),
+            webhook_id=webhook.id,
+            delivery_id=delivery_id,
+            data={
+                "notification_id": notification.id,
+                "title": notification.title,
+                "message": notification.message,
+                "priority": notification.priority.value,
+                "data": notification.data,
+                "related_entity_id": notification.related_entity_id,
+                "related_entity_type": notification.related_entity_type,
+            },
+        )
+
+        # Sign payload
+        signature = self._sign_payload(payload.to_dict_for_signing(), webhook.secret)
+        payload.signature = signature
+
+        delivery = WebhookDelivery(
+            id=delivery_id,
+            webhook_id=webhook.id,
+            notification_id=notification.id,
+            event_type=notification.event_type,
+            payload=payload.to_dict_for_signing(),
+            signature=signature,
+        )
+
+        try:
+            if not self._http_client:
+                raise RuntimeError("HTTP client not initialized")
+
+            start = datetime.now(timezone.utc)
+            response = await self._http_client.post(
+                webhook.url,
+                json=payload.model_dump(mode='json'),
+                headers={
+                    "Content-Type": "application/json",
+                    "X-Forge-Signature": signature,
+                    "X-Forge-Event": notification.event_type.value,
+                    "X-Forge-Delivery": delivery_id,
+                },
+            )
+            elapsed = (datetime.now(timezone.utc) - start).total_seconds() * 1000
+
+            delivery.status_code = response.status_code
+            delivery.response_body = response.text[:1000] if response.text else None
+            delivery.response_time_ms = elapsed
+            delivery.completed_at = datetime.now(timezone.utc)
+
+            if response.status_code >= 200 and response.status_code < 300:
+                delivery.success = True
+                webhook.total_success += 1
+                webhook.consecutive_failures = 0
+                webhook.last_success_at = datetime.now(timezone.utc)
+            else:
+                delivery.success = False
+                delivery.error = f"HTTP {response.status_code}"
+                webhook.total_failure += 1
+                webhook.consecutive_failures += 1
+                webhook.last_failure_at = datetime.now(timezone.utc)
+
+                # Schedule retry
+                await self._schedule_retry(delivery, webhook)
+
+        except Exception as e:
+            delivery.error = str(e)
+            delivery.completed_at = datetime.now(timezone.utc)
+            webhook.total_failure += 1
+            webhook.consecutive_failures += 1
+            webhook.last_failure_at = datetime.now(timezone.utc)
+
+            # Schedule retry
+            await self._schedule_retry(delivery, webhook)
+
+        webhook.total_sent += 1
+        webhook.last_triggered_at = datetime.now(timezone.utc)
+
+        self._deliveries[delivery.id] = delivery
+        return delivery
+
+    async def _schedule_retry(self, delivery: WebhookDelivery, webhook: WebhookSubscription) -> None:
+        """Schedule a retry for a failed delivery."""
+        if delivery.retry_count >= self.MAX_RETRIES:
+            logger.warning(f"Webhook {webhook.id} max retries exceeded")
+
+            # Disable webhook after too many failures
+            if webhook.consecutive_failures >= 10:
+                webhook.active = False
+                logger.warning(f"Webhook {webhook.id} disabled due to failures")
+
+            return
+
+        delay = self.RETRY_DELAYS[min(delivery.retry_count, len(self.RETRY_DELAYS) - 1)]
+        delivery.retry_count += 1
+        delivery.next_retry_at = datetime.now(timezone.utc) + timedelta(seconds=delay)
+
+        await self._retry_queue.put((delivery, webhook))
+
+    async def _retry_worker(self) -> None:
+        """Background worker for processing retry queue."""
+        while True:
+            try:
+                delivery, webhook = await self._retry_queue.get()
+
+                # Wait until retry time
+                if delivery.next_retry_at:
+                    wait_time = (delivery.next_retry_at - datetime.now(timezone.utc)).total_seconds()
+                    if wait_time > 0:
+                        await asyncio.sleep(wait_time)
+
+                # Retry delivery
+                await self._retry_delivery(delivery, webhook)
+
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Retry worker error: {e}")
+
+    async def _retry_delivery(self, delivery: WebhookDelivery, webhook: WebhookSubscription) -> None:
+        """Retry a failed webhook delivery."""
+        try:
+            if not self._http_client:
+                raise RuntimeError("HTTP client not initialized")
+
+            start = datetime.now(timezone.utc)
+            response = await self._http_client.post(
+                webhook.url,
+                json=delivery.payload,
+                headers={
+                    "Content-Type": "application/json",
+                    "X-Forge-Signature": delivery.signature,
+                    "X-Forge-Event": delivery.event_type.value,
+                    "X-Forge-Delivery": delivery.id,
+                    "X-Forge-Retry": str(delivery.retry_count),
+                },
+            )
+            elapsed = (datetime.now(timezone.utc) - start).total_seconds() * 1000
+
+            delivery.status_code = response.status_code
+            delivery.response_time_ms = elapsed
+            delivery.completed_at = datetime.now(timezone.utc)
+
+            if response.status_code >= 200 and response.status_code < 300:
+                delivery.success = True
+                webhook.consecutive_failures = 0
+            else:
+                await self._schedule_retry(delivery, webhook)
+
+        except Exception as e:
+            delivery.error = str(e)
+            await self._schedule_retry(delivery, webhook)
+
+    def _sign_payload(self, payload: dict[str, Any], secret: str) -> str:
+        """Create HMAC-SHA256 signature for payload."""
+        payload_str = json.dumps(payload, sort_keys=True, default=str)
+        signature = hmac.new(
+            secret.encode('utf-8'),
+            payload_str.encode('utf-8'),
+            hashlib.sha256
+        ).hexdigest()
+        return f"sha256={signature}"
+
+    # =========================================================================
+    # User Preferences
+    # =========================================================================
+
+    async def get_user_preferences(self, user_id: str) -> NotificationPreferences:
+        """Get notification preferences for a user."""
+        if user_id not in self._preferences:
+            self._preferences[user_id] = NotificationPreferences(user_id=user_id)
+        return self._preferences[user_id]
+
+    async def update_user_preferences(
+        self,
+        user_id: str,
+        updates: dict[str, Any],
+    ) -> NotificationPreferences:
+        """Update user notification preferences."""
+        prefs = await self.get_user_preferences(user_id)
+
+        for key, value in updates.items():
+            if hasattr(prefs, key):
+                setattr(prefs, key, value)
+
+        prefs.updated_at = datetime.now(timezone.utc)
+        return prefs
+
+
+# Global instance
+_notification_service: NotificationService | None = None
+
+
+async def get_notification_service() -> NotificationService:
+    """Get the global notification service instance."""
+    global _notification_service
+    if _notification_service is None:
+        _notification_service = NotificationService()
+        await _notification_service.start()
+    return _notification_service
+
+
+async def shutdown_notification_service() -> None:
+    """Shutdown the notification service."""
+    global _notification_service
+    if _notification_service:
+        await _notification_service.stop()
+        _notification_service = None
