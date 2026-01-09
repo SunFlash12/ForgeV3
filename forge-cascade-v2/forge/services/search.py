@@ -336,14 +336,31 @@ class SearchService:
             )
             return []
     
+    def _escape_regex_metacharacters(self, text: str) -> str:
+        """
+        SECURITY FIX (Audit 4 - M20): Escape regex metacharacters in user input.
+
+        Prevents regex injection attacks where users could inject malicious
+        regex patterns that cause ReDoS or unexpected behavior.
+        """
+        import re
+        # Escape all regex metacharacters
+        return re.escape(text)
+
     async def _keyword_search(self, request: SearchRequest) -> list[SearchResultItem]:
-        """Perform keyword/full-text search."""
+        """
+        Perform keyword/full-text search.
+
+        SECURITY FIX (Audit 4 - M20): User input is now escaped to prevent
+        regex injection attacks.
+        """
         if not self._db:
             return []
-        
-        # Build search pattern
+
+        # SECURITY FIX: Escape regex metacharacters in each search term
         search_terms = request.query.split()
-        search_pattern = "|".join(f"(?i).*{term}.*" for term in search_terms)
+        escaped_terms = [self._escape_regex_metacharacters(term) for term in search_terms]
+        search_pattern = "|".join(f"(?i).*{term}.*" for term in escaped_terms)
         
         where_clauses = [
             "(capsule.content =~ $pattern OR capsule.title =~ $pattern)",
