@@ -370,14 +370,53 @@ class ContentValidator:
 
         return sanitized
 
+    # SECURITY FIX (Audit 4 - H19): Regex timeout to prevent ReDoS
+    REGEX_TIMEOUT_SECONDS = 1.0
+
     async def _check_patterns(self, content: str, result: ValidationResult) -> None:
-        """Check content against threat patterns."""
+        """
+        Check content against threat patterns.
+
+        SECURITY FIX (Audit 4 - H19): Added timeout protection against ReDoS
+        (Regular Expression Denial of Service) attacks where malicious input
+        causes catastrophic regex backtracking.
+        """
+        import asyncio
+        import concurrent.futures
+
         for pattern in self._patterns:
             if not pattern.enabled:
                 continue
 
             try:
-                matches = re.findall(pattern.pattern, content, pattern.flags)
+                # SECURITY FIX: Run regex in thread pool with timeout
+                # This prevents ReDoS from blocking the event loop
+                loop = asyncio.get_event_loop()
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    try:
+                        matches = await asyncio.wait_for(
+                            loop.run_in_executor(
+                                executor,
+                                lambda: re.findall(pattern.pattern, content, pattern.flags)
+                            ),
+                            timeout=self.REGEX_TIMEOUT_SECONDS
+                        )
+                    except asyncio.TimeoutError:
+                        logger.warning(
+                            "regex_timeout_redos_protection",
+                            pattern=pattern.name,
+                            content_length=len(content),
+                            timeout=self.REGEX_TIMEOUT_SECONDS
+                        )
+                        result.add_issue(ValidationIssue(
+                            stage=ValidationStage.PATTERN_MATCHING,
+                            severity=ThreatLevel.MEDIUM,
+                            message=f"Pattern check timed out (possible ReDoS): {pattern.name}",
+                            pattern=pattern.name,
+                            metadata={"timeout": True}
+                        ))
+                        continue
+
                 if matches:
                     result.add_issue(ValidationIssue(
                         stage=ValidationStage.PATTERN_MATCHING,
