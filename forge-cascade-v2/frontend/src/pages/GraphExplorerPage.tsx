@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import ForceGraph2D, { ForceGraphMethods, NodeObject, LinkObject } from 'react-force-graph-2d';
+import ForceGraph2D from 'react-force-graph-2d';
+import type { ForceGraphMethods, NodeObject, LinkObject } from 'react-force-graph-2d';
 import {
   Search,
   ZoomIn,
@@ -8,7 +9,6 @@ import {
   Maximize2,
   Filter,
   RefreshCw,
-  Info,
   X,
   Database,
   GitBranch,
@@ -24,7 +24,6 @@ import {
   Card,
   Button,
   Badge,
-  Modal,
 } from '../components/common';
 
 // Types
@@ -37,6 +36,9 @@ interface GraphNode extends NodeObject {
   community_id: number;
   created_at: string;
   content_preview?: string;
+  // Runtime properties added by force-graph
+  x?: number;
+  y?: number;
 }
 
 interface GraphEdge extends LinkObject {
@@ -104,16 +106,9 @@ const relationshipColors: Record<string, string> = {
   REFERENCES: '#06b6d4',
 };
 
-const trustLevelColors: Record<string, string> = {
-  QUARANTINE: '#ef4444',
-  SANDBOX: '#f59e0b',
-  STANDARD: '#3b82f6',
-  TRUSTED: '#22c55e',
-  CORE: '#8b5cf6',
-};
 
 export default function GraphExplorerPage() {
-  const graphRef = useRef<ForceGraphMethods<GraphNode, GraphEdge>>();
+  const graphRef = useRef<ForceGraphMethods<GraphNode, GraphEdge> | undefined>(undefined);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // State
@@ -184,7 +179,8 @@ export default function GraphExplorerPage() {
     if (sizeBy === 'pagerank') {
       return 5 + node.pagerank_score * 20;
     } else if (sizeBy === 'connections') {
-      return 5 + Math.log(1 + (node as unknown as { val?: number }).val || 1) * 3;
+      const nodeVal = (node as unknown as { val?: number }).val ?? 0;
+      return 5 + Math.log(1 + nodeVal) * 3;
     }
     return 8;
   }, [sizeBy]);
@@ -390,7 +386,7 @@ export default function GraphExplorerPage() {
             nodeLabel={(node: GraphNode) => `${node.label}\nType: ${node.type}\nTrust: ${node.trust_level}`}
             nodeColor={getNodeColor}
             nodeVal={getNodeSize}
-            nodeCanvasObject={(node: GraphNode, ctx, globalScale) => {
+            nodeCanvasObject={(node: GraphNode, ctx: CanvasRenderingContext2D, globalScale: number) => {
               const size = getNodeSize(node);
               const isSelected = selectedNode?.id === node.id;
               const isHovered = hoveredNode?.id === node.id;

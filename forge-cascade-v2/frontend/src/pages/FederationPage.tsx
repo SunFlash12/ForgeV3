@@ -9,13 +9,9 @@ import {
   ShieldAlert,
   ShieldX,
   Link2,
-  Unlink,
-  Settings,
   TrendingUp,
   TrendingDown,
-  Clock,
   Activity,
-  ArrowUpDown,
   CheckCircle,
   XCircle,
   AlertTriangle,
@@ -23,8 +19,6 @@ import {
   ChevronDown,
   ChevronUp,
   Trash2,
-  Play,
-  Pause,
 } from 'lucide-react';
 import { api } from '../api/client';
 import {
@@ -116,7 +110,7 @@ const trustTierIcons: Record<string, React.ReactNode> = {
 export default function FederationPage() {
   const queryClient = useQueryClient();
   const [showAddModal, setShowAddModal] = useState(false);
-  const [selectedPeer, setSelectedPeer] = useState<FederatedPeer | null>(null);
+  const [_selectedPeer, _setSelectedPeer] = useState<FederatedPeer | null>(null);
   const [expandedPeerId, setExpandedPeerId] = useState<string | null>(null);
 
   // Fetch peers
