@@ -512,11 +512,18 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
         Validate that the provided refresh token matches the stored one.
 
         This prevents use of old/revoked refresh tokens.
+
+        SECURITY FIX (Audit 4 - M1): Uses constant-time comparison to prevent
+        timing attacks that could leak information about valid token prefixes.
         """
+        import secrets
+
         stored_token = await self.get_refresh_token(user_id)
         if stored_token is None:
             return False
-        return stored_token == token
+
+        # SECURITY FIX: Use constant-time comparison to prevent timing attacks
+        return secrets.compare_digest(stored_token, token)
 
     # =========================================================================
     # Password Reset Token Management

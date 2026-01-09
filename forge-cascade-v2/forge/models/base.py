@@ -14,10 +14,20 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 def convert_neo4j_datetime(value: Any) -> datetime:
-    """Convert Neo4j DateTime to Python datetime."""
+    """
+    Convert Neo4j DateTime to Python datetime.
+
+    SECURITY FIX (Audit 4 - L5): Uses datetime.now(timezone.utc) instead of
+    deprecated datetime.utcnow() for proper timezone-aware handling.
+    """
+    from datetime import timezone
+
     if value is None:
-        return datetime.utcnow()
+        return datetime.now(timezone.utc)
     if isinstance(value, datetime):
+        # Ensure timezone-aware
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
         return value
     # Handle Neo4j DateTime object
     if hasattr(value, 'to_native'):
