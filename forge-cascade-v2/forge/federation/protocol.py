@@ -505,22 +505,23 @@ class FederationProtocol:
             logger.warning("Handshake timestamp too far in future")
             return False
 
-        # SECURITY FIX: Verify nonce for replay prevention
+        # SECURITY FIX (Audit 4 - H5): Verify nonce for replay prevention
+        # REMOVED backward compatibility - all handshakes MUST have nonces
         nonce = getattr(handshake, 'nonce', None)
-        if nonce:
-            # Check nonce format and uniqueness
-            if not self._nonce_store.is_valid_and_unused(nonce):
-                logger.warning(f"Handshake nonce invalid or already used: {nonce[:8]}...")
-                return False
+        if not nonce:
+            # SECURITY FIX: Reject handshakes without nonce - no backward compatibility
+            logger.error("Handshake rejected: missing nonce (replay protection required)")
+            return False
 
-            # Mark nonce as used to prevent replay
-            if not self._nonce_store.mark_used(nonce):
-                logger.warning(f"Replay attack detected in handshake: nonce {nonce[:8]}...")
-                return False
-        else:
-            # Log warning but allow handshakes without nonce for backward compatibility
-            # In strict mode, this could be changed to reject nonced-less handshakes
-            logger.warning("Handshake received without nonce (legacy peer)")
+        # Check nonce format and uniqueness
+        if not self._nonce_store.is_valid_and_unused(nonce):
+            logger.warning(f"Handshake nonce invalid or already used: {nonce[:8]}...")
+            return False
+
+        # Mark nonce as used to prevent replay
+        if not self._nonce_store.mark_used(nonce):
+            logger.warning(f"Replay attack detected in handshake: nonce {nonce[:8]}...")
+            return False
 
         # Reconstruct signed data
         handshake_data = {
@@ -748,21 +749,23 @@ class FederationProtocol:
 
     def _verify_payload(self, payload: SyncPayload, public_key: str) -> bool:
         """Verify a sync payload signature and nonce."""
-        # SECURITY FIX: Verify nonce for replay prevention
+        # SECURITY FIX (Audit 4 - H5): Verify nonce for replay prevention
+        # REMOVED backward compatibility - all payloads MUST have nonces
         nonce = getattr(payload, 'nonce', None)
-        if nonce:
-            # Check nonce format and uniqueness
-            if not self._nonce_store.is_valid_and_unused(nonce):
-                logger.warning(f"Payload nonce invalid or already used: {nonce[:8]}...")
-                return False
+        if not nonce:
+            # SECURITY FIX: Reject payloads without nonce - no backward compatibility
+            logger.error("Sync payload rejected: missing nonce (replay protection required)")
+            return False
 
-            # Mark nonce as used to prevent replay
-            if not self._nonce_store.mark_used(nonce):
-                logger.warning(f"Replay attack detected in payload: nonce {nonce[:8]}...")
-                return False
-        else:
-            # Log warning but allow payloads without nonce for backward compatibility
-            logger.warning("Sync payload received without nonce (legacy peer)")
+        # Check nonce format and uniqueness
+        if not self._nonce_store.is_valid_and_unused(nonce):
+            logger.warning(f"Payload nonce invalid or already used: {nonce[:8]}...")
+            return False
+
+        # Mark nonce as used to prevent replay
+        if not self._nonce_store.mark_used(nonce):
+            logger.warning(f"Replay attack detected in payload: nonce {nonce[:8]}...")
+            return False
 
         # Reconstruct payload without signature for verification
         payload_copy = payload.model_copy()

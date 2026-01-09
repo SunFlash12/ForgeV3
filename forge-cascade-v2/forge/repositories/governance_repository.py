@@ -361,31 +361,66 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
         """
         Mark a passed proposal as executed.
 
+        SECURITY FIX (Audit 4 - H21): Now verifies that the timelock has
+        expired before allowing execution. This prevents premature execution
+        of proposals that should have a mandatory waiting period.
+
         Args:
             proposal_id: Proposal ID
 
         Returns:
-            Updated proposal
+            Updated proposal, or None if timelock not yet expired
         """
-        now = self._now().isoformat()
-        
+        now = self._now()
+        now_iso = now.isoformat()
+
+        # SECURITY FIX: Add timelock verification to prevent early execution
+        # The proposal can only be executed if:
+        # 1. Status is 'passed'
+        # 2. Either no execution_allowed_after is set, OR it has already passed
         query = """
         MATCH (p:Proposal {id: $id})
         WHERE p.status = 'passed'
+          AND (
+            p.execution_allowed_after IS NULL
+            OR datetime(p.execution_allowed_after) <= datetime($now)
+          )
         SET
             p.status = 'executed',
             p.executed_at = $now,
             p.updated_at = $now
         RETURN p {.*} AS entity
         """
-        
+
         result = await self.client.execute_single(
             query,
-            {"id": proposal_id, "now": now},
+            {"id": proposal_id, "now": now_iso},
         )
-        
+
         if result and result.get("entity"):
             return self._to_model(result["entity"])
+
+        # If no result, check if it's due to timelock or other reason
+        check_query = """
+        MATCH (p:Proposal {id: $id})
+        RETURN p.status AS status, p.execution_allowed_after AS timelock
+        """
+        check_result = await self.client.execute_single(check_query, {"id": proposal_id})
+
+        if check_result:
+            status = check_result.get("status")
+            timelock = check_result.get("timelock")
+            if status == "passed" and timelock:
+                # Log that timelock blocked execution
+                import structlog
+                logger = structlog.get_logger(__name__)
+                logger.warning(
+                    "proposal_execution_blocked_by_timelock",
+                    proposal_id=proposal_id,
+                    timelock=timelock,
+                    current_time=now_iso
+                )
+
         return None
 
     async def cancel(self, proposal_id: str, reason: str) -> Proposal | None:

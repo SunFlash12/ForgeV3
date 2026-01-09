@@ -276,37 +276,60 @@ class TenantIsolator:
 
         return {"tenant_id": current.tenant_id}
 
-    def apply_tenant_filter(self, query: str) -> str:
+    def apply_tenant_filter(self, query: str, params: dict | None = None) -> tuple[str, dict]:
         """
-        Apply tenant filter to a Cypher query.
+        Apply tenant filter to a Cypher query using parameterization.
+
+        SECURITY FIX (Audit 4 - H14): Use parameterized queries instead of
+        string interpolation to prevent SQL injection in tenant_id.
 
         Args:
             query: Original Cypher query
+            params: Existing query parameters (will be modified)
 
         Returns:
-            Modified query with tenant filter
+            Tuple of (modified_query, updated_params) with tenant filter
         """
+        if params is None:
+            params = {}
+
         if not self._config.enabled:
-            return query
+            return query, params
 
         current = self.get_current_tenant()
         if not current:
-            return query
+            return query, params
 
-        # Add tenant filter to WHERE clause
-        # This is a simple implementation; production would use proper query parsing
+        # SECURITY FIX: Validate tenant_id format to prevent injection
+        # Tenant IDs should be alphanumeric with limited special chars
+        import re
+        tenant_id = current.tenant_id
+        if not re.match(r'^[a-zA-Z0-9_-]{1,64}$', tenant_id):
+            logger.error(
+                "invalid_tenant_id_format",
+                tenant_id_length=len(tenant_id)
+            )
+            raise TenantIsolationError("Invalid tenant ID format")
+
+        # SECURITY FIX: Use parameterized query instead of string interpolation
+        # Add tenant_id as a parameter, not directly in the query string
+        params["__tenant_filter_id"] = tenant_id
+
+        # Add tenant filter to WHERE clause using parameterized query
         if "WHERE" in query.upper():
-            # Add to existing WHERE
-            query = query.replace(
-                "WHERE",
-                f"WHERE n.tenant_id = '{current.tenant_id}' AND",
-                1
+            # Add to existing WHERE - find case-insensitive position
+            where_pos = query.upper().find("WHERE")
+            query = (
+                query[:where_pos + 5] +
+                " n.tenant_id = $__tenant_filter_id AND" +
+                query[where_pos + 5:]
             )
         else:
             # Need to add WHERE clause - this is simplified
+            # In production, use proper Cypher parsing
             pass
 
-        return query
+        return query, params
 
     def _log_cross_tenant_attempt(
         self,

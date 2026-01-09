@@ -446,14 +446,32 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
         results = await self.client.execute(query, {"id": capsule_id})
         return self._to_models([r["capsule"] for r in results if r.get("capsule")])
 
+    # SECURITY FIX (Audit 4 - H26): Maximum depth for graph traversals
+    MAX_GRAPH_DEPTH = 20  # Prevent DoS via deep traversal
+
     async def get_descendants(
         self,
         capsule_id: str,
         max_depth: int = 10,
     ) -> list[LineageNode]:
-        """Get all descendants of a capsule up to max depth."""
+        """
+        Get all descendants of a capsule up to max depth.
+
+        SECURITY FIX (Audit 4 - H26): Validates and caps max_depth to prevent
+        DoS via unbounded graph traversal.
+        """
+        # SECURITY FIX: Validate and clamp max_depth to safe range
+        safe_depth = max(1, min(int(max_depth), self.MAX_GRAPH_DEPTH))
+        if max_depth != safe_depth:
+            logger.warning(
+                "max_depth_clamped",
+                requested=max_depth,
+                clamped_to=safe_depth,
+                capsule_id=capsule_id
+            )
+
         query = f"""
-        MATCH path = (root:Capsule {{id: $id}})<-[:DERIVED_FROM*1..{max_depth}]-(descendant:Capsule)
+        MATCH path = (root:Capsule {{id: $id}})<-[:DERIVED_FROM*1..{safe_depth}]-(descendant:Capsule)
         WITH DISTINCT descendant, length(path) as depth
         RETURN {{
             id: descendant.id,
@@ -545,6 +563,9 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
         """
         Get all ancestors of a capsule up to max depth.
 
+        SECURITY FIX (Audit 4 - H26): Validates and caps max_depth to prevent
+        DoS via unbounded graph traversal.
+
         Args:
             capsule_id: Capsule ID
             max_depth: Maximum depth to traverse
@@ -552,8 +573,18 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
         Returns:
             List of ancestor capsules
         """
+        # SECURITY FIX: Validate and clamp max_depth to safe range
+        safe_depth = max(1, min(int(max_depth), self.MAX_GRAPH_DEPTH))
+        if max_depth != safe_depth:
+            logger.warning(
+                "max_depth_clamped",
+                requested=max_depth,
+                clamped_to=safe_depth,
+                capsule_id=capsule_id
+            )
+
         query = f"""
-        MATCH (c:Capsule {{id: $id}})-[:DERIVED_FROM*1..{max_depth}]->(ancestor:Capsule)
+        MATCH (c:Capsule {{id: $id}})-[:DERIVED_FROM*1..{safe_depth}]->(ancestor:Capsule)
         WITH DISTINCT ancestor
         ORDER BY ancestor.created_at ASC
         RETURN ancestor {{.*}} AS capsule

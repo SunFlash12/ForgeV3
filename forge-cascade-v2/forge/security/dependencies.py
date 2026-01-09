@@ -47,18 +47,32 @@ async def get_optional_auth_context(
 ) -> Optional[AuthorizationContext]:
     """
     Get authorization context if token is present.
-    
+
     Returns None if no token provided (for public endpoints).
+
+    SECURITY FIX (Audit 4 - H1): Reject tokens with missing required claims
+    instead of defaulting to STANDARD trust. This prevents privilege escalation
+    from malformed or tampered tokens.
     """
     if not token:
         return None
-    
+
     try:
         payload = verify_access_token(token)
+
+        # SECURITY FIX: Reject tokens missing required claims
+        # Do NOT use default values - this prevents privilege escalation
+        if payload.trust_flame is None or payload.role is None:
+            import logging
+            logging.getLogger(__name__).warning(
+                "token_missing_claims: trust_flame or role claim missing"
+            )
+            return None
+
         return create_auth_context(
             user_id=payload.sub,
-            trust_flame=payload.trust_flame or 60,
-            role=payload.role or "user"
+            trust_flame=payload.trust_flame,
+            role=payload.role
         )
     except TokenError:
         return None
@@ -69,8 +83,12 @@ async def get_auth_context(
 ) -> AuthorizationContext:
     """
     Get authorization context from token (required).
-    
+
     Raises HTTPException if not authenticated.
+
+    SECURITY FIX (Audit 4 - H1): Reject tokens with missing required claims
+    instead of defaulting to STANDARD trust. This prevents privilege escalation
+    from malformed or tampered tokens.
     """
     if not token:
         raise HTTPException(
@@ -78,13 +96,21 @@ async def get_auth_context(
             detail="Authentication required",
             headers={"WWW-Authenticate": "Bearer"}
         )
-    
+
     try:
         payload = verify_access_token(token)
+
+        # SECURITY FIX: Reject tokens missing required claims
+        # Do NOT use default values - this prevents privilege escalation
+        if payload.trust_flame is None:
+            raise TokenInvalidError("Token missing required trust_flame claim")
+        if payload.role is None:
+            raise TokenInvalidError("Token missing required role claim")
+
         return create_auth_context(
             user_id=payload.sub,
-            trust_flame=payload.trust_flame or 60,
-            role=payload.role or "user"
+            trust_flame=payload.trust_flame,
+            role=payload.role
         )
     except TokenExpiredError:
         raise HTTPException(

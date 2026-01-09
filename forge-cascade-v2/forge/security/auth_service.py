@@ -630,22 +630,105 @@ class AuthService:
     async def verify_email(
         self,
         user_id: str,
-        verification_token: str,  # Would be validated
+        verification_token: str,
         ip_address: Optional[str] = None
     ) -> None:
         """
-        Verify user's email address.
-        
-        Note: Simplified version - would need proper token validation.
+        Verify user's email address using a verification token.
+
+        SECURITY FIX (Audit 4 - H2): Now properly validates the verification token
+        against a stored hash before marking the email as verified.
+
+        Args:
+            user_id: User ID
+            verification_token: Plain text verification token
+            ip_address: Client IP for audit logging
+
+        Raises:
+            AuthenticationError: If user not found or token invalid
         """
+        user = await self.user_repo.get_by_id(user_id)
+
+        if not user:
+            raise AuthenticationError("User not found")
+
+        # SECURITY FIX: Hash the provided token and validate against stored hash
+        token_hash = hashlib.sha256(verification_token.encode()).hexdigest()
+        is_valid = await self.user_repo.validate_email_verification_token(
+            user_id=user_id,
+            token_hash=token_hash
+        )
+
+        if not is_valid:
+            await self.audit_repo.log_security_event(
+                actor_id=user_id,
+                event_name="email_verification_failed",
+                details={"reason": "invalid_or_expired_token"},
+                ip_address=ip_address
+            )
+            raise AuthenticationError("Invalid or expired verification token")
+
+        # Mark email as verified
         await self.user_repo.set_verified(user_id)
-        
+
+        # Clear the verification token (one-time use)
+        await self.user_repo.clear_email_verification_token(user_id)
+
         await self.audit_repo.log_user_action(
             actor_id=user_id,
             target_user_id=user_id,
             action="email_verified",
             ip_address=ip_address
         )
+
+    async def request_email_verification(
+        self,
+        user_id: str,
+        ip_address: Optional[str] = None
+    ) -> Optional[str]:
+        """
+        Generate and store an email verification token.
+
+        SECURITY FIX (Audit 4 - H2): Added this method to properly generate
+        verification tokens with hashed storage.
+
+        Args:
+            user_id: User ID
+            ip_address: Client IP for audit logging
+
+        Returns:
+            Plain text verification token to send to user via email
+        """
+        user = await self.user_repo.get_by_id(user_id)
+
+        if not user:
+            raise AuthenticationError("User not found")
+
+        if user.is_verified:
+            return None  # Already verified
+
+        # Generate secure token
+        plain_token = secrets.token_urlsafe(32)
+        token_hash = hashlib.sha256(plain_token.encode()).hexdigest()
+
+        # Token expires in 24 hours
+        from datetime import timezone
+        expires_at = datetime.now(timezone.utc) + timedelta(hours=24)
+
+        await self.user_repo.store_email_verification_token(
+            user_id=user_id,
+            token_hash=token_hash,
+            expires_at=expires_at
+        )
+
+        await self.audit_repo.log_user_action(
+            actor_id=user_id,
+            target_user_id=user_id,
+            action="email_verification_requested",
+            ip_address=ip_address
+        )
+
+        return plain_token
     
     async def deactivate_account(
         self,
