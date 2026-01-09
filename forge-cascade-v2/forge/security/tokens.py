@@ -55,11 +55,17 @@ class TokenBlacklist:
 
     SECURITY FIX (Audit 2): Uses asyncio.Lock for async methods to prevent
     blocking the event loop. threading.Lock retained for sync methods only.
+
+    SECURITY FIX (Audit 3): Added bounded memory limits to prevent DoS through
+    memory exhaustion. Maximum 100,000 entries with LRU eviction.
     """
 
     # In-memory fallback storage
+    # SECURITY FIX (Audit 3): Bounded memory - max 100,000 blacklisted tokens
+    _MAX_BLACKLIST_SIZE: int = 100000
     _blacklist: Set[str] = set()
     _expiry_times: dict[str, float] = {}
+    _access_order: list[str] = []  # Track access order for LRU eviction
     _sync_lock = threading.Lock()  # For sync methods only
     _async_lock: Optional[asyncio.Lock] = None  # Lazy-initialized for async methods
     _last_cleanup: float = 0
@@ -160,7 +166,10 @@ class TokenBlacklist:
             cls._blacklist.add(jti)
             if expires_at:
                 cls._expiry_times[jti] = expires_at
+            # SECURITY FIX (Audit 3): Track access order for LRU eviction
+            cls._access_order.append(jti)
             cls._maybe_cleanup_unlocked()
+            cls._evict_lru_unlocked()  # Enforce memory bounds
             logger.debug("token_blacklisted_memory", jti=jti[:8] + "...")
 
     @classmethod
@@ -198,7 +207,10 @@ class TokenBlacklist:
             cls._blacklist.add(jti)
             if expires_at:
                 cls._expiry_times[jti] = expires_at
+            # SECURITY FIX (Audit 3): Track access order for LRU eviction
+            cls._access_order.append(jti)
             cls._maybe_cleanup_unlocked()
+            cls._evict_lru_unlocked()  # Enforce memory bounds
 
     @classmethod
     def is_blacklisted(cls, jti: Optional[str]) -> bool:
@@ -251,7 +263,41 @@ class TokenBlacklist:
         ]
         for jti in expired:
             cls._blacklist.discard(jti)
-            del cls._expiry_times[jti]
+            cls._expiry_times.pop(jti, None)
+            # Remove from access order
+            try:
+                cls._access_order.remove(jti)
+            except ValueError:
+                pass
+
+    @classmethod
+    def _evict_lru_unlocked(cls, count: int = 1000) -> None:
+        """
+        Evict least recently used entries when blacklist exceeds max size.
+
+        SECURITY FIX (Audit 3): Prevents memory exhaustion attacks by
+        limiting blacklist size and evicting oldest entries.
+
+        Note: Caller must hold the lock (sync or async).
+        """
+        if len(cls._blacklist) <= cls._MAX_BLACKLIST_SIZE:
+            return
+
+        # Evict oldest entries (first in access order)
+        evict_count = min(count, len(cls._access_order))
+        to_evict = cls._access_order[:evict_count]
+
+        for jti in to_evict:
+            cls._blacklist.discard(jti)
+            cls._expiry_times.pop(jti, None)
+
+        cls._access_order = cls._access_order[evict_count:]
+
+        logger.info(
+            "token_blacklist_eviction",
+            evicted=evict_count,
+            remaining=len(cls._blacklist)
+        )
 
     @classmethod
     def clear(cls) -> None:
@@ -259,6 +305,7 @@ class TokenBlacklist:
         with cls._sync_lock:
             cls._blacklist.clear()
             cls._expiry_times.clear()
+            cls._access_order.clear()
 
     @classmethod
     async def clear_async(cls) -> None:
@@ -282,6 +329,7 @@ class TokenBlacklist:
         async with cls._get_async_lock():
             cls._blacklist.clear()
             cls._expiry_times.clear()
+            cls._access_order.clear()
 
     @classmethod
     async def close(cls) -> None:
@@ -312,6 +360,210 @@ class TokenInvalidError(TokenError):
 
 # SECURITY FIX: Hardcoded allowed algorithms to prevent algorithm confusion attacks
 ALLOWED_JWT_ALGORITHMS = ["HS256", "HS384", "HS512"]
+
+
+# =============================================================================
+# SECURITY FIX (Audit 3): Key Rotation Support
+# =============================================================================
+
+class KeyRotationManager:
+    """
+    SECURITY FIX (Audit 3): JWT Key Rotation Manager.
+
+    Manages multiple signing keys to support seamless key rotation:
+    - Current key: Used for signing new tokens
+    - Previous keys: Used for validating tokens during rotation period
+
+    Key rotation process:
+    1. Generate new key
+    2. Add new key as current (old current becomes previous)
+    3. Wait for all old tokens to expire (typically 1 refresh token cycle)
+    4. Remove old previous keys
+
+    This allows zero-downtime key rotation without invalidating active tokens.
+    """
+
+    _current_key_id: str = "default"
+    _keys: dict[str, str] = {}  # key_id -> secret
+    _key_created_at: dict[str, datetime] = {}
+    _rotation_lock = asyncio.Lock()
+
+    @classmethod
+    def initialize(cls) -> None:
+        """Initialize with default key from settings."""
+        if not cls._keys:
+            cls._current_key_id = "key_1"
+            cls._keys[cls._current_key_id] = settings.jwt_secret_key
+            cls._key_created_at[cls._current_key_id] = datetime.now(timezone.utc)
+            logger.info("key_rotation_initialized", current_key_id=cls._current_key_id)
+
+    @classmethod
+    def get_current_key(cls) -> tuple[str, str]:
+        """
+        Get the current signing key.
+
+        Returns:
+            Tuple of (key_id, secret)
+        """
+        cls.initialize()
+        return cls._current_key_id, cls._keys[cls._current_key_id]
+
+    @classmethod
+    def get_key_by_id(cls, key_id: str) -> str | None:
+        """
+        Get a key by its ID.
+
+        Args:
+            key_id: The key identifier
+
+        Returns:
+            The secret key or None if not found
+        """
+        cls.initialize()
+        return cls._keys.get(key_id)
+
+    @classmethod
+    def get_all_keys(cls) -> list[str]:
+        """
+        Get all valid keys for token verification.
+
+        Returns:
+            List of all secret keys (current + previous)
+        """
+        cls.initialize()
+        return list(cls._keys.values())
+
+    @classmethod
+    async def rotate_key(cls, new_secret: str, keep_previous: int = 2) -> str:
+        """
+        Rotate to a new signing key.
+
+        Args:
+            new_secret: The new secret key (must be at least 32 chars)
+            keep_previous: Number of previous keys to keep (default 2)
+
+        Returns:
+            The new key ID
+
+        Raises:
+            ValueError: If new_secret is too short
+        """
+        if len(new_secret) < 32:
+            raise ValueError("New secret must be at least 32 characters")
+
+        async with cls._rotation_lock:
+            cls.initialize()
+
+            # Generate new key ID
+            key_num = len(cls._keys) + 1
+            new_key_id = f"key_{key_num}"
+
+            # Add new key
+            cls._keys[new_key_id] = new_secret
+            cls._key_created_at[new_key_id] = datetime.now(timezone.utc)
+
+            # Update current key
+            old_key_id = cls._current_key_id
+            cls._current_key_id = new_key_id
+
+            # Remove oldest keys if we have too many
+            while len(cls._keys) > keep_previous + 1:
+                oldest_key = min(
+                    cls._key_created_at.keys(),
+                    key=lambda k: cls._key_created_at[k]
+                )
+                if oldest_key != cls._current_key_id:
+                    del cls._keys[oldest_key]
+                    del cls._key_created_at[oldest_key]
+                    logger.info("old_key_removed", key_id=oldest_key)
+
+            logger.info(
+                "key_rotated",
+                new_key_id=new_key_id,
+                old_key_id=old_key_id,
+                total_keys=len(cls._keys)
+            )
+
+            return new_key_id
+
+    @classmethod
+    def decode_with_rotation(
+        cls,
+        token: str,
+        algorithms: list[str],
+        options: dict | None = None
+    ) -> dict:
+        """
+        Decode a token, trying all valid keys.
+
+        Args:
+            token: The JWT token
+            algorithms: Allowed algorithms
+            options: PyJWT decode options
+
+        Returns:
+            Decoded payload
+
+        Raises:
+            InvalidTokenError: If token cannot be decoded with any key
+        """
+        cls.initialize()
+
+        # Try to get key ID from header
+        try:
+            unverified_header = pyjwt.get_unverified_header(token)
+            kid = unverified_header.get("kid")
+            if kid and kid in cls._keys:
+                # Try the specific key first
+                try:
+                    return pyjwt.decode(
+                        token,
+                        cls._keys[kid],
+                        algorithms=algorithms,
+                        options=options or {}
+                    )
+                except (InvalidTokenError, DecodeError):
+                    pass  # Fall through to try all keys
+        except Exception:
+            pass  # No valid header, try all keys
+
+        # Try all keys
+        last_error = None
+        for key in cls.get_all_keys():
+            try:
+                return pyjwt.decode(
+                    token,
+                    key,
+                    algorithms=algorithms,
+                    options=options or {}
+                )
+            except ExpiredSignatureError:
+                raise  # Don't try other keys for expired tokens
+            except (InvalidTokenError, DecodeError) as e:
+                last_error = e
+                continue
+
+        # None of the keys worked
+        raise InvalidTokenError(f"Token verification failed: {last_error}")
+
+    @classmethod
+    def get_rotation_status(cls) -> dict:
+        """
+        Get current key rotation status.
+
+        Returns:
+            Dict with rotation status info
+        """
+        cls.initialize()
+        return {
+            "current_key_id": cls._current_key_id,
+            "total_keys": len(cls._keys),
+            "key_ids": list(cls._keys.keys()),
+            "key_ages": {
+                kid: (datetime.now(timezone.utc) - created).total_seconds()
+                for kid, created in cls._key_created_at.items()
+            }
+        }
 
 
 def create_access_token(
@@ -351,8 +603,14 @@ def create_access_token(
     if additional_claims:
         payload.update(additional_claims)
 
-    # SECURITY FIX: Use PyJWT instead of python-jose
-    return pyjwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
+    # SECURITY FIX (Audit 3): Use KeyRotationManager for signing
+    key_id, secret = KeyRotationManager.get_current_key()
+    return pyjwt.encode(
+        payload,
+        secret,
+        algorithm=settings.jwt_algorithm,
+        headers={"kid": key_id}  # Include key ID in header for rotation support
+    )
 
 
 def create_refresh_token(
@@ -383,8 +641,14 @@ def create_refresh_token(
         "type": "refresh"
     }
 
-    # SECURITY FIX: Use PyJWT instead of python-jose
-    return pyjwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
+    # SECURITY FIX (Audit 3): Use KeyRotationManager for signing
+    key_id, secret = KeyRotationManager.get_current_key()
+    return pyjwt.encode(
+        payload,
+        secret,
+        algorithm=settings.jwt_algorithm,
+        headers={"kid": key_id}
+    )
 
 
 def create_token_pair(
@@ -420,6 +684,9 @@ def decode_token(token: str, verify_exp: bool = True) -> TokenPayload:
     """
     Decode and validate a JWT token.
 
+    SECURITY FIX (Audit 3): Now uses KeyRotationManager to support key rotation.
+    Tokens signed with any valid key (current or previous) will be accepted.
+
     Args:
         token: JWT token string
         verify_exp: Whether to verify expiration (default True)
@@ -442,10 +709,11 @@ def decode_token(token: str, verify_exp: bool = True) -> TokenPayload:
         if not verify_exp:
             options["verify_exp"] = False
 
-        payload = pyjwt.decode(
+        # SECURITY FIX (Audit 3): Use KeyRotationManager for decoding
+        # This allows tokens signed with any valid key to be verified
+        payload = KeyRotationManager.decode_with_rotation(
             token,
-            settings.jwt_secret_key,
-            algorithms=ALLOWED_JWT_ALGORITHMS,  # Hardcoded whitelist
+            algorithms=ALLOWED_JWT_ALGORITHMS,
             options=options
         )
 

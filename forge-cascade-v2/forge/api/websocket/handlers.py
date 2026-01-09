@@ -543,30 +543,34 @@ async def websocket_events(
 ):
     """
     WebSocket endpoint for real-time event streaming.
-    
+
     Query Parameters:
-    - token: JWT access token for authentication (optional)
+    - token: JWT access token for authentication (REQUIRED)
     - topics: Comma-separated list of event topics to subscribe to
-    
+
     Message Format (incoming):
     - {"type": "subscribe", "topics": ["topic1", "topic2"]}
     - {"type": "unsubscribe", "topics": ["topic1"]}
     - {"type": "ping"}
-    
+
     Message Format (outgoing):
     - {"type": "event", "event_type": "...", "data": {...}, "timestamp": "..."}
     - {"type": "connected", "connection_id": "...", "subscriptions": [...]}
     - {"type": "pong"}
     """
-    
-    # Authenticate
+
+    # SECURITY FIX (Audit 3): Require authentication for all WebSocket endpoints
     user_id = await authenticate_websocket(websocket, token)
-    
+
+    if not user_id:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+
     # Parse initial subscriptions
     subscriptions = []
     if topics:
         subscriptions = [t.strip() for t in topics.split(",") if t.strip()]
-    
+
     # Accept connection
     connection = await connection_manager.connect_events(
         websocket=websocket,
@@ -632,18 +636,22 @@ async def websocket_dashboard(
 ):
     """
     WebSocket endpoint for live dashboard metrics.
-    
+
     Receives periodic metrics updates from the server.
     Supports ping/pong for keepalive.
-    
+
     Message Format (outgoing):
     - {"type": "metrics_update", "metrics": {...}, "timestamp": "..."}
     - {"type": "connected", "connection_id": "..."}
     """
-    
-    # Authenticate
+
+    # SECURITY FIX (Audit 3): Require authentication for all WebSocket endpoints
     user_id = await authenticate_websocket(websocket, token)
-    
+
+    if not user_id:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+
     # Accept connection
     connection = await connection_manager.connect_dashboard(
         websocket=websocket,

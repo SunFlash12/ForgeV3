@@ -80,12 +80,16 @@ class SyncService:
     async def register_peer(self, peer: FederatedPeer) -> None:
         """Register a new federated peer."""
         self._peers[peer.id] = peer
+        # SECURITY FIX (Audit 3): Persist peer to database
+        await self.persist_peer(peer)
         logger.info(f"Registered peer: {peer.name} ({peer.id})")
 
     async def unregister_peer(self, peer_id: str) -> None:
         """Remove a federated peer."""
         if peer_id in self._peers:
             del self._peers[peer_id]
+            # SECURITY FIX (Audit 3): Also remove from database
+            await self.delete_peer_from_db(peer_id)
             logger.info(f"Unregistered peer: {peer_id}")
 
     async def get_peer(self, peer_id: str) -> FederatedPeer | None:
@@ -593,3 +597,169 @@ class SyncService:
                 except Exception as e:
                     logger.error(f"Failed to schedule sync with {peer.name}: {e}")
         return sync_ids
+
+    # =========================================================================
+    # SECURITY FIX (Audit 3): Federation State Persistence
+    # =========================================================================
+
+    async def persist_peer(self, peer: FederatedPeer) -> bool:
+        """
+        SECURITY FIX (Audit 3): Persist peer to Neo4j database.
+
+        Ensures peer state survives restarts, maintaining:
+        - Trust relationships
+        - Sync state
+        - Public key mappings
+
+        Args:
+            peer: The peer to persist
+
+        Returns:
+            True if successfully persisted
+        """
+        import json
+        try:
+            async with self.driver.session() as session:
+                query = """
+                MERGE (p:FederatedPeer {id: $id})
+                SET p.name = $name,
+                    p.endpoint = $endpoint,
+                    p.public_key = $public_key,
+                    p.status = $status,
+                    p.trust_score = $trust_score,
+                    p.sync_direction = $sync_direction,
+                    p.conflict_resolution = $conflict_resolution,
+                    p.last_sync_at = $last_sync_at,
+                    p.created_at = $created_at,
+                    p.updated_at = $updated_at,
+                    p.metadata = $metadata
+                RETURN p.id AS id
+                """
+                result = await session.run(query, {
+                    "id": peer.id,
+                    "name": peer.name,
+                    "endpoint": peer.endpoint,
+                    "public_key": peer.public_key,
+                    "status": peer.status.value if hasattr(peer.status, 'value') else str(peer.status),
+                    "trust_score": peer.trust_score,
+                    "sync_direction": peer.sync_direction.value if hasattr(peer.sync_direction, 'value') else str(peer.sync_direction),
+                    "conflict_resolution": peer.conflict_resolution.value if hasattr(peer.conflict_resolution, 'value') else str(peer.conflict_resolution),
+                    "last_sync_at": peer.last_sync_at.isoformat() if peer.last_sync_at else None,
+                    "created_at": peer.created_at.isoformat() if peer.created_at else None,
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                    "metadata": json.dumps(peer.metadata) if peer.metadata else None,
+                })
+                record = await result.single()
+                logger.info(f"Persisted peer {peer.name} to database")
+                return record is not None
+        except Exception as e:
+            logger.error(f"Failed to persist peer {peer.id}: {e}")
+            return False
+
+    async def load_peers_from_db(self) -> list[FederatedPeer]:
+        """
+        SECURITY FIX (Audit 3): Load all peers from Neo4j database.
+
+        Called at startup to restore federation state.
+
+        Returns:
+            List of loaded peers
+        """
+        import json
+        try:
+            async with self.driver.session() as session:
+                query = """
+                MATCH (p:FederatedPeer)
+                RETURN p {.*} AS peer
+                """
+                result = await session.run(query)
+                records = await result.data()
+
+                loaded_peers = []
+                for record in records:
+                    peer_data = record["peer"]
+                    try:
+                        peer = FederatedPeer(
+                            id=peer_data["id"],
+                            name=peer_data["name"],
+                            endpoint=peer_data["endpoint"],
+                            public_key=peer_data.get("public_key", ""),
+                            status=PeerStatus(peer_data.get("status", "pending")),
+                            trust_score=float(peer_data.get("trust_score", 0.3)),
+                            sync_direction=SyncDirection(peer_data.get("sync_direction", "bidirectional")),
+                            conflict_resolution=ConflictResolution(peer_data.get("conflict_resolution", "local_wins")),
+                            last_sync_at=datetime.fromisoformat(peer_data["last_sync_at"]) if peer_data.get("last_sync_at") else None,
+                            created_at=datetime.fromisoformat(peer_data["created_at"]) if peer_data.get("created_at") else None,
+                            metadata=json.loads(peer_data["metadata"]) if peer_data.get("metadata") else {},
+                        )
+                        # Register in memory
+                        self._peers[peer.id] = peer
+                        loaded_peers.append(peer)
+                    except Exception as e:
+                        logger.error(f"Failed to parse peer {peer_data.get('id')}: {e}")
+
+                logger.info(f"Loaded {len(loaded_peers)} peers from database")
+                return loaded_peers
+        except Exception as e:
+            logger.error(f"Failed to load peers from database: {e}")
+            return []
+
+    async def delete_peer_from_db(self, peer_id: str) -> bool:
+        """
+        SECURITY FIX (Audit 3): Delete peer from Neo4j database.
+
+        Args:
+            peer_id: ID of peer to delete
+
+        Returns:
+            True if successfully deleted
+        """
+        try:
+            async with self.driver.session() as session:
+                query = """
+                MATCH (p:FederatedPeer {id: $id})
+                DELETE p
+                RETURN count(*) AS deleted
+                """
+                result = await session.run(query, {"id": peer_id})
+                record = await result.single()
+                deleted = record["deleted"] if record else 0
+                if deleted > 0:
+                    logger.info(f"Deleted peer {peer_id} from database")
+                return deleted > 0
+        except Exception as e:
+            logger.error(f"Failed to delete peer {peer_id}: {e}")
+            return False
+
+    async def persist_trust_score(self, peer_id: str, trust_score: float, reason: str) -> bool:
+        """
+        SECURITY FIX (Audit 3): Persist trust score update to database.
+
+        Args:
+            peer_id: ID of peer
+            trust_score: New trust score
+            reason: Reason for update
+
+        Returns:
+            True if successfully persisted
+        """
+        try:
+            async with self.driver.session() as session:
+                query = """
+                MATCH (p:FederatedPeer {id: $id})
+                SET p.trust_score = $trust_score,
+                    p.trust_updated_at = $updated_at,
+                    p.trust_update_reason = $reason
+                RETURN p.id AS id
+                """
+                result = await session.run(query, {
+                    "id": peer_id,
+                    "trust_score": trust_score,
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                    "reason": reason,
+                })
+                record = await result.single()
+                return record is not None
+        except Exception as e:
+            logger.error(f"Failed to persist trust score for {peer_id}: {e}")
+            return False

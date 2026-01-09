@@ -371,8 +371,21 @@ class PartitionManager:
 
         self._rebalance_jobs[job.job_id] = job
 
-        # Start rebalancing
-        asyncio.create_task(self._execute_rebalance(job))
+        # SECURITY FIX (Audit 3): Track background task and handle exceptions
+        async def _safe_rebalance(j: RebalanceJob) -> None:
+            try:
+                await self._execute_rebalance(j)
+            except Exception as e:
+                j.status = "failed"
+                logger.error(
+                    "rebalance_execution_error",
+                    job_id=j.job_id,
+                    error=str(e)
+                )
+
+        # Start rebalancing with exception handling
+        task = asyncio.create_task(_safe_rebalance(job))
+        task.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
 
         logger.info(
             "rebalance_triggered",

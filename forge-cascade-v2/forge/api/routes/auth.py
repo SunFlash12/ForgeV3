@@ -319,19 +319,24 @@ async def register(
         return UserResponse.from_user(user)
 
     except RegistrationError as e:
+        # Registration errors are user-facing (username/email taken)
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=str(e),
         )
     except PasswordValidationError as e:
+        # Password validation errors are user-facing (tells user what to fix)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
         )
     except ValueError as e:
+        # SECURITY FIX (Audit 3): Generic message for unexpected validation errors
+        import logging
+        logging.getLogger(__name__).warning(f"registration_validation_error: {e}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
+            detail="Invalid registration data",
         )
 
 
@@ -677,3 +682,190 @@ def _score_to_next_level(score: float, current: TrustLevel) -> float | None:
         return None
 
     return max(0, next_threshold - score)
+
+
+# =============================================================================
+# SECURITY FIX (Audit 3): MFA Endpoints
+# =============================================================================
+
+from forge.security.mfa import get_mfa_service, MFAStatus
+
+
+class MFASetupResponse(BaseModel):
+    """Response for MFA setup."""
+    secret: str
+    provisioning_uri: str
+    backup_codes: list[str]
+
+
+class MFAVerifyRequest(BaseModel):
+    """Request to verify MFA code."""
+    code: str = Field(..., min_length=6, max_length=8, description="TOTP or backup code")
+
+
+class MFAStatusResponse(BaseModel):
+    """MFA status response."""
+    enabled: bool
+    verified: bool
+    backup_codes_remaining: int
+
+
+@router.post("/me/mfa/setup", response_model=MFASetupResponse)
+async def setup_mfa(
+    user: ActiveUserDep,
+    audit_repo: AuditRepoDep,
+) -> MFASetupResponse:
+    """
+    Initialize MFA setup for the current user.
+
+    Returns the TOTP secret, QR code URI, and backup codes.
+    User must verify setup by calling /me/mfa/verify with a valid code.
+
+    SECURITY: Backup codes are shown only once - user must save them.
+    """
+    mfa = get_mfa_service()
+
+    # Check if MFA already enabled
+    status = await mfa.get_status(user.id)
+    if status.enabled and status.verified:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="MFA is already enabled. Disable it first to reconfigure."
+        )
+
+    result = await mfa.setup_mfa(user.id, user.email)
+
+    await audit_repo.log_security_event(
+        actor_id=user.id,
+        event_name="mfa_setup_initiated",
+        details={},
+    )
+
+    return MFASetupResponse(
+        secret=result.secret,
+        provisioning_uri=result.provisioning_uri,
+        backup_codes=result.backup_codes,
+    )
+
+
+@router.post("/me/mfa/verify", status_code=status.HTTP_204_NO_CONTENT)
+async def verify_mfa_setup(
+    request: MFAVerifyRequest,
+    user: ActiveUserDep,
+    audit_repo: AuditRepoDep,
+) -> Response:
+    """
+    Verify MFA setup with a TOTP code from authenticator app.
+
+    This completes the MFA setup process.
+    """
+    mfa = get_mfa_service()
+
+    if await mfa.verify_setup(user.id, request.code):
+        await audit_repo.log_security_event(
+            actor_id=user.id,
+            event_name="mfa_enabled",
+            details={},
+        )
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="Invalid verification code. Please try again."
+    )
+
+
+@router.get("/me/mfa/status", response_model=MFAStatusResponse)
+async def get_mfa_status(
+    user: ActiveUserDep,
+) -> MFAStatusResponse:
+    """
+    Get MFA status for the current user.
+    """
+    mfa = get_mfa_service()
+    mfa_status = await mfa.get_status(user.id)
+
+    return MFAStatusResponse(
+        enabled=mfa_status.enabled,
+        verified=mfa_status.verified,
+        backup_codes_remaining=mfa_status.backup_codes_remaining,
+    )
+
+
+@router.delete("/me/mfa", status_code=status.HTTP_204_NO_CONTENT)
+async def disable_mfa(
+    request: MFAVerifyRequest,
+    user: ActiveUserDep,
+    audit_repo: AuditRepoDep,
+) -> Response:
+    """
+    Disable MFA for the current user.
+
+    Requires a valid TOTP code or backup code for security.
+    """
+    mfa = get_mfa_service()
+
+    # Verify code before disabling
+    code = request.code
+
+    # Try TOTP first, then backup code
+    verified = await mfa.verify_totp(user.id, code)
+    if not verified:
+        # Try as backup code (format: XXXX-XXXX)
+        verified = await mfa.verify_backup_code(user.id, code)
+
+    if not verified:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid verification code. MFA cannot be disabled."
+        )
+
+    await mfa.disable_mfa(user.id)
+
+    await audit_repo.log_security_event(
+        actor_id=user.id,
+        event_name="mfa_disabled",
+        details={},
+    )
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/me/mfa/backup-codes", response_model=list[str])
+async def regenerate_backup_codes(
+    request: MFAVerifyRequest,
+    user: ActiveUserDep,
+    audit_repo: AuditRepoDep,
+) -> list[str]:
+    """
+    Regenerate backup codes.
+
+    Requires a valid TOTP code. All previous backup codes are invalidated.
+
+    SECURITY: New codes are shown only once - user must save them.
+    """
+    mfa = get_mfa_service()
+
+    # Must provide valid TOTP to regenerate backup codes
+    if not await mfa.verify_totp(user.id, request.code):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid TOTP code. Cannot regenerate backup codes."
+        )
+
+    try:
+        new_codes = await mfa.regenerate_backup_codes(user.id)
+
+        await audit_repo.log_security_event(
+            actor_id=user.id,
+            event_name="mfa_backup_codes_regenerated",
+            details={},
+        )
+
+        return new_codes
+    except ValueError as e:
+        # SECURITY FIX (Audit 3): Generic message for MFA errors
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="MFA is not enabled for this account"
+        )

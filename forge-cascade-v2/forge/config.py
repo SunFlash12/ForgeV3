@@ -91,14 +91,26 @@ class Settings(BaseSettings):
     # ═══════════════════════════════════════════════════════════════
     jwt_secret_key: str = Field(description="JWT secret key")
     jwt_algorithm: str = Field(default="HS256", description="JWT algorithm")
+    # SECURITY FIX (Audit 3): Reduced default access token expiry from 60 to 30 minutes
     jwt_access_token_expire_minutes: int = Field(
-        default=60, ge=1, description="Access token expiry"
+        default=30, ge=1, le=60, description="Access token expiry (max 60 min)"
     )
     jwt_refresh_token_expire_days: int = Field(
-        default=7, ge=1, description="Refresh token expiry"
+        default=7, ge=1, le=30, description="Refresh token expiry (max 30 days)"
     )
     password_bcrypt_rounds: int = Field(
         default=12, ge=4, le=31, description="Bcrypt rounds"
+    )
+
+    # SECURITY FIX (Audit 3): Session management settings
+    max_concurrent_sessions_per_user: int = Field(
+        default=5, ge=1, le=20, description="Max concurrent sessions per user"
+    )
+    session_inactivity_timeout_minutes: int = Field(
+        default=30, ge=5, le=1440, description="Session inactivity timeout"
+    )
+    enforce_session_limit: bool = Field(
+        default=True, description="Enforce concurrent session limit"
     )
 
     @field_validator("jwt_secret_key")

@@ -7,14 +7,38 @@ SECURITY FIX (Audit 2):
 - Added authentication to peer management routes
 - Require admin role for peer registration/modification/deletion
 - Added rate limiting to public federation endpoints
+
+SECURITY FIX (Audit 3):
+- Replaced Python hash() with SHA-256 for content integrity
 """
 
+import hashlib
 import logging
 import time
 import uuid
 from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any, Annotated
+
+
+def _compute_content_hash(content: str | None) -> str | None:
+    """
+    SECURITY FIX (Audit 3): Compute SHA-256 hash for content integrity.
+
+    Uses cryptographic hash instead of Python's hash() which:
+    - Is not consistent across Python sessions
+    - Is not cryptographically secure
+    - Could lead to hash collisions
+
+    Args:
+        content: The content string to hash
+
+    Returns:
+        Hexadecimal SHA-256 hash or None if content is None
+    """
+    if content is None:
+        return None
+    return hashlib.sha256(content.encode('utf-8')).hexdigest()
 
 from fastapi import APIRouter, HTTPException, Depends, Query, Header, Request
 from pydantic import BaseModel, Field
@@ -55,20 +79,35 @@ class FederationRateLimiter:
 
     Applies stricter limits to prevent abuse from external peers.
     Uses in-memory storage (for distributed deployments, use Redis).
+
+    SECURITY FIX (Audit 3): Added trust-based rate limits per peer.
     """
+
+    # Trust-based rate limit multipliers
+    TRUST_RATE_MULTIPLIERS = {
+        "core": 3.0,      # 0.8-1.0 trust: 3x normal limits
+        "trusted": 2.0,   # 0.6-0.8 trust: 2x normal limits
+        "standard": 1.0,  # 0.4-0.6 trust: normal limits
+        "limited": 0.5,   # 0.2-0.4 trust: 50% limits
+        "quarantine": 0.1,  # 0.0-0.2 trust: 10% limits (nearly blocked)
+    }
 
     def __init__(
         self,
         requests_per_minute: int = 30,
         requests_per_hour: int = 500,
         handshake_per_hour: int = 10,  # Stricter for handshakes
+        sync_per_hour: int = 60,  # SECURITY FIX (Audit 3): Sync-specific limit
     ):
         self.requests_per_minute = requests_per_minute
         self.requests_per_hour = requests_per_hour
         self.handshake_per_hour = handshake_per_hour
+        self.sync_per_hour = sync_per_hour
         self._minute_counts: dict[str, tuple[float, int]] = {}
         self._hour_counts: dict[str, tuple[float, int]] = {}
         self._handshake_counts: dict[str, tuple[float, int]] = {}
+        self._sync_counts: dict[str, tuple[float, int]] = {}  # SECURITY FIX (Audit 3)
+        self._peer_trust_levels: dict[str, float] = {}  # SECURITY FIX (Audit 3)
 
     def _get_client_key(self, request: Request, public_key: str | None = None) -> str:
         """Get rate limit key from peer public key or IP."""
@@ -82,25 +121,66 @@ class FederationRateLimiter:
             return f"ip:{request.client.host}"
         return "ip:unknown"
 
+    def set_peer_trust(self, public_key: str, trust_score: float) -> None:
+        """
+        SECURITY FIX (Audit 3): Set peer trust level for rate limit adjustment.
+
+        Args:
+            public_key: Peer's public key
+            trust_score: Trust score (0.0-1.0)
+        """
+        key = f"peer:{public_key[:32]}"
+        self._peer_trust_levels[key] = trust_score
+        logger.debug(f"Set trust level for {key}: {trust_score}")
+
+    def _get_trust_multiplier(self, key: str) -> float:
+        """
+        SECURITY FIX (Audit 3): Get rate limit multiplier based on trust.
+
+        Higher trust = higher limits (up to 3x for core peers).
+        """
+        trust_score = self._peer_trust_levels.get(key, 0.3)  # Default to low trust
+
+        if trust_score >= 0.8:
+            return self.TRUST_RATE_MULTIPLIERS["core"]
+        elif trust_score >= 0.6:
+            return self.TRUST_RATE_MULTIPLIERS["trusted"]
+        elif trust_score >= 0.4:
+            return self.TRUST_RATE_MULTIPLIERS["standard"]
+        elif trust_score >= 0.2:
+            return self.TRUST_RATE_MULTIPLIERS["limited"]
+        else:
+            return self.TRUST_RATE_MULTIPLIERS["quarantine"]
+
     def check_rate_limit(
         self,
         request: Request,
         public_key: str | None = None,
         is_handshake: bool = False,
+        is_sync: bool = False,  # SECURITY FIX (Audit 3): Sync-specific limit
     ) -> tuple[bool, int]:
         """
         Check if request is within rate limits.
+
+        SECURITY FIX (Audit 3): Now applies trust-based rate multipliers.
 
         Returns (allowed, retry_after_seconds).
         """
         now = time.time()
         key = self._get_client_key(request, public_key)
 
+        # SECURITY FIX (Audit 3): Get trust-based rate multiplier
+        trust_multiplier = self._get_trust_multiplier(key)
+        adjusted_minute_limit = int(self.requests_per_minute * trust_multiplier)
+        adjusted_hour_limit = int(self.requests_per_hour * trust_multiplier)
+        adjusted_sync_limit = int(self.sync_per_hour * trust_multiplier)
+
         # Check minute limit
         if key in self._minute_counts:
             window_start, count = self._minute_counts[key]
             if now - window_start < 60:
-                if count >= self.requests_per_minute:
+                if count >= adjusted_minute_limit:
+                    logger.warning(f"Federation minute rate limit exceeded for {key} (trust: {trust_multiplier}x)")
                     return False, int(60 - (now - window_start))
             else:
                 self._minute_counts[key] = (now, 0)
@@ -109,10 +189,22 @@ class FederationRateLimiter:
         if key in self._hour_counts:
             window_start, count = self._hour_counts[key]
             if now - window_start < 3600:
-                if count >= self.requests_per_hour:
+                if count >= adjusted_hour_limit:
+                    logger.warning(f"Federation hour rate limit exceeded for {key} (trust: {trust_multiplier}x)")
                     return False, int(3600 - (now - window_start))
             else:
                 self._hour_counts[key] = (now, 0)
+
+        # SECURITY FIX (Audit 3): Check sync-specific limit
+        if is_sync:
+            if key in self._sync_counts:
+                window_start, count = self._sync_counts[key]
+                if now - window_start < 3600:
+                    if count >= adjusted_sync_limit:
+                        logger.warning(f"Federation sync rate limit exceeded for {key}")
+                        return False, int(3600 - (now - window_start))
+                else:
+                    self._sync_counts[key] = (now, 0)
 
         # Special stricter limit for handshakes
         if is_handshake:
@@ -134,6 +226,9 @@ class FederationRateLimiter:
             self._hour_counts[key] = (now, 0)
         if is_handshake and key not in self._handshake_counts:
             self._handshake_counts[key] = (now, 0)
+        # SECURITY FIX (Audit 3): Track sync counts
+        if is_sync and key not in self._sync_counts:
+            self._sync_counts[key] = (now, 0)
 
         _, minute_count = self._minute_counts[key]
         self._minute_counts[key] = (self._minute_counts[key][0], minute_count + 1)
@@ -144,6 +239,11 @@ class FederationRateLimiter:
         if is_handshake:
             _, handshake_count = self._handshake_counts[key]
             self._handshake_counts[key] = (self._handshake_counts[key][0], handshake_count + 1)
+
+        # SECURITY FIX (Audit 3): Increment sync counter
+        if is_sync:
+            _, sync_count = self._sync_counts[key]
+            self._sync_counts[key] = (self._sync_counts[key][0], sync_count + 1)
 
         return True, 0
 
@@ -933,7 +1033,7 @@ async def get_changes(
             "version": c.version,
             "created_at": c.created_at.isoformat() if c.created_at else None,
             "updated_at": c.updated_at.isoformat() if c.updated_at else None,
-            "content_hash": hash(c.content) if c.content else None,  # Simple hash for now
+            "content_hash": _compute_content_hash(c.content),  # SECURITY FIX (Audit 3): SHA-256
         }
         for c in capsules
     ]
@@ -1024,7 +1124,8 @@ async def receive_capsules(
                 local = await capsule_repo.get_by_id(fed_capsule.local_capsule_id)
                 if local:
                     remote_hash = remote_capsule.get("content_hash")
-                    local_hash = hash(local.content) if local.content else None
+                    # SECURITY FIX (Audit 3): Use SHA-256 for consistent hashing
+                    local_hash = _compute_content_hash(local.content)
 
                     if remote_hash != local_hash:
                         # Conflict - resolve based on policy

@@ -543,7 +543,7 @@ class SolanaChainClient(BaseChainClient):
         )
     
     # ==================== Contract Operations ====================
-    
+
     async def call_contract(
         self,
         contract_address: str,
@@ -552,15 +552,132 @@ class SolanaChainClient(BaseChainClient):
         abi: Optional[list[dict]] = None,
     ) -> Any:
         """
-        Read data from a Solana program.
-        
-        Note: Solana programs work differently than EVM contracts.
-        This is a placeholder that would need program-specific implementation.
+        Read data from a Solana program account.
+
+        Unlike EVM contracts, Solana programs don't have "view functions" in the
+        same sense. Instead, we read account data directly and decode it.
+
+        Args:
+            contract_address: The program account address to read from
+            function_name: Used as a hint for data decoding (e.g., "account_info", "balance")
+            args: Arguments for parsing - typically [account_address] for the account to read
+            abi: Optional schema definition for decoding account data
+
+        Returns:
+            Decoded account data based on function_name:
+            - "account_info": Raw account info (lamports, owner, data)
+            - "balance": Account balance in SOL
+            - "token_balance": SPL token balance
+            - "data": Raw account data bytes
         """
-        raise NotImplementedError(
-            "Solana program calls require program-specific implementation"
-        )
-    
+        self._ensure_initialized()
+        from solders.pubkey import Pubkey
+
+        # For simple queries, contract_address is the account to read
+        try:
+            account_pubkey = Pubkey.from_string(contract_address)
+        except Exception as e:
+            raise ChainClientError(f"Invalid account address: {contract_address} - {e}")
+
+        # Handle different query types based on function_name
+        if function_name == "balance" or function_name == "get_balance":
+            # Return SOL balance
+            response = await self._client.get_balance(account_pubkey)
+            if response.value is None:
+                return 0.0
+            return response.value / 1_000_000_000  # Lamports to SOL
+
+        elif function_name == "account_info" or function_name == "get_account_info":
+            # Return full account info
+            response = await self._client.get_account_info(account_pubkey)
+            if response.value is None:
+                return None
+
+            account = response.value
+            return {
+                "lamports": account.lamports,
+                "owner": str(account.owner),
+                "executable": account.executable,
+                "rent_epoch": account.rent_epoch,
+                "data_len": len(account.data) if account.data else 0,
+            }
+
+        elif function_name == "token_balance" or function_name == "get_token_balance":
+            # Return SPL token balance for a token account
+            response = await self._client.get_token_account_balance(account_pubkey)
+            if response.value is None:
+                return 0.0
+            return float(response.value.ui_amount or 0)
+
+        elif function_name == "data" or function_name == "get_data":
+            # Return raw account data
+            response = await self._client.get_account_info(account_pubkey)
+            if response.value is None:
+                return None
+            return response.value.data
+
+        elif function_name == "program_accounts" or function_name == "get_program_accounts":
+            # Get all accounts owned by a program
+            # args[0] should be optional filters
+            filters = args[0] if args else None
+            program_pubkey = account_pubkey
+
+            if filters:
+                response = await self._client.get_program_accounts(
+                    program_pubkey,
+                    filters=filters,
+                )
+            else:
+                response = await self._client.get_program_accounts(program_pubkey)
+
+            if not response.value:
+                return []
+
+            return [
+                {
+                    "pubkey": str(acc.pubkey),
+                    "lamports": acc.account.lamports,
+                    "data_len": len(acc.account.data) if acc.account.data else 0,
+                }
+                for acc in response.value
+            ]
+
+        elif function_name == "multiple_accounts" or function_name == "get_multiple_accounts":
+            # Get multiple accounts at once (args should be list of addresses)
+            if not args:
+                return []
+
+            pubkeys = [Pubkey.from_string(addr) for addr in args]
+            response = await self._client.get_multiple_accounts(pubkeys)
+
+            if not response.value:
+                return [None] * len(pubkeys)
+
+            results = []
+            for i, acc in enumerate(response.value):
+                if acc is None:
+                    results.append(None)
+                else:
+                    results.append({
+                        "address": args[i],
+                        "lamports": acc.lamports,
+                        "owner": str(acc.owner),
+                        "data_len": len(acc.data) if acc.data else 0,
+                    })
+            return results
+
+        else:
+            # Default: return account info
+            response = await self._client.get_account_info(account_pubkey)
+            if response.value is None:
+                return None
+
+            return {
+                "lamports": response.value.lamports,
+                "owner": str(response.value.owner),
+                "data": response.value.data,
+            }
+
     async def execute_contract(
         self,
         contract_address: str,
@@ -571,11 +688,174 @@ class SolanaChainClient(BaseChainClient):
     ) -> TransactionRecord:
         """
         Execute a Solana program instruction.
-        
-        Note: This requires program-specific instruction building.
+
+        Unlike EVM contracts, Solana programs require explicit instruction building
+        with accounts and serialized data. This method provides a generic interface
+        for common program interactions.
+
+        Args:
+            contract_address: The program ID to invoke
+            function_name: Instruction type - determines how to build the instruction
+            args: Instruction-specific arguments:
+                - For "transfer": [to_address, amount]
+                - For "memo": [memo_text]
+                - For "custom": [instruction_data_bytes, [account_metas]]
+            value: SOL to include with transaction (for rent, etc.)
+            abi: Optional - used for custom instruction encoding
+
+        Returns:
+            Transaction record with signature
         """
-        raise NotImplementedError(
-            "Solana program execution requires program-specific implementation"
+        self._ensure_initialized()
+
+        if not self._keypair:
+            raise ChainClientError("No operator keypair configured for program execution")
+
+        from solders.pubkey import Pubkey
+        from solders.instruction import Instruction, AccountMeta
+        from solana.transaction import Transaction
+
+        program_id = Pubkey.from_string(contract_address)
+
+        # Build instruction based on function_name
+        if function_name == "memo":
+            # Send a memo (SPL Memo program)
+            memo_program_id = Pubkey.from_string("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr")
+            memo_text = args[0] if args else ""
+
+            instruction = Instruction(
+                program_id=memo_program_id,
+                accounts=[
+                    AccountMeta(pubkey=self._keypair.pubkey(), is_signer=True, is_writable=False)
+                ],
+                data=memo_text.encode('utf-8'),
+            )
+
+        elif function_name == "custom" or function_name == "raw":
+            # Custom instruction with raw data
+            # args[0] = instruction data (bytes or list of ints)
+            # args[1] = list of account metas: [{"pubkey": str, "is_signer": bool, "is_writable": bool}]
+
+            if len(args) < 2:
+                raise ChainClientError(
+                    "Custom instruction requires [instruction_data, account_metas]"
+                )
+
+            instruction_data = args[0]
+            if isinstance(instruction_data, list):
+                instruction_data = bytes(instruction_data)
+            elif isinstance(instruction_data, str):
+                instruction_data = base58.b58decode(instruction_data)
+
+            account_metas = []
+            for meta in args[1]:
+                account_metas.append(
+                    AccountMeta(
+                        pubkey=Pubkey.from_string(meta["pubkey"]),
+                        is_signer=meta.get("is_signer", False),
+                        is_writable=meta.get("is_writable", False),
+                    )
+                )
+
+            instruction = Instruction(
+                program_id=program_id,
+                accounts=account_metas,
+                data=instruction_data,
+            )
+
+        elif function_name == "create_account":
+            # System program: create account
+            from solders.system_program import create_account, CreateAccountParams
+
+            if len(args) < 3:
+                raise ChainClientError(
+                    "create_account requires [new_account_pubkey, lamports, space]"
+                )
+
+            new_account = Pubkey.from_string(args[0])
+            lamports = int(args[1])
+            space = int(args[2])
+            owner = program_id if len(args) < 4 else Pubkey.from_string(args[3])
+
+            instruction = create_account(
+                CreateAccountParams(
+                    from_pubkey=self._keypair.pubkey(),
+                    to_pubkey=new_account,
+                    lamports=lamports,
+                    space=space,
+                    owner=owner,
+                )
+            )
+
+        elif function_name == "close_account":
+            # Close a token account and reclaim rent
+            from spl.token.instructions import close_account, CloseAccountParams
+            from spl.token.constants import TOKEN_PROGRAM_ID
+
+            if not args:
+                raise ChainClientError("close_account requires [account_to_close]")
+
+            account_to_close = Pubkey.from_string(args[0])
+            destination = self._keypair.pubkey()  # Rent goes back to operator
+
+            instruction = close_account(
+                CloseAccountParams(
+                    program_id=TOKEN_PROGRAM_ID,
+                    account=account_to_close,
+                    dest=destination,
+                    owner=self._keypair.pubkey(),
+                )
+            )
+
+        else:
+            raise ChainClientError(
+                f"Unknown instruction type: {function_name}. "
+                f"Supported: memo, custom, create_account, close_account"
+            )
+
+        # Build and send transaction
+        recent_blockhash = (await self._client.get_latest_blockhash()).value.blockhash
+
+        tx = Transaction(
+            recent_blockhash=recent_blockhash,
+            fee_payer=self._keypair.pubkey(),
+        )
+        tx.add(instruction)
+
+        # Add SOL transfer if value > 0
+        if value > 0:
+            from solders.system_program import transfer, TransferParams
+
+            # If this is a program call with value, we might need to transfer to the program
+            # or a specific account. For now, we skip value transfer for program calls
+            # as it's typically handled differently in Solana
+            logger.warning(
+                f"SOL value ({value}) specified for program call - "
+                "Solana handles value transfers differently than EVM"
+            )
+
+        tx.sign(self._keypair)
+
+        response = await self._client.send_transaction(tx)
+
+        if response.value is None:
+            raise TransactionFailedError(
+                f"Failed to execute program instruction: {function_name}"
+            )
+
+        tx_sig = str(response.value)
+
+        return TransactionRecord(
+            tx_hash=tx_sig,
+            chain=self.chain.value,
+            block_number=0,
+            timestamp=datetime.utcnow(),
+            from_address=str(self._keypair.pubkey()),
+            to_address=contract_address,
+            value=value,
+            gas_used=0,
+            status="pending",
+            transaction_type=f"program_{function_name}",
         )
     
     # ==================== Block Operations ====================

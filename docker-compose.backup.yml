@@ -1,0 +1,58 @@
+# Docker Compose - Neo4j Backup Service
+#
+# This provides automated database backups with retention policy.
+#
+# Usage:
+#   # Start backup service (will run initial backup and then schedule)
+#   docker compose -f docker-compose.yml -f docker-compose.backup.yml up -d backup
+#
+#   # Run one-shot full backup
+#   docker compose -f docker-compose.yml -f docker-compose.backup.yml run --rm backup backup full
+#
+#   # Run one-shot incremental backup
+#   docker compose -f docker-compose.yml -f docker-compose.backup.yml run --rm backup backup incremental
+#
+#   # Restore from backup (interactive)
+#   docker compose -f docker-compose.yml -f docker-compose.backup.yml run --rm backup restore /backups/neo4j_backup_full_20240101_020000.json.gz
+#
+#   # List backups
+#   docker compose -f docker-compose.yml -f docker-compose.backup.yml run --rm backup ls -la /backups
+
+services:
+  backup:
+    build:
+      context: ./scripts/backup
+      dockerfile: Dockerfile
+    container_name: forge-backup
+    environment:
+      # Neo4j connection (from .env)
+      - NEO4J_URI=${NEO4J_URI}
+      - NEO4J_USERNAME=${NEO4J_USERNAME}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+      - NEO4J_DATABASE=${NEO4J_DATABASE:-neo4j}
+      # Backup configuration
+      - BACKUP_DIR=/backups
+      - RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-30}
+      # Schedule (cron format)
+      - BACKUP_SCHEDULE=${BACKUP_SCHEDULE:-0 2 * * *}
+      - INCREMENTAL_SCHEDULE=${INCREMENTAL_SCHEDULE:-0 */6 * * *}
+      # Optional: S3 upload
+      - BACKUP_S3_BUCKET=${BACKUP_S3_BUCKET:-}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}
+    volumes:
+      - backup-data:/backups
+      - ./backups:/backups/local  # Also save locally
+    networks:
+      - forge-network
+    restart: unless-stopped
+    profiles:
+      - backup  # Only starts with --profile backup
+
+volumes:
+  backup-data:
+
+networks:
+  forge-network:
+    external: true

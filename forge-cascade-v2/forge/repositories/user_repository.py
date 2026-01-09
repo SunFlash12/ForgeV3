@@ -26,6 +26,17 @@ from forge.repositories.base import BaseRepository
 
 logger = structlog.get_logger(__name__)
 
+# SECURITY FIX (Audit 3): Define explicit field lists to prevent password_hash leakage
+# Fields safe for User model (no password_hash, refresh_token, etc.)
+USER_SAFE_FIELDS = """
+    .id, .username, .email, .display_name, .bio, .avatar_url,
+    .role, .trust_flame, .is_active, .is_verified, .auth_provider,
+    .last_login, .metadata, .created_at, .updated_at
+""".strip()
+
+# Fields for UserPublic model (public profile)
+USER_PUBLIC_FIELDS = ".id, .username, .display_name, .bio, .avatar_url, .trust_flame, .created_at"
+
 
 class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
     """
@@ -113,6 +124,30 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
         
         raise RuntimeError("Failed to create user")
 
+    async def get_by_id(self, entity_id: str) -> User | None:
+        """
+        Get user by ID with safe field list.
+
+        SECURITY FIX (Audit 3): Override base implementation to use explicit
+        field list, excluding password_hash and other sensitive fields.
+
+        Args:
+            entity_id: User ID
+
+        Returns:
+            User model or None if not found
+        """
+        query = f"""
+        MATCH (u:User {{id: $id}})
+        RETURN u {{{USER_SAFE_FIELDS}}} AS user
+        """
+
+        result = await self.client.execute_single(query, {"id": entity_id})
+
+        if result and result.get("user"):
+            return self._to_model(result["user"])
+        return None
+
     async def update(self, entity_id: str, data: UserUpdate) -> User | None:
         """
         Update user profile.
@@ -146,14 +181,15 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
             set_clauses.append("u.email = $email")
             params["email"] = data.email
         
+        # SECURITY FIX (Audit 3): Use explicit field list to exclude password_hash
         query = f"""
         MATCH (u:User {{id: $id}})
         SET {', '.join(set_clauses)}
-        RETURN u {{.*}} AS user
+        RETURN u {{{USER_SAFE_FIELDS}}} AS user
         """
-        
+
         result = await self.client.execute_single(query, params)
-        
+
         if result and result.get("user"):
             return self._to_model(result["user"])
         return None

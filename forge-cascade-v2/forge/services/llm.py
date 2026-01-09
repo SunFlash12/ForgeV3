@@ -179,7 +179,22 @@ class AnthropicProvider(LLMProviderBase):
         self._model = model
         self._api_base = api_base or "https://api.anthropic.com"
         self._timeout = timeout
-    
+        # SECURITY FIX (Audit 3): Reuse HTTP client instead of creating new one per request
+        self._http_client: Optional["httpx.AsyncClient"] = None
+
+    def _get_client(self) -> "httpx.AsyncClient":
+        """Get or create the HTTP client (lazy initialization)."""
+        import httpx
+        if self._http_client is None:
+            self._http_client = httpx.AsyncClient(timeout=self._timeout)
+        return self._http_client
+
+    async def close(self) -> None:
+        """Close the HTTP client."""
+        if self._http_client is not None:
+            await self._http_client.aclose()
+            self._http_client = None
+
     async def complete(
         self,
         messages: list[LLMMessage],
@@ -187,22 +202,21 @@ class AnthropicProvider(LLMProviderBase):
         temperature: Optional[float] = None,
     ) -> LLMResponse:
         """Generate completion via Anthropic API."""
-        import httpx
         import time
-        
+
         start_time = time.monotonic()
-        
+
         url = f"{self._api_base}/v1/messages"
         headers = {
             "x-api-key": self._api_key,
             "anthropic-version": "2023-06-01",
             "Content-Type": "application/json",
         }
-        
+
         # Convert messages format
         system_message = None
         api_messages = []
-        
+
         for msg in messages:
             if msg.role == "system":
                 system_message = msg.content
@@ -211,23 +225,24 @@ class AnthropicProvider(LLMProviderBase):
                     "role": msg.role,
                     "content": msg.content,
                 })
-        
+
         payload = {
             "model": self._model,
             "messages": api_messages,
             "max_tokens": max_tokens or 4096,
         }
-        
+
         if system_message:
             payload["system"] = system_message
-        
+
         if temperature is not None:
             payload["temperature"] = temperature
-        
-        async with httpx.AsyncClient(timeout=self._timeout) as client:
-            response = await client.post(url, headers=headers, json=payload)
-            response.raise_for_status()
-            data = response.json()
+
+        # SECURITY FIX (Audit 3): Reuse HTTP client
+        client = self._get_client()
+        response = await client.post(url, headers=headers, json=payload)
+        response.raise_for_status()
+        data = response.json()
         
         latency_ms = (time.monotonic() - start_time) * 1000
         
@@ -264,7 +279,22 @@ class OpenAIProvider(LLMProviderBase):
         self._model = model
         self._api_base = api_base or "https://api.openai.com/v1"
         self._timeout = timeout
-    
+        # SECURITY FIX (Audit 3): Reuse HTTP client instead of creating new one per request
+        self._http_client: Optional["httpx.AsyncClient"] = None
+
+    def _get_client(self) -> "httpx.AsyncClient":
+        """Get or create the HTTP client (lazy initialization)."""
+        import httpx
+        if self._http_client is None:
+            self._http_client = httpx.AsyncClient(timeout=self._timeout)
+        return self._http_client
+
+    async def close(self) -> None:
+        """Close the HTTP client."""
+        if self._http_client is not None:
+            await self._http_client.aclose()
+            self._http_client = None
+
     async def complete(
         self,
         messages: list[LLMMessage],
@@ -272,35 +302,35 @@ class OpenAIProvider(LLMProviderBase):
         temperature: Optional[float] = None,
     ) -> LLMResponse:
         """Generate completion via OpenAI API."""
-        import httpx
         import time
-        
+
         start_time = time.monotonic()
-        
+
         url = f"{self._api_base}/chat/completions"
         headers = {
             "Authorization": f"Bearer {self._api_key}",
             "Content-Type": "application/json",
         }
-        
+
         api_messages = [
             {"role": msg.role, "content": msg.content}
             for msg in messages
         ]
-        
+
         payload = {
             "model": self._model,
             "messages": api_messages,
             "max_tokens": max_tokens or 4096,
         }
-        
+
         if temperature is not None:
             payload["temperature"] = temperature
-        
-        async with httpx.AsyncClient(timeout=self._timeout) as client:
-            response = await client.post(url, headers=headers, json=payload)
-            response.raise_for_status()
-            data = response.json()
+
+        # SECURITY FIX (Audit 3): Reuse HTTP client
+        client = self._get_client()
+        response = await client.post(url, headers=headers, json=payload)
+        response.raise_for_status()
+        data = response.json()
         
         latency_ms = (time.monotonic() - start_time) * 1000
         
@@ -332,7 +362,22 @@ class OllamaProvider(LLMProviderBase):
         self._model = model
         self._api_base = api_base
         self._timeout = timeout
-    
+        # SECURITY FIX (Audit 3): Reuse HTTP client instead of creating new one per request
+        self._http_client: Optional["httpx.AsyncClient"] = None
+
+    def _get_client(self) -> "httpx.AsyncClient":
+        """Get or create the HTTP client (lazy initialization)."""
+        import httpx
+        if self._http_client is None:
+            self._http_client = httpx.AsyncClient(timeout=self._timeout)
+        return self._http_client
+
+    async def close(self) -> None:
+        """Close the HTTP client."""
+        if self._http_client is not None:
+            await self._http_client.aclose()
+            self._http_client = None
+
     async def complete(
         self,
         messages: list[LLMMessage],
@@ -340,36 +385,36 @@ class OllamaProvider(LLMProviderBase):
         temperature: Optional[float] = None,
     ) -> LLMResponse:
         """Generate completion via Ollama API."""
-        import httpx
         import time
-        
+
         start_time = time.monotonic()
-        
+
         url = f"{self._api_base}/api/chat"
-        
+
         api_messages = [
             {"role": msg.role, "content": msg.content}
             for msg in messages
         ]
-        
+
         payload = {
             "model": self._model,
             "messages": api_messages,
             "stream": False,
         }
-        
+
         if max_tokens:
             payload["options"] = payload.get("options", {})
             payload["options"]["num_predict"] = max_tokens
-        
+
         if temperature is not None:
             payload["options"] = payload.get("options", {})
             payload["options"]["temperature"] = temperature
-        
-        async with httpx.AsyncClient(timeout=self._timeout) as client:
-            response = await client.post(url, json=payload)
-            response.raise_for_status()
-            data = response.json()
+
+        # SECURITY FIX (Audit 3): Reuse HTTP client
+        client = self._get_client()
+        response = await client.post(url, json=payload)
+        response.raise_for_status()
+        data = response.json()
         
         latency_ms = (time.monotonic() - start_time) * 1000
         

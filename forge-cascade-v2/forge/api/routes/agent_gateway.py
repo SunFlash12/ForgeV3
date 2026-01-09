@@ -458,7 +458,10 @@ async def create_capsule(
         result = await gateway.create_capsule(session, creation_request)
         return result
     except ValueError as e:
-        raise HTTPException(status_code=403, detail=str(e))
+        # SECURITY FIX (Audit 3): Log error internally, return generic message
+        import logging
+        logging.getLogger(__name__).warning(f"agent_gateway_capsule_creation_failed: {e}")
+        raise HTTPException(status_code=403, detail="Capsule creation not permitted")
 
 
 # ============================================================================

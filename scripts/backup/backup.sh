@@ -1,0 +1,86 @@
+#!/bin/bash
+#
+# Neo4j Backup Shell Script
+#
+# Usage:
+#   ./backup.sh              # Full backup
+#   ./backup.sh --incremental  # Incremental backup
+#
+# Environment variables required (from .env):
+#   NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD
+#
+# Schedule with cron:
+#   # Daily full backup at 2 AM
+#   0 2 * * * /path/to/backup.sh >> /var/log/forge/backup.log 2>&1
+#
+#   # Hourly incremental backup
+#   0 * * * * /path/to/backup.sh --incremental >> /var/log/forge/backup.log 2>&1
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
+BACKUP_DIR="${BACKUP_DIR:-$PROJECT_ROOT/backups/neo4j}"
+
+# Load environment variables from .env if it exists
+if [ -f "$PROJECT_ROOT/.env" ]; then
+    export $(grep -v '^#' "$PROJECT_ROOT/.env" | xargs)
+fi
+
+# Ensure backup directory exists
+mkdir -p "$BACKUP_DIR"
+
+echo "=========================================="
+echo "Forge Neo4j Backup"
+echo "Date: $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
+echo "=========================================="
+
+# Run the Python backup script
+cd "$PROJECT_ROOT/forge-cascade-v2"
+
+if [ -f "$PROJECT_ROOT/forge-cascade-v2/.venv/bin/python" ]; then
+    PYTHON="$PROJECT_ROOT/forge-cascade-v2/.venv/bin/python"
+elif command -v python3 &> /dev/null; then
+    PYTHON="python3"
+else
+    PYTHON="python"
+fi
+
+$PYTHON "$SCRIPT_DIR/neo4j_backup.py" \
+    --backup-dir "$BACKUP_DIR" \
+    --retention-days "${RETENTION_DAYS:-30}" \
+    "$@"
+
+EXIT_CODE=$?
+
+if [ $EXIT_CODE -eq 0 ]; then
+    echo "Backup completed successfully"
+
+    # Optional: Upload to S3 or other storage
+    if [ -n "$BACKUP_S3_BUCKET" ]; then
+        echo "Uploading to S3..."
+        LATEST_BACKUP=$(ls -t "$BACKUP_DIR"/neo4j_backup_*.json.gz | head -1)
+        aws s3 cp "$LATEST_BACKUP" "s3://$BACKUP_S3_BUCKET/neo4j/"
+        echo "Uploaded to s3://$BACKUP_S3_BUCKET/neo4j/"
+    fi
+
+    # Optional: Webhook notification
+    if [ -n "$BACKUP_WEBHOOK_URL" ]; then
+        curl -X POST "$BACKUP_WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d "{\"status\":\"success\",\"timestamp\":\"$(date -u +"%Y-%m-%dT%H:%M:%SZ")\"}" \
+            || true
+    fi
+else
+    echo "Backup failed with exit code $EXIT_CODE"
+
+    # Optional: Error notification webhook
+    if [ -n "$BACKUP_WEBHOOK_URL" ]; then
+        curl -X POST "$BACKUP_WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d "{\"status\":\"failed\",\"exit_code\":$EXIT_CODE,\"timestamp\":\"$(date -u +"%Y-%m-%dT%H:%M:%SZ")\"}" \
+            || true
+    fi
+fi
+
+exit $EXIT_CODE

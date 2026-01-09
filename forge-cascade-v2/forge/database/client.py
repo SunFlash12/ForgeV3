@@ -273,16 +273,28 @@ class Neo4jClient:
 # ═══════════════════════════════════════════════════════════════
 
 import asyncio
+import threading
 
 _db_client: Neo4jClient | None = None
+# SECURITY FIX (Audit 3): Initialize lock at module level to prevent race condition
+# The lock must be created lazily because asyncio.Lock() requires an event loop.
+# We use a threading.Lock to protect the lazy initialization of the async lock.
 _db_client_lock: asyncio.Lock | None = None
+_lock_init_lock = threading.Lock()  # Protects _db_client_lock initialization
 
 
 def _get_lock() -> asyncio.Lock:
-    """Get or create the singleton lock (must be called from async context)."""
+    """
+    Get or create the singleton lock.
+
+    SECURITY FIX (Audit 3): Uses double-checked locking pattern with threading.Lock
+    to prevent race condition where multiple coroutines could create separate locks.
+    """
     global _db_client_lock
     if _db_client_lock is None:
-        _db_client_lock = asyncio.Lock()
+        with _lock_init_lock:
+            if _db_client_lock is None:
+                _db_client_lock = asyncio.Lock()
     return _db_client_lock
 
 

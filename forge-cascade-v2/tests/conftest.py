@@ -18,12 +18,28 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from httpx import AsyncClient, ASGITransport
 
-# Set test environment before imports
+# =============================================================================
+# TEST ENVIRONMENT SETUP
+# =============================================================================
+# SECURITY NOTE (Audit 3): These are TEST-ONLY credentials for pytest fixtures.
+# The APP_ENV="testing" flag ensures these cannot be used in production.
+# Production deployments MUST use environment variables from secure sources.
+
+# Safety check: Prevent accidental production use
+_current_env = os.environ.get("APP_ENV", "")
+if _current_env == "production":
+    raise RuntimeError(
+        "SECURITY ERROR: Test fixtures cannot be loaded in production environment. "
+        "Do not import conftest.py in production code."
+    )
+
 os.environ["APP_ENV"] = "testing"
+
+# TEST-ONLY database credentials (not valid for production)
 os.environ["NEO4J_URI"] = "bolt://localhost:7687"
 os.environ["NEO4J_USER"] = "neo4j"
-os.environ["NEO4J_PASSWORD"] = "testpassword"
-os.environ["JWT_SECRET_KEY"] = "test-secret-key-at-least-32-characters-long-for-testing"
+os.environ["NEO4J_PASSWORD"] = "testpassword"  # TEST ONLY - not a real password
+os.environ["JWT_SECRET_KEY"] = "test-secret-key-at-least-32-characters-long-for-testing"  # TEST ONLY
 os.environ["LLM_PROVIDER"] = "mock"
 os.environ["EMBEDDING_PROVIDER"] = "mock"
 

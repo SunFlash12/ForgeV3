@@ -5,15 +5,20 @@ Handles notification delivery through multiple channels:
 - In-app notifications
 - Webhook delivery
 - Future: Email, Slack, etc.
+
+SECURITY FIX (Audit 3): Added SSRF protection for webhook URLs
 """
 
 import asyncio
 import hashlib
 import hmac
+import ipaddress
 import json
 import logging
+import socket
 from datetime import datetime, timezone, timedelta
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 
@@ -32,6 +37,77 @@ from forge.models.base import generate_id
 logger = logging.getLogger(__name__)
 
 
+class SSRFError(Exception):
+    """Raised when a potential SSRF attack is detected."""
+    pass
+
+
+def validate_webhook_url(url: str) -> str:
+    """
+    Validate a webhook URL to prevent SSRF attacks.
+
+    SECURITY FIX (Audit 3): Validates webhook URLs before HTTP requests.
+
+    Args:
+        url: The webhook URL to validate
+
+    Returns:
+        The validated URL
+
+    Raises:
+        SSRFError: If the URL is invalid or targets a private resource
+    """
+    try:
+        parsed = urlparse(url)
+    except Exception as e:
+        raise SSRFError(f"Invalid URL format: {e}")
+
+    if parsed.scheme not in ("http", "https"):
+        raise SSRFError(f"Invalid URL scheme: {parsed.scheme}")
+
+    hostname = parsed.hostname
+    if not hostname:
+        raise SSRFError("URL missing hostname")
+
+    # Block dangerous hostnames
+    dangerous_hostnames = {
+        "localhost", "127.0.0.1", "0.0.0.0", "::1", "[::1]",
+        "metadata.google.internal", "169.254.169.254", "metadata.aws",
+    }
+
+    if hostname.lower() in dangerous_hostnames:
+        raise SSRFError(f"Blocked hostname: {hostname}")
+
+    # Resolve hostname and check for private IPs
+    try:
+        addr_info = socket.getaddrinfo(hostname, parsed.port or 443, proto=socket.IPPROTO_TCP)
+        ip_addresses = set(info[4][0] for info in addr_info)
+
+        for ip_str in ip_addresses:
+            try:
+                ip = ipaddress.ip_address(ip_str)
+            except ValueError:
+                raise SSRFError(f"Invalid IP address resolved: {ip_str}")
+
+            if ip.is_private:
+                raise SSRFError(f"Private IP address blocked: {ip_str}")
+            if ip.is_loopback:
+                raise SSRFError(f"Loopback address blocked: {ip_str}")
+            if ip.is_link_local:
+                raise SSRFError(f"Link-local address blocked: {ip_str}")
+            if ip.is_reserved:
+                raise SSRFError(f"Reserved address blocked: {ip_str}")
+            if ip_str.startswith("169.254."):
+                raise SSRFError(f"Cloud metadata address blocked: {ip_str}")
+
+    except socket.gaierror as e:
+        raise SSRFError(f"DNS resolution failed for {hostname}: {e}")
+    except OSError as e:
+        raise SSRFError(f"Network error resolving {hostname}: {e}")
+
+    return url
+
+
 class NotificationService:
     """
     Central service for managing and delivering notifications.
@@ -41,8 +117,9 @@ class NotificationService:
     MAX_RETRIES = 3
     RETRY_DELAYS = [60, 300, 900]  # 1min, 5min, 15min
 
-    def __init__(self, redis_client=None):
+    def __init__(self, redis_client=None, neo4j_client=None):
         self.redis = redis_client
+        self.neo4j = neo4j_client  # AUDIT 3 FIX (A1-D03): Add Neo4j client
         self._http_client: httpx.AsyncClient | None = None
 
         # In-memory storage (would use database in production)
@@ -120,6 +197,8 @@ class NotificationService:
 
         # Store in-app notification
         self._notifications[notification.id] = notification
+        # AUDIT 3 FIX (A1-D03): Persist to database
+        await self._persist_notification(notification)
 
         # Get user preferences
         prefs = await self.get_user_preferences(user_id)
@@ -278,6 +357,8 @@ class NotificationService:
         )
 
         self._webhooks[webhook.id] = webhook
+        # AUDIT 3 FIX (A1-D03): Persist to database
+        await self._persist_webhook(webhook)
 
         # Optionally verify the webhook
         await self._verify_webhook(webhook)
@@ -315,12 +396,21 @@ class NotificationService:
         webhook = self._webhooks.get(webhook_id)
         if webhook and webhook.user_id == user_id:
             del self._webhooks[webhook_id]
+            # AUDIT 3 FIX (A1-D03): Delete from database
+            await self._delete_webhook_from_db(webhook_id)
             return True
         return False
 
     async def _verify_webhook(self, webhook: WebhookSubscription) -> bool:
         """Verify a webhook endpoint by sending a ping."""
         try:
+            # SECURITY FIX (Audit 3): Validate webhook URL to prevent SSRF
+            try:
+                validated_url = validate_webhook_url(webhook.url)
+            except SSRFError as e:
+                logger.warning(f"Webhook URL blocked by SSRF protection: {e}")
+                return False
+
             payload = {
                 "event": "webhook.verify",
                 "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -331,7 +421,7 @@ class NotificationService:
 
             if self._http_client:
                 response = await self._http_client.post(
-                    webhook.url,
+                    validated_url,
                     json=payload,
                     headers={
                         "Content-Type": "application/json",
@@ -430,9 +520,12 @@ class NotificationService:
             if not self._http_client:
                 raise RuntimeError("HTTP client not initialized")
 
+            # SECURITY FIX (Audit 3): Validate webhook URL to prevent SSRF
+            validated_url = validate_webhook_url(webhook.url)
+
             start = datetime.now(timezone.utc)
             response = await self._http_client.post(
-                webhook.url,
+                validated_url,
                 json=payload.model_dump(mode='json'),
                 headers={
                     "Content-Type": "application/json",
@@ -523,9 +616,12 @@ class NotificationService:
             if not self._http_client:
                 raise RuntimeError("HTTP client not initialized")
 
+            # SECURITY FIX (Audit 3): Validate webhook URL to prevent SSRF
+            validated_url = validate_webhook_url(webhook.url)
+
             start = datetime.now(timezone.utc)
             response = await self._http_client.post(
-                webhook.url,
+                validated_url,
                 json=delivery.payload,
                 headers={
                     "Content-Type": "application/json",
@@ -547,6 +643,12 @@ class NotificationService:
             else:
                 await self._schedule_retry(delivery, webhook)
 
+        except SSRFError as e:
+            # SECURITY FIX (Audit 3): Don't retry SSRF-blocked URLs
+            delivery.error = f"SSRF blocked: {e}"
+            delivery.success = False
+            logger.warning(f"Webhook {webhook.id} blocked by SSRF protection: {e}")
+            # Don't retry - this is a permanent failure
         except Exception as e:
             delivery.error = str(e)
             await self._schedule_retry(delivery, webhook)
@@ -585,6 +687,141 @@ class NotificationService:
 
         prefs.updated_at = datetime.now(timezone.utc)
         return prefs
+
+    # =========================================================================
+    # Persistence Methods (Audit 3 - A1-D03)
+    # =========================================================================
+
+    async def _persist_notification(self, notification: Notification) -> bool:
+        """
+        Persist a notification to Neo4j database.
+
+        AUDIT 3 FIX (A1-D03): Add persistent storage to notification service.
+        """
+        if not self.neo4j:
+            return False
+
+        try:
+            query = """
+            MERGE (n:Notification {id: $id})
+            SET n.user_id = $user_id,
+                n.event_type = $event_type,
+                n.title = $title,
+                n.message = $message,
+                n.priority = $priority,
+                n.is_read = $is_read,
+                n.created_at = $created_at,
+                n.read_at = $read_at
+            RETURN n.id as id
+            """
+            await self.neo4j.execute_write(
+                query,
+                parameters={
+                    "id": notification.id,
+                    "user_id": notification.user_id,
+                    "event_type": notification.event_type.value,
+                    "title": notification.title,
+                    "message": notification.message,
+                    "priority": notification.priority.value,
+                    "is_read": notification.is_read,
+                    "created_at": notification.created_at.isoformat() if notification.created_at else None,
+                    "read_at": notification.read_at.isoformat() if notification.read_at else None,
+                }
+            )
+            return True
+        except Exception as e:
+            logger.error(f"Failed to persist notification {notification.id}: {e}")
+            return False
+
+    async def _persist_webhook(self, webhook: WebhookSubscription) -> bool:
+        """Persist a webhook subscription to Neo4j database."""
+        if not self.neo4j:
+            return False
+
+        try:
+            query = """
+            MERGE (w:WebhookSubscription {id: $id})
+            SET w.user_id = $user_id,
+                w.url = $url,
+                w.secret = $secret,
+                w.active = $active,
+                w.events = $events,
+                w.created_at = $created_at
+            RETURN w.id as id
+            """
+            await self.neo4j.execute_write(
+                query,
+                parameters={
+                    "id": webhook.id,
+                    "user_id": webhook.user_id,
+                    "url": webhook.url,
+                    "secret": webhook.secret,
+                    "active": webhook.active,
+                    "events": [e.value for e in webhook.events] if webhook.events else [],
+                    "created_at": webhook.created_at.isoformat() if webhook.created_at else None,
+                }
+            )
+            return True
+        except Exception as e:
+            logger.error(f"Failed to persist webhook {webhook.id}: {e}")
+            return False
+
+    async def load_from_database(self) -> int:
+        """
+        Load all notification data from Neo4j on startup.
+
+        Returns:
+            Number of webhooks loaded
+        """
+        if not self.neo4j:
+            logger.warning("No Neo4j client, cannot load notification data")
+            return 0
+
+        loaded = 0
+        try:
+            # Load webhooks (more important than old notifications)
+            query = """
+            MATCH (w:WebhookSubscription)
+            WHERE w.active = true
+            RETURN w.id as id, w.user_id as user_id, w.url as url,
+                   w.secret as secret, w.active as active, w.events as events,
+                   w.created_at as created_at
+            """
+            results = await self.neo4j.execute_read(query)
+
+            for record in results:
+                webhook = WebhookSubscription(
+                    id=record["id"],
+                    user_id=record["user_id"],
+                    url=record["url"],
+                    secret=record["secret"],
+                    active=record["active"],
+                    events=[NotificationEvent(e) for e in (record["events"] or [])],
+                )
+                self._webhooks[webhook.id] = webhook
+                loaded += 1
+
+            logger.info(f"Loaded {loaded} webhooks from database")
+            return loaded
+        except Exception as e:
+            logger.error(f"Failed to load notification data: {e}")
+            return 0
+
+    async def _delete_webhook_from_db(self, webhook_id: str) -> bool:
+        """Delete a webhook from the database."""
+        if not self.neo4j:
+            return False
+
+        try:
+            query = """
+            MATCH (w:WebhookSubscription {id: $id})
+            DELETE w
+            """
+            await self.neo4j.execute_write(query, parameters={"id": webhook_id})
+            return True
+        except Exception as e:
+            logger.error(f"Failed to delete webhook {webhook_id}: {e}")
+            return False
 
 
 # Global instance

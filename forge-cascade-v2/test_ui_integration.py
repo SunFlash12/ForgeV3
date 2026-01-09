@@ -12,7 +12,14 @@ from datetime import datetime
 # Configuration
 FRONTEND_URL = "http://localhost:5173"
 API_URL = "http://localhost:8001/api/v1"
-ADMIN_PASSWORD = os.environ.get("SEED_ADMIN_PASSWORD", "admin123")
+
+# SECURITY FIX: Require password from environment, no hardcoded defaults
+ADMIN_PASSWORD = os.environ.get("SEED_ADMIN_PASSWORD")
+if not ADMIN_PASSWORD:
+    import sys
+    print("ERROR: SEED_ADMIN_PASSWORD environment variable is required")
+    print("Set it with: export SEED_ADMIN_PASSWORD=<your-secure-password>")
+    sys.exit(1)
 
 # Test results tracking
 results = {"passed": 0, "failed": 0, "tests": []}

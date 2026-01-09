@@ -33,6 +33,36 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/marketplace", tags=["Marketplace"])
 
 
+# SECURITY FIX (Audit 3): Sanitize error messages to prevent information disclosure
+def _sanitize_validation_error(e: Exception, context: str) -> str:
+    """
+    Return a safe error message for validation errors.
+
+    Logs the actual error internally but returns a generic message to users.
+    """
+    error_str = str(e).lower()
+    logger.warning(f"marketplace_validation_error: {context}", extra={"error": str(e)})
+
+    # Map known validation errors to user-friendly messages
+    if "not found" in error_str:
+        return "The requested item was not found"
+    if "permission" in error_str or "not own" in error_str or "unauthorized" in error_str:
+        return "You do not have permission to perform this action"
+    if "already" in error_str:
+        return "This action has already been performed"
+    if "price" in error_str:
+        return "Invalid price specified"
+    if "quantity" in error_str or "stock" in error_str:
+        return "Invalid quantity or insufficient stock"
+    if "status" in error_str:
+        return "Invalid status for this operation"
+    if "cart" in error_str:
+        return "Cart operation failed"
+
+    # Generic fallback - don't expose internal details
+    return "Invalid request. Please check your input and try again."
+
+
 # ============================================================================
 # Request/Response Models
 # ============================================================================
@@ -160,7 +190,8 @@ async def create_listing(
             tags=request.tags,
         )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        # SECURITY FIX (Audit 3): Sanitize error message
+        raise HTTPException(status_code=400, detail=_sanitize_validation_error(e, "create_listing"))
 
     return ListingResponse(
         id=listing.id,
@@ -280,7 +311,8 @@ async def publish_listing(
     try:
         listing = await svc.publish_listing(listing_id, user.id)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        # SECURITY FIX (Audit 3): Sanitize error message
+        raise HTTPException(status_code=400, detail=_sanitize_validation_error(e, "publish_listing"))
 
     return ListingResponse(
         id=listing.id,
@@ -314,7 +346,8 @@ async def update_listing(
         updates = request.model_dump(exclude_none=True)
         listing = await svc.update_listing(listing_id, user.id, updates)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        # SECURITY FIX (Audit 3): Sanitize error message
+        raise HTTPException(status_code=400, detail=_sanitize_validation_error(e, "update_listing"))
 
     return ListingResponse(
         id=listing.id,
@@ -346,7 +379,8 @@ async def cancel_listing(
     try:
         await svc.cancel_listing(listing_id, user.id)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        # SECURITY FIX (Audit 3): Sanitize error message
+        raise HTTPException(status_code=400, detail=_sanitize_validation_error(e, "cancel_listing"))
 
     return {"cancelled": True}
 
@@ -390,7 +424,8 @@ async def add_to_cart(
     try:
         cart = await svc.add_to_cart(user.id, listing_id)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        # SECURITY FIX (Audit 3): Sanitize error message
+        raise HTTPException(status_code=400, detail=_sanitize_validation_error(e, "add_to_cart"))
 
     return CartResponse(
         items=[
@@ -448,7 +483,8 @@ async def checkout(
     try:
         purchases = await svc.checkout(user.id)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        # SECURITY FIX (Audit 3): Sanitize error message
+        raise HTTPException(status_code=400, detail=_sanitize_validation_error(e, "checkout"))
 
     return [
         PurchaseResponse(
@@ -475,7 +511,8 @@ async def purchase_single(
     try:
         purchase = await svc.purchase_single(user.id, listing_id)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        # SECURITY FIX (Audit 3): Sanitize error message
+        raise HTTPException(status_code=400, detail=_sanitize_validation_error(e, "purchase_single"))
 
     return PurchaseResponse(
         id=purchase.id,

@@ -67,12 +67,16 @@ _maintenance_lock = threading.Lock()
 
 def is_maintenance_mode() -> bool:
     """Check if maintenance mode is enabled."""
-    return _maintenance_state["enabled"]
+    # SECURITY FIX (Audit 3): Acquire lock for consistent read
+    with _maintenance_lock:
+        return _maintenance_state["enabled"]
 
 
 def get_maintenance_message() -> str:
     """Get the maintenance mode message."""
-    return _maintenance_state["message"]
+    # SECURITY FIX (Audit 3): Acquire lock for consistent read
+    with _maintenance_lock:
+        return _maintenance_state["message"]
 
 
 def set_maintenance_mode(enabled: bool, user_id: str | None = None, message: str | None = None) -> None:
@@ -285,7 +289,10 @@ async def get_health(
         }
         checks["database"] = db_healthy
     except Exception as e:
-        components["database"] = {"status": "unhealthy", "error": str(e)}
+        # SECURITY FIX (Audit 3): Don't expose internal error details
+        import structlog
+        structlog.get_logger(__name__).error("database_health_check_failed", error=str(e))
+        components["database"] = {"status": "unhealthy", "error": "Database connection failed"}
         checks["database"] = False
     
     # Event system health
@@ -391,7 +398,10 @@ async def readiness_probe(
         if not db_ready:
             ready = False
     except Exception as e:
-        details["database"] = f"error: {str(e)}"
+        # SECURITY FIX (Audit 3): Don't expose internal error details
+        import structlog
+        structlog.get_logger(__name__).error("readiness_check_failed", error=str(e))
+        details["database"] = "error: connection failed"
         ready = False
     
     if not ready:

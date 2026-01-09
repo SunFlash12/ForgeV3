@@ -23,6 +23,7 @@ import hashlib
 import threading
 import structlog
 
+from ..security.safe_regex import safe_search, RegexTimeoutError, RegexValidationError
 from ..models.events import Event, EventType
 from ..models.overlay import Capability, FuelBudget
 from ..models.base import TrustLevel
@@ -85,9 +86,19 @@ class ContentPolicyRule(ValidationRule):
             return False, f"Content exceeds maximum length ({self.max_content_length})"
         
         # Check blocked patterns
+        # SECURITY FIX (Audit 3): Use safe_search to prevent ReDoS attacks
         for pattern in self.blocked_patterns:
-            if re.search(pattern, content, re.IGNORECASE):
-                return False, f"Content contains blocked pattern: {pattern[:20]}..."
+            try:
+                if safe_search(pattern, content, re.IGNORECASE, timeout=0.5, validate=True):
+                    return False, f"Content contains blocked pattern: {pattern[:20]}..."
+            except (RegexTimeoutError, RegexValidationError) as e:
+                # Log but don't block - invalid pattern is a configuration error
+                structlog.get_logger().warning(
+                    "invalid_blocked_pattern",
+                    pattern=pattern[:30],
+                    error=str(e)
+                )
+                continue
         
         return True, None
 
@@ -185,17 +196,25 @@ class InputSanitizationRule(ValidationRule):
     
     def validate(self, data: dict) -> tuple[bool, Optional[str]]:
         content = str(data.get("content", ""))
-        
+
+        # SECURITY FIX (Audit 3): Use safe_search to prevent ReDoS
         # Check for SQL injection
         for pattern in self.sql_patterns:
-            if re.search(pattern, content, re.IGNORECASE):
-                return False, "Potential SQL injection detected"
-        
+            try:
+                if safe_search(pattern, content, re.IGNORECASE, timeout=0.5, validate=False):
+                    return False, "Potential SQL injection detected"
+            except RegexTimeoutError:
+                # If regex times out on suspicious input, treat as potential attack
+                return False, "Input validation timeout - potential attack"
+
         # Check for XSS
         for pattern in self.xss_patterns:
-            if re.search(pattern, content, re.IGNORECASE):
-                return False, "Potential XSS attack detected"
-        
+            try:
+                if safe_search(pattern, content, re.IGNORECASE, timeout=0.5, validate=False):
+                    return False, "Potential XSS attack detected"
+            except RegexTimeoutError:
+                return False, "Input validation timeout - potential attack"
+
         return True, None
 
 
@@ -313,11 +332,16 @@ class SecurityValidatorOverlay(BaseOverlay):
         # Add custom rules
         if custom_rules:
             self._rules.extend(custom_rules)
-        
+
         # Threat tracking
+        # SECURITY FIX (Audit 3): Bounded memory limits to prevent DoS
+        self._MAX_THREAT_CACHE_USERS: int = 10000  # Max users tracked
+        self._MAX_THREATS_PER_USER: int = 100  # Max threats per user
+        self._MAX_BLOCKED_USERS: int = 10000  # Max blocked users
         self._threat_cache: dict[str, list[datetime]] = defaultdict(list)
         self._blocked_users: set[str] = set()
-        
+        self._threat_cache_access_order: list[str] = []  # For LRU eviction
+
         self._logger = logger.bind(overlay=self.NAME)
     
     async def initialize(self) -> bool:
@@ -513,20 +537,40 @@ class SecurityValidatorOverlay(BaseOverlay):
         """Track threats and potentially block users."""
         if not user_id:
             return
-        
+
         now = datetime.utcnow()
-        
-        # Add threats to cache
-        self._threat_cache[user_id].extend([now] * len(threats))
-        
-        # Clean old threats (last hour)
+
+        # SECURITY FIX (Audit 3): Enforce bounded memory for threat cache
+        # Check if we need to evict old users from threat cache
+        if user_id not in self._threat_cache:
+            if len(self._threat_cache) >= self._MAX_THREAT_CACHE_USERS:
+                # Evict oldest users from threat cache (LRU)
+                evict_count = max(1, len(self._threat_cache_access_order) // 10)
+                for old_user in self._threat_cache_access_order[:evict_count]:
+                    self._threat_cache.pop(old_user, None)
+                self._threat_cache_access_order = self._threat_cache_access_order[evict_count:]
+                self._logger.info("threat_cache_eviction", evicted_users=evict_count)
+            self._threat_cache_access_order.append(user_id)
+
+        # Add threats to cache (bounded per user)
+        new_threats = [now] * len(threats)
+        self._threat_cache[user_id].extend(new_threats)
+
+        # Clean old threats (last hour) AND enforce per-user limit
         cutoff = now - timedelta(hours=1)
-        self._threat_cache[user_id] = [
-            t for t in self._threat_cache[user_id] if t > cutoff
-        ]
-        
+        recent_threats = [t for t in self._threat_cache[user_id] if t > cutoff]
+        # Keep only the most recent threats up to limit
+        self._threat_cache[user_id] = recent_threats[-self._MAX_THREATS_PER_USER:]
+
         # Block user if too many threats
         if len(self._threat_cache[user_id]) >= 10:
+            # SECURITY FIX (Audit 3): Enforce bounded blocked users set
+            if len(self._blocked_users) >= self._MAX_BLOCKED_USERS:
+                # Remove a random blocked user to make room (or could use LRU)
+                try:
+                    self._blocked_users.pop()
+                except KeyError:
+                    pass
             self._blocked_users.add(user_id)
             self._logger.warning(
                 "user_blocked_for_threats",

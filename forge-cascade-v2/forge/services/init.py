@@ -170,8 +170,20 @@ def _setup_ghost_council_event_handlers(ghost_council, event_bus) -> None:
                     severity=issue.severity.value,
                 )
 
+                # SECURITY FIX (Audit 3): Track background task and handle exceptions
+                async def _safe_respond(gc, iss):
+                    try:
+                        await gc.respond_to_issue(iss)
+                    except Exception as e:
+                        logger.error(
+                            "ghost_council_response_error",
+                            issue_id=iss.id,
+                            error=str(e)
+                        )
+
                 # Run deliberation in background to not block event processing
-                asyncio.create_task(ghost_council.respond_to_issue(issue))
+                task = asyncio.create_task(_safe_respond(ghost_council, issue))
+                task.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
 
         except Exception as e:
             logger.error(

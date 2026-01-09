@@ -186,7 +186,9 @@ class OpenAIEmbeddingProvider(EmbeddingProviderBase):
         self._model = model
         self._api_base = api_base or "https://api.openai.com/v1"
         self._timeout = timeout
-        
+        # SECURITY FIX (Audit 3): Reuse HTTP client instead of creating new one per request
+        self._http_client: Optional["httpx.AsyncClient"] = None
+
         # Determine dimensions
         if dimensions:
             self._dimensions = dimensions
@@ -195,35 +197,47 @@ class OpenAIEmbeddingProvider(EmbeddingProviderBase):
     
     def get_dimensions(self) -> int:
         return self._dimensions
-    
+
+    def _get_client(self) -> "httpx.AsyncClient":
+        """Get or create the HTTP client (lazy initialization)."""
+        import httpx
+        if self._http_client is None:
+            self._http_client = httpx.AsyncClient(timeout=self._timeout)
+        return self._http_client
+
+    async def close(self) -> None:
+        """Close the HTTP client."""
+        if self._http_client is not None:
+            await self._http_client.aclose()
+            self._http_client = None
+
     async def embed(self, text: str) -> EmbeddingResult:
         """Generate embedding via OpenAI API."""
         results = await self.embed_batch([text])
         return results[0]
-    
+
     async def embed_batch(self, texts: list[str]) -> list[EmbeddingResult]:
         """Generate embeddings for batch via OpenAI API."""
-        import httpx
-        
         url = f"{self._api_base}/embeddings"
         headers = {
             "Authorization": f"Bearer {self._api_key}",
             "Content-Type": "application/json",
         }
-        
+
         payload = {
             "input": texts,
             "model": self._model,
         }
-        
+
         # For text-embedding-3-* models, dimensions can be specified
         if self._model.startswith("text-embedding-3"):
             payload["dimensions"] = self._dimensions
-        
-        async with httpx.AsyncClient(timeout=self._timeout) as client:
-            response = await client.post(url, headers=headers, json=payload)
-            response.raise_for_status()
-            data = response.json()
+
+        # SECURITY FIX (Audit 3): Reuse HTTP client
+        client = self._get_client()
+        response = await client.post(url, headers=headers, json=payload)
+        response.raise_for_status()
+        data = response.json()
         
         results = []
         for i, item in enumerate(data.get("data", [])):
@@ -314,7 +328,7 @@ class SentenceTransformersProvider(EmbeddingProviderBase):
 
 
 class EmbeddingCache:
-    """Simple in-memory cache for embeddings."""
+    """Simple in-memory cache for embeddings with thread-safe operations."""
 
     # Cost optimization: Increased default from 10000 to 50000 for better hit rates
     def __init__(self, max_size: int = 50000):
@@ -322,49 +336,58 @@ class EmbeddingCache:
         self._max_size = max_size
         self._hits = 0
         self._misses = 0
-    
+        # SECURITY FIX (Audit 3): Add lock to prevent race conditions in cache operations
+        import asyncio
+        self._lock = asyncio.Lock()
+
     def _make_key(self, text: str, model: str) -> str:
         """Create cache key from text and model."""
         return hashlib.sha256(f"{model}:{text}".encode()).hexdigest()
-    
-    def get(self, text: str, model: str) -> Optional[EmbeddingResult]:
-        """Get cached embedding if exists."""
+
+    async def get(self, text: str, model: str) -> Optional[EmbeddingResult]:
+        """Get cached embedding if exists (thread-safe)."""
         key = self._make_key(text, model)
-        if key in self._cache:
-            self._hits += 1
-            result = self._cache[key]
-            result.cached = True
-            return result
-        self._misses += 1
-        return None
-    
-    def set(self, text: str, model: str, result: EmbeddingResult) -> None:
-        """Cache an embedding result."""
-        if len(self._cache) >= self._max_size:
-            # Simple eviction: remove oldest 10%
-            keys_to_remove = list(self._cache.keys())[:self._max_size // 10]
-            for key in keys_to_remove:
-                del self._cache[key]
-        
-        key = self._make_key(text, model)
-        self._cache[key] = result
-    
-    def stats(self) -> dict[str, Any]:
-        """Get cache statistics."""
-        total = self._hits + self._misses
-        return {
-            "size": len(self._cache),
-            "max_size": self._max_size,
-            "hits": self._hits,
-            "misses": self._misses,
-            "hit_rate": self._hits / total if total > 0 else 0,
-        }
-    
-    def clear(self) -> None:
-        """Clear the cache."""
-        self._cache.clear()
-        self._hits = 0
-        self._misses = 0
+        # SECURITY FIX (Audit 3): Use lock for thread-safe cache access
+        async with self._lock:
+            if key in self._cache:
+                self._hits += 1
+                result = self._cache[key]
+                result.cached = True
+                return result
+            self._misses += 1
+            return None
+
+    async def set(self, text: str, model: str, result: EmbeddingResult) -> None:
+        """Cache an embedding result (thread-safe)."""
+        # SECURITY FIX (Audit 3): Use lock for thread-safe cache modification
+        async with self._lock:
+            if len(self._cache) >= self._max_size:
+                # Simple eviction: remove oldest 10%
+                keys_to_remove = list(self._cache.keys())[:self._max_size // 10]
+                for key in keys_to_remove:
+                    del self._cache[key]
+
+            key = self._make_key(text, model)
+            self._cache[key] = result
+
+    async def stats(self) -> dict[str, Any]:
+        """Get cache statistics (thread-safe)."""
+        async with self._lock:
+            total = self._hits + self._misses
+            return {
+                "size": len(self._cache),
+                "max_size": self._max_size,
+                "hits": self._hits,
+                "misses": self._misses,
+                "hit_rate": self._hits / total if total > 0 else 0,
+            }
+
+    async def clear(self) -> None:
+        """Clear the cache (thread-safe)."""
+        async with self._lock:
+            self._cache.clear()
+            self._hits = 0
+            self._misses = 0
 
 
 class EmbeddingService:
@@ -440,17 +463,17 @@ class EmbeddingService:
         """
         # Check cache
         if self._cache:
-            cached = self._cache.get(text, self._config.model)
+            cached = await self._cache.get(text, self._config.model)
             if cached:
                 logger.debug("embedding_cache_hit", text_length=len(text))
                 return cached
-        
+
         # Generate embedding
         result = await self._provider.embed(text)
-        
+
         # Cache result
         if self._cache:
-            self._cache.set(text, self._config.model, result)
+            await self._cache.set(text, self._config.model, result)
         
         logger.debug(
             "embedding_generated",
@@ -485,7 +508,7 @@ class EmbeddingService:
         # Check cache for each text
         for i, text in enumerate(texts):
             if self._cache:
-                cached = self._cache.get(text, self._config.model)
+                cached = await self._cache.get(text, self._config.model)
                 if cached:
                     results[i] = cached
                     continue
@@ -529,7 +552,7 @@ class EmbeddingService:
                 for (original_idx, text), result in zip(batch, batch_results):
                     results[original_idx] = result
                     if self._cache:
-                        self._cache.set(text, self._config.model, result)
+                        await self._cache.set(text, self._config.model, result)
         
         logger.info(
             "embedding_batch_complete",
@@ -540,16 +563,16 @@ class EmbeddingService:
         
         return results  # type: ignore
     
-    def cache_stats(self) -> dict[str, Any]:
+    async def cache_stats(self) -> dict[str, Any]:
         """Get cache statistics."""
         if self._cache:
-            return self._cache.stats()
+            return await self._cache.stats()
         return {"cache_enabled": False}
-    
-    def clear_cache(self) -> None:
+
+    async def clear_cache(self) -> None:
         """Clear the embedding cache."""
         if self._cache:
-            self._cache.clear()
+            await self._cache.clear()
 
 
 # =============================================================================

@@ -351,6 +351,135 @@ class PeerTrustManager:
             elif tier == "LIMITED":
                 peer.status = PeerStatus.DEGRADED
 
+    async def revoke_peer(
+        self,
+        peer: FederatedPeer,
+        reason: str,
+        revoked_by: str,
+    ) -> None:
+        """
+        Revoke trust for a peer.
+
+        SECURITY FIX (Audit 3): Implement trust revocation per 3.6.
+
+        Args:
+            peer: Peer to revoke
+            reason: Reason for revocation
+            revoked_by: ID of the user/system revoking trust
+        """
+        peer_lock = await self._get_peer_lock(peer.id)
+        async with peer_lock:
+            old_trust = peer.trust_score
+
+            # Set trust to 0 and mark as revoked
+            peer.trust_score = 0.0
+            peer.status = PeerStatus.REVOKED
+            self._peer_trust_cache[peer.id] = 0.0
+
+            # Store revocation metadata
+            if not hasattr(peer, 'metadata') or peer.metadata is None:
+                peer.metadata = {}
+            peer.metadata['revoked_at'] = datetime.now(timezone.utc).isoformat()
+            peer.metadata['revoked_by'] = revoked_by
+            peer.metadata['revocation_reason'] = reason
+
+            self._record_event(
+                peer.id,
+                "trust_revoked",
+                -old_trust,
+                f"Trust revoked by {revoked_by}: {reason}"
+            )
+
+            logger.warning(
+                f"Trust revoked for {peer.name} by {revoked_by}: {reason}"
+            )
+
+    async def check_trust_expiration(
+        self,
+        peer: FederatedPeer,
+        max_trust_age_days: int = 7,
+    ) -> tuple[bool, str]:
+        """
+        Check if peer trust has expired and needs re-verification.
+
+        SECURITY FIX (Audit 3): Implement trust expiration per 3.7.
+
+        Args:
+            peer: Peer to check
+            max_trust_age_days: Days before trust requires re-verification
+
+        Returns:
+            (is_expired, reason)
+        """
+        # Check if peer has verification timestamp
+        last_verified = getattr(peer, 'last_verified_at', None)
+        if not last_verified:
+            # Use last_seen_at as fallback
+            last_verified = peer.last_seen_at
+
+        if not last_verified:
+            return True, "Peer has never been verified"
+
+        # Calculate time since last verification
+        now = datetime.now(timezone.utc)
+        if isinstance(last_verified, str):
+            last_verified = datetime.fromisoformat(last_verified.replace('Z', '+00:00'))
+
+        age = now - last_verified
+        if age.days >= max_trust_age_days:
+            return True, f"Trust expired ({age.days} days since verification)"
+
+        return False, f"Trust valid ({age.days} days old)"
+
+    async def apply_trust_decay_if_expired(
+        self,
+        peer: FederatedPeer,
+        max_trust_age_days: int = 7,
+    ) -> float:
+        """
+        Apply trust decay for peers with expired trust.
+
+        SECURITY FIX (Audit 3): Automatic trust decay for unverified peers.
+
+        Args:
+            peer: Peer to check
+            max_trust_age_days: Days before trust decay applies
+
+        Returns:
+            New trust score
+        """
+        is_expired, reason = await self.check_trust_expiration(peer, max_trust_age_days)
+
+        if not is_expired:
+            return peer.trust_score
+
+        peer_lock = await self._get_peer_lock(peer.id)
+        async with peer_lock:
+            old_trust = peer.trust_score
+
+            # Apply significant decay for expired trust
+            decay = 0.1  # 10% decay for expired trust
+            new_trust = max(0.0, old_trust - decay)
+
+            peer.trust_score = new_trust
+            self._peer_trust_cache[peer.id] = new_trust
+
+            self._record_event(
+                peer.id,
+                "trust_expired_decay",
+                -decay,
+                reason
+            )
+
+            logger.warning(
+                f"Trust expired for {peer.name}: {old_trust:.2f} -> {new_trust:.2f} ({reason})"
+            )
+
+            # Update status based on new trust
+            await self._update_peer_status(peer)
+
+            return new_trust
+
     def _record_event(
         self,
         peer_id: str,

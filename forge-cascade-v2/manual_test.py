@@ -36,7 +36,14 @@ time.sleep(0.5)
 # 2. AUTHENTICATION
 print('\n--- AUTHENTICATION ---')
 import os
-ADMIN_PWD = os.environ.get('SEED_ADMIN_PASSWORD', 'admin123')
+import sys
+
+# SECURITY FIX: Require password from environment, no hardcoded defaults
+ADMIN_PWD = os.environ.get('SEED_ADMIN_PASSWORD')
+if not ADMIN_PWD:
+    print("ERROR: SEED_ADMIN_PASSWORD environment variable is required")
+    print("Set it with: export SEED_ADMIN_PASSWORD=<your-secure-password>")
+    sys.exit(1)
 r = session.post(f'{BASE_URL}/api/v1/auth/login',
     json={'username': 'admin', 'password': ADMIN_PWD}, timeout=30)
 test('Auth', 'Admin login', r.status_code == 200, f'Status: {r.status_code}')

@@ -93,9 +93,12 @@ async def get_auth_context(
             headers={"WWW-Authenticate": "Bearer"}
         )
     except TokenInvalidError as e:
+        # SECURITY FIX (Audit 3): Generic message to prevent token format leakage
+        import logging
+        logging.getLogger(__name__).warning(f"token_validation_failed: {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=str(e),
+            detail="Invalid authentication token",
             headers={"WWW-Authenticate": "Bearer"}
         )
 

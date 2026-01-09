@@ -15,8 +15,20 @@ import concurrent.futures
 
 # Configuration
 BASE_URL = os.environ.get("TEST_API_URL", "http://localhost:8001")
-ADMIN_PASSWORD = os.environ.get("SEED_ADMIN_PASSWORD", "admin123")
-ORACLE_PASSWORD = os.environ.get("SEED_ORACLE_PASSWORD", "oracle123")
+
+# SECURITY FIX: Require passwords from environment, no hardcoded defaults
+ADMIN_PASSWORD = os.environ.get("SEED_ADMIN_PASSWORD")
+ORACLE_PASSWORD = os.environ.get("SEED_ORACLE_PASSWORD")
+
+if not ADMIN_PASSWORD or not ORACLE_PASSWORD:
+    import sys
+    print("ERROR: Required environment variables not set:")
+    if not ADMIN_PASSWORD:
+        print("  - SEED_ADMIN_PASSWORD")
+    if not ORACLE_PASSWORD:
+        print("  - SEED_ORACLE_PASSWORD")
+    print("Set them with: export SEED_ADMIN_PASSWORD=... SEED_ORACLE_PASSWORD=...")
+    sys.exit(1)
 
 # Test results tracking
 test_results = {
