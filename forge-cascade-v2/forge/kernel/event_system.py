@@ -80,15 +80,22 @@ class EventBus:
     - Metrics collection
     """
     
+    # SECURITY FIX (Audit 4 - H13): Maximum dead letter queue size to prevent memory exhaustion
+    MAX_DEAD_LETTER_QUEUE_SIZE = 1000
+
     def __init__(
         self,
         max_queue_size: int = 10000,
         max_retries: int = 3,
-        retry_delay_seconds: float = 1.0
+        retry_delay_seconds: float = 1.0,
+        max_dead_letter_size: int = 1000
     ):
         self._subscriptions: dict[str, Subscription] = {}
         self._event_queue: asyncio.Queue[Event] = asyncio.Queue(maxsize=max_queue_size)
-        self._dead_letter_queue: asyncio.Queue[tuple[Event, Exception]] = asyncio.Queue()
+        # SECURITY FIX (Audit 4 - H13): Bound the dead letter queue to prevent DoS
+        self._dead_letter_queue: asyncio.Queue[tuple[Event, Exception]] = asyncio.Queue(
+            maxsize=max_dead_letter_size
+        )
         self._cascade_chains: dict[str, CascadeChain] = {}
         self._metrics = EventMetrics()
         self._max_retries = max_retries

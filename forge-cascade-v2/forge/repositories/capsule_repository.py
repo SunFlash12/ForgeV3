@@ -176,19 +176,28 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
         
         raise RuntimeError("Failed to create capsule")
 
-    async def update(self, entity_id: str, data: CapsuleUpdate) -> Capsule | None:
+    async def update(
+        self,
+        entity_id: str,
+        data: CapsuleUpdate,
+        caller_id: str | None = None
+    ) -> Capsule | None:
         """
         Update an existing capsule.
-        
+
+        SECURITY FIX (Audit 4 - H27): Now verifies caller owns the capsule
+        before allowing updates.
+
         Note: This creates a new version rather than modifying in place
         for audit trail purposes.
-        
+
         Args:
             entity_id: Capsule ID
             data: Update data
-            
+            caller_id: ID of the user attempting the update (for authorization)
+
         Returns:
-            Updated capsule or None
+            Updated capsule or None if not found or not authorized
         """
         # Build SET clauses for non-None fields
         set_clauses = ["c.updated_at = $now"]
@@ -196,6 +205,12 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
             "id": entity_id,
             "now": self._now().isoformat(),
         }
+
+        # SECURITY FIX (Audit 4 - H27): Add owner verification if caller_id provided
+        owner_check = ""
+        if caller_id:
+            params["caller_id"] = caller_id
+            owner_check = " AND c.owner_id = $caller_id"
         
         if data.content is not None:
             set_clauses.append("c.content = $content")
@@ -216,17 +231,36 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
         if data.metadata is not None:
             set_clauses.append("c.metadata = $metadata")
             params["metadata"] = data.metadata
-        
+
+        # SECURITY FIX (Audit 4 - H27): Include owner check in WHERE clause
         query = f"""
         MATCH (c:Capsule {{id: $id}})
+        WHERE c.is_archived = false{owner_check}
         SET {', '.join(set_clauses)}
         RETURN c {{.*}} AS capsule
         """
-        
+
         result = await self.client.execute_single(query, params)
-        
+
         if result and result.get("capsule"):
             return self._to_model(result["capsule"])
+
+        # SECURITY FIX: Log if update failed due to authorization
+        if caller_id:
+            # Check if capsule exists but caller doesn't own it
+            check_query = """
+            MATCH (c:Capsule {id: $id})
+            RETURN c.owner_id AS owner_id
+            """
+            check_result = await self.client.execute_single(check_query, {"id": entity_id})
+            if check_result and check_result.get("owner_id") != caller_id:
+                logger.warning(
+                    "capsule_update_unauthorized",
+                    capsule_id=entity_id,
+                    caller_id=caller_id,
+                    owner_id=check_result.get("owner_id")
+                )
+
         return None
 
     async def get_lineage(self, capsule_id: str) -> CapsuleWithLineage | None:

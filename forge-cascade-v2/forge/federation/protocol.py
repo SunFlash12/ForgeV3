@@ -394,16 +394,37 @@ class FederationProtocol:
         Save keys to persistent storage.
 
         Keys are stored in PEM format for compatibility.
+
+        SECURITY FIX (Audit 4 - H8): Private keys are now encrypted at rest
+        using a passphrase from the FEDERATION_KEY_PASSPHRASE environment variable.
         """
         try:
             # Create directory if needed
             private_key_path.parent.mkdir(parents=True, exist_ok=True)
 
-            # Save private key (PEM format, no encryption)
+            # SECURITY FIX (Audit 4 - H8): Encrypt private key at rest
+            # Get passphrase from environment variable
+            passphrase = os.environ.get("FEDERATION_KEY_PASSPHRASE")
+
+            if passphrase:
+                # Encrypt with provided passphrase
+                encryption_algo = serialization.BestAvailableEncryption(
+                    passphrase.encode('utf-8')
+                )
+                logger.info("Saving federation private key with encryption")
+            else:
+                # No passphrase - warn and use no encryption (development only)
+                encryption_algo = serialization.NoEncryption()
+                logger.warning(
+                    "FEDERATION_KEY_PASSPHRASE not set - private key stored without encryption. "
+                    "This is insecure for production deployments!"
+                )
+
+            # Save private key (PEM format)
             private_pem = self._private_key.private_bytes(
                 encoding=serialization.Encoding.PEM,
                 format=serialization.PrivateFormat.PKCS8,
-                encryption_algorithm=serialization.NoEncryption()
+                encryption_algorithm=encryption_algo
             )
             with open(private_key_path, "wb") as f:
                 f.write(private_pem)

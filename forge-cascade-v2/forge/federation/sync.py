@@ -446,15 +446,39 @@ class SyncService:
         local: dict[str, Any] | None,
         remote: dict[str, Any],
     ) -> dict[str, Any]:
-        """Attempt to merge local and remote capsules."""
+        """
+        Attempt to merge local and remote capsules.
+
+        SECURITY FIX (Audit 4 - H9): Never accept trust_level from remote peers.
+        Trust must always be calculated locally based on our own policies.
+        Accepting remote trust values allows attackers to claim high trust.
+        """
         if not local:
-            return remote
+            # For new capsules, strip the remote trust and use our default
+            merged = remote.copy()
+            # SECURITY FIX: Don't trust remote trust_level - use UNVERIFIED default
+            merged["trust_level"] = 20  # UNVERIFIED - will be recalculated locally
+            logger.info(
+                "remote_trust_rejected",
+                remote_claimed_trust=remote.get("trust_level"),
+                assigned_trust=20
+            )
+            return merged
 
         merged = local.copy()
 
-        # Take higher trust
+        # SECURITY FIX (Audit 4 - H9): Never adopt remote trust levels
+        # Trust must be recalculated locally, not accepted from potentially
+        # malicious peers. Keeping local trust_level unchanged.
         if remote.get("trust_level", 0) > local.get("trust_level", 0):
-            merged["trust_level"] = remote["trust_level"]
+            logger.warning(
+                "remote_higher_trust_rejected",
+                capsule_id=local.get("id"),
+                local_trust=local.get("trust_level"),
+                remote_claimed_trust=remote.get("trust_level"),
+                reason="Trust levels must be calculated locally, not accepted from remote"
+            )
+            # Keep local trust - do NOT update from remote
 
         # Combine tags
         local_tags = set(local.get("tags", []))
