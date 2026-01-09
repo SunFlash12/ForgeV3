@@ -26,7 +26,22 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 const CART_STORAGE_KEY = 'forge_shop_cart';
 const PLATFORM_FEE_RATE = 0.10; // 10% platform fee
 
+/**
+ * Calculate cart total (CLIENT-SIDE ONLY - FOR DISPLAY PURPOSES)
+ *
+ * SECURITY WARNING (Audit 4 - H23): This client-side calculation is for
+ * display purposes ONLY. The server MUST independently verify all prices
+ * at checkout time by fetching current prices from the database.
+ *
+ * NEVER trust client-submitted prices for actual transactions.
+ * The checkout API endpoint must:
+ * 1. Extract capsule IDs from the cart
+ * 2. Fetch current prices from the database
+ * 3. Calculate the actual total server-side
+ * 4. Compare with client total and reject if significantly different
+ */
 function calculateTotal(items: CartItem[]): number {
+  // CLIENT-SIDE ONLY - Server must recalculate from database prices
   const subtotal = items.reduce((sum, item) => sum + (item.capsule.price || 0), 0);
   return subtotal + (subtotal * PLATFORM_FEE_RATE);
 }

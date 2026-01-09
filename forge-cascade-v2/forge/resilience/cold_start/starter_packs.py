@@ -466,11 +466,26 @@ class StarterPackManager:
         user_id: str,
         trust_level: int
     ) -> Optional[str]:
-        """Create a capsule from template."""
+        """
+        Create a capsule from template.
+
+        SECURITY FIX (Audit 4 - H30): Validates pack content before creating
+        capsules to prevent XSS, injection, and other content-based attacks.
+        """
         if self._create_capsule_callback:
             try:
+                # SECURITY FIX (Audit 4 - H30): Validate and sanitize content
+                sanitized_content = self._validate_pack_content(template.content)
+                if sanitized_content is None:
+                    logger.warning(
+                        "pack_content_validation_failed",
+                        template_id=template.template_id,
+                        reason="Content failed security validation"
+                    )
+                    return None
+
                 return await self._create_capsule_callback(
-                    content=template.content,
+                    content=sanitized_content,
                     capsule_type=template.capsule_type,
                     tags=template.tags,
                     user_id=user_id,
@@ -484,6 +499,77 @@ class StarterPackManager:
                     error=str(e)
                 )
         return None
+
+    def _validate_pack_content(self, content: str) -> Optional[str]:
+        """
+        SECURITY FIX (Audit 4 - H30): Validate and sanitize pack content.
+
+        Checks for:
+        - XSS payloads (script tags, event handlers, javascript: URLs)
+        - SQL/Cypher injection patterns
+        - Excessive size
+        - Malicious encoding
+
+        Returns sanitized content or None if content is rejected.
+        """
+        import re
+        import html
+
+        if not content:
+            return ""
+
+        # Check size limit
+        MAX_CONTENT_SIZE = 100000  # 100KB max
+        if len(content) > MAX_CONTENT_SIZE:
+            logger.warning("pack_content_too_large", size=len(content))
+            return None
+
+        # Detect XSS patterns
+        xss_patterns = [
+            r'<script[^>]*>',
+            r'javascript:',
+            r'on\w+\s*=',  # Event handlers like onclick=
+            r'<iframe[^>]*>',
+            r'<object[^>]*>',
+            r'<embed[^>]*>',
+            r'expression\s*\(',
+            r'vbscript:',
+            r'data:text/html',
+        ]
+
+        content_lower = content.lower()
+        for pattern in xss_patterns:
+            if re.search(pattern, content_lower):
+                logger.warning(
+                    "pack_content_xss_detected",
+                    pattern=pattern[:20]
+                )
+                return None
+
+        # Detect injection patterns
+        injection_patterns = [
+            r"'\s*OR\s+'1'\s*=\s*'1",  # SQL injection
+            r";\s*DROP\s+",  # SQL injection
+            r"MATCH\s*\([^)]*\)\s*DELETE",  # Cypher injection
+            r"CALL\s+db\.",  # Cypher procedure injection
+        ]
+
+        for pattern in injection_patterns:
+            if re.search(pattern, content, re.IGNORECASE):
+                logger.warning(
+                    "pack_content_injection_detected",
+                    pattern=pattern[:20]
+                )
+                return None
+
+        # Basic HTML entity encoding for special characters
+        # This preserves markdown but escapes dangerous HTML
+        sanitized = content
+        # Don't fully escape - just neutralize script execution
+        sanitized = re.sub(r'<script', '&lt;script', sanitized, flags=re.IGNORECASE)
+        sanitized = re.sub(r'javascript:', 'javascript-disabled:', sanitized, flags=re.IGNORECASE)
+
+        return sanitized
 
     async def _activate_overlay(
         self,

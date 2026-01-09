@@ -679,7 +679,14 @@ class FederationProtocol:
             if capsule_types:
                 params["types"] = ",".join(capsule_types)
 
-            # Sign request
+            # SECURITY FIX (Audit 4 - H29): Add nonce to prevent replay attacks
+            # Each sync request includes a unique nonce that is signed
+            import secrets
+            import time
+            nonce = f"{int(time.time() * 1000)}_{secrets.token_hex(16)}"
+            params["nonce"] = nonce
+
+            # Sign request including nonce
             request_data = json.dumps(params, sort_keys=True).encode('utf-8')
             signature = self.sign_message(request_data)
 
@@ -689,6 +696,7 @@ class FederationProtocol:
                 headers={
                     "X-Forge-Signature": signature,
                     "X-Forge-Public-Key": self._public_key_b64,
+                    "X-Forge-Nonce": nonce,  # SECURITY FIX: Include nonce in header
                 },
             )
 
