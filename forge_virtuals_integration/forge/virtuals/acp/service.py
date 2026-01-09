@@ -588,20 +588,34 @@ class ACPService:
         memo_type: str,
         content: dict[str, Any],
         sender_address: str,
+        private_key: str | None = None,
     ) -> ACPMemo:
         """
-        Create a cryptographically signed ACP memo.
-        
+        SECURITY FIX (Audit 4): Create a cryptographically signed ACP memo.
+
         Memos form the immutable record of the ACP transaction,
-        with each party signing their contributions.
+        with each party signing their contributions using real cryptographic signatures.
+
+        Args:
+            job_id: The job this memo belongs to
+            memo_type: Type of memo (offer, acceptance, delivery, etc.)
+            content: Memo content as dict
+            sender_address: Address of the sender
+            private_key: Private key for signing (hex for EVM, base58 for Solana)
+
+        Returns:
+            ACPMemo with cryptographic signature
+
+        Note:
+            Without a private key, memo will be marked as UNSIGNED and
+            should not be trusted for authorization decisions.
         """
         content_json = json.dumps(content, sort_keys=True)
         content_hash = hashlib.sha256(content_json.encode()).hexdigest()
-        
-        # In production, this would use actual cryptographic signing
-        # with the sender's private key
-        signature = f"sig_{content_hash[:16]}_{sender_address[-8:]}"
-        
+
+        # SECURITY FIX (Audit 4): Implement actual cryptographic signing
+        signature = await self._sign_content(content_hash, sender_address, private_key)
+
         return ACPMemo(
             memo_type=memo_type,
             job_id=job_id,
@@ -610,6 +624,153 @@ class ACPService:
             sender_address=sender_address,
             sender_signature=signature,
         )
+
+    async def _sign_content(
+        self,
+        content_hash: str,
+        sender_address: str,
+        private_key: str | None,
+    ) -> str:
+        """
+        SECURITY FIX (Audit 4): Sign content with actual cryptographic signature.
+
+        Supports both EVM (ECDSA/secp256k1) and Solana (Ed25519) signatures.
+        """
+        if not private_key:
+            # Mark as unsigned if no private key provided
+            logger.warning(
+                "memo_unsigned",
+                sender_address=sender_address,
+                warning="No private key provided - memo is UNSIGNED and should not be trusted",
+            )
+            return f"UNSIGNED:{content_hash[:32]}"
+
+        # Convert content hash to bytes for signing
+        message_bytes = bytes.fromhex(content_hash)
+
+        # Detect chain type from address format
+        if sender_address.startswith("0x"):
+            # EVM chain - use ECDSA with eth_account
+            return await self._sign_evm(message_bytes, private_key)
+        else:
+            # Solana - use Ed25519
+            return await self._sign_solana(message_bytes, private_key)
+
+    async def _sign_evm(self, message_bytes: bytes, private_key_hex: str) -> str:
+        """Sign using EVM ECDSA (secp256k1)."""
+        try:
+            from eth_account import Account
+            from eth_account.messages import encode_defunct
+
+            # Create signable message
+            signable = encode_defunct(primitive=message_bytes)
+
+            # Sign with private key
+            signed = Account.sign_message(signable, private_key_hex)
+
+            # Return signature as hex
+            return signed.signature.hex()
+
+        except Exception as e:
+            logger.error("evm_signing_error", error=str(e))
+            raise ValueError(f"Failed to sign with EVM key: {e}")
+
+    async def _sign_solana(self, message_bytes: bytes, private_key_base58: str) -> str:
+        """Sign using Solana Ed25519."""
+        try:
+            from solders.keypair import Keypair
+            import base58
+
+            # Decode private key
+            secret_bytes = base58.b58decode(private_key_base58)
+            keypair = Keypair.from_bytes(secret_bytes)
+
+            # Sign message
+            signature = keypair.sign_message(message_bytes)
+
+            # Return signature as base58
+            return base58.b58encode(bytes(signature)).decode('ascii')
+
+        except Exception as e:
+            logger.error("solana_signing_error", error=str(e))
+            raise ValueError(f"Failed to sign with Solana key: {e}")
+
+    async def verify_memo_signature(
+        self,
+        memo: ACPMemo,
+    ) -> bool:
+        """
+        SECURITY FIX (Audit 4): Verify the cryptographic signature of a memo.
+
+        Returns:
+            True if signature is valid and matches sender_address
+        """
+        if memo.sender_signature.startswith("UNSIGNED:"):
+            logger.warning("verify_unsigned_memo", memo_type=memo.memo_type)
+            return False
+
+        content_json = json.dumps(memo.content, sort_keys=True)
+        content_hash = hashlib.sha256(content_json.encode()).hexdigest()
+        message_bytes = bytes.fromhex(content_hash)
+
+        if memo.sender_address.startswith("0x"):
+            return await self._verify_evm_signature(
+                message_bytes,
+                memo.sender_signature,
+                memo.sender_address,
+            )
+        else:
+            return await self._verify_solana_signature(
+                message_bytes,
+                memo.sender_signature,
+                memo.sender_address,
+            )
+
+    async def _verify_evm_signature(
+        self,
+        message_bytes: bytes,
+        signature_hex: str,
+        expected_address: str,
+    ) -> bool:
+        """Verify EVM ECDSA signature."""
+        try:
+            from eth_account import Account
+            from eth_account.messages import encode_defunct
+
+            signable = encode_defunct(primitive=message_bytes)
+            recovered_address = Account.recover_message(
+                signable,
+                signature=bytes.fromhex(signature_hex.removeprefix("0x"))
+            )
+
+            return recovered_address.lower() == expected_address.lower()
+
+        except Exception as e:
+            logger.error("evm_verify_error", error=str(e))
+            return False
+
+    async def _verify_solana_signature(
+        self,
+        message_bytes: bytes,
+        signature_base58: str,
+        expected_pubkey: str,
+    ) -> bool:
+        """Verify Solana Ed25519 signature."""
+        try:
+            from solders.pubkey import Pubkey
+            from solders.signature import Signature
+            import base58
+
+            pubkey = Pubkey.from_string(expected_pubkey)
+            sig_bytes = base58.b58decode(signature_base58)
+            signature = Signature.from_bytes(sig_bytes)
+
+            # Verify signature
+            return signature.verify(pubkey, message_bytes)
+
+        except Exception as e:
+            logger.error("solana_verify_error", error=str(e))
+            return False
     
     async def _lock_escrow(
         self,

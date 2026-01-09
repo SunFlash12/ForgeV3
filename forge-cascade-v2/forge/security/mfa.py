@@ -86,17 +86,156 @@ class MFAService:
     Multi-Factor Authentication service using TOTP.
 
     Implements RFC 6238 (TOTP) with backup codes for recovery.
+
+    SECURITY FIX (Audit 4): Added database persistence for MFA data.
+    In-memory storage is now development-only with explicit warning.
     """
 
-    def __init__(self):
-        # In-memory storage for demonstration - in production, use database
+    def __init__(
+        self,
+        db_client=None,
+        encryption_key: Optional[str] = None,
+        use_memory_storage: bool = False,
+    ):
+        """
+        Initialize MFA service.
+
+        Args:
+            db_client: Database client for persistent storage
+            encryption_key: Key for encrypting secrets at rest (required for production)
+            use_memory_storage: If True, use in-memory storage (DEV ONLY - data lost on restart!)
+        """
+        self._db = db_client
+        self._encryption_key = encryption_key
+
+        # SECURITY FIX (Audit 4): Warn if using memory storage in production
+        if use_memory_storage or db_client is None:
+            import os
+            env = os.environ.get("FORGE_ENV", "development")
+            if env != "development" and env != "test":
+                logger.error(
+                    "CRITICAL_SECURITY_WARNING",
+                    message="MFA using in-memory storage in non-development environment!",
+                    warning="MFA secrets will be LOST on restart. Users will be locked out.",
+                    env=env,
+                )
+            else:
+                logger.warning(
+                    "mfa_memory_storage_warning",
+                    message="MFA using in-memory storage - for development only",
+                    warning="MFA secrets will be lost on restart",
+                )
+            self._use_db = False
+        else:
+            self._use_db = True
+            if not encryption_key:
+                logger.warning(
+                    "mfa_encryption_warning",
+                    message="MFA encryption key not provided - secrets stored unencrypted",
+                )
+
+        # In-memory fallback (DEV ONLY)
         self._secrets: dict[str, str] = {}  # user_id -> base32 secret
         self._backup_codes: dict[str, set[str]] = {}  # user_id -> set of hashed codes
         self._verified: dict[str, bool] = {}  # user_id -> whether MFA setup is verified
         self._last_used: dict[str, datetime] = {}  # user_id -> last MFA use time
         self._verification_attempts: dict[str, VerificationAttempt] = {}
 
-        logger.info("MFA service initialized")
+        logger.info(
+            "MFA service initialized",
+            storage="database" if self._use_db else "memory",
+            encrypted=bool(encryption_key),
+        )
+
+    def _encrypt_secret(self, secret: str) -> str:
+        """Encrypt a secret for storage."""
+        if not self._encryption_key:
+            return secret
+        # Simple encryption using Fernet (production should use HSM)
+        try:
+            from cryptography.fernet import Fernet
+            import base64
+            # Derive a valid Fernet key from the encryption key
+            key = base64.urlsafe_b64encode(
+                hashlib.sha256(self._encryption_key.encode()).digest()
+            )
+            f = Fernet(key)
+            return f.encrypt(secret.encode()).decode()
+        except ImportError:
+            logger.warning("cryptography not installed, storing unencrypted")
+            return secret
+
+    def _decrypt_secret(self, encrypted: str) -> str:
+        """Decrypt a stored secret."""
+        if not self._encryption_key:
+            return encrypted
+        try:
+            from cryptography.fernet import Fernet
+            import base64
+            key = base64.urlsafe_b64encode(
+                hashlib.sha256(self._encryption_key.encode()).digest()
+            )
+            f = Fernet(key)
+            return f.decrypt(encrypted.encode()).decode()
+        except ImportError:
+            return encrypted
+        except Exception as e:
+            logger.error("mfa_decrypt_error", error=str(e))
+            raise ValueError("Failed to decrypt MFA secret")
+
+    async def _persist_mfa_data(
+        self,
+        user_id: str,
+        secret: str,
+        backup_codes_hashed: set[str],
+        verified: bool,
+    ) -> None:
+        """Persist MFA data to database."""
+        if not self._use_db:
+            return
+
+        encrypted_secret = self._encrypt_secret(secret)
+        mfa_data = {
+            "user_id": user_id,
+            "secret_encrypted": encrypted_secret,
+            "backup_codes_hashed": list(backup_codes_hashed),
+            "verified": verified,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "last_used": None,
+        }
+
+        # Store in database
+        async with self._db.session() as session:
+            await session.run(
+                """
+                MERGE (m:MFACredential {user_id: $user_id})
+                SET m.secret_encrypted = $secret_encrypted,
+                    m.backup_codes_hashed = $backup_codes_hashed,
+                    m.verified = $verified,
+                    m.created_at = $created_at,
+                    m.updated_at = datetime()
+                """,
+                mfa_data
+            )
+        logger.info("mfa_data_persisted", user_id=user_id)
+
+    async def _load_mfa_data(self, user_id: str) -> Optional[dict]:
+        """Load MFA data from database."""
+        if not self._use_db:
+            return None
+
+        async with self._db.session() as session:
+            result = await session.run(
+                """
+                MATCH (m:MFACredential {user_id: $user_id})
+                RETURN m {.*} AS mfa
+                """,
+                {"user_id": user_id}
+            )
+            record = await result.single()
+            if record:
+                return dict(record["mfa"])
+        return None
 
     # =========================================================================
     # Setup
@@ -155,14 +294,23 @@ class MFAService:
         # Generate backup codes
         backup_codes = self.generate_backup_codes()
 
-        # Store secret (unverified until user confirms with valid code)
-        self._secrets[user_id] = secret
-        self._verified[user_id] = False
-
-        # Store hashed backup codes
-        self._backup_codes[user_id] = {
+        # Hash backup codes for storage
+        hashed_codes = {
             self._hash_backup_code(code) for code in backup_codes
         }
+
+        # Store in memory (for immediate use)
+        self._secrets[user_id] = secret
+        self._verified[user_id] = False
+        self._backup_codes[user_id] = hashed_codes
+
+        # SECURITY FIX (Audit 4): Persist to database
+        await self._persist_mfa_data(
+            user_id=user_id,
+            secret=secret,
+            backup_codes_hashed=hashed_codes,
+            verified=False,
+        )
 
         # Generate provisioning URI for QR code
         uri = self._generate_provisioning_uri(secret, email)
@@ -170,7 +318,8 @@ class MFAService:
         logger.info(
             "MFA setup initiated",
             user_id=user_id,
-            backup_codes_count=len(backup_codes)
+            backup_codes_count=len(backup_codes),
+            persisted=self._use_db,
         )
 
         return MFASetupResult(
@@ -314,6 +463,34 @@ class MFAService:
                     attempts=attempt.attempts
                 )
 
+    async def _ensure_loaded(self, user_id: str) -> bool:
+        """
+        SECURITY FIX (Audit 4): Ensure MFA data is loaded from database.
+
+        Returns:
+            True if data is available (from memory or loaded from DB)
+        """
+        if user_id in self._secrets:
+            return True
+
+        # Try to load from database
+        mfa_data = await self._load_mfa_data(user_id)
+        if mfa_data:
+            try:
+                encrypted = mfa_data.get("secret_encrypted", "")
+                self._secrets[user_id] = self._decrypt_secret(encrypted)
+                self._verified[user_id] = mfa_data.get("verified", False)
+                self._backup_codes[user_id] = set(mfa_data.get("backup_codes_hashed", []))
+                if mfa_data.get("last_used"):
+                    self._last_used[user_id] = datetime.fromisoformat(mfa_data["last_used"])
+                logger.info("mfa_data_loaded_from_db", user_id=user_id)
+                return True
+            except Exception as e:
+                logger.error("mfa_data_load_error", user_id=user_id, error=str(e))
+                return False
+
+        return False
+
     async def verify_totp(
         self,
         user_id: str,
@@ -336,6 +513,9 @@ class MFAService:
         if not allowed:
             logger.warning("MFA verification rate limited", user_id=user_id, error=error)
             return False
+
+        # SECURITY FIX (Audit 4): Load from database if not in memory
+        await self._ensure_loaded(user_id)
 
         # Check if MFA is set up
         secret = self._secrets.get(user_id)

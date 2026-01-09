@@ -195,47 +195,88 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
         return None
 
     async def get_by_username(self, username: str) -> UserInDB | None:
-        """Get user by username (case-insensitive)."""
+        """
+        Get user by username (case-insensitive).
+
+        SECURITY NOTE (Audit 4): This is an INTERNAL method for authentication.
+        Returns UserInDB which includes password_hash - needed for password verification.
+        DO NOT expose UserInDB directly to API responses - use User model instead.
+        """
         query = """
         MATCH (u:User)
         WHERE toLower(u.username) = toLower($username)
         RETURN u {.*} AS user
         """
-        
+
         result = await self.client.execute_single(query, {"username": username})
-        
+
         if result and result.get("user"):
             return UserInDB.model_validate(result["user"])
         return None
 
     async def get_by_email(self, email: str) -> UserInDB | None:
-        """Get user by email (case-insensitive)."""
+        """
+        Get user by email (case-insensitive).
+
+        SECURITY NOTE (Audit 4): This is an INTERNAL method for authentication.
+        Returns UserInDB which includes password_hash - needed for password verification.
+        DO NOT expose UserInDB directly to API responses - use User model instead.
+        """
         query = """
         MATCH (u:User)
         WHERE toLower(u.email) = toLower($email)
         RETURN u {.*} AS user
         """
-        
+
         result = await self.client.execute_single(query, {"email": email})
-        
+
         if result and result.get("user"):
             return UserInDB.model_validate(result["user"])
         return None
 
     async def get_by_username_or_email(self, identifier: str) -> UserInDB | None:
-        """Get user by username or email."""
+        """
+        Get user by username or email.
+
+        SECURITY NOTE (Audit 4): This is an INTERNAL method for authentication.
+        Returns UserInDB which includes password_hash - needed for password verification.
+        DO NOT expose UserInDB directly to API responses - use User model instead.
+        """
         query = """
         MATCH (u:User)
         WHERE toLower(u.username) = toLower($identifier)
            OR toLower(u.email) = toLower($identifier)
         RETURN u {.*} AS user
         """
-        
+
         result = await self.client.execute_single(query, {"identifier": identifier})
-        
+
         if result and result.get("user"):
             return UserInDB.model_validate(result["user"])
         return None
+
+    def to_safe_user(self, user_in_db: UserInDB) -> User:
+        """
+        SECURITY FIX (Audit 4): Convert UserInDB to safe User model.
+
+        Strips password_hash and other sensitive fields before exposing to API.
+        Always use this when returning user data to external callers.
+        """
+        return User(
+            id=user_in_db.id,
+            username=user_in_db.username,
+            email=user_in_db.email,
+            display_name=user_in_db.display_name,
+            bio=user_in_db.bio,
+            avatar_url=user_in_db.avatar_url,
+            role=user_in_db.role,
+            trust_flame=user_in_db.trust_flame,
+            is_active=user_in_db.is_active,
+            is_verified=user_in_db.is_verified,
+            auth_provider=user_in_db.auth_provider,
+            created_at=user_in_db.created_at,
+            updated_at=user_in_db.updated_at,
+        )
 
     async def update_password(
         self,

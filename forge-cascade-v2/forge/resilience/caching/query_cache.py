@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import pickle
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -147,7 +146,8 @@ class QueryCache:
                 data = await self._redis.get(key)
                 if data:
                     self._stats.hits += 1
-                    return pickle.loads(data)
+                    # SECURITY FIX (Audit 4): Replace pickle with JSON to prevent RCE
+                    return json.loads(data.decode('utf-8'))
                 self._stats.misses += 1
                 return None
             else:
@@ -194,7 +194,8 @@ class QueryCache:
 
         try:
             # Check size limit
-            serialized = pickle.dumps(value)
+            # SECURITY FIX (Audit 4): Replace pickle with JSON to prevent RCE
+            serialized = json.dumps(value, default=str).encode('utf-8')
             if len(serialized) > self._config.max_cached_result_bytes:
                 logger.warning(
                     "cache_value_too_large",
