@@ -71,26 +71,69 @@ class OverlayRepository(BaseRepository[Overlay, OverlayCreate, OverlayUpdate]):
     def model_class(self) -> type[Overlay]:
         return Overlay
 
+    def _compute_content_hash(self, content: bytes) -> str:
+        """
+        SECURITY FIX (Audit 4 - H28): Compute SHA-256 hash of overlay content.
+
+        Args:
+            content: Raw overlay content (WASM bytecode or Python source)
+
+        Returns:
+            Hex string of SHA-256 hash
+        """
+        import hashlib
+        return hashlib.sha256(content).hexdigest()
+
     async def create(
         self,
         data: OverlayCreate,
+        wasm_content: bytes | None = None,
         **kwargs: Any,
     ) -> Overlay:
         """
         Register a new overlay.
-        
+
+        SECURITY FIX (Audit 4 - H28): Now verifies wasm_hash against actual
+        WASM content before storing. This prevents hash manipulation attacks.
+
         Args:
             data: Overlay manifest/configuration
-            
+            wasm_content: Optional WASM bytecode for hash verification
+
         Returns:
             Registered overlay
+
+        Raises:
+            ValueError: If provided hash doesn't match computed hash
         """
         now = self._now().isoformat()
         overlay_id = data.id or self._generate_id()
-        
+
+        # SECURITY FIX (Audit 4 - H28): Verify WASM hash if content provided
+        verified_hash = data.source_hash
+        if wasm_content:
+            computed_hash = self._compute_content_hash(wasm_content)
+            if data.source_hash and data.source_hash != computed_hash:
+                self.logger.error(
+                    "wasm_hash_mismatch",
+                    overlay_id=overlay_id,
+                    claimed_hash=data.source_hash[:16] + "...",
+                    computed_hash=computed_hash[:16] + "...",
+                )
+                raise ValueError(
+                    f"WASM hash mismatch: claimed {data.source_hash[:16]}... "
+                    f"but computed {computed_hash[:16]}..."
+                )
+            verified_hash = computed_hash
+            self.logger.info(
+                "wasm_hash_verified",
+                overlay_id=overlay_id,
+                hash=computed_hash[:16] + "..."
+            )
+
         # Convert capabilities to list of strings for Neo4j
         capabilities_list = [c.value for c in data.capabilities]
-        
+
         query = """
         CREATE (o:Overlay {
             id: $id,
@@ -102,9 +145,10 @@ class OverlayRepository(BaseRepository[Overlay, OverlayCreate, OverlayUpdate]):
             capabilities: $capabilities,
             dependencies: $dependencies,
             wasm_hash: $wasm_hash,
+            wasm_hash_verified: $hash_verified,
             created_at: $created_at,
             updated_at: $updated_at,
-            
+
             // Metrics (embedded)
             total_executions: 0,
             successful_executions: 0,
@@ -119,7 +163,7 @@ class OverlayRepository(BaseRepository[Overlay, OverlayCreate, OverlayUpdate]):
         })
         RETURN o {.*} AS entity
         """
-        
+
         result = await self.client.execute_single(
             query,
             {
@@ -131,7 +175,8 @@ class OverlayRepository(BaseRepository[Overlay, OverlayCreate, OverlayUpdate]):
                 "trust_level": TrustLevel.STANDARD.value,
                 "capabilities": capabilities_list,
                 "dependencies": data.dependencies,
-                "wasm_hash": data.source_hash,
+                "wasm_hash": verified_hash,
+                "hash_verified": wasm_content is not None,  # Track if hash was verified
                 "created_at": now,
                 "updated_at": now,
             },

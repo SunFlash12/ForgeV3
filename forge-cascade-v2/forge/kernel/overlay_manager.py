@@ -620,38 +620,67 @@ class OverlayManager:
     
     # =========================================================================
     # Circuit Breaker
+    # SECURITY FIX (Audit 4 - H12): Use lock for atomic circuit breaker operations
     # =========================================================================
-    
+
+    def __init_circuit_lock(self) -> None:
+        """Initialize circuit breaker lock if not already done."""
+        if not hasattr(self, '_circuit_lock'):
+            import threading
+            self._circuit_lock = threading.Lock()
+
     def _is_circuit_open(self, overlay_id: str) -> bool:
-        """Check if circuit breaker is open for an overlay."""
-        if overlay_id not in self._circuit_open:
-            return False
-        
-        open_time = self._circuit_open[overlay_id]
-        if (datetime.utcnow() - open_time).seconds >= self._circuit_timeout:
-            # Half-open: allow one attempt
-            del self._circuit_open[overlay_id]
-            return False
-        
-        return True
-    
+        """
+        Check if circuit breaker is open for an overlay.
+
+        SECURITY FIX (Audit 4 - H12): Now uses atomic operations with locking
+        to prevent race conditions in check-then-delete pattern.
+        """
+        self.__init_circuit_lock()
+
+        with self._circuit_lock:
+            if overlay_id not in self._circuit_open:
+                return False
+
+            open_time = self._circuit_open[overlay_id]
+            if (datetime.utcnow() - open_time).seconds >= self._circuit_timeout:
+                # Half-open: allow one attempt - atomic delete under lock
+                del self._circuit_open[overlay_id]
+                return False
+
+            return True
+
     def _record_failure(self, overlay_id: str) -> None:
-        """Record an overlay execution failure."""
-        self._failure_counts[overlay_id] = \
-            self._failure_counts.get(overlay_id, 0) + 1
-        
-        if self._failure_counts[overlay_id] >= self._circuit_threshold:
-            self._circuit_open[overlay_id] = datetime.utcnow()
-            self._logger.warning(
-                "overlay_circuit_opened",
-                overlay_id=overlay_id,
-                failures=self._failure_counts[overlay_id]
-            )
-    
+        """
+        Record an overlay execution failure.
+
+        SECURITY FIX (Audit 4 - H12): Now uses atomic operations with locking.
+        """
+        self.__init_circuit_lock()
+
+        with self._circuit_lock:
+            self._failure_counts[overlay_id] = \
+                self._failure_counts.get(overlay_id, 0) + 1
+
+            if self._failure_counts[overlay_id] >= self._circuit_threshold:
+                self._circuit_open[overlay_id] = datetime.utcnow()
+                self._logger.warning(
+                    "overlay_circuit_opened",
+                    overlay_id=overlay_id,
+                    failures=self._failure_counts[overlay_id]
+                )
+
     def reset_circuit(self, overlay_id: str) -> None:
-        """Manually reset a circuit breaker."""
-        self._failure_counts.pop(overlay_id, None)
-        self._circuit_open.pop(overlay_id, None)
+        """
+        Manually reset a circuit breaker.
+
+        SECURITY FIX (Audit 4 - H12): Now uses atomic operations with locking.
+        """
+        self.__init_circuit_lock()
+
+        with self._circuit_lock:
+            self._failure_counts.pop(overlay_id, None)
+            self._circuit_open.pop(overlay_id, None)
         self._logger.info("overlay_circuit_reset", overlay_id=overlay_id)
     
     # =========================================================================
