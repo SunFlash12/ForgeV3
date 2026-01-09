@@ -11,6 +11,7 @@ import {
   ArrowRight,
   Eye,
   Filter,
+  Loader2,
 } from 'lucide-react';
 import { api } from '../api/client';
 import {
@@ -69,7 +70,7 @@ export default function ContradictionsPage() {
   });
 
   // Fetch unresolved contradictions
-  const { data: contradictionsData, isLoading } = useQuery({
+  const { data: contradictionsData, isLoading } = useQuery<{ contradictions: Contradiction[] }>({
     queryKey: ['contradictions', severityFilter],
     queryFn: () => api.get('/graph/contradictions/unresolved?limit=100'),
   });
@@ -228,7 +229,7 @@ export default function ContradictionsPage() {
       {/* Contradictions List */}
       {filteredContradictions.length === 0 ? (
         <EmptyState
-          icon={CheckCircle}
+          icon={<CheckCircle className="w-10 h-10" />}
           title="No Contradictions Found"
           description="There are no unresolved contradictions in the knowledge base."
         />
@@ -481,7 +482,7 @@ export default function ContradictionsPage() {
               >
                 {resolveMutation.isPending ? (
                   <>
-                    <LoadingSpinner size="sm" className="mr-2" />
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                     Resolving...
                   </>
                 ) : (
