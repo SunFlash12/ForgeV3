@@ -67,6 +67,26 @@ class ComplianceEngine:
         self.config = config or get_compliance_config()
         self.registry = registry or get_compliance_registry()
         
+        # TODO: CRITICAL - Implement persistent storage
+        # Current in-memory stores will lose ALL compliance data on restart.
+        # This includes legally required records (DSARs, consent, breach reports).
+        #
+        # Recommended implementation:
+        # 1. Use PostgreSQL with separate tables for each entity type
+        # 2. Add repository layer (ComplianceRepository) following existing patterns
+        # 3. Required tables:
+        #    - dsars (id, request_type, subject_email, status, deadline, created_at, etc.)
+        #    - consent_records (id, user_id, consent_type, granted, granted_at, etc.)
+        #    - breach_notifications (id, severity, discovered_at, contained, etc.)
+        #    - audit_events (id, category, event_type, action, actor_id, created_at, hash)
+        #    - ai_systems (id, system_name, risk_classification, registered_at)
+        #    - ai_decisions (id, ai_system_id, decision_type, confidence, reviewed, etc.)
+        # 4. Audit log should use append-only storage with hash chain for tamper detection
+        # 5. Consider regulatory data retention requirements:
+        #    - GDPR: Consent records must be kept for duration of processing + 7 years
+        #    - SOX: Audit logs must be retained for 7 years minimum
+        #    - HIPAA: 6 years for audit trails
+        #
         # In-memory stores (would be database-backed in production)
         self._dsars: dict[str, DataSubjectRequest] = {}
         self._consents: dict[str, list[ConsentRecord]] = {}  # user_id -> consents

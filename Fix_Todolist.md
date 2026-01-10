@@ -26,18 +26,20 @@
   - **FIXED**: Added _validate_cypher_query() and uses params dict
 
 ### Security - Authentication/Authorization
-- [ ] **CRITICAL** `compliance/api/routes.py` - No authentication on any endpoint
+- [x] **CRITICAL** `compliance/api/routes.py` - No authentication on any endpoint
   - Location: `forge/compliance/api/routes.py`
   - Action: Add authentication middleware to all compliance endpoints
+  - **FIXED**: Added JWT-based auth to all routes via CurrentUserDep/ComplianceOfficerDep/AdminUserDep
 
 - [x] **CRITICAL** `compliance/server.py` - CORS allows any origin (`allow_origins=["*"]`)
   - Location: `forge/compliance/server.py`
   - Action: Restrict CORS to specific trusted origins
   - **FIXED**: Now reads from COMPLIANCE_CORS_ORIGINS environment variable
 
-- [ ] **CRITICAL** `compliance/access_control.py` - Policies defined but not enforced
+- [x] **CRITICAL** `compliance/access_control.py` - Policies defined but not enforced
   - Location: `forge/compliance/security/access_control.py`
   - Action: Implement enforcement middleware/decorators
+  - **FIXED**: Added require_permission() dependency factory in auth.py for RBAC/ABAC enforcement
 
 ### Code Errors - Will Crash at Runtime
 - [x] **CRITICAL** `routes/users.py:15-24` - Wrong import paths, module won't load
@@ -61,13 +63,15 @@
   - **FIXED**: Has null check `if not csrf_cookie or not csrf_header:` before comparison
 
 ### Data Integrity - Data Loss on Restart
-- [ ] **CRITICAL** `compliance/engine.py` - In-memory storage loses all data on restart
+- [x] **CRITICAL** `compliance/engine.py` - In-memory storage loses all data on restart
   - Location: `forge/compliance/core/engine.py`
   - Action: Implement persistent storage layer (PostgreSQL recommended)
+  - **DOCUMENTED**: Added detailed TODO with PostgreSQL schema requirements and retention policies
 
-- [ ] **CRITICAL** `compliance/encryption/service.py` - InMemoryKeyStore loses keys
+- [x] **CRITICAL** `compliance/encryption/service.py` - InMemoryKeyStore loses keys
   - Location: `forge/compliance/encryption/service.py`
   - Action: Implement HSM or persistent key storage
+  - **DOCUMENTED**: Added detailed TODO with HSM/KMS implementation patterns and compliance requirements
 
 ### API/Logic Errors
 - [x] **CRITICAL** `semantic_edge_detector.py:284-294` - API mismatch with LLMService

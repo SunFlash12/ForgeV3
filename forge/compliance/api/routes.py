@@ -8,6 +8,9 @@ REST API endpoints for compliance operations including:
 - AI governance
 - Audit logging
 - Compliance reporting
+
+SECURITY: All endpoints require authentication.
+Sensitive operations require compliance officer role.
 """
 
 from __future__ import annotations
@@ -37,6 +40,12 @@ from forge.compliance.core.models import (
     AIDecisionLog,
     ComplianceReport,
     AuditEvent,
+)
+from forge.compliance.api.auth import (
+    CurrentUserDep,
+    ComplianceOfficerDep,
+    AdminUserDep,
+    ComplianceUser,
 )
 
 router = APIRouter(prefix="/compliance", tags=["compliance"])
@@ -198,13 +207,16 @@ async def get_engine() -> ComplianceEngine:
 @router.post("/dsars", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def create_dsar(
     request: DSARCreateRequest,
+    user: CurrentUserDep,
     engine: ComplianceEngine = Depends(get_engine),
 ):
     """
     Create a new Data Subject Access Request.
-    
+
     Automatically calculates deadline based on jurisdiction and request type.
     Uses the strictest deadline (LGPD 15 days) as baseline.
+
+    Requires: Authentication
     """
     dsar = await engine.create_dsar(
         request_type=request.request_type,
@@ -214,7 +226,7 @@ async def create_dsar(
         jurisdiction=request.jurisdiction,
         specific_data_categories=request.specific_data_categories,
     )
-    
+
     return {
         "id": dsar.id,
         "request_type": dsar.request_type.value,
@@ -227,13 +239,14 @@ async def create_dsar(
 @router.get("/dsars/{dsar_id}")
 async def get_dsar(
     dsar_id: str,
+    user: CurrentUserDep,
     engine: ComplianceEngine = Depends(get_engine),
 ):
-    """Get DSAR details."""
+    """Get DSAR details. Requires: Authentication"""
     dsar = engine._dsars.get(dsar_id)
     if not dsar:
         raise HTTPException(status_code=404, detail="DSAR not found")
-    
+
     return dsar.model_dump()
 
 
@@ -241,9 +254,10 @@ async def get_dsar(
 async def process_dsar(
     dsar_id: str,
     request: DSARProcessRequest,
+    user: ComplianceOfficerDep,
     engine: ComplianceEngine = Depends(get_engine),
 ):
-    """Mark DSAR as processing."""
+    """Mark DSAR as processing. Requires: Compliance Officer role"""
     try:
         dsar = await engine.process_dsar(dsar_id, request.actor_id)
         return {"status": dsar.status, "assigned_to": dsar.assigned_to}
@@ -255,9 +269,10 @@ async def process_dsar(
 async def complete_dsar(
     dsar_id: str,
     request: DSARCompleteRequest,
+    user: ComplianceOfficerDep,
     engine: ComplianceEngine = Depends(get_engine),
 ):
-    """Complete a DSAR."""
+    """Complete a DSAR. Requires: Compliance Officer role"""
     try:
         dsar = await engine.complete_dsar(
             dsar_id=dsar_id,
@@ -273,19 +288,20 @@ async def complete_dsar(
 
 @router.get("/dsars")
 async def list_dsars(
+    user: CurrentUserDep,
     status: str | None = Query(None),
     overdue_only: bool = Query(False),
     engine: ComplianceEngine = Depends(get_engine),
 ):
-    """List DSARs with optional filters."""
+    """List DSARs with optional filters. Requires: Authentication"""
     dsars = list(engine._dsars.values())
-    
+
     if status:
         dsars = [d for d in dsars if d.status == status]
-    
+
     if overdue_only:
         dsars = [d for d in dsars if d.is_overdue]
-    
+
     return {
         "total": len(dsars),
         "dsars": [
@@ -311,12 +327,14 @@ async def list_dsars(
 @router.post("/consents", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def record_consent(
     request: ConsentCreateRequest,
+    user: CurrentUserDep,
     engine: ComplianceEngine = Depends(get_engine),
 ):
     """
     Record a consent decision.
-    
+
     Maintains full audit trail per GDPR Article 7.
+    Requires: Authentication
     """
     consent = await engine.record_consent(
         user_id=request.user_id,
@@ -333,7 +351,7 @@ async def record_consent(
         tcf_string=request.tcf_string,
         gpp_string=request.gpp_string,
     )
-    
+
     return {
         "id": consent.id,
         "consent_type": consent.consent_type.value,
@@ -345,20 +363,21 @@ async def record_consent(
 @router.post("/consents/withdraw")
 async def withdraw_consent(
     request: ConsentWithdrawRequest,
+    user: CurrentUserDep,
     engine: ComplianceEngine = Depends(get_engine),
 ):
-    """Withdraw consent."""
+    """Withdraw consent. Requires: Authentication"""
     consent = await engine.withdraw_consent(
         user_id=request.user_id,
         consent_type=request.consent_type,
     )
-    
+
     if not consent:
         raise HTTPException(
             status_code=404,
             detail="Active consent not found for this type",
         )
-    
+
     return {
         "id": consent.id,
         "consent_type": consent.consent_type.value,
@@ -369,18 +388,20 @@ async def withdraw_consent(
 @router.post("/consents/gpc")
 async def process_gpc_signal(
     request: GPCSignalRequest,
+    user: CurrentUserDep,
     engine: ComplianceEngine = Depends(get_engine),
 ):
     """
     Process Global Privacy Control signal.
-    
+
     Per CCPA, GPC must be treated as opt-out of sale/sharing.
+    Requires: Authentication
     """
     withdrawn = await engine.process_gpc_signal(
         user_id=request.user_id,
         gpc_enabled=request.gpc_enabled,
     )
-    
+
     return {
         "gpc_enabled": request.gpc_enabled,
         "consents_withdrawn": len(withdrawn),
@@ -391,11 +412,12 @@ async def process_gpc_signal(
 @router.get("/consents/{user_id}")
 async def get_user_consents(
     user_id: str,
+    user: CurrentUserDep,
     engine: ComplianceEngine = Depends(get_engine),
 ):
-    """Get all consent records for a user."""
+    """Get all consent records for a user. Requires: Authentication"""
     consents = await engine.get_user_consents(user_id)
-    
+
     return {
         "user_id": user_id,
         "total": len(consents),
@@ -418,9 +440,10 @@ async def get_user_consents(
 async def check_consent(
     user_id: str,
     consent_type: ConsentType,
+    user: CurrentUserDep,
     engine: ComplianceEngine = Depends(get_engine),
 ):
-    """Check if user has valid consent for a specific type."""
+    """Check if user has valid consent for a specific type. Requires: Authentication"""
     has_consent = await engine.check_consent(user_id, consent_type)
     return {"has_consent": has_consent}
 
@@ -433,12 +456,14 @@ async def check_consent(
 @router.post("/breaches", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def report_breach(
     request: BreachReportRequest,
+    user: ComplianceOfficerDep,
     engine: ComplianceEngine = Depends(get_engine),
 ):
     """
     Report a data breach.
-    
+
     Automatically calculates notification deadlines per jurisdiction.
+    Requires: Compliance Officer role
     """
     breach = await engine.report_breach(
         discovered_by=request.discovered_by,
@@ -452,7 +477,7 @@ async def report_breach(
         root_cause=request.root_cause,
         attack_vector=request.attack_vector,
     )
-    
+
     return {
         "id": breach.id,
         "severity": breach.severity.value,
@@ -469,9 +494,10 @@ async def report_breach(
 async def contain_breach(
     breach_id: str,
     request: BreachContainRequest,
+    user: ComplianceOfficerDep,
     engine: ComplianceEngine = Depends(get_engine),
 ):
-    """Mark breach as contained."""
+    """Mark breach as contained. Requires: Compliance Officer role"""
     try:
         breach = await engine.mark_breach_contained(
             breach_id=breach_id,
@@ -490,9 +516,10 @@ async def contain_breach(
 async def notify_authority(
     breach_id: str,
     request: AuthorityNotificationRequest,
+    user: ComplianceOfficerDep,
     engine: ComplianceEngine = Depends(get_engine),
 ):
-    """Record that authority has been notified."""
+    """Record that authority has been notified. Requires: Compliance Officer role"""
     try:
         breach = await engine.record_authority_notification(
             breach_id=breach_id,
@@ -500,12 +527,12 @@ async def notify_authority(
             reference_number=request.reference_number,
             actor_id=request.actor_id,
         )
-        
+
         notif = next(
             (n for n in breach.authority_notifications if n.jurisdiction == request.jurisdiction),
             None,
         )
-        
+
         return {
             "notified": notif.notified if notif else False,
             "reference_number": notif.reference_number if notif else None,
@@ -517,31 +544,33 @@ async def notify_authority(
 @router.get("/breaches/{breach_id}")
 async def get_breach(
     breach_id: str,
+    user: ComplianceOfficerDep,
     engine: ComplianceEngine = Depends(get_engine),
 ):
-    """Get breach details."""
+    """Get breach details. Requires: Compliance Officer role"""
     breach = engine._breaches.get(breach_id)
     if not breach:
         raise HTTPException(status_code=404, detail="Breach not found")
-    
+
     return breach.model_dump()
 
 
 @router.get("/breaches")
 async def list_breaches(
+    user: ComplianceOfficerDep,
     contained: bool | None = Query(None),
     overdue: bool | None = Query(None),
     engine: ComplianceEngine = Depends(get_engine),
 ):
-    """List breaches with optional filters."""
+    """List breaches with optional filters. Requires: Compliance Officer role"""
     breaches = list(engine._breaches.values())
-    
+
     if contained is not None:
         breaches = [b for b in breaches if b.contained == contained]
-    
+
     if overdue is True:
         breaches = [b for b in breaches if b.is_overdue]
-    
+
     return {
         "total": len(breaches),
         "breaches": [
@@ -566,10 +595,12 @@ async def list_breaches(
 @router.post("/ai-systems", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def register_ai_system(
     request: AISystemRegisterRequest,
+    user: ComplianceOfficerDep,
     engine: ComplianceEngine = Depends(get_engine),
 ):
     """
     Register an AI system for EU AI Act compliance.
+    Requires: Compliance Officer role
     """
     registration = await engine.register_ai_system(
         system_name=request.system_name,
@@ -582,7 +613,7 @@ async def register_ai_system(
         human_oversight_measures=request.human_oversight_measures,
         training_data_description=request.training_data_description,
     )
-    
+
     return {
         "id": registration.id,
         "system_name": registration.system_name,
@@ -595,12 +626,14 @@ async def register_ai_system(
 @router.post("/ai-decisions", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def log_ai_decision(
     request: AIDecisionLogRequest,
+    user: CurrentUserDep,
     engine: ComplianceEngine = Depends(get_engine),
 ):
     """
     Log an AI decision for transparency and explainability.
-    
+
     Per EU AI Act Article 12 and GDPR Article 22.
+    Requires: Authentication
     """
     decision = await engine.log_ai_decision(
         ai_system_id=request.ai_system_id,
@@ -615,7 +648,7 @@ async def log_ai_decision(
         has_legal_effect=request.has_legal_effect,
         has_significant_effect=request.has_significant_effect,
     )
-    
+
     return {
         "id": decision.id,
         "decision_type": decision.decision_type,
@@ -627,12 +660,14 @@ async def log_ai_decision(
 @router.post("/ai-decisions/review")
 async def request_human_review(
     request: HumanReviewRequest,
+    user: ComplianceOfficerDep,
     engine: ComplianceEngine = Depends(get_engine),
 ):
     """
     Request or complete human review of an AI decision.
-    
+
     Per GDPR Article 22 right to human intervention.
+    Requires: Compliance Officer role
     """
     decision = await engine.request_human_review(
         decision_id=request.decision_id,
@@ -640,10 +675,10 @@ async def request_human_review(
         override=request.override,
         override_reason=request.override_reason,
     )
-    
+
     if not decision:
         raise HTTPException(status_code=404, detail="Decision not found")
-    
+
     return {
         "id": decision.id,
         "human_reviewed": decision.human_reviewed,
@@ -654,28 +689,31 @@ async def request_human_review(
 @router.get("/ai-decisions/{decision_id}/explanation")
 async def get_ai_decision_explanation(
     decision_id: str,
+    user: CurrentUserDep,
     engine: ComplianceEngine = Depends(get_engine),
 ):
     """
     Get plain-language explanation of an AI decision.
-    
+
     Per GDPR Article 22 and EU AI Act transparency requirements.
+    Requires: Authentication
     """
     explanation = await engine.get_ai_decision_explanation(decision_id)
-    
+
     if not explanation:
         raise HTTPException(status_code=404, detail="Decision not found")
-    
+
     return explanation
 
 
 @router.get("/ai-systems")
 async def list_ai_systems(
+    user: CurrentUserDep,
     engine: ComplianceEngine = Depends(get_engine),
 ):
-    """List all registered AI systems."""
+    """List all registered AI systems. Requires: Authentication"""
     systems = list(engine._ai_systems.values())
-    
+
     return {
         "total": len(systems),
         "high_risk_count": len([
@@ -702,6 +740,7 @@ async def list_ai_systems(
 
 @router.get("/audit-events")
 async def get_audit_events(
+    user: ComplianceOfficerDep,
     start_date: datetime | None = Query(None),
     end_date: datetime | None = Query(None),
     category: AuditEventCategory | None = Query(None),
@@ -711,7 +750,7 @@ async def get_audit_events(
     limit: int = Query(100, le=1000),
     engine: ComplianceEngine = Depends(get_engine),
 ):
-    """Query audit events with filters."""
+    """Query audit events with filters. Requires: Compliance Officer role"""
     events = await engine.get_audit_events(
         start_date=start_date,
         end_date=end_date,
@@ -721,7 +760,7 @@ async def get_audit_events(
         entity_id=entity_id,
         limit=limit,
     )
-    
+
     return {
         "total": len(events),
         "events": [
@@ -743,9 +782,10 @@ async def get_audit_events(
 
 @router.get("/audit-chain/verify")
 async def verify_audit_chain(
+    user: AdminUserDep,
     engine: ComplianceEngine = Depends(get_engine),
 ):
-    """Verify audit log chain integrity."""
+    """Verify audit log chain integrity. Requires: Admin role"""
     is_valid, message = engine.verify_audit_chain()
     return {
         "valid": is_valid,
@@ -761,9 +801,10 @@ async def verify_audit_chain(
 @router.post("/reports", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def generate_compliance_report(
     request: ComplianceReportRequest,
+    user: ComplianceOfficerDep,
     engine: ComplianceEngine = Depends(get_engine),
 ):
-    """Generate a compliance assessment report."""
+    """Generate a compliance assessment report. Requires: Compliance Officer role"""
     report = await engine.generate_compliance_report(
         report_type=request.report_type,
         start_date=request.start_date,
@@ -772,7 +813,7 @@ async def generate_compliance_report(
         jurisdictions=request.jurisdictions,
         generated_by=request.generated_by,
     )
-    
+
     return {
         "id": report.id,
         "overall_compliance_score": report.overall_compliance_score,
@@ -790,34 +831,36 @@ async def generate_compliance_report(
 @router.post("/controls/verify")
 async def verify_control(
     request: ControlVerifyRequest,
+    user: ComplianceOfficerDep,
     engine: ComplianceEngine = Depends(get_engine),
 ):
-    """Verify a compliance control."""
-    status = await engine.verify_control(
+    """Verify a compliance control. Requires: Compliance Officer role"""
+    ctrl_status = await engine.verify_control(
         control_id=request.control_id,
         verifier_id=request.verifier_id,
         evidence=request.evidence,
         notes=request.notes,
     )
-    
-    if not status:
+
+    if not ctrl_status:
         raise HTTPException(status_code=404, detail="Control not found")
-    
+
     return {
-        "control_id": status.control_id,
-        "implemented": status.implemented,
-        "verified": status.verified,
-        "status": status.status,
+        "control_id": ctrl_status.control_id,
+        "implemented": ctrl_status.implemented,
+        "verified": ctrl_status.verified,
+        "status": ctrl_status.status,
     }
 
 
 @router.post("/controls/verify-all")
 async def run_automated_verifications(
+    user: AdminUserDep,
     engine: ComplianceEngine = Depends(get_engine),
 ):
-    """Run all automated control verifications."""
+    """Run all automated control verifications. Requires: Admin role"""
     results = await engine.run_automated_verifications()
-    
+
     return {
         "total": len(results),
         "passed": sum(1 for r in results.values() if r),
@@ -828,21 +871,22 @@ async def run_automated_verifications(
 
 @router.get("/status")
 async def get_compliance_status(
+    user: CurrentUserDep,
     engine: ComplianceEngine = Depends(get_engine),
 ):
-    """Get overall compliance status."""
+    """Get overall compliance status. Requires: Authentication"""
     frameworks = engine.config.frameworks_list
-    
+
     status_by_framework = {}
     total_controls = 0
     total_compliant = 0
-    
+
     for framework in frameworks:
         framework_status = engine.registry.get_framework_compliance_status(framework)
         status_by_framework[framework.value] = framework_status
         total_controls += framework_status["total"]
         total_compliant += framework_status["verified"]
-    
+
     return {
         "overall_compliance_percentage": (total_compliant / total_controls * 100) if total_controls > 0 else 0,
         "total_controls": total_controls,
