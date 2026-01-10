@@ -60,6 +60,9 @@ DEFAULT_BACKUP_DIR = Path(__file__).parent.parent.parent / "backups" / "neo4j"
 DEFAULT_RETENTION_DAYS = 30
 BATCH_SIZE = 1000
 
+# Memory threshold for warning about large databases
+LARGE_DB_THRESHOLD = 100000  # Warn if > 100k nodes
+
 
 class Neo4jBackup:
     """Neo4j database backup handler."""
@@ -233,6 +236,17 @@ class Neo4jBackup:
         async with self._driver.session(database=self.database) as session:
             # Get database info
             db_info = await self._get_database_info(session)
+
+            # Memory warning for large databases
+            total_objects = db_info["node_count"] + db_info["relationship_count"]
+            if total_objects > LARGE_DB_THRESHOLD:
+                logger.warning(
+                    "large_database_backup",
+                    node_count=db_info["node_count"],
+                    rel_count=db_info["relationship_count"],
+                    hint="Consider using Neo4j's native neo4j-admin dump for very large databases",
+                )
+
             logger.info(
                 "Starting backup",
                 database=self.database,
@@ -241,6 +255,9 @@ class Neo4jBackup:
             )
 
             # Export data
+            # Note: For very large databases (1M+ nodes), consider streaming to file
+            # instead of collecting in memory. This implementation is suitable for
+            # databases up to ~500k nodes on systems with adequate RAM.
             nodes = await self._export_nodes(session, since if incremental else None)
             relationships = await self._export_relationships(session, since if incremental else None)
 
