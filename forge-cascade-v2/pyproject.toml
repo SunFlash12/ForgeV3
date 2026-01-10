@@ -93,6 +93,8 @@ packages = ["forge"]
 [tool.ruff]
 target-version = "py311"
 line-length = 100
+
+[tool.ruff.lint]
 select = [
     "E",   # pycodestyle errors
     "W",   # pycodestyle warnings
@@ -105,9 +107,13 @@ select = [
 ignore = [
     "E501",  # line too long (handled by black)
     "B008",  # do not perform function calls in argument defaults
+    "E402",  # module level import not at top (intentional for module setup)
+    "B904",  # raise without from (intentional for security - don't leak exception details)
+    "E741",  # ambiguous variable name (l is common for listing/label in loops)
+    "B023",  # loop variable binding (false positive in async executor context)
 ]
 
-[tool.ruff.isort]
+[tool.ruff.lint.isort]
 known-first-party = ["forge"]
 
 [tool.black]

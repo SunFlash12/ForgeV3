@@ -1164,7 +1164,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
                 return policy
         return None
 
-    async def create_delegation(self, data: dict[str, Any]) -> dict:
+    async def create_delegation_from_dict(self, data: dict[str, Any]) -> dict:
         """
         Create a vote delegation from a dict.
 
