@@ -495,6 +495,22 @@ async def get_compliance_status():
     }
 
 
+@app.get("/api/v1/compliance/frameworks")
+async def list_frameworks():
+    """List all supported compliance frameworks."""
+    return {
+        "items": [
+            {"id": "gdpr", "name": "GDPR", "version": "2016/679", "controls": 99},
+            {"id": "ccpa", "name": "CCPA", "version": "2018", "controls": 45},
+            {"id": "soc2", "name": "SOC2", "version": "2017", "controls": 64},
+            {"id": "hipaa", "name": "HIPAA", "version": "1996", "controls": 75},
+            {"id": "pci-dss", "name": "PCI-DSS", "version": "4.0", "controls": 78},
+            {"id": "iso27001", "name": "ISO 27001", "version": "2022", "controls": 93},
+        ],
+        "total": 6,
+    }
+
+
 @app.post("/api/v1/compliance/controls/verify-all")
 async def verify_all_controls():
     return {
