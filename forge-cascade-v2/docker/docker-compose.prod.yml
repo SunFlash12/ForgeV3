@@ -64,7 +64,8 @@ services:
   # REDIS CACHE
   # ===========================================================================
   redis:
-    image: redis:7-alpine
+    # SECURITY FIX: Pin to specific version instead of floating tag
+    image: redis:7.4.1-alpine
     container_name: forge-redis
     restart: unless-stopped
     # SECURITY FIX: Bind to localhost only - don't expose Redis externally
@@ -99,7 +100,8 @@ services:
       dockerfile: docker/Dockerfile.backend
       args:
         PYTHON_VERSION: "3.11"
-    image: forge-cascade-api:${VERSION:-latest}
+    # SECURITY FIX: VERSION env var is required, no default to :latest
+    image: forge-cascade-api:${VERSION:?VERSION environment variable is required}
     container_name: forge-api
     restart: unless-stopped
     ports:
@@ -169,7 +171,8 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile.frontend
-    image: forge-cascade-frontend:${VERSION:-latest}
+    # SECURITY FIX: VERSION env var is required, no default to :latest
+    image: forge-cascade-frontend:${VERSION:?VERSION environment variable is required}
     container_name: forge-frontend
     restart: unless-stopped
     ports:
@@ -194,7 +197,8 @@ services:
   # NGINX REVERSE PROXY
   # ===========================================================================
   nginx:
-    image: nginx:1.25-alpine
+    # SECURITY FIX: Pin to specific patch version
+    image: nginx:1.25.3-alpine
     container_name: forge-nginx
     restart: unless-stopped
     ports:
