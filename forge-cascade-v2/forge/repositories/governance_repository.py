@@ -261,9 +261,16 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
         eligible_voters = await self._count_eligible_voters()
         total_votes = proposal.votes_for + proposal.votes_against + proposal.votes_abstain
 
-        # Check if quorum is met (enough voters participated)
-        quorum_met = True
-        if eligible_voters > 0:
+        # SECURITY FIX (Audit 4 - M5): Check quorum properly
+        # Cannot meet quorum if there are no eligible voters
+        if eligible_voters == 0:
+            self.logger.warning(
+                "quorum_check_no_voters",
+                proposal_id=proposal_id,
+                eligible_voters=0,
+            )
+            quorum_met = False
+        else:
             participation_rate = total_votes / eligible_voters
             quorum_met = participation_rate >= proposal.quorum_percent
 

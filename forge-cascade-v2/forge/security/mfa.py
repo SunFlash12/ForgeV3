@@ -454,13 +454,16 @@ class MFAService:
             attempt.attempts += 1
 
             if attempt.attempts >= MAX_VERIFICATION_ATTEMPTS:
-                attempt.locked_until = datetime.now(timezone.utc).replace(
-                    second=datetime.now(timezone.utc).second + LOCKOUT_DURATION_SECONDS
+                # SECURITY FIX (Audit 4 - M3): Correct lockout time calculation
+                # Previous code used .replace(second=...) which overflows incorrectly
+                attempt.locked_until = datetime.now(timezone.utc) + timedelta(
+                    seconds=LOCKOUT_DURATION_SECONDS
                 )
                 logger.warning(
                     "MFA verification locked",
                     user_id=user_id,
-                    attempts=attempt.attempts
+                    attempts=attempt.attempts,
+                    locked_until=attempt.locked_until.isoformat(),
                 )
 
     async def _ensure_loaded(self, user_id: str) -> bool:
