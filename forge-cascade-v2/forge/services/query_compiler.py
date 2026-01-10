@@ -600,9 +600,10 @@ class QueryCompiler:
         # Build WHERE clauses
         where_clauses = []
 
-        # Add trust filter
+        # Add trust filter - SECURITY FIX: Use parameterized query instead of string interpolation
         if user_trust < 100:
-            where_clauses.append(f"c.trust_level <= {user_trust}")
+            params["user_trust_level"] = user_trust
+            where_clauses.append("c.trust_level <= $user_trust_level")
 
         for constraint in intent.constraints:
             param_name = f"p{param_counter}"

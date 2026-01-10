@@ -133,8 +133,9 @@ services:
       args:
         - VITE_API_URL=https://forgecascade.org/api/v1
     container_name: forge-frontend
+    # SECURITY FIX: Bind to localhost in development; in production use nginx reverse proxy
     ports:
-      - "80:80"
+      - "127.0.0.1:80:80"
     # SECURITY FIX: Add security options
     security_opt:
       - no-new-privileges:true

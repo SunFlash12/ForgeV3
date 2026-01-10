@@ -270,36 +270,71 @@ class LogHostFunction(HostFunction):
         log_func(message, overlay_id=self.overlay_id)
 
 
+def _validate_cypher_query(query: str) -> None:
+    """
+    SECURITY FIX: Validate Cypher query to prevent injection attacks.
+
+    Raises:
+        ValueError: If query appears to contain injection patterns
+    """
+    # Check for multiple statements (query chaining)
+    if ';' in query:
+        raise ValueError("Multiple statements not allowed in query")
+
+    # Check for CALL clauses that could execute procedures
+    query_lower = query.lower()
+    if 'call ' in query_lower and 'apoc' not in query_lower:
+        # Allow APOC procedures but block other CALL usage for safety
+        raise ValueError("CALL statements restricted")
+
+    # Check for LOAD CSV or other data import
+    if 'load csv' in query_lower:
+        raise ValueError("LOAD CSV not allowed")
+
+    # Check for periodic commit (batch operations)
+    if 'periodic commit' in query_lower:
+        raise ValueError("PERIODIC COMMIT not allowed")
+
+    # Check for USING clause which could affect query planning
+    if 'using index' in query_lower or 'using scan' in query_lower:
+        raise ValueError("Query hints not allowed from overlays")
+
+
 class DatabaseReadHostFunction(HostFunction):
     """Database read host function."""
-    
+
     name = "db_read"
     required_capability = Capability.DATABASE_READ
-    
+
     def __init__(self, db_client: Any):
         self.db = db_client
-    
+
     async def __call__(self, query: str, params: Optional[dict] = None) -> list[dict]:
         """Execute a read query."""
+        # SECURITY FIX: Validate query for injection patterns
+        _validate_cypher_query(query)
+
         # Validate query is read-only
         query_lower = query.lower().strip()
         if any(kw in query_lower for kw in ["create", "merge", "set", "delete", "remove"]):
             raise PermissionError("Write operations not allowed with DATABASE_READ capability")
-        
+
         return await self.db.execute(query, params or {})
 
 
 class DatabaseWriteHostFunction(HostFunction):
     """Database write host function."""
-    
+
     name = "db_write"
     required_capability = Capability.DATABASE_WRITE
-    
+
     def __init__(self, db_client: Any):
         self.db = db_client
-    
+
     async def __call__(self, query: str, params: Optional[dict] = None) -> list[dict]:
         """Execute a write query."""
+        # SECURITY FIX: Validate query for injection patterns
+        _validate_cypher_query(query)
         return await self.db.execute(query, params or {})
 
 

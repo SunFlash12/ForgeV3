@@ -13,6 +13,14 @@ Provides:
 - Cascade triggering
 - Cascade chain monitoring
 - Cascade metrics
+
+TODO: Cascade chains are currently stored in-memory only (EventSystem._cascade_chains).
+This means cascade state is lost on server restart. Future work needed:
+1. Create CascadeRepository with Neo4j persistence for CascadeChain/CascadeEvent
+2. Persist chains when created/updated in EventSystem
+3. Load active chains on startup
+4. Implement cleanup of completed chains after retention period
+See: https://github.com/forge/forge-cascade/issues/XXX
 """
 
 from __future__ import annotations

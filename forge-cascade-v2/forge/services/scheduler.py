@@ -315,10 +315,11 @@ def _create_graph_snapshot_task() -> Callable[[], Coroutine[Any, Any, Any]]:
 
         logger.info("scheduled_graph_snapshot_starting")
 
-        client = Neo4jClient()
-        await client.connect()
-
+        # SECURITY FIX: Move client creation inside try block to prevent connection leak
+        client = None
         try:
+            client = Neo4jClient()
+            await client.connect()
             graph_repo = GraphRepository(client)
             temporal_repo = TemporalRepository(client)
 
@@ -346,7 +347,8 @@ def _create_graph_snapshot_task() -> Callable[[], Coroutine[Any, Any, Any]]:
             )
 
         finally:
-            await client.close()
+            if client:
+                await client.close()
 
     return task
 
@@ -361,10 +363,11 @@ def _create_version_compaction_task() -> Callable[[], Coroutine[Any, Any, Any]]:
 
         logger.info("scheduled_version_compaction_starting")
 
-        client = Neo4jClient()
-        await client.connect()
-
+        # SECURITY FIX: Move client creation inside try block to prevent connection leak
+        client = None
         try:
+            client = Neo4jClient()
+            await client.connect()
             temporal_repo = TemporalRepository(client)
 
             # Get capsules with old versions to compact
@@ -391,7 +394,8 @@ def _create_version_compaction_task() -> Callable[[], Coroutine[Any, Any, Any]]:
             )
 
         finally:
-            await client.close()
+            if client:
+                await client.close()
 
     return task
 
