@@ -86,45 +86,77 @@ class ForgeApp:
     async def initialize(self) -> None:
         """Initialize all components."""
         logger.info("forge_initializing")
-        
-        # Database
-        self.db_client = Neo4jClient()
-        await self.db_client.connect()
-        
-        # Kernel
-        self.event_system = EventSystem()
-        self.overlay_manager = OverlayManager(self.event_system)
-        await self.overlay_manager.start()
-        
-        self.pipeline = CascadePipeline(
-            overlay_manager=self.overlay_manager,
-            event_bus=self.event_system,
-        )
-        
-        # Immune system
-        immune = create_immune_system(
-            db_client=self.db_client,
-            overlay_manager=self.overlay_manager,
-            event_system=self.event_system,
-        )
-        self.circuit_registry = immune["circuit_registry"]
-        self.health_checker = immune["health_checker"]
-        self.anomaly_system = immune["anomaly_system"]
-        self.canary_manager = immune["canary_manager"]
-        
-        # Initialize services (embedding, LLM, search)
-        from forge.services.init import init_all_services
-        from forge.repositories.capsule_repository import CapsuleRepository
-        
-        capsule_repo = CapsuleRepository(self.db_client)
-        init_all_services(
-            db_client=self.db_client,
-            capsule_repo=capsule_repo,
-            event_bus=self.event_system,
-        )
-        
+
+        # SECURITY FIX (Audit 4): Add error recovery for core service initialization
+        # Database - critical, app cannot run without it
+        try:
+            self.db_client = Neo4jClient()
+            await self.db_client.connect()
+            logger.info("database_connected")
+        except Exception as e:
+            logger.critical("database_connection_failed", error=str(e))
+            raise RuntimeError(f"Cannot start: Database connection failed - {e}") from e
+
+        # Kernel - critical for core functionality
+        try:
+            self.event_system = EventSystem()
+            self.overlay_manager = OverlayManager(self.event_system)
+            await self.overlay_manager.start()
+
+            self.pipeline = CascadePipeline(
+                overlay_manager=self.overlay_manager,
+                event_bus=self.event_system,
+            )
+            logger.info("kernel_initialized")
+        except Exception as e:
+            logger.critical("kernel_initialization_failed", error=str(e))
+            # Clean up database connection before failing
+            if self.db_client:
+                await self.db_client.close()
+            raise RuntimeError(f"Cannot start: Kernel initialization failed - {e}") from e
+
+        # Immune system - important but app can run in degraded mode
+        try:
+            immune = create_immune_system(
+                db_client=self.db_client,
+                overlay_manager=self.overlay_manager,
+                event_system=self.event_system,
+            )
+            self.circuit_registry = immune["circuit_registry"]
+            self.health_checker = immune["health_checker"]
+            self.anomaly_system = immune["anomaly_system"]
+            self.canary_manager = immune["canary_manager"]
+            logger.info("immune_system_initialized")
+        except Exception as e:
+            logger.error("immune_system_init_failed", error=str(e))
+            # Continue without immune system - degraded mode
+            self.circuit_registry = None
+            self.health_checker = None
+            self.anomaly_system = None
+            self.canary_manager = None
+
+        # Initialize services (embedding, LLM, search) - important but degradable
+        try:
+            from forge.services.init import init_all_services
+            from forge.repositories.capsule_repository import CapsuleRepository
+
+            capsule_repo = CapsuleRepository(self.db_client)
+            init_all_services(
+                db_client=self.db_client,
+                capsule_repo=capsule_repo,
+                event_bus=self.event_system,
+            )
+            logger.info("services_initialized")
+        except Exception as e:
+            logger.error("services_init_failed", error=str(e))
+            # Continue - some features may not work
+
         # Register core overlays
-        await self._register_core_overlays()
+        try:
+            await self._register_core_overlays()
+            logger.info("core_overlays_registered")
+        except Exception as e:
+            logger.error("overlay_registration_failed", error=str(e))
 
         # Initialize resilience layer (caching, observability, validation)
         try:

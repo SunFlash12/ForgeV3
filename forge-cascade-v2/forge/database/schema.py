@@ -9,6 +9,12 @@ import re
 from typing import Any
 
 import structlog
+from neo4j.exceptions import (
+    ClientError,
+    DatabaseError,
+    ConstraintError,
+    ServiceUnavailable,
+)
 from forge.database.client import Neo4jClient
 from forge.config import settings
 
@@ -200,10 +206,31 @@ class SchemaManager:
                 await self.client.execute(query)
                 results[name] = True
                 logger.debug(f"Created constraint: {name}")
-            except Exception as e:
+            except ConstraintError as e:
+                # Constraint already exists or conflicts - expected in some cases
                 results[name] = False
-                logger.error(f"Failed to create constraint: {name}", error=str(e))
-        
+                logger.warning(f"Constraint conflict: {name}", error=str(e))
+            except ClientError as e:
+                # Syntax or client-side error - likely a bug in the query
+                results[name] = False
+                logger.error(f"Client error creating constraint: {name}", error=str(e))
+            except DatabaseError as e:
+                # Database-level error - may be transient
+                results[name] = False
+                logger.error(f"Database error creating constraint: {name}", error=str(e))
+            except ServiceUnavailable as e:
+                # Connection lost - re-raise as this is fatal
+                logger.critical(f"Database unavailable while creating constraint: {name}", error=str(e))
+                raise
+            except Exception as e:
+                # Unexpected error - log with full type info
+                results[name] = False
+                logger.error(
+                    f"Unexpected error creating constraint: {name}",
+                    error_type=type(e).__name__,
+                    error=str(e)
+                )
+
         return results
 
     async def create_indexes(self) -> dict[str, bool]:
@@ -400,10 +427,27 @@ class SchemaManager:
                 await self.client.execute(query)
                 results[name] = True
                 logger.debug(f"Created index: {name}")
-            except Exception as e:
+            except ClientError as e:
+                # Syntax or client-side error - likely a bug in the query
                 results[name] = False
-                logger.error(f"Failed to create index: {name}", error=str(e))
-        
+                logger.error(f"Client error creating index: {name}", error=str(e))
+            except DatabaseError as e:
+                # Database-level error - may be transient or index already exists
+                results[name] = False
+                logger.error(f"Database error creating index: {name}", error=str(e))
+            except ServiceUnavailable as e:
+                # Connection lost - re-raise as this is fatal
+                logger.critical(f"Database unavailable while creating index: {name}", error=str(e))
+                raise
+            except Exception as e:
+                # Unexpected error - log with full type info
+                results[name] = False
+                logger.error(
+                    f"Unexpected error creating index: {name}",
+                    error_type=type(e).__name__,
+                    error=str(e)
+                )
+
         return results
 
     async def create_vector_indexes(self) -> dict[str, bool]:
@@ -436,15 +480,36 @@ class SchemaManager:
                 await self.client.execute(query)
                 results[name] = True
                 logger.info(f"Created vector index: {name}")
-            except Exception as e:
-                # Vector indexes may fail on older Neo4j versions
+            except ClientError as e:
+                # Vector indexes not supported or syntax error
                 results[name] = False
                 logger.warning(
-                    f"Failed to create vector index: {name}",
+                    f"Client error creating vector index: {name}",
                     error=str(e),
                     hint="Vector indexes require Neo4j 5.x with vector index support",
                 )
-        
+            except DatabaseError as e:
+                # Database-level error - may be version incompatibility
+                results[name] = False
+                logger.warning(
+                    f"Database error creating vector index: {name}",
+                    error=str(e),
+                    hint="Vector indexes require Neo4j 5.x with vector index support",
+                )
+            except ServiceUnavailable as e:
+                # Connection lost - re-raise as this is fatal
+                logger.critical(f"Database unavailable while creating vector index: {name}", error=str(e))
+                raise
+            except Exception as e:
+                # Unexpected error - log with full type info
+                results[name] = False
+                logger.warning(
+                    f"Unexpected error creating vector index: {name}",
+                    error_type=type(e).__name__,
+                    error=str(e),
+                    hint="Vector indexes require Neo4j 5.x with vector index support",
+                )
+
         return results
 
     async def drop_all(self, force: bool = False) -> dict[str, bool]:
@@ -501,10 +566,23 @@ class SchemaManager:
                 try:
                     await self.client.execute(f"DROP CONSTRAINT {name} IF EXISTS")
                     results[f"drop_constraint_{name}"] = True
+                except ClientError as e:
+                    results[f"drop_constraint_{name}"] = False
+                    logger.error(f"Client error dropping constraint: {name}", error=str(e))
+                except DatabaseError as e:
+                    results[f"drop_constraint_{name}"] = False
+                    logger.error(f"Database error dropping constraint: {name}", error=str(e))
+                except ServiceUnavailable as e:
+                    logger.critical(f"Database unavailable while dropping constraint: {name}", error=str(e))
+                    raise
                 except Exception as e:
                     results[f"drop_constraint_{name}"] = False
-                    logger.error(f"Failed to drop constraint: {name}", error=str(e))
-        
+                    logger.error(
+                        f"Unexpected error dropping constraint: {name}",
+                        error_type=type(e).__name__,
+                        error=str(e)
+                    )
+
         # Get all indexes
         indexes = await self.client.execute(
             "SHOW INDEXES YIELD name RETURN name"
@@ -521,10 +599,23 @@ class SchemaManager:
                 try:
                     await self.client.execute(f"DROP INDEX {name} IF EXISTS")
                     results[f"drop_index_{name}"] = True
+                except ClientError as e:
+                    results[f"drop_index_{name}"] = False
+                    logger.error(f"Client error dropping index: {name}", error=str(e))
+                except DatabaseError as e:
+                    results[f"drop_index_{name}"] = False
+                    logger.error(f"Database error dropping index: {name}", error=str(e))
+                except ServiceUnavailable as e:
+                    logger.critical(f"Database unavailable while dropping index: {name}", error=str(e))
+                    raise
                 except Exception as e:
                     results[f"drop_index_{name}"] = False
-                    logger.error(f"Failed to drop index: {name}", error=str(e))
-        
+                    logger.error(
+                        f"Unexpected error dropping index: {name}",
+                        error_type=type(e).__name__,
+                        error=str(e)
+                    )
+
         return results
 
     async def verify_schema(self) -> dict[str, Any]:
