@@ -149,10 +149,10 @@ jobs:
           curl -f http://localhost:8002/health || exit 1
           curl -f http://localhost:8002/api/v1/compliance/frameworks || exit 1
 
-          # Test Virtuals API endpoints
+          # Test Virtuals API endpoints (note: FastAPI routes have trailing slash)
           echo "Testing Virtuals API..."
           curl -f http://localhost:8003/health || exit 1
-          curl -f http://localhost:8003/api/v1/agents || exit 1
+          curl -fL http://localhost:8003/api/v1/agents/ || exit 1
 
           echo "API tests passed!"
 
