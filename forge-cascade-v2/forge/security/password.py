@@ -25,6 +25,11 @@ PASSWORD_MAX_LENGTH = 128
 
 # SECURITY FIX (Audit 2 + 3): Comprehensive common weak passwords blacklist
 # Top 200+ most common passwords from breach databases
+#
+# SECURITY NOTE (Audit 4 - L9): For enhanced protection, consider integrating
+# with the HaveIBeenPwned API using the k-anonymity model:
+# https://haveibeenpwned.com/API/v3#PwnedPasswords
+# This would check against billions of breached passwords without exposing the password.
 COMMON_WEAK_PASSWORDS = frozenset({
     # Original list
     "password", "password1", "password123", "password!",
@@ -214,7 +219,12 @@ def hash_password(
     if validate:
         validate_password_strength(password, username=username, email=email)
 
-    password_bytes = password.encode('utf-8')
+    # SECURITY FIX (Audit 4 - L10): Apply Unicode NFKC normalization before hashing
+    # This ensures consistent hashing regardless of Unicode representation variants
+    # (e.g., é as single char vs e + combining accent)
+    import unicodedata
+    normalized_password = unicodedata.normalize('NFKC', password)
+    password_bytes = normalized_password.encode('utf-8')
     salt = bcrypt.gensalt(rounds=_bcrypt_rounds)
     hashed = bcrypt.hashpw(password_bytes, salt)
     return hashed.decode('utf-8')
@@ -240,9 +250,13 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
         return False
 
     try:
+        # SECURITY FIX (Audit 4 - L10): Apply same Unicode normalization as hash_password
+        import unicodedata
+        normalized_password = unicodedata.normalize('NFKC', plain_password)
+
         # bcrypt.checkpw is designed to be constant-time
         result = bcrypt.checkpw(
-            plain_password.encode('utf-8'),
+            normalized_password.encode('utf-8'),
             hashed_password.encode('utf-8')
         )
         return result

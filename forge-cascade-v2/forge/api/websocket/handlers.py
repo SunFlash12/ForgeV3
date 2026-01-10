@@ -15,10 +15,12 @@ from datetime import datetime, timezone
 from typing import Any, Callable, Optional
 from uuid import uuid4
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, status
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, status, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from forge.security.tokens import verify_token
+from forge.models.user import User
+from forge.api.dependencies import get_current_user as get_current_user_ws
 
 
 logger = structlog.get_logger(__name__)
@@ -807,6 +809,19 @@ async def websocket_chat(
 
 
 @websocket_router.get("/ws/stats")
-async def get_websocket_stats() -> dict[str, Any]:
-    """Get WebSocket connection statistics."""
+async def get_websocket_stats(
+    current_user: User = Depends(get_current_user_ws),
+) -> dict[str, Any]:
+    """
+    Get WebSocket connection statistics.
+
+    SECURITY FIX (Audit 4 - L6): Requires authentication to prevent
+    information disclosure about active connections.
+    """
+    # Only allow admins to view connection stats
+    if current_user.role not in ("admin", "moderator"):
+        raise HTTPException(
+            status_code=403,
+            detail="Insufficient permissions to view WebSocket statistics"
+        )
     return connection_manager.get_stats()

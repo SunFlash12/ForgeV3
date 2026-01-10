@@ -122,10 +122,34 @@ class Capsule(CapsuleBase, TimestampMixin):
 class CapsuleInDB(Capsule):
     """Capsule with database-specific fields."""
 
+    # SECURITY FIX (Audit 4 - L4): Validate embedding dimensions and value ranges
     embedding: list[float] | None = Field(
         default=None,
-        description="Vector embedding for semantic search",
+        description="Vector embedding for semantic search (1536 dims for OpenAI)",
     )
+
+    @field_validator("embedding", mode="after")
+    @classmethod
+    def validate_embedding(cls, v: list[float] | None) -> list[float] | None:
+        """Validate embedding dimensions and value ranges."""
+        if v is None:
+            return v
+        # OpenAI embeddings are 1536 dimensions, allow some flexibility
+        valid_dimensions = {384, 768, 1024, 1536, 3072}
+        if len(v) not in valid_dimensions:
+            raise ValueError(
+                f"Embedding must have valid dimensions ({valid_dimensions}), "
+                f"got {len(v)}"
+            )
+        # Check value ranges (embeddings should be normalized, typically -1 to 1)
+        for i, val in enumerate(v):
+            if not isinstance(val, (int, float)):
+                raise ValueError(f"Embedding value at index {i} must be numeric")
+            if val < -10.0 or val > 10.0:
+                raise ValueError(
+                    f"Embedding value at index {i} is out of valid range [-10, 10]: {val}"
+                )
+        return v
 
 
 class LineageNode(ForgeModel):
