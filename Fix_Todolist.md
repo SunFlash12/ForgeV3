@@ -182,9 +182,10 @@
     - [ ] SystemPage
     - [ ] SettingsPage
 
-- [ ] **HIGH** `CapsulesPage` - Edit button non-functional
+- [x] **HIGH** `CapsulesPage` - Edit button non-functional
   - Location: `forge-cascade-v2/frontend/src/pages/CapsulesPage.tsx`
   - Action: Implement edit mode with API integration
+  - **FIXED**: Added isEditing state, edit form, updateMutation with API integration
 
 ### DevOps
 - [x] **HIGH** `docker-compose.yml:137` - Frontend exposed on 0.0.0.0:80
@@ -212,9 +213,10 @@
   - Action: Restrict to trusted proxy IPs
   - **FIXED**: Made configurable via FORWARDED_ALLOW_IPS env var with safe defaults
 
-- [ ] **HIGH** Pin all Docker image tags (no floating :latest)
+- [x] **HIGH** Pin all Docker image tags (no floating :latest)
   - Location: All docker-compose files
   - Action: Use specific version tags
+  - **FIXED**: Pinned redis:7.4.1-alpine, nginx:1.25.3-alpine, required VERSION env var for app images
 
 ### Services
 - [x] **HIGH** `notifications.py:848-858` - Secret field mismatch between save/load
@@ -264,13 +266,15 @@
   - Action: Convert to async operations
   - **FIXED**: Use asyncio.to_thread for CPU-bound export operations
 
-- [ ] **HIGH** `security/breach_notification.py` - No deadline enforcement/alerting
+- [x] **HIGH** `security/breach_notification.py` - No deadline enforcement/alerting
   - Location: `forge/compliance/security/breach_notification.py`
   - Action: Implement deadline alerts and escalation
+  - **FIXED**: Added DeadlineAlert, get_approaching_deadlines(), check_and_alert_deadlines() with callback
 
-- [ ] **HIGH** `ai_governance/service.py` - No actual bias detection implementation
+- [x] **HIGH** `ai_governance/service.py` - No actual bias detection implementation
   - Location: `forge/compliance/ai_governance/service.py`
   - Action: Integrate with ML fairness libraries (Fairlearn, AI Fairness 360)
+  - **FIXED**: Implemented proper TPR/FPR calculations for equalized_odds and equal_opportunity metrics
 
 ---
 
