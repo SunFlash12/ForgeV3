@@ -4,59 +4,20 @@
 # SECURITY FIX (Audit 3): Pinned all dependencies to exact versions
 # to prevent supply chain attacks and ensure reproducible builds.
 # Run `pip-compile --generate-hashes` for additional security.
+#
+# For modular installation:
+#   pip install -r requirements-base.txt           # Core API only
+#   pip install -r requirements-ml.txt             # Add ML features
+#   pip install -r requirements-dev.txt            # Add dev tools
+#
+# For CPU-only ML (faster install, smaller):
+#   pip install -r requirements-ml.txt --extra-index-url https://download.pytorch.org/whl/cpu
 
-# Web Framework
-fastapi==0.115.6
-uvicorn[standard]==0.34.0
-python-multipart==0.0.20
-websockets==14.1
+# Include base dependencies
+-r requirements-base.txt
 
-# Database
-neo4j==5.27.0
+# Include ML dependencies (optional but included by default)
+-r requirements-ml.txt
 
-# Caching
-redis==5.2.1
-
-# Validation & Serialization
-pydantic==2.10.4
-pydantic-settings==2.7.1
-email-validator==2.2.0
-
-# Security
-# SECURITY FIX (Audit 2): Replaced python-jose (abandoned since 2022, CVE-2022-29217) with PyJWT
-PyJWT==2.10.1
-cryptography==44.0.0
-passlib[bcrypt]==1.7.4
-# NOTE: passlib is maintenance-only; consider migrating to bcrypt directly in future
-
-# ML/AI
-scikit-learn==1.6.1
-sentence-transformers==3.3.1
-numpy==2.2.2
-
-# Async utilities
-httpx==0.28.1
-aiofiles==24.1.0
-
-# Utilities
-python-dotenv==1.0.1
-structlog==24.4.0
-tenacity==9.0.0
-
-# Observability
-opentelemetry-api==1.29.0
-opentelemetry-sdk==1.29.0
-opentelemetry-exporter-otlp==1.29.0
-opentelemetry-instrumentation-fastapi==0.50b0
-sentry-sdk[fastapi]==2.19.2
-
-# MFA Support (Audit 3)
-pyotp==2.9.0
-
-# Development (optional)
-pytest==8.3.4
-pytest-asyncio==0.25.2
-pytest-cov==6.0.0
-ruff==0.9.2
-black==24.10.0
-mypy==1.14.1
+# Include dev dependencies
+-r requirements-dev.txt

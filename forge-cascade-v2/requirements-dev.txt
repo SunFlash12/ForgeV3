@@ -1,0 +1,12 @@
+# Forge Cascade V2 - Development Dependencies
+# Install after base: pip install -r requirements-dev.txt
+
+# Testing
+pytest==8.3.4
+pytest-asyncio==0.25.2
+pytest-cov==6.0.0
+
+# Linting & Formatting
+ruff==0.9.2
+black==24.10.0
+mypy==1.14.1
