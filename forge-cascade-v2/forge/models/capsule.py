@@ -142,7 +142,7 @@ class CapsuleInDB(Capsule):
             )
         # Check value ranges (embeddings should be normalized, typically -1 to 1)
         for i, val in enumerate(v):
-            if not isinstance(val, (int, float)):
+            if not isinstance(val, int | float):
                 raise ValueError(f"Embedding value at index {i} must be numeric")
             if val < -10.0 or val > 10.0:
                 raise ValueError(
