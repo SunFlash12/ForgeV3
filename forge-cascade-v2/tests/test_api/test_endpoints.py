@@ -55,7 +55,9 @@ class TestCapsuleEndpoints:
     
     def test_list_capsules_authorized(self, client: TestClient, auth_headers: dict):
         response = client.get("/api/v1/capsules", headers=auth_headers)
-        # Should succeed with auth
+        # TODO: MEDIUM - Fix test to not accept 500 as valid
+        # Tests should use a mock database or skip if DB unavailable.
+        # Accepting 500 masks real server errors and makes tests meaningless.
         assert response.status_code in [200, 500]  # 500 if DB not connected
     
     def test_create_capsule_unauthorized(self, client: TestClient):
@@ -71,7 +73,7 @@ class TestCapsuleEndpoints:
             "type": "knowledge",
             "title": "Test Capsule",
         }, headers=auth_headers)
-        # Should succeed or fail due to DB
+        # TODO: MEDIUM - Use mock DB instead of accepting 500
         assert response.status_code in [201, 500]
 
 
@@ -84,6 +86,7 @@ class TestGovernanceEndpoints:
     
     def test_list_proposals_authorized(self, client: TestClient, auth_headers: dict):
         response = client.get("/api/v1/governance/proposals", headers=auth_headers)
+        # TODO: MEDIUM - Use mock DB instead of accepting 500
         assert response.status_code in [200, 500]
 
 
@@ -96,6 +99,7 @@ class TestOverlayEndpoints:
     
     def test_list_overlays_authorized(self, client: TestClient, auth_headers: dict):
         response = client.get("/api/v1/overlays", headers=auth_headers)
+        # TODO: MEDIUM - Use mock DB instead of accepting 500
         assert response.status_code in [200, 500]
 
 

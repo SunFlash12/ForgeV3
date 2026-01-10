@@ -442,7 +442,13 @@ async def main():
         # Check if data already exists
         result = await client.execute("MATCH (u:User) RETURN count(u) as count", {})
         if result and result[0]["count"] > 0:
-            print("Database already contains data. Clearing and reseeding...")
+            print("Database already contains data.")
+            # SECURITY FIX (Audit 4): Require confirmation before deleting all data
+            confirm = input("This will DELETE ALL DATA in the database. Continue? (yes/no): ")
+            if confirm.lower() != "yes":
+                print("Aborted. No changes made.")
+                return
+            print("Clearing database and reseeding...")
             await client.execute("MATCH (n) DETACH DELETE n", {})
         
         # Seed data

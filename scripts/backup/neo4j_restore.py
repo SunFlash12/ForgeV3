@@ -267,6 +267,16 @@ class Neo4jRestore:
         async with self._driver.session(database=self.database) as session:
             # Optionally clear database
             if clear_first:
+                # SECURITY FIX (Audit 4): Require confirmation before deleting all data
+                print("\n" + "=" * 60)
+                print("WARNING: This will DELETE ALL DATA in the database!")
+                print(f"Database: {self.database}")
+                print("=" * 60)
+                confirm = input("Type 'yes' to confirm deletion: ")
+                if confirm.lower() != "yes":
+                    logger.warning("Restore aborted by user")
+                    print("Aborted. No changes made.")
+                    return
                 await self.clear_database()
 
             # Restore nodes
