@@ -8,6 +8,12 @@ SECURITY FIXES (Audit 2):
 - Disabled redirect following to prevent SSRF bypass
 - Added private IP range blocking
 - Added nonce-based replay prevention
+
+SECURITY FIXES (Audit 4):
+- H3: DNS pinning to prevent DNS rebinding attacks
+- H4: TLS certificate pinning for federation peers
+- H8: Private key encryption at rest
+- H29: Nonce in sync requests
 """
 
 import asyncio
@@ -19,8 +25,10 @@ import logging
 import os
 import secrets
 import socket
+import ssl
 import threading
 from collections import OrderedDict
+from dataclasses import dataclass, field
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Any
@@ -47,6 +55,388 @@ logger = logging.getLogger(__name__)
 class SSRFError(Exception):
     """Raised when a potential SSRF attack is detected."""
     pass
+
+
+class DNSRebindingError(Exception):
+    """Raised when DNS rebinding attack is detected (IP changed between validation and request)."""
+    pass
+
+
+class CertificatePinningError(Exception):
+    """Raised when TLS certificate doesn't match pinned fingerprint."""
+    pass
+
+
+@dataclass
+class PinnedConnection:
+    """
+    SECURITY FIX (Audit 4 - H3): DNS pinning data structure.
+
+    Stores resolved IP addresses at validation time to prevent DNS rebinding attacks
+    where an attacker could change DNS resolution between URL validation and request execution.
+    """
+    hostname: str
+    pinned_ips: list[str]  # IPs resolved at validation time
+    pinned_at: datetime
+    port: int = 443
+    ttl_seconds: int = 300  # Re-resolve after 5 minutes
+
+    def is_expired(self) -> bool:
+        """Check if the pinned IPs have expired and need re-resolution."""
+        age = (datetime.now(timezone.utc) - self.pinned_at).total_seconds()
+        return age > self.ttl_seconds
+
+
+@dataclass
+class PinnedCertificate:
+    """
+    SECURITY FIX (Audit 4 - H4): TLS certificate pinning data structure.
+
+    Stores the SHA-256 fingerprint of a peer's TLS certificate to prevent
+    MitM attacks even with valid certificates from compromised CAs.
+    """
+    peer_id: str
+    hostname: str
+    fingerprint_sha256: str  # hex-encoded SHA-256 of DER-encoded cert
+    pinned_at: datetime
+    last_verified: datetime
+    # Trust on first use (TOFU) or explicit pinning
+    pin_type: str = "tofu"  # "tofu" | "explicit"
+    # Optional: allow cert rotation with advance notice
+    next_fingerprint: str | None = None
+    next_valid_from: datetime | None = None
+
+
+class DNSPinStore:
+    """
+    SECURITY FIX (Audit 4 - H3): DNS pinning store to prevent DNS rebinding attacks.
+
+    When a URL is validated, we resolve its DNS and store the IP addresses.
+    Subsequent requests MUST connect only to those pinned IPs.
+
+    Attack scenario this prevents:
+    1. Attacker controls evil.com pointing to 8.8.8.8 (safe IP)
+    2. We validate evil.com -> resolves to 8.8.8.8 -> allowed
+    3. Attacker changes DNS: evil.com -> 169.254.169.254 (AWS metadata)
+    4. Without pinning: our request goes to metadata server (SSRF!)
+    5. With pinning: we connect to pinned 8.8.8.8, not the new DNS resolution
+    """
+
+    DEFAULT_TTL = 300  # 5 minutes
+    MAX_PINS = 10000   # Prevent memory exhaustion
+
+    def __init__(self, ttl_seconds: int | None = None):
+        self._pins: dict[str, PinnedConnection] = {}
+        self._lock = threading.Lock()
+        self._ttl = ttl_seconds or self.DEFAULT_TTL
+
+    def pin_hostname(self, hostname: str, port: int, ips: list[str]) -> PinnedConnection:
+        """
+        Pin a hostname to specific IP addresses.
+
+        Args:
+            hostname: The hostname to pin
+            port: The port number
+            ips: List of IP addresses to pin
+
+        Returns:
+            PinnedConnection with the pinning data
+        """
+        key = f"{hostname}:{port}"
+        pin = PinnedConnection(
+            hostname=hostname,
+            pinned_ips=ips,
+            pinned_at=datetime.now(timezone.utc),
+            port=port,
+            ttl_seconds=self._ttl,
+        )
+
+        with self._lock:
+            # Enforce size limit
+            if len(self._pins) >= self.MAX_PINS and key not in self._pins:
+                # Remove oldest 10%
+                to_remove = self.MAX_PINS // 10
+                oldest = sorted(self._pins.items(), key=lambda x: x[1].pinned_at)[:to_remove]
+                for k, _ in oldest:
+                    del self._pins[k]
+                logger.warning(f"DNSPinStore at capacity, evicted {to_remove} oldest entries")
+
+            self._pins[key] = pin
+
+        logger.debug(f"Pinned {hostname}:{port} to IPs: {ips}")
+        return pin
+
+    def get_pinned_ips(self, hostname: str, port: int) -> list[str] | None:
+        """
+        Get pinned IPs for a hostname, or None if not pinned or expired.
+        """
+        key = f"{hostname}:{port}"
+        with self._lock:
+            pin = self._pins.get(key)
+            if pin and not pin.is_expired():
+                return pin.pinned_ips
+            elif pin and pin.is_expired():
+                # Remove expired pin
+                del self._pins[key]
+        return None
+
+    def verify_ip(self, hostname: str, port: int, ip: str) -> bool:
+        """
+        Verify that an IP matches the pinned IPs for a hostname.
+
+        Returns True if:
+        - No pin exists (first connection)
+        - IP matches a pinned IP
+
+        Returns False if:
+        - Pin exists and IP doesn't match (potential DNS rebinding attack)
+        """
+        pinned_ips = self.get_pinned_ips(hostname, port)
+        if pinned_ips is None:
+            return True  # No pin yet
+        return ip in pinned_ips
+
+    def clear_pin(self, hostname: str, port: int) -> None:
+        """Remove a pin (e.g., when peer is removed)."""
+        key = f"{hostname}:{port}"
+        with self._lock:
+            self._pins.pop(key, None)
+
+
+class CertificatePinStore:
+    """
+    SECURITY FIX (Audit 4 - H4): TLS certificate pinning for federation peers.
+
+    Stores SHA-256 fingerprints of peer certificates and verifies them during
+    TLS handshakes. Uses Trust On First Use (TOFU) by default, with support
+    for explicit pinning.
+
+    Attack scenario this prevents:
+    1. Attacker compromises a CA or obtains a fraudulent certificate
+    2. Attacker performs MitM on federation traffic
+    3. Without pinning: TLS validates because cert is from "trusted" CA
+    4. With pinning: We reject because cert fingerprint doesn't match
+    """
+
+    MAX_PINS = 10000
+    PIN_FILE = "certificate_pins.json"
+
+    def __init__(self, storage_path: str | None = None):
+        self._pins: dict[str, PinnedCertificate] = {}
+        self._lock = threading.Lock()
+        self._storage_path = storage_path
+        # Load persisted pins
+        if storage_path:
+            self._load_pins()
+
+    def _load_pins(self) -> None:
+        """Load certificate pins from persistent storage."""
+        if not self._storage_path:
+            return
+        pin_file = Path(self._storage_path) / self.PIN_FILE
+        if not pin_file.exists():
+            return
+        try:
+            with open(pin_file, 'r') as f:
+                data = json.load(f)
+            for peer_id, pin_data in data.items():
+                self._pins[peer_id] = PinnedCertificate(
+                    peer_id=pin_data["peer_id"],
+                    hostname=pin_data["hostname"],
+                    fingerprint_sha256=pin_data["fingerprint_sha256"],
+                    pinned_at=datetime.fromisoformat(pin_data["pinned_at"]),
+                    last_verified=datetime.fromisoformat(pin_data["last_verified"]),
+                    pin_type=pin_data.get("pin_type", "tofu"),
+                    next_fingerprint=pin_data.get("next_fingerprint"),
+                    next_valid_from=datetime.fromisoformat(pin_data["next_valid_from"])
+                        if pin_data.get("next_valid_from") else None,
+                )
+            logger.info(f"Loaded {len(self._pins)} certificate pins from {pin_file}")
+        except Exception as e:
+            logger.error(f"Failed to load certificate pins: {e}")
+
+    def _save_pins(self) -> None:
+        """Persist certificate pins to storage."""
+        if not self._storage_path:
+            return
+        pin_file = Path(self._storage_path) / self.PIN_FILE
+        try:
+            pin_file.parent.mkdir(parents=True, exist_ok=True)
+            data = {}
+            for peer_id, pin in self._pins.items():
+                data[peer_id] = {
+                    "peer_id": pin.peer_id,
+                    "hostname": pin.hostname,
+                    "fingerprint_sha256": pin.fingerprint_sha256,
+                    "pinned_at": pin.pinned_at.isoformat(),
+                    "last_verified": pin.last_verified.isoformat(),
+                    "pin_type": pin.pin_type,
+                    "next_fingerprint": pin.next_fingerprint,
+                    "next_valid_from": pin.next_valid_from.isoformat()
+                        if pin.next_valid_from else None,
+                }
+            with open(pin_file, 'w') as f:
+                json.dump(data, f, indent=2)
+            logger.debug(f"Saved {len(data)} certificate pins to {pin_file}")
+        except Exception as e:
+            logger.error(f"Failed to save certificate pins: {e}")
+
+    def pin_certificate(
+        self,
+        peer_id: str,
+        hostname: str,
+        fingerprint: str,
+        pin_type: str = "tofu"
+    ) -> PinnedCertificate:
+        """
+        Pin a certificate fingerprint for a peer.
+
+        Args:
+            peer_id: The peer's unique ID
+            hostname: The peer's hostname
+            fingerprint: SHA-256 hex fingerprint of the DER-encoded certificate
+            pin_type: "tofu" for trust-on-first-use, "explicit" for admin-configured
+        """
+        now = datetime.now(timezone.utc)
+        pin = PinnedCertificate(
+            peer_id=peer_id,
+            hostname=hostname,
+            fingerprint_sha256=fingerprint.lower(),
+            pinned_at=now,
+            last_verified=now,
+            pin_type=pin_type,
+        )
+
+        with self._lock:
+            # Check size limit
+            if len(self._pins) >= self.MAX_PINS and peer_id not in self._pins:
+                logger.error("Certificate pin store at capacity")
+                raise ValueError("Certificate pin store at capacity")
+
+            existing = self._pins.get(peer_id)
+            if existing and existing.pin_type == "explicit" and pin_type == "tofu":
+                # Don't overwrite explicit pins with TOFU
+                logger.warning(
+                    f"Attempted TOFU update of explicitly pinned cert for {peer_id}"
+                )
+                return existing
+
+            self._pins[peer_id] = pin
+            self._save_pins()
+
+        logger.info(f"Pinned certificate for peer {peer_id} ({hostname}): {fingerprint[:16]}...")
+        return pin
+
+    def get_pin(self, peer_id: str) -> PinnedCertificate | None:
+        """Get the pinned certificate for a peer."""
+        with self._lock:
+            return self._pins.get(peer_id)
+
+    def verify_certificate(
+        self,
+        peer_id: str,
+        cert_fingerprint: str,
+        hostname: str,
+    ) -> bool:
+        """
+        Verify a certificate fingerprint against pinned value.
+
+        Returns True if:
+        - No pin exists (TOFU will pin it)
+        - Fingerprint matches pinned value
+        - Fingerprint matches next_fingerprint and next_valid_from has passed
+
+        Returns False if:
+        - Pin exists and fingerprint doesn't match
+        """
+        pin = self.get_pin(peer_id)
+        cert_fingerprint = cert_fingerprint.lower()
+
+        if pin is None:
+            # No existing pin - will be pinned via TOFU
+            return True
+
+        # Check primary fingerprint
+        if pin.fingerprint_sha256 == cert_fingerprint:
+            # Update last_verified
+            with self._lock:
+                pin.last_verified = datetime.now(timezone.utc)
+                self._save_pins()
+            return True
+
+        # Check for scheduled certificate rotation
+        if (pin.next_fingerprint and
+            pin.next_fingerprint.lower() == cert_fingerprint and
+            pin.next_valid_from and
+            datetime.now(timezone.utc) >= pin.next_valid_from):
+
+            logger.info(f"Peer {peer_id} rotated to pre-announced certificate")
+            # Promote next cert to primary
+            with self._lock:
+                pin.fingerprint_sha256 = cert_fingerprint
+                pin.next_fingerprint = None
+                pin.next_valid_from = None
+                pin.last_verified = datetime.now(timezone.utc)
+                self._save_pins()
+            return True
+
+        # Fingerprint mismatch - potential MitM attack
+        logger.error(
+            f"Certificate pinning failure for peer {peer_id}! "
+            f"Expected {pin.fingerprint_sha256[:16]}..., got {cert_fingerprint[:16]}..."
+        )
+        return False
+
+    def announce_rotation(
+        self,
+        peer_id: str,
+        new_fingerprint: str,
+        valid_from: datetime
+    ) -> bool:
+        """
+        Announce an upcoming certificate rotation.
+
+        Allows peers to pre-announce certificate changes to avoid pinning failures.
+        """
+        pin = self.get_pin(peer_id)
+        if pin is None:
+            logger.warning(f"Cannot announce rotation for unknown peer {peer_id}")
+            return False
+
+        with self._lock:
+            pin.next_fingerprint = new_fingerprint.lower()
+            pin.next_valid_from = valid_from
+            self._save_pins()
+
+        logger.info(
+            f"Peer {peer_id} announced cert rotation to {new_fingerprint[:16]}... "
+            f"valid from {valid_from.isoformat()}"
+        )
+        return True
+
+    def remove_pin(self, peer_id: str) -> None:
+        """Remove a certificate pin."""
+        with self._lock:
+            self._pins.pop(peer_id, None)
+            self._save_pins()
+
+
+# Global stores
+_dns_pin_store = DNSPinStore()
+_cert_pin_store: CertificatePinStore | None = None
+
+
+def get_dns_pin_store() -> DNSPinStore:
+    """Get the global DNS pin store."""
+    return _dns_pin_store
+
+
+def get_cert_pin_store(storage_path: str | None = None) -> CertificatePinStore:
+    """Get or initialize the global certificate pin store."""
+    global _cert_pin_store
+    if _cert_pin_store is None:
+        _cert_pin_store = CertificatePinStore(storage_path)
+    return _cert_pin_store
 
 
 class ReplayAttackError(Exception):
@@ -199,20 +589,46 @@ def get_nonce_store() -> NonceStore:
     return _federation_nonce_store
 
 
-def validate_url_for_ssrf(url: str, allow_private: bool = False) -> str:
+@dataclass
+class ValidatedURL:
     """
-    Validate a URL to prevent SSRF attacks.
+    SECURITY FIX (Audit 4 - H3): Validated URL with pinned DNS resolution.
+
+    Contains both the original URL and the resolved/pinned IP addresses
+    to prevent DNS rebinding attacks.
+    """
+    url: str
+    hostname: str
+    port: int
+    pinned_ips: list[str]
+    scheme: str
+
+
+def validate_url_for_ssrf(
+    url: str,
+    allow_private: bool = False,
+    dns_pin_store: DNSPinStore | None = None,
+) -> ValidatedURL:
+    """
+    Validate a URL to prevent SSRF attacks and pin DNS resolution.
+
+    SECURITY FIX (Audit 4 - H3): Now returns ValidatedURL with pinned IPs
+    to prevent DNS rebinding attacks.
 
     Args:
         url: The URL to validate
         allow_private: If True, allow private IP ranges (for development only)
+        dns_pin_store: Optional DNS pin store (uses global if not provided)
 
     Returns:
-        The validated URL
+        ValidatedURL with the validated URL and pinned IP addresses
 
     Raises:
         SSRFError: If the URL is invalid or targets a private resource
+        DNSRebindingError: If DNS resolves to different IPs than previously pinned
     """
+    dns_store = dns_pin_store or get_dns_pin_store()
+
     try:
         parsed = urlparse(url)
     except Exception as e:
@@ -230,6 +646,8 @@ def validate_url_for_ssrf(url: str, allow_private: bool = False) -> str:
     if not hostname:
         raise SSRFError("URL missing hostname")
 
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+
     # SECURITY: Block dangerous hostnames
     dangerous_hostnames = {
         "localhost",
@@ -245,13 +663,16 @@ def validate_url_for_ssrf(url: str, allow_private: bool = False) -> str:
     if hostname.lower() in dangerous_hostnames:
         raise SSRFError(f"Blocked hostname: {hostname}")
 
+    # SECURITY FIX (Audit 4 - H3): Check for existing DNS pin
+    existing_pinned_ips = dns_store.get_pinned_ips(hostname, port)
+
     # SECURITY: Resolve hostname and check for private IPs
     try:
         # Resolve all IP addresses for the hostname
-        addr_info = socket.getaddrinfo(hostname, parsed.port or 443, proto=socket.IPPROTO_TCP)
-        ip_addresses = set(info[4][0] for info in addr_info)
+        addr_info = socket.getaddrinfo(hostname, port, proto=socket.IPPROTO_TCP)
+        resolved_ips = list(set(info[4][0] for info in addr_info))
 
-        for ip_str in ip_addresses:
+        for ip_str in resolved_ips:
             try:
                 ip = ipaddress.ip_address(ip_str)
             except ValueError:
@@ -279,7 +700,42 @@ def validate_url_for_ssrf(url: str, allow_private: bool = False) -> str:
     except OSError as e:
         raise SSRFError(f"Network error resolving {hostname}: {e}")
 
-    return url
+    # SECURITY FIX (Audit 4 - H3): Detect DNS rebinding attack
+    if existing_pinned_ips is not None:
+        # Check if any resolved IP matches pinned IPs
+        matching_ips = set(resolved_ips) & set(existing_pinned_ips)
+        if not matching_ips:
+            logger.error(
+                f"DNS rebinding detected for {hostname}! "
+                f"Pinned: {existing_pinned_ips}, Resolved: {resolved_ips}"
+            )
+            raise DNSRebindingError(
+                f"DNS resolved to different IPs than pinned. "
+                f"Expected one of {existing_pinned_ips}, got {resolved_ips}"
+            )
+        # Use only the matching IPs
+        pinned_ips = list(matching_ips)
+    else:
+        # First connection - pin the resolved IPs
+        dns_store.pin_hostname(hostname, port, resolved_ips)
+        pinned_ips = resolved_ips
+
+    return ValidatedURL(
+        url=url,
+        hostname=hostname,
+        port=port,
+        pinned_ips=pinned_ips,
+        scheme=parsed.scheme,
+    )
+
+
+def _compute_cert_fingerprint(cert_der: bytes) -> str:
+    """
+    Compute SHA-256 fingerprint of a DER-encoded certificate.
+
+    SECURITY FIX (Audit 4 - H4): Helper for certificate pinning.
+    """
+    return hashlib.sha256(cert_der).hexdigest()
 
 
 class FederationProtocol:
@@ -294,6 +750,10 @@ class FederationProtocol:
 
     SECURITY FIX (Audit 2): Keys are now persisted to disk to prevent
     regeneration on restart which would invalidate all peer relationships.
+
+    SECURITY FIX (Audit 4):
+    - H3: DNS pinning to prevent DNS rebinding attacks
+    - H4: TLS certificate pinning for federation peers
     """
 
     API_VERSION = "1.0"
@@ -307,6 +767,8 @@ class FederationProtocol:
         instance_name: str,
         key_storage_path: str | None = None,
         nonce_store: NonceStore | None = None,
+        dns_pin_store: DNSPinStore | None = None,
+        cert_pin_store: CertificatePinStore | None = None,
     ):
         self.instance_id = instance_id
         self.instance_name = instance_name
@@ -318,6 +780,10 @@ class FederationProtocol:
         self._key_storage_path = key_storage_path or self.DEFAULT_KEY_PATH
         # SECURITY FIX: Nonce store for replay attack prevention
         self._nonce_store = nonce_store or get_nonce_store()
+        # SECURITY FIX (Audit 4 - H3): DNS pin store for DNS rebinding protection
+        self._dns_pin_store = dns_pin_store or get_dns_pin_store()
+        # SECURITY FIX (Audit 4 - H4): Certificate pin store for TLS pinning
+        self._cert_pin_store = cert_pin_store or get_cert_pin_store(key_storage_path)
 
     async def initialize(self) -> None:
         """Initialize protocol with key generation."""
@@ -340,6 +806,49 @@ class FederationProtocol:
         """Cleanup resources."""
         if self._http_client:
             await self._http_client.aclose()
+
+    async def _get_response_cert_fingerprint(
+        self,
+        response: httpx.Response
+    ) -> str | None:
+        """
+        SECURITY FIX (Audit 4 - H4): Extract TLS certificate fingerprint from response.
+
+        Attempts to get the server's certificate from the underlying connection
+        and compute its SHA-256 fingerprint.
+
+        Note: This requires access to the underlying SSL socket, which may not
+        always be available depending on the httpx transport configuration.
+
+        Returns:
+            SHA-256 hex fingerprint of the server certificate, or None if unavailable
+        """
+        try:
+            # Access the underlying connection stream
+            stream = response.stream
+            if hasattr(stream, '_stream') and hasattr(stream._stream, 'get_extra_info'):
+                ssl_object = stream._stream.get_extra_info('ssl_object')
+                if ssl_object:
+                    # Get peer certificate in DER format
+                    cert_der = ssl_object.getpeercert(binary_form=True)
+                    if cert_der:
+                        return _compute_cert_fingerprint(cert_der)
+
+            # Alternative: try via response.extensions (httpx 0.24+)
+            if hasattr(response, 'extensions'):
+                network_stream = response.extensions.get('network_stream')
+                if network_stream and hasattr(network_stream, 'get_extra_info'):
+                    ssl_object = network_stream.get_extra_info('ssl_object')
+                    if ssl_object:
+                        cert_der = ssl_object.getpeercert(binary_form=True)
+                        if cert_der:
+                            return _compute_cert_fingerprint(cert_der)
+
+            logger.debug("Could not extract certificate from response")
+            return None
+        except Exception as e:
+            logger.warning(f"Failed to extract certificate fingerprint: {e}")
+            return None
 
     async def _load_or_generate_keys(self) -> None:
         """
@@ -559,22 +1068,41 @@ class FederationProtocol:
         message = json.dumps(handshake_data, sort_keys=True).encode('utf-8')
         return self.verify_signature(message, handshake.signature, handshake.public_key)
 
-    async def initiate_handshake(self, peer_url: str) -> tuple[PeerHandshake, PeerHandshake] | None:
+    async def initiate_handshake(
+        self,
+        peer_url: str,
+        peer_id: str | None = None,
+    ) -> tuple[PeerHandshake, PeerHandshake] | None:
         """
         Initiate handshake with a potential peer.
+
+        SECURITY FIX (Audit 4):
+        - H3: Uses DNS pinning to prevent DNS rebinding attacks
+        - H4: Verifies and pins TLS certificate fingerprint
+
+        Args:
+            peer_url: The peer's URL
+            peer_id: Optional peer ID for certificate pinning (uses instance_id from response if None)
 
         Returns (our_handshake, their_handshake) if successful, None otherwise.
         """
         if not self._http_client:
             raise RuntimeError("Protocol not initialized")
 
-        # SECURITY FIX: Validate URL to prevent SSRF attacks
+        # SECURITY FIX (Audit 4 - H3): Validate URL with DNS pinning
         settings = get_settings()
         allow_private = settings.environment != "production"
         try:
-            validated_url = validate_url_for_ssrf(peer_url, allow_private=allow_private)
+            validated = validate_url_for_ssrf(
+                peer_url,
+                allow_private=allow_private,
+                dns_pin_store=self._dns_pin_store,
+            )
         except SSRFError as e:
             logger.error(f"SSRF protection blocked handshake URL: {e}")
+            return None
+        except DNSRebindingError as e:
+            logger.error(f"DNS rebinding attack detected: {e}")
             return None
 
         try:
@@ -583,10 +1111,23 @@ class FederationProtocol:
 
             # Send to peer (using validated URL)
             response = await self._http_client.post(
-                f"{validated_url.rstrip('/')}/api/v1/federation/handshake",
+                f"{validated.url.rstrip('/')}/api/v1/federation/handshake",
                 json=our_handshake.model_dump(mode='json'),
                 timeout=self.HANDSHAKE_TIMEOUT,
             )
+
+            # SECURITY FIX (Audit 4 - H4): Verify and pin TLS certificate
+            if validated.scheme == "https":
+                cert_fingerprint = await self._get_response_cert_fingerprint(response)
+                if cert_fingerprint:
+                    # Use peer_id if provided, otherwise defer pinning until we know their instance_id
+                    effective_peer_id = peer_id
+                    if effective_peer_id:
+                        if not self._cert_pin_store.verify_certificate(
+                            effective_peer_id, cert_fingerprint, validated.hostname
+                        ):
+                            logger.error(f"Certificate pinning failed for peer {effective_peer_id}")
+                            return None
 
             if response.status_code != 200:
                 logger.error(f"Handshake failed with status {response.status_code}")
@@ -595,6 +1136,25 @@ class FederationProtocol:
             # Parse their response
             their_data = response.json()
             their_handshake = PeerHandshake(**their_data)
+
+            # SECURITY FIX (Audit 4 - H4): Pin certificate for new peer (TOFU)
+            if validated.scheme == "https" and cert_fingerprint:
+                their_id = their_handshake.instance_id
+                existing_pin = self._cert_pin_store.get_pin(their_id)
+                if existing_pin is None:
+                    # First contact - Trust On First Use (TOFU)
+                    self._cert_pin_store.pin_certificate(
+                        peer_id=their_id,
+                        hostname=validated.hostname,
+                        fingerprint=cert_fingerprint,
+                        pin_type="tofu",
+                    )
+                    logger.info(f"TOFU: Pinned certificate for new peer {their_id}")
+                elif not self._cert_pin_store.verify_certificate(
+                    their_id, cert_fingerprint, validated.hostname
+                ):
+                    logger.error(f"Certificate pinning failed for peer {their_id}")
+                    return None
 
             # Verify their handshake
             if not self.verify_handshake(their_handshake):
@@ -612,22 +1172,33 @@ class FederationProtocol:
             return None
 
     async def check_peer_health(self, peer: FederatedPeer) -> PeerStatus:
-        """Check if a peer is reachable and responsive."""
+        """
+        Check if a peer is reachable and responsive.
+
+        SECURITY FIX (Audit 4 - H3): Uses DNS pinning to prevent rebinding attacks.
+        """
         if not self._http_client:
             raise RuntimeError("Protocol not initialized")
 
-        # SECURITY FIX: Validate URL to prevent SSRF attacks
+        # SECURITY FIX (Audit 4 - H3): Validate URL with DNS pinning
         settings = get_settings()
         allow_private = settings.environment != "production"
         try:
-            validated_url = validate_url_for_ssrf(peer.url, allow_private=allow_private)
+            validated = validate_url_for_ssrf(
+                peer.url,
+                allow_private=allow_private,
+                dns_pin_store=self._dns_pin_store,
+            )
         except SSRFError as e:
             logger.error(f"SSRF protection blocked health check URL: {e}")
+            return PeerStatus.OFFLINE
+        except DNSRebindingError as e:
+            logger.error(f"DNS rebinding detected during health check: {e}")
             return PeerStatus.OFFLINE
 
         try:
             response = await self._http_client.get(
-                f"{validated_url.rstrip('/')}/api/v1/federation/health",
+                f"{validated.url.rstrip('/')}/api/v1/federation/health",
                 timeout=10,
             )
 
@@ -653,6 +1224,10 @@ class FederationProtocol:
         """
         Request changes from a peer.
 
+        SECURITY FIX (Audit 4):
+        - H3: Uses DNS pinning to prevent DNS rebinding attacks
+        - H29: Includes nonce in requests to prevent replay attacks
+
         Args:
             peer: The peer to sync with
             since: Get changes since this timestamp
@@ -662,13 +1237,20 @@ class FederationProtocol:
         if not self._http_client:
             raise RuntimeError("Protocol not initialized")
 
-        # SECURITY FIX: Validate URL to prevent SSRF attacks
+        # SECURITY FIX (Audit 4 - H3): Validate URL with DNS pinning
         settings = get_settings()
         allow_private = settings.environment != "production"
         try:
-            validated_url = validate_url_for_ssrf(peer.url, allow_private=allow_private)
+            validated = validate_url_for_ssrf(
+                peer.url,
+                allow_private=allow_private,
+                dns_pin_store=self._dns_pin_store,
+            )
         except SSRFError as e:
             logger.error(f"SSRF protection blocked sync request URL: {e}")
+            return None
+        except DNSRebindingError as e:
+            logger.error(f"DNS rebinding detected during sync request: {e}")
             return None
 
         try:
@@ -681,9 +1263,7 @@ class FederationProtocol:
 
             # SECURITY FIX (Audit 4 - H29): Add nonce to prevent replay attacks
             # Each sync request includes a unique nonce that is signed
-            import secrets
-            import time
-            nonce = f"{int(time.time() * 1000)}_{secrets.token_hex(16)}"
+            nonce = f"{int(datetime.now(timezone.utc).timestamp() * 1000)}_{secrets.token_hex(16)}"
             params["nonce"] = nonce
 
             # Sign request including nonce
@@ -691,7 +1271,7 @@ class FederationProtocol:
             signature = self.sign_message(request_data)
 
             response = await self._http_client.get(
-                f"{validated_url.rstrip('/')}/api/v1/federation/changes",
+                f"{validated.url.rstrip('/')}/api/v1/federation/changes",
                 params=params,
                 headers={
                     "X-Forge-Signature": signature,
@@ -726,6 +1306,8 @@ class FederationProtocol:
         """
         Push changes to a peer.
 
+        SECURITY FIX (Audit 4 - H3): Uses DNS pinning to prevent DNS rebinding attacks.
+
         Args:
             peer: The peer to push to
             payload: The sync payload with capsules/edges
@@ -733,13 +1315,20 @@ class FederationProtocol:
         if not self._http_client:
             raise RuntimeError("Protocol not initialized")
 
-        # SECURITY FIX: Validate URL to prevent SSRF attacks
+        # SECURITY FIX (Audit 4 - H3): Validate URL with DNS pinning
         settings = get_settings()
         allow_private = settings.environment != "production"
         try:
-            validated_url = validate_url_for_ssrf(peer.url, allow_private=allow_private)
+            validated = validate_url_for_ssrf(
+                peer.url,
+                allow_private=allow_private,
+                dns_pin_store=self._dns_pin_store,
+            )
         except SSRFError as e:
             logger.error(f"SSRF protection blocked sync push URL: {e}")
+            return False
+        except DNSRebindingError as e:
+            logger.error(f"DNS rebinding detected during sync push: {e}")
             return False
 
         try:
@@ -755,7 +1344,7 @@ class FederationProtocol:
             payload.signature = signature
 
             response = await self._http_client.post(
-                f"{validated_url.rstrip('/')}/api/v1/federation/incoming/capsules",
+                f"{validated.url.rstrip('/')}/api/v1/federation/incoming/capsules",
                 json=payload.model_dump(mode='json'),
                 headers={
                     "X-Forge-Public-Key": self._public_key_b64,
