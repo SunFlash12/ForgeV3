@@ -357,6 +357,14 @@ export default function CapsulesPage() {
           capsule={selectedCapsule}
           onClose={() => setSelectedCapsule(null)}
           onDelete={() => deleteMutation.mutate(selectedCapsule.id)}
+          onUpdate={() => {
+            addToast({
+              type: 'success',
+              title: 'Capsule Updated',
+              message: 'Your changes have been saved successfully.',
+            });
+            setSelectedCapsule(null);
+          }}
           canEdit={user?.id === selectedCapsule.owner_id || user?.trust_level === 'TRUSTED' || user?.trust_level === 'CORE'}
           canDelete={user?.trust_level === 'TRUSTED' || user?.trust_level === 'CORE'}
         />
@@ -781,101 +789,251 @@ interface CapsuleDetailModalProps {
   capsule: Capsule;
   onClose: () => void;
   onDelete: () => void;
+  onUpdate?: () => void;
   canEdit: boolean;
   canDelete: boolean;
 }
 
-function CapsuleDetailModal({ capsule, onClose, onDelete, canEdit, canDelete }: CapsuleDetailModalProps) {
+function CapsuleDetailModal({ capsule, onClose, onDelete, onUpdate, canEdit, canDelete }: CapsuleDetailModalProps) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editData, setEditData] = useState({
+    title: capsule.title,
+    content: capsule.content,
+    tags: capsule.tags || [],
+  });
+  const [tagInput, setTagInput] = useState('');
+  const queryClient = useQueryClient();
+
   const TypeIcon = CAPSULE_TYPE_INFO[capsule.type]?.icon || BookOpen;
+
+  const updateMutation = useMutation({
+    mutationFn: (data: { title?: string; content?: string; tags?: string[] }) =>
+      api.updateCapsule(capsule.id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['capsules'] });
+      setIsEditing(false);
+      onUpdate?.();
+    },
+  });
+
+  const handleAddTag = () => {
+    if (tagInput.trim() && !editData.tags.includes(tagInput.trim())) {
+      setEditData({
+        ...editData,
+        tags: [...editData.tags, tagInput.trim()],
+      });
+      setTagInput('');
+    }
+  };
+
+  const handleRemoveTag = (tag: string) => {
+    setEditData({
+      ...editData,
+      tags: editData.tags.filter((t) => t !== tag),
+    });
+  };
+
+  const handleSave = () => {
+    if (!editData.title.trim() || !editData.content.trim()) {
+      return;
+    }
+    updateMutation.mutate({
+      title: editData.title,
+      content: editData.content,
+      tags: editData.tags,
+    });
+  };
+
+  const handleCancelEdit = () => {
+    setEditData({
+      title: capsule.title,
+      content: capsule.content,
+      tags: capsule.tags || [],
+    });
+    setIsEditing(false);
+  };
 
   return (
     <Modal
       isOpen={true}
-      onClose={onClose}
-      title={capsule.title || 'Untitled Capsule'}
+      onClose={isEditing ? handleCancelEdit : onClose}
+      title={isEditing ? 'Edit Capsule' : (capsule.title || 'Untitled Capsule')}
       size="lg"
       footer={
-        <>
-          {canDelete && (
+        isEditing ? (
+          <>
+            <Button variant="secondary" onClick={handleCancelEdit}>
+              Cancel
+            </Button>
             <Button
-              variant="danger"
-              onClick={() => {
-                if (confirm('Are you sure you want to delete this capsule?')) {
-                  onDelete();
-                }
-              }}
-              icon={<Trash2 className="w-4 h-4" />}
+              variant="primary"
+              onClick={handleSave}
+              loading={updateMutation.isPending}
+              disabled={!editData.title.trim() || !editData.content.trim()}
+              icon={<CheckCircle className="w-4 h-4" />}
             >
-              Delete
+              Save Changes
             </Button>
-          )}
-          {canEdit && (
-            <Button variant="secondary" icon={<Edit className="w-4 h-4" />}>
-              Edit
+          </>
+        ) : (
+          <>
+            {canDelete && (
+              <Button
+                variant="danger"
+                onClick={() => {
+                  if (confirm('Are you sure you want to delete this capsule?')) {
+                    onDelete();
+                  }
+                }}
+                icon={<Trash2 className="w-4 h-4" />}
+              >
+                Delete
+              </Button>
+            )}
+            {canEdit && (
+              <Button
+                variant="secondary"
+                icon={<Edit className="w-4 h-4" />}
+                onClick={() => setIsEditing(true)}
+              >
+                Edit
+              </Button>
+            )}
+            <Button variant="primary" onClick={onClose}>
+              Close
             </Button>
-          )}
-          <Button variant="primary" onClick={onClose}>
-            Close
-          </Button>
-        </>
+          </>
+        )
       }
     >
-      <div className="space-y-4">
-        <div className="flex items-center gap-2">
-          <span className={`badge border ${typeColors[capsule.type]} flex items-center gap-1.5`}>
-            <TypeIcon className="w-3 h-3" />
-            {capsule.type}
-          </span>
-          <span className="text-sm text-slate-500 dark:text-slate-400">Version {capsule.version}</span>
-        </div>
-
-        <div className="max-w-none">
-          <p className="text-slate-600 dark:text-slate-300 whitespace-pre-wrap">{capsule.content}</p>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          {capsule.tags.map((tag) => (
-            <span
-              key={tag}
-              className="inline-flex items-center gap-1 px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded text-sm text-slate-600 dark:text-slate-400"
-            >
-              <Tag className="w-3 h-3" />
-              {tag}
-            </span>
-          ))}
-        </div>
-
-        <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+      {isEditing ? (
+        // Edit Form
+        <div className="space-y-4">
           <div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Trust Score</p>
-            <p className="text-lg font-semibold text-slate-800 dark:text-white">{capsule.trust_level}</p>
+            <label className="label">Title</label>
+            <input
+              type="text"
+              value={editData.title}
+              onChange={(e) => setEditData({ ...editData, title: e.target.value })}
+              className="input"
+              placeholder="Enter a descriptive title"
+            />
           </div>
-          <div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Access Count</p>
-            <p className="text-lg font-semibold text-slate-800 dark:text-white">{capsule.view_count}</p>
-          </div>
-          <div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Created</p>
-            <p className="text-sm text-slate-800 dark:text-slate-200">{new Date(capsule.created_at).toLocaleString()}</p>
-          </div>
-          <div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Updated</p>
-            <p className="text-sm text-slate-800 dark:text-slate-200">{new Date(capsule.updated_at).toLocaleString()}</p>
-          </div>
-        </div>
 
-        {capsule.parent_id && (
-          <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
-            <p className="text-sm font-medium text-slate-800 dark:text-white mb-2 flex items-center gap-2">
-              <GitBranch className="w-4 h-4" />
-              Lineage
-            </p>
-            <div className="text-sm">
-              <p className="text-slate-500">Parent: {capsule.parent_id}</p>
+          <div>
+            <label className="label">Content</label>
+            <textarea
+              value={editData.content}
+              onChange={(e) => setEditData({ ...editData, content: e.target.value })}
+              className="input min-h-32"
+              placeholder="Enter the knowledge content..."
+            />
+          </div>
+
+          <div>
+            <label className="label">Tags</label>
+            <div className="flex gap-2 mb-2">
+              <input
+                type="text"
+                value={tagInput}
+                onChange={(e) => setTagInput(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddTag())}
+                className="input flex-1"
+                placeholder="Add a tag..."
+              />
+              <Button type="button" variant="secondary" onClick={handleAddTag}>
+                Add
+              </Button>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {editData.tags.map((tag) => (
+                <span
+                  key={tag}
+                  className="inline-flex items-center gap-1 px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded text-sm text-slate-600 dark:text-slate-400"
+                >
+                  <Tag className="w-3 h-3" />
+                  {tag}
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveTag(tag)}
+                    className="text-slate-500 hover:text-slate-800 dark:hover:text-slate-300"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              ))}
+              {editData.tags.length === 0 && (
+                <span className="text-xs text-slate-400 italic">No tags</span>
+              )}
             </div>
           </div>
-        )}
-      </div>
+
+          {updateMutation.isError && (
+            <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-400">
+              <AlertCircle className="w-4 h-4" />
+              {updateMutation.error?.message || 'Failed to update capsule'}
+            </div>
+          )}
+        </div>
+      ) : (
+        // View Mode
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <span className={`badge border ${typeColors[capsule.type]} flex items-center gap-1.5`}>
+              <TypeIcon className="w-3 h-3" />
+              {capsule.type}
+            </span>
+            <span className="text-sm text-slate-500 dark:text-slate-400">Version {capsule.version}</span>
+          </div>
+
+          <div className="max-w-none">
+            <p className="text-slate-600 dark:text-slate-300 whitespace-pre-wrap">{capsule.content}</p>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {capsule.tags.map((tag) => (
+              <span
+                key={tag}
+                className="inline-flex items-center gap-1 px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded text-sm text-slate-600 dark:text-slate-400"
+              >
+                <Tag className="w-3 h-3" />
+                {tag}
+              </span>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+            <div>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Trust Score</p>
+              <p className="text-lg font-semibold text-slate-800 dark:text-white">{capsule.trust_level}</p>
+            </div>
+            <div>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Access Count</p>
+              <p className="text-lg font-semibold text-slate-800 dark:text-white">{capsule.view_count}</p>
+            </div>
+            <div>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Created</p>
+              <p className="text-sm text-slate-800 dark:text-slate-200">{new Date(capsule.created_at).toLocaleString()}</p>
+            </div>
+            <div>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Updated</p>
+              <p className="text-sm text-slate-800 dark:text-slate-200">{new Date(capsule.updated_at).toLocaleString()}</p>
+            </div>
+          </div>
+
+          {capsule.parent_id && (
+            <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
+              <p className="text-sm font-medium text-slate-800 dark:text-white mb-2 flex items-center gap-2">
+                <GitBranch className="w-4 h-4" />
+                Lineage
+              </p>
+              <div className="text-sm">
+                <p className="text-slate-500">Parent: {capsule.parent_id}</p>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </Modal>
   );
 }

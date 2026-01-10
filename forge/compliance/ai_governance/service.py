@@ -785,18 +785,23 @@ class AIGovernanceService:
     ) -> BiasAssessment:
         """
         Assess AI system for bias across protected attributes.
-        
+
         Per NYC Local Law 144, Colorado AI Act requirements.
+
+        Calculates fairness metrics:
+        - Demographic Parity: P(ŷ=1|G=g) should be equal across groups
+        - Equalized Odds: TPR and FPR should be equal across groups
+        - Equal Opportunity: TPR should be equal across groups
         """
         assessment = BiasAssessment(
             ai_system_id=ai_system_id,
             protected_attributes=protected_attributes,
         )
-        
+
         # Calculate metrics for each protected attribute
         for attr in protected_attributes:
             attr_metrics = {}
-            
+
             # Group data by protected attribute value
             groups = {}
             for i, data in enumerate(test_data):
@@ -806,50 +811,132 @@ class AIGovernanceService:
                 groups[group_value]["predictions"].append(predictions[i])
                 if ground_truth:
                     groups[group_value]["ground_truth"].append(ground_truth[i])
-            
-            # Calculate demographic parity
+
+            # Calculate demographic parity: P(ŷ=1|G=g)
             positive_rates = {}
             for group, values in groups.items():
                 positive_count = sum(1 for p in values["predictions"] if p)
                 positive_rates[group] = positive_count / len(values["predictions"]) if values["predictions"] else 0
-            
+
             if positive_rates:
                 min_rate = min(positive_rates.values())
                 max_rate = max(positive_rates.values())
                 attr_metrics["demographic_parity"] = min_rate / max_rate if max_rate > 0 else 1.0
-            
-            # Calculate equalized odds if ground truth available
+
+            # Calculate equalized odds and equal opportunity if ground truth available
             if ground_truth:
-                # Simplified calculation
-                attr_metrics["equalized_odds"] = 0.85  # Placeholder
-                attr_metrics["equal_opportunity"] = 0.90  # Placeholder
-            
+                tpr_per_group = {}  # True Positive Rate per group
+                fpr_per_group = {}  # False Positive Rate per group
+
+                for group, values in groups.items():
+                    preds = values["predictions"]
+                    truths = values["ground_truth"]
+
+                    # Count true positives, false positives, etc.
+                    tp = sum(1 for p, t in zip(preds, truths) if p and t)
+                    fp = sum(1 for p, t in zip(preds, truths) if p and not t)
+                    tn = sum(1 for p, t in zip(preds, truths) if not p and not t)
+                    fn = sum(1 for p, t in zip(preds, truths) if not p and t)
+
+                    # True Positive Rate (Recall/Sensitivity): TP / (TP + FN)
+                    positives = tp + fn
+                    tpr_per_group[group] = tp / positives if positives > 0 else 0.0
+
+                    # False Positive Rate: FP / (FP + TN)
+                    negatives = fp + tn
+                    fpr_per_group[group] = fp / negatives if negatives > 0 else 0.0
+
+                # Equal Opportunity: min(TPR) / max(TPR) across groups
+                if tpr_per_group:
+                    min_tpr = min(tpr_per_group.values())
+                    max_tpr = max(tpr_per_group.values())
+                    attr_metrics["equal_opportunity"] = min_tpr / max_tpr if max_tpr > 0 else 1.0
+
+                # Equalized Odds: min of TPR ratio and FPR ratio across groups
+                # Both TPR and FPR should be equal across groups
+                if tpr_per_group and fpr_per_group:
+                    # TPR ratio
+                    min_tpr = min(tpr_per_group.values())
+                    max_tpr = max(tpr_per_group.values())
+                    tpr_ratio = min_tpr / max_tpr if max_tpr > 0 else 1.0
+
+                    # FPR ratio (we want FPRs to be equal, so check disparity)
+                    # For FPR, lower is better but we want equality
+                    min_fpr = min(fpr_per_group.values())
+                    max_fpr = max(fpr_per_group.values())
+                    # Handle edge case where all FPRs are 0 (perfect)
+                    if max_fpr == 0:
+                        fpr_ratio = 1.0
+                    else:
+                        fpr_ratio = min_fpr / max_fpr if max_fpr > 0 else 1.0
+
+                    # Equalized odds is the minimum of TPR and FPR equality
+                    attr_metrics["equalized_odds"] = min(tpr_ratio, fpr_ratio)
+
             assessment.metrics[attr] = attr_metrics
-        
+
         # Check for bias
         failures = assessment.check_thresholds()
         if failures:
             assessment.bias_detected = True
-            assessment.affected_groups = [f.split(":")[0] for f in failures]
+            assessment.affected_groups = list(set(f.split(":")[0] for f in failures))
             assessment.remediation_required = True
             assessment.remediation_deadline = datetime.utcnow() + timedelta(days=30)
-            assessment.recommendations = [
-                "Review training data for representation issues",
-                "Consider rebalancing or reweighting",
-                "Implement fairness constraints in model training",
-                "Conduct disparate impact analysis",
-            ]
-        
+            assessment.recommendations = self._generate_bias_recommendations(failures, assessment.metrics)
+
         self._bias_assessments[assessment.assessment_id] = assessment
-        
+
         logger.info(
             "bias_assessment_completed",
             assessment_id=assessment.assessment_id,
             system_id=ai_system_id,
             bias_detected=assessment.bias_detected,
+            failures=failures if failures else None,
         )
-        
+
         return assessment
+
+    def _generate_bias_recommendations(
+        self,
+        failures: list[str],
+        metrics: dict[str, dict[str, float]],
+    ) -> list[str]:
+        """Generate specific recommendations based on detected bias."""
+        recommendations = []
+
+        # Analyze failure types
+        has_demographic_parity_issue = any("demographic_parity" in f for f in failures)
+        has_equal_opportunity_issue = any("equal_opportunity" in f for f in failures)
+        has_equalized_odds_issue = any("equalized_odds" in f for f in failures)
+
+        if has_demographic_parity_issue:
+            recommendations.extend([
+                "Review training data distribution across protected groups",
+                "Consider resampling or reweighting to balance representation",
+                "Evaluate whether demographic parity is the appropriate fairness criterion for this use case",
+            ])
+
+        if has_equal_opportunity_issue:
+            recommendations.extend([
+                "Investigate why true positive rates differ across groups",
+                "Check for label quality issues in underperforming groups",
+                "Consider threshold adjustment per group (with appropriate documentation)",
+            ])
+
+        if has_equalized_odds_issue:
+            recommendations.extend([
+                "Review both true positive and false positive rates across groups",
+                "Implement fairness constraints during model training",
+                "Consider post-processing calibration methods",
+            ])
+
+        # General recommendations
+        recommendations.extend([
+            "Conduct disparate impact analysis with domain experts",
+            "Document bias findings and mitigation efforts for compliance",
+        ])
+
+        return recommendations
     
     # ───────────────────────────────────────────────────────────────
     # CONFORMITY ASSESSMENT
