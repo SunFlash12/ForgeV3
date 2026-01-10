@@ -616,14 +616,18 @@ class CanaryManager(Generic[T]):
         deployment = self._deployments.get(deployment_id)
         if not deployment:
             return None
-        
+
         if deployment.state != CanaryState.RUNNING:
             # Return control when not actively running
             return deployment.control_version
-        
+
+        # Note: Counter increments are not locked for performance reasons.
+        # In high-concurrency scenarios, counts may have slight inaccuracies
+        # but routing decisions remain correct. Use record_outcome() for
+        # accurate metrics tracking.
         self._request_counter += 1
         deployment.metrics.total_requests += 1
-        
+
         # Route based on percentage
         if random.random() * 100 < deployment.current_percentage:
             return deployment.canary_version
@@ -647,30 +651,35 @@ class CanaryManager(Generic[T]):
         success: bool,
         latency_ms: float,
     ) -> None:
-        """Record request outcome for metrics."""
+        """
+        Record request outcome for metrics.
+
+        Uses lock to ensure thread-safe counter updates in async context.
+        """
         deployment = self._deployments.get(deployment_id)
         if not deployment:
             return
-        
-        metrics = deployment.metrics
-        
-        if is_canary:
-            metrics.canary_requests += 1
-            if not success:
-                metrics.canary_errors += 1
-            metrics.canary_latencies.append(latency_ms)
-            
-            # Keep latency list bounded
-            if len(metrics.canary_latencies) > 10000:
-                metrics.canary_latencies = metrics.canary_latencies[-5000:]
-        else:
-            metrics.control_requests += 1
-            if not success:
-                metrics.control_errors += 1
-            metrics.control_latencies.append(latency_ms)
-            
-            if len(metrics.control_latencies) > 10000:
-                metrics.control_latencies = metrics.control_latencies[-5000:]
+
+        async with self._lock:
+            metrics = deployment.metrics
+
+            if is_canary:
+                metrics.canary_requests += 1
+                if not success:
+                    metrics.canary_errors += 1
+                metrics.canary_latencies.append(latency_ms)
+
+                # Keep latency list bounded
+                if len(metrics.canary_latencies) > 10000:
+                    metrics.canary_latencies = metrics.canary_latencies[-5000:]
+            else:
+                metrics.control_requests += 1
+                if not success:
+                    metrics.control_errors += 1
+                metrics.control_latencies.append(latency_ms)
+
+                if len(metrics.control_latencies) > 10000:
+                    metrics.control_latencies = metrics.control_latencies[-5000:]
     
     async def manual_advance(self, deployment_id: str) -> bool:
         """Manually advance to next step (for MANUAL strategy)."""

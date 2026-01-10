@@ -14,6 +14,7 @@ that keeps the digital society resilient.
 from __future__ import annotations
 
 import asyncio
+import threading
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -448,8 +449,8 @@ class CircuitBreaker(Generic[T]):
             return result
         
         except asyncio.TimeoutError:
-            self._stats.timeout_calls += 1
             async with self._lock:
+                self._stats.timeout_calls += 1
                 await self._record_failure(TimeoutError("Call timed out"))
             raise
         
@@ -591,15 +592,23 @@ class CircuitBreakerRegistry:
         }
 
 
-# Global registry for convenience
+# Global registry for convenience - uses double-checked locking for thread safety
 _global_registry: CircuitBreakerRegistry | None = None
+_registry_lock = threading.Lock()
 
 
 def get_circuit_registry() -> CircuitBreakerRegistry:
-    """Get global circuit breaker registry."""
+    """
+    Get global circuit breaker registry.
+
+    Thread-safe using double-checked locking pattern.
+    """
     global _global_registry
     if _global_registry is None:
-        _global_registry = CircuitBreakerRegistry()
+        with _registry_lock:
+            # Double-check after acquiring lock
+            if _global_registry is None:
+                _global_registry = CircuitBreakerRegistry()
     return _global_registry
 
 
