@@ -15,6 +15,7 @@ Each component reports: HEALTHY, DEGRADED, UNHEALTHY, or UNKNOWN
 from __future__ import annotations
 
 import asyncio
+import os
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -25,6 +26,10 @@ from typing import Any, Callable, Coroutine
 import structlog
 
 logger = structlog.get_logger(__name__)
+
+# Configurable health check thresholds (via environment variables)
+HEALTH_DEAD_LETTER_THRESHOLD = int(os.getenv("HEALTH_DEAD_LETTER_THRESHOLD", "100"))
+HEALTH_PENDING_EVENTS_THRESHOLD = int(os.getenv("HEALTH_PENDING_EVENTS_THRESHOLD", "1000"))
 
 
 class HealthStatus(str, Enum):
@@ -404,13 +409,13 @@ class EventSystemHealthCheck(HealthCheck):
             dead_letter = metrics.get("dead_letter_count", 0)
             subscribers = metrics.get("subscriber_count", 0)
             
-            # Determine health
-            if dead_letter > 100:
+            # Determine health (using configurable thresholds)
+            if dead_letter > HEALTH_DEAD_LETTER_THRESHOLD:
                 health_status = HealthStatus.DEGRADED
-                message = f"High dead letter count: {dead_letter}"
-            elif pending > 1000:
+                message = f"High dead letter count: {dead_letter} (threshold: {HEALTH_DEAD_LETTER_THRESHOLD})"
+            elif pending > HEALTH_PENDING_EVENTS_THRESHOLD:
                 health_status = HealthStatus.DEGRADED
-                message = f"Event backlog building: {pending}"
+                message = f"Event backlog building: {pending} (threshold: {HEALTH_PENDING_EVENTS_THRESHOLD})"
             elif subscribers == 0:
                 health_status = HealthStatus.DEGRADED
                 message = "No active subscribers"
