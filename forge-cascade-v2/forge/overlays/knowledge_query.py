@@ -15,30 +15,19 @@ Pipeline:
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
+
 import structlog
 
-from ..models.events import Event, EventType
+from ..models.events import Event
 from ..models.overlay import Capability
-from ..models.query import (
-    QueryIntent,
-    CompiledQuery,
-    QueryResult,
-    GraphSchema,
-    get_default_schema
-)
+from ..models.query import CompiledQuery, GraphSchema, QueryResult, get_default_schema
 from ..services.query_compiler import (
-    QueryCompiler,
-    KnowledgeQueryService,
-    CypherValidator,
     CypherSecurityError,
+    CypherValidator,
+    KnowledgeQueryService,
 )
-from .base import (
-    BaseOverlay,
-    OverlayContext,
-    OverlayResult,
-    OverlayError
-)
+from .base import BaseOverlay, OverlayContext, OverlayError, OverlayResult
 
 logger = structlog.get_logger()
 
@@ -88,7 +77,7 @@ class QueryHistoryEntry:
     compiled_cypher: str
     result_count: int
     execution_time_ms: float
-    user_id: Optional[str]
+    user_id: str | None
     timestamp: datetime = field(default_factory=datetime.utcnow)
 
 
@@ -109,6 +98,9 @@ class KnowledgeQueryOverlay(BaseOverlay):
     # Direct invocation - no event subscription needed
     SUBSCRIBED_EVENTS = set()
 
+    # SECURITY FIX (Audit 4 - M): Add cache size limit to prevent memory exhaustion
+    MAX_QUERY_CACHE_SIZE = 1000  # Maximum cached compiled queries
+
     REQUIRED_CAPABILITIES = {
         Capability.DATABASE_READ,
         Capability.LLM_ACCESS
@@ -116,9 +108,9 @@ class KnowledgeQueryOverlay(BaseOverlay):
 
     def __init__(
         self,
-        query_service: Optional[KnowledgeQueryService] = None,
-        config: Optional[QueryConfig] = None,
-        schema: Optional[GraphSchema] = None
+        query_service: KnowledgeQueryService | None = None,
+        config: QueryConfig | None = None,
+        schema: GraphSchema | None = None
     ):
         """
         Initialize the knowledge query overlay.
@@ -168,8 +160,8 @@ class KnowledgeQueryOverlay(BaseOverlay):
     async def execute(
         self,
         context: OverlayContext,
-        event: Optional[Event] = None,
-        input_data: Optional[dict[str, Any]] = None
+        event: Event | None = None,
+        input_data: dict[str, Any] | None = None
     ) -> OverlayResult:
         """
         Execute a knowledge query.
@@ -213,6 +205,10 @@ class KnowledgeQueryOverlay(BaseOverlay):
 
                 # Cache the compiled query
                 if self._config.cache_compiled_queries:
+                    # SECURITY FIX (Audit 4 - M): Evict oldest entry if cache is full
+                    if len(self._query_cache) >= self.MAX_QUERY_CACHE_SIZE:
+                        oldest_key = next(iter(self._query_cache))
+                        del self._query_cache[oldest_key]
                     self._query_cache[cache_key] = compiled
 
             # Apply limits
@@ -309,7 +305,7 @@ class KnowledgeQueryOverlay(BaseOverlay):
     async def execute_raw(
         self,
         cypher: str,
-        parameters: Optional[dict] = None,
+        parameters: dict | None = None,
         limit: int = 20
     ) -> QueryResult:
         """
@@ -335,7 +331,7 @@ class KnowledgeQueryOverlay(BaseOverlay):
                 reason=str(e),
                 cypher_preview=cypher[:100] if cypher else ""
             )
-            raise QuerySecurityError(f"Query rejected for security reasons: {e}")
+            raise QuerySecurityError(f"Query rejected for security reasons: {e}") from e
 
         return await self._query_service.execute_raw(
             cypher=cypher,
@@ -345,7 +341,7 @@ class KnowledgeQueryOverlay(BaseOverlay):
 
     def get_query_history(
         self,
-        user_id: Optional[str] = None,
+        user_id: str | None = None,
         limit: int = 20
     ) -> list[dict]:
         """Get recent query history."""
@@ -406,7 +402,7 @@ class KnowledgeQueryOverlay(BaseOverlay):
         cypher: str,
         result_count: int,
         execution_time: float,
-        user_id: Optional[str]
+        user_id: str | None
     ) -> None:
         """Record query in history."""
         from uuid import uuid4
@@ -456,7 +452,7 @@ class KnowledgeQueryOverlay(BaseOverlay):
 
 # Convenience function
 def create_knowledge_query_overlay(
-    query_service: Optional[KnowledgeQueryService] = None,
+    query_service: KnowledgeQueryService | None = None,
     **kwargs
 ) -> KnowledgeQueryOverlay:
     """
