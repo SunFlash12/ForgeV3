@@ -81,7 +81,35 @@ from .dependencies import (
     # Trust dependencies
     require_trust,
 )
-from .password import get_password_strength, hash_password, needs_rehash, verify_password
+from .mfa import (
+    MFAService,
+    MFASetupResult,
+    MFAStatus,
+)
+from .password import (
+    get_password_strength,
+    hash_password,
+    needs_rehash,
+    validate_password_strength,
+    verify_password,
+)
+from .prompt_sanitization import (
+    INJECTION_PATTERNS,
+    create_safe_user_message,
+    sanitize_dict_for_prompt,
+    sanitize_for_prompt,
+    validate_llm_output,
+)
+from .safe_regex import (
+    RegexTimeoutError,
+    RegexValidationError,
+    safe_compile,
+    safe_findall,
+    safe_match,
+    safe_search,
+    safe_sub,
+    validate_pattern,
+)
 from .tokens import (
     TokenError,
     TokenExpiredError,
@@ -99,11 +127,34 @@ from .tokens import (
 )
 
 __all__ = [
+    # MFA
+    "MFAService",
+    "MFASetupResult",
+    "MFAStatus",
+
     # Password
     "hash_password",
     "verify_password",
     "needs_rehash",
     "get_password_strength",
+    "validate_password_strength",
+
+    # Prompt Sanitization
+    "sanitize_for_prompt",
+    "sanitize_dict_for_prompt",
+    "create_safe_user_message",
+    "validate_llm_output",
+    "INJECTION_PATTERNS",
+
+    # Safe Regex
+    "safe_compile",
+    "safe_match",
+    "safe_search",
+    "safe_findall",
+    "safe_sub",
+    "validate_pattern",
+    "RegexValidationError",
+    "RegexTimeoutError",
 
     # Tokens
     "create_access_token",

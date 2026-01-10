@@ -186,8 +186,9 @@ def safe_match(
     """
     # Limit input size
     if len(string) > MAX_INPUT_LENGTH:
+        original_length = len(string)
         string = string[:MAX_INPUT_LENGTH]
-        logger.warning("regex_input_truncated", original_length=len(string), max_length=MAX_INPUT_LENGTH)
+        logger.warning("regex_input_truncated", original_length=original_length, max_length=MAX_INPUT_LENGTH)
 
     compiled = safe_compile(pattern, flags, validate)
     return _run_with_timeout(compiled.match, string, timeout=timeout)
@@ -219,8 +220,9 @@ def safe_search(
     """
     # Limit input size
     if len(string) > MAX_INPUT_LENGTH:
+        original_length = len(string)
         string = string[:MAX_INPUT_LENGTH]
-        logger.warning("regex_input_truncated", original_length=len(string), max_length=MAX_INPUT_LENGTH)
+        logger.warning("regex_input_truncated", original_length=original_length, max_length=MAX_INPUT_LENGTH)
 
     compiled = safe_compile(pattern, flags, validate)
     return _run_with_timeout(compiled.search, string, timeout=timeout)
@@ -254,8 +256,9 @@ def safe_findall(
     """
     # Limit input size
     if len(string) > MAX_INPUT_LENGTH:
+        original_length = len(string)
         string = string[:MAX_INPUT_LENGTH]
-        logger.warning("regex_input_truncated", original_length=len(string), max_length=MAX_INPUT_LENGTH)
+        logger.warning("regex_input_truncated", original_length=original_length, max_length=MAX_INPUT_LENGTH)
 
     compiled = safe_compile(pattern, flags, validate)
     results = _run_with_timeout(compiled.findall, string, timeout=timeout)
@@ -298,8 +301,9 @@ def safe_sub(
     """
     # Limit input size
     if len(string) > MAX_INPUT_LENGTH:
+        original_length = len(string)
         string = string[:MAX_INPUT_LENGTH]
-        logger.warning("regex_input_truncated", original_length=len(string), max_length=MAX_INPUT_LENGTH)
+        logger.warning("regex_input_truncated", original_length=original_length, max_length=MAX_INPUT_LENGTH)
 
     compiled = safe_compile(pattern, flags, validate)
     return _run_with_timeout(compiled.sub, repl, string, count, timeout=timeout)

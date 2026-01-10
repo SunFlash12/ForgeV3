@@ -431,7 +431,7 @@ class MFAService:
         # Check if locked
         if attempt.locked_until:
             if datetime.now(UTC) < attempt.locked_until:
-                remaining = (attempt.locked_until - datetime.now(UTC)).seconds
+                remaining = int((attempt.locked_until - datetime.now(UTC)).total_seconds())
                 return False, f"Too many failed attempts. Try again in {remaining} seconds."
             else:
                 # Lockout expired, reset
