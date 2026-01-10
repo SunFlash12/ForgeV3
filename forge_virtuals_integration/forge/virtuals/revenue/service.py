@@ -275,53 +275,77 @@ class RevenueService:
     ) -> dict[str, float]:
         """
         Process pending revenue distributions in batches.
-        
+
         This method aggregates pending revenue records and executes
         batch distributions to minimize gas costs. Distributions are
         grouped by beneficiary for efficient processing. The method
         returns a summary of all distributions made.
-        
+
+        SECURITY FIX (Audit 4 - M16): Added integrity check to verify
+        distribution amounts match expected totals.
+
         Args:
             batch_size: Maximum records to process per batch
-            
+
         Returns:
             Dict mapping beneficiary addresses to total amounts distributed
         """
         if not self._pending_distributions:
             return {}
-        
+
         # Take a batch of pending distributions
         batch = self._pending_distributions[:batch_size]
         self._pending_distributions = self._pending_distributions[batch_size:]
-        
+
+        # SECURITY FIX (Audit 4 - M16): Calculate expected total for integrity check
+        expected_total = sum(record.amount_virtual for record in batch)
+
         # Aggregate by beneficiary for batch processing
         aggregated: dict[str, float] = defaultdict(float)
-        
+
         for record in batch:
             for beneficiary in record.beneficiary_addresses:
                 aggregated[beneficiary] += record.amount_virtual
-        
+
+        # SECURITY FIX (Audit 4 - M16): Verify distribution integrity
+        distribution_total = sum(aggregated.values())
+        if abs(distribution_total - expected_total) > 0.001:  # Allow small float precision error
+            logger.error(
+                "distribution_integrity_mismatch",
+                expected_total=expected_total,
+                distribution_total=distribution_total,
+                difference=distribution_total - expected_total,
+                batch_size=len(batch),
+            )
+            # Return batch to queue and abort this distribution
+            self._pending_distributions = batch + self._pending_distributions
+            raise RevenueServiceError(
+                f"Distribution integrity check failed: expected {expected_total}, "
+                f"got {distribution_total} (diff: {distribution_total - expected_total})"
+            )
+
         # Execute batch distribution if enabled
         if self.config.enable_revenue_sharing and aggregated:
             try:
                 await self._execute_batch_distribution(aggregated)
-                
+
                 # Mark records as distributed
                 for record in batch:
                     record.distribution_complete = True
                     await self._revenue_repo.update(record)
-                    
+
             except Exception as e:
                 logger.error(f"Batch distribution failed: {e}")
                 # Return records to pending queue for retry
                 self._pending_distributions.extend(batch)
                 raise RevenueServiceError(f"Distribution failed: {e}")
-        
+
         logger.info(
             f"Processed {len(batch)} revenue records, "
-            f"distributed to {len(aggregated)} beneficiaries"
+            f"distributed to {len(aggregated)} beneficiaries, "
+            f"total: {distribution_total} VIRTUAL"
         )
-        
+
         return dict(aggregated)
     
     async def _execute_batch_distribution(
