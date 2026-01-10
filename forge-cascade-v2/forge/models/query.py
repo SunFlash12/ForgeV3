@@ -5,7 +5,6 @@ Data structures for the natural language to Cypher query compiler,
 enabling users to query the knowledge graph with plain English.
 """
 
-from datetime import datetime
 from enum import Enum
 from typing import Any
 
@@ -423,7 +422,8 @@ class DirectCypherRequest(ForgeModel):
     cypher: str = Field(min_length=5, max_length=5000)
     parameters: dict[str, Any] = Field(default_factory=dict)
     read_only: bool = Field(default=True)
-    timeout_ms: int = Field(default=30000, ge=1000, le=300000)
+    # SECURITY FIX (Audit 4 - M): Reduce max timeout from 5min to 2min
+    timeout_ms: int = Field(default=30000, ge=1000, le=120000)
 
 
 # ═══════════════════════════════════════════════════════════════
