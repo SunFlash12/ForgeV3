@@ -16,6 +16,7 @@ SECURITY FIXES (Audit 2):
 """
 
 import asyncio
+import hashlib
 import threading
 import time
 from datetime import UTC, datetime, timedelta
@@ -362,6 +363,47 @@ class TokenInvalidError(TokenError):
 
 # SECURITY FIX: Hardcoded allowed algorithms to prevent algorithm confusion attacks
 ALLOWED_JWT_ALGORITHMS = ["HS256", "HS384", "HS512"]
+
+
+# =============================================================================
+# SECURITY FIX (Audit 4): Refresh Token Hashing
+# =============================================================================
+
+
+def hash_refresh_token(token: str) -> str:
+    """
+    SECURITY FIX (Audit 4): Hash a refresh token for secure storage.
+
+    Instead of storing raw refresh tokens in the database, we store their
+    SHA-256 hash. This means if the database is compromised, attackers
+    cannot use the stored hashes to authenticate - they need the original
+    token which only the legitimate user possesses.
+
+    Args:
+        token: The raw refresh token (JWT string)
+
+    Returns:
+        SHA-256 hex digest of the token
+    """
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def verify_refresh_token_hash(token: str, stored_hash: str) -> bool:
+    """
+    SECURITY FIX (Audit 4): Verify a refresh token against its stored hash.
+
+    Uses constant-time comparison to prevent timing attacks.
+
+    Args:
+        token: The raw refresh token to verify
+        stored_hash: The SHA-256 hash stored in the database
+
+    Returns:
+        True if the token matches the hash, False otherwise
+    """
+    import secrets
+    token_hash = hash_refresh_token(token)
+    return secrets.compare_digest(token_hash, stored_hash)
 
 
 # =============================================================================

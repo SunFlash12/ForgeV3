@@ -22,6 +22,7 @@ from forge.models.user import (
     UserUpdate,
 )
 from forge.repositories.base import BaseRepository
+from forge.security.tokens import hash_refresh_token, verify_refresh_token_hash
 
 logger = structlog.get_logger(__name__)
 
@@ -305,7 +306,16 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
         user_id: str,
         refresh_token: str | None,
     ) -> bool:
-        """Update user's refresh token."""
+        """
+        Update user's refresh token.
+
+        SECURITY FIX (Audit 4): Store hash instead of raw token.
+        If database is compromised, attackers cannot use the stored hashes
+        to authenticate - they need the original token.
+        """
+        # SECURITY FIX: Hash the token before storing
+        token_hash = hash_refresh_token(refresh_token) if refresh_token else None
+
         query = """
         MATCH (u:User {id: $id})
         SET u.refresh_token = $refresh_token
@@ -314,7 +324,7 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
 
         result = await self.client.execute_single(
             query,
-            {"id": user_id, "refresh_token": refresh_token},
+            {"id": user_id, "refresh_token": token_hash},
         )
 
         return result is not None and result.get("id") == user_id
@@ -508,21 +518,22 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
 
     async def validate_refresh_token(self, user_id: str, token: str) -> bool:
         """
-        Validate that the provided refresh token matches the stored one.
+        Validate that the provided refresh token matches the stored hash.
 
         This prevents use of old/revoked refresh tokens.
 
-        SECURITY FIX (Audit 4 - M1): Uses constant-time comparison to prevent
-        timing attacks that could leak information about valid token prefixes.
-        """
-        import secrets
+        SECURITY FIX (Audit 4): Now stores hashes instead of raw tokens.
+        The stored value is a SHA-256 hash, so we hash the incoming token
+        and compare hashes. This protects tokens if the database is compromised.
 
-        stored_token = await self.get_refresh_token(user_id)
-        if stored_token is None:
+        Uses constant-time comparison to prevent timing attacks.
+        """
+        stored_hash = await self.get_refresh_token(user_id)
+        if stored_hash is None:
             return False
 
-        # SECURITY FIX: Use constant-time comparison to prevent timing attacks
-        return secrets.compare_digest(stored_token, token)
+        # SECURITY FIX: Compare hash of incoming token with stored hash
+        return verify_refresh_token_hash(token, stored_hash)
 
     # =========================================================================
     # Password Reset Token Management
