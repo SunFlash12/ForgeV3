@@ -2,6 +2,15 @@
 Marketplace Service
 
 Handles capsule listings, purchases, and revenue distribution.
+
+TODO: PERSISTENCE NEEDED - _listings and _carts are stored in-memory only.
+This means all marketplace data is lost on service restart.
+Future work needed:
+1. Create MarketplaceRepository with Neo4j persistence
+2. Store listings as :CapsuleListing nodes linked to :Capsule
+3. Store carts as :Cart nodes linked to :User
+4. Add indexes for efficient querying by seller_id, status, etc.
+5. Implement cache layer with Redis for performance
 """
 
 import logging

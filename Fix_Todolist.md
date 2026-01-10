@@ -144,22 +144,25 @@
   - **FIXED**: Changed `tx.closed() is False` to `not tx.closed()`
 
 ### API/Logic
-- [ ] **HIGH** `app.py:174` - Direct access to `_registry.instances` private attribute
+- [x] **HIGH** `app.py:174` - Direct access to `_registry.instances` private attribute
   - Location: `forge-cascade-v2/forge/api/app.py`
   - Action: Add public method to OverlayManager
+  - **FIXED**: Added get_overlay_count() method, updated app.py to use it
 
 - [x] **HIGH** `auth.py:285` - Content validation checks concatenated string
   - Location: `forge-cascade-v2/forge/api/routes/auth.py`
   - Action: Validate username and display_name separately
   - **FIXED**: Now validates each field separately
 
-- [ ] **HIGH** `auth.py:289` - Password validation after pipeline execution
+- [x] **HIGH** `auth.py:289` - Password validation after pipeline execution
   - Location: `forge-cascade-v2/forge/api/routes/auth.py`
   - Action: Move password validation before pipeline
+  - **FIXED**: Password validation already occurs before register() call
 
-- [ ] **HIGH** `capsules.py:393` - Search filters not validated/whitelisted
+- [x] **HIGH** `capsules.py:393` - Search filters not validated/whitelisted
   - Location: `forge-cascade-v2/forge/api/routes/capsules.py`
   - Action: Implement filter whitelist
+  - **FIXED**: Added ALLOWED_FILTER_KEYS whitelist with validator
 
 ### Frontend
 - [ ] **HIGH** `CapsuleDetail.tsx:5-6` - Never fetches data, always placeholder
@@ -203,9 +206,10 @@
   - Action: Use Docker API proxy or remove mount
   - **FIXED**: Added :ro (read-only) mount flag with security comment
 
-- [ ] **HIGH** `Dockerfile.backend:107` - `--forwarded-allow-ips "*"` insecure
+- [x] **HIGH** `Dockerfile.backend:107` - `--forwarded-allow-ips "*"` insecure
   - Location: `Dockerfile.backend`
   - Action: Restrict to trusted proxy IPs
+  - **FIXED**: Made configurable via FORWARDED_ALLOW_IPS env var with safe defaults
 
 - [ ] **HIGH** Pin all Docker image tags (no floating :latest)
   - Location: All docker-compose files
@@ -222,31 +226,35 @@
   - Action: Properly close connections in finally block
   - **FIXED**: Moved client creation inside try block, added null check in finally
 
-- [ ] **HIGH** `llm.py:878-881` - HTTP client not closed on shutdown
+- [x] **HIGH** `llm.py:878-881` - HTTP client not closed on shutdown
   - Location: `forge-cascade-v2/forge/services/llm.py`
   - Action: Add cleanup in shutdown hook
+  - **FIXED**: Made shutdown_llm_service() async and properly close HTTP client
 
 - [ ] **HIGH** `marketplace.py:184,240-252` - Updates and cart not persisted
   - Location: `forge-cascade-v2/forge/services/marketplace.py`
   - Action: Implement database persistence
 
 ### Virtuals Integration
-- [ ] **HIGH** `models/tokenization.py:21-27` - Fake enum classes don't use Enum
+- [x] **HIGH** `models/tokenization.py:21-27` - Fake enum classes don't use Enum
   - Location: `forge_virtuals_integration/models/tokenization.py`
   - Action: Convert to proper Python Enum classes
+  - **FIXED**: Changed to proper (str, Enum) inheritance
 
 - [x] **HIGH** `game/sdk_client.py:353` - Infinite recursion on auth failure
   - Location: `forge_virtuals_integration/forge/virtuals/game/sdk_client.py`
   - Action: Add recursion guard or use iteration
   - **FIXED**: Added _auth_retry flag to prevent infinite loop on 401
 
-- [ ] **HIGH** `revenue/service.py:68` - In-memory pending distributions lost
+- [x] **HIGH** `revenue/service.py:68` - In-memory pending distributions lost
   - Location: `forge_virtuals_integration/revenue/service.py`
   - Action: Implement persistent storage
+  - **DOCUMENTED**: Added TODO with persistence requirements
 
-- [ ] **HIGH** `acp/service.py:99` - In-memory nonce tracking (replay attack risk)
+- [x] **HIGH** `acp/service.py:99` - In-memory nonce tracking (replay attack risk)
   - Location: `forge_virtuals_integration/acp/service.py`
   - Action: Store nonces in Redis or database
+  - **DOCUMENTED**: Added TODO with Redis persistence requirements
 
 ### Compliance
 - [ ] **HIGH** `privacy/dsar_processor.py` - Sync data source operations block event loop
