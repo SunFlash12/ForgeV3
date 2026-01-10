@@ -165,7 +165,8 @@ services:
   # ===========================================================================
 
   redis:
-    image: redis:7-alpine
+    # SECURITY FIX: Pin to specific version
+    image: redis:7.4.1-alpine
     container_name: forge-redis
     volumes:
       - redis-data:/data
