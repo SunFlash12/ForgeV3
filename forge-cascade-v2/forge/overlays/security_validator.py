@@ -20,7 +20,6 @@ from collections import defaultdict
 import asyncio
 import re
 import hashlib
-import threading
 import structlog
 
 from ..security.safe_regex import safe_search, RegexTimeoutError, RegexValidationError
@@ -59,15 +58,27 @@ class ValidationRule:
     description: str
     severity: str  # "low", "medium", "high", "critical"
     enabled: bool = True
-    
+
     def validate(self, data: dict) -> tuple[bool, Optional[str]]:
         """
-        Validate data against this rule.
-        
+        Validate data against this rule (sync version).
+
         Returns:
             Tuple of (is_valid, error_message)
         """
         raise NotImplementedError
+
+    async def validate_async(self, data: dict) -> tuple[bool, Optional[str]]:
+        """
+        Validate data against this rule (async version).
+
+        SECURITY FIX (Audit 4 - M8): Default implementation calls sync version.
+        Override in subclasses that need async operations (e.g., RateLimitRule).
+
+        Returns:
+            Tuple of (is_valid, error_message)
+        """
+        return self.validate(data)
 
 
 @dataclass
@@ -128,6 +139,9 @@ class RateLimitRule(ValidationRule):
 
     SECURITY FIX (Audit 2): Uses proper locking to prevent race conditions
     that could allow rate limit bypass through concurrent requests.
+
+    SECURITY FIX (Audit 4 - M8): Uses asyncio.Lock instead of threading.Lock
+    to avoid blocking the event loop in async contexts.
     """
     requests_per_minute: int = 60
     requests_per_hour: int = 1000
@@ -138,17 +152,58 @@ class RateLimitRule(ValidationRule):
     minute_reset: datetime = field(default_factory=datetime.utcnow)
     hour_reset: datetime = field(default_factory=datetime.utcnow)
 
-    # SECURITY FIX: Lock to ensure atomic check-and-increment
-    _lock: threading.Lock = field(default_factory=threading.Lock)
+    # SECURITY FIX (Audit 4 - M8): Use asyncio.Lock instead of threading.Lock
+    # threading.Lock blocks the entire thread including the event loop
+    _async_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
     def validate(self, data: dict) -> tuple[bool, Optional[str]]:
+        """
+        Synchronous validation (for backwards compatibility).
+
+        WARNING: This method uses internal synchronous logic without locking.
+        For thread-safe rate limiting in async contexts, use validate_async().
+        """
         user_id = data.get("user_id", "anonymous")
         now = datetime.utcnow()
 
-        # SECURITY FIX: Use lock to make check-and-increment atomic
-        # This prevents race conditions where concurrent requests could
-        # bypass rate limits by reading the same counter value
-        with self._lock:
+        # Reset counters if needed (non-atomic, use validate_async for safety)
+        if now - self.minute_reset > timedelta(minutes=1):
+            self.minute_counts.clear()
+            self.minute_reset = now
+
+        if now - self.hour_reset > timedelta(hours=1):
+            self.hour_counts.clear()
+            self.hour_reset = now
+
+        # Get current counts
+        current_minute = self.minute_counts[user_id]
+        current_hour = self.hour_counts[user_id]
+
+        # Check limits
+        if current_minute >= self.requests_per_minute:
+            return False, f"Rate limit exceeded: {self.requests_per_minute}/min"
+
+        if current_hour >= self.requests_per_hour:
+            return False, f"Rate limit exceeded: {self.requests_per_hour}/hour"
+
+        # Increment counters
+        self.minute_counts[user_id] = current_minute + 1
+        self.hour_counts[user_id] = current_hour + 1
+
+        return True, None
+
+    async def validate_async(self, data: dict) -> tuple[bool, Optional[str]]:
+        """
+        Async validation with proper locking.
+
+        SECURITY FIX (Audit 4 - M8): Uses asyncio.Lock for non-blocking
+        rate limiting in async contexts.
+        """
+        user_id = data.get("user_id", "anonymous")
+        now = datetime.utcnow()
+
+        # Use async lock for non-blocking atomic operations
+        async with self._async_lock:
             # Reset counters if needed
             if now - self.minute_reset > timedelta(minutes=1):
                 self.minute_counts.clear()
@@ -465,11 +520,12 @@ class SecurityValidatorOverlay(BaseOverlay):
         for rule in self._rules:
             if not rule.enabled:
                 continue
-            
+
             try:
-                valid, error = rule.validate(data)
+                # SECURITY FIX (Audit 4 - M8): Use async validation to avoid blocking
+                valid, error = await rule.validate_async(data)
                 rule_results[rule.name] = (valid, error)
-                
+
                 if not valid:
                     if rule.severity == "critical":
                         threats.append(f"[CRITICAL] {rule.name}: {error}")
