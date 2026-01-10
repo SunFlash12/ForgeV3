@@ -5,7 +5,7 @@ Democratic decision-making with trust-weighted voting,
 Constitutional AI ethical review, and Ghost Council.
 """
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Any
 
@@ -13,8 +13,8 @@ from pydantic import Field, field_validator, model_validator
 
 from forge.models.base import (
     ForgeModel,
-    TimestampMixin,
     ProposalStatus,
+    TimestampMixin,
     generate_id,
 )
 
@@ -120,11 +120,11 @@ class VoteChoice(str, Enum):
         # Validate and return
         try:
             return cls(canonical)
-        except ValueError:
+        except ValueError as exc:
             valid_choices = ["APPROVE", "REJECT", "ABSTAIN", "FOR", "AGAINST", "YES", "NO"]
             raise ValueError(
                 f"Invalid vote choice '{value}'. Valid choices: {valid_choices}"
-            )
+            ) from exc
 
 
 class ProposalBase(ForgeModel):
@@ -274,14 +274,14 @@ class Proposal(ProposalBase, TimestampMixin):
         from datetime import timezone
         if self.status != ProposalStatus.VOTING:
             return False
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         # Make comparison timezone-safe
         starts = self.voting_starts_at
         ends = self.voting_ends_at
         if starts and starts.tzinfo is None:
-            starts = starts.replace(tzinfo=timezone.utc)
+            starts = starts.replace(tzinfo=UTC)
         if ends and ends.tzinfo is None:
-            ends = ends.replace(tzinfo=timezone.utc)
+            ends = ends.replace(tzinfo=UTC)
         return (
             starts is not None
             and ends is not None
@@ -302,10 +302,10 @@ class Proposal(ProposalBase, TimestampMixin):
             return False
         if self.execution_allowed_after is None:
             return False
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         allowed_after = self.execution_allowed_after
         if allowed_after.tzinfo is None:
-            allowed_after = allowed_after.replace(tzinfo=timezone.utc)
+            allowed_after = allowed_after.replace(tzinfo=UTC)
         return now >= allowed_after
 
     @property
@@ -320,10 +320,10 @@ class Proposal(ProposalBase, TimestampMixin):
             return None
         if self.execution_allowed_after is None:
             return None
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         allowed_after = self.execution_allowed_after
         if allowed_after.tzinfo is None:
-            allowed_after = allowed_after.replace(tzinfo=timezone.utc)
+            allowed_after = allowed_after.replace(tzinfo=UTC)
         remaining = (allowed_after - now).total_seconds()
         return max(0, int(remaining))
 
@@ -351,7 +351,7 @@ class Vote(ForgeModel, TimestampMixin):
         description="Voting weight based on trust flame",
     )
     reason: str | None = None
-    
+
     # Delegation
     delegated_from: str | None = Field(
         default=None,
@@ -395,20 +395,20 @@ class ConstitutionalAnalysis(ForgeModel):
 
     proposal_id: str
     analyzed_at: datetime = Field(default_factory=datetime.utcnow)
-    
+
     # Scores (0-100)
     ethical_score: int = Field(ge=0, le=100)
     fairness_score: int = Field(ge=0, le=100)
     safety_score: int = Field(ge=0, le=100)
     transparency_score: int = Field(ge=0, le=100)
-    
+
     # Analysis
     concerns: list[EthicalConcern] = Field(default_factory=list)
     summary: str
     recommendation: str = Field(
         description="approve, review, reject",
     )
-    
+
     # Confidence
     confidence: float = Field(
         ge=0.0,
