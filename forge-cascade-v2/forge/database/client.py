@@ -144,7 +144,9 @@ class Neo4jClient:
                 await tx.commit()
             except Exception:
                 # Rollback on error - check if transaction is still open
-                if tx.closed() is False:
+                # FIX: Use 'not tx.closed()' instead of 'tx.closed() is False'
+                # to handle any falsy value correctly
+                if not tx.closed():
                     await tx.rollback()
                 raise
 

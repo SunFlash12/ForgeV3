@@ -107,42 +107,56 @@ class Histogram:
     buckets: list[float] = field(default_factory=lambda: [
         0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0
     ])
-    _observations: dict[tuple, list[float]] = field(default_factory=dict)
-    
+    # FIX: Store running statistics instead of all observations to prevent unbounded memory
+    _stats: dict[tuple, dict] = field(default_factory=dict)
+    # Keep last N observations for percentile calculation (bounded)
+    _recent_observations: dict[tuple, list[float]] = field(default_factory=dict)
+    _max_observations: int = 10000  # Limit stored observations per label set
+
     def observe(self, value: float, **labels) -> None:
-        """Observe a value."""
+        """Observe a value with bounded memory."""
         key = self._label_key(labels)
-        if key not in self._observations:
-            self._observations[key] = []
-        self._observations[key].append(value)
+
+        # Initialize stats if needed
+        if key not in self._stats:
+            self._stats[key] = {"count": 0, "sum": 0.0, "bucket_counts": {b: 0 for b in self.buckets}}
+            self._stats[key]["bucket_counts"][float("inf")] = 0
+            self._recent_observations[key] = []
+
+        # Update running statistics
+        self._stats[key]["count"] += 1
+        self._stats[key]["sum"] += value
+
+        # Update bucket counts
+        for bucket in self.buckets:
+            if value <= bucket:
+                self._stats[key]["bucket_counts"][bucket] += 1
+        self._stats[key]["bucket_counts"][float("inf")] += 1
+
+        # Store recent observation with eviction
+        obs = self._recent_observations[key]
+        obs.append(value)
+        if len(obs) > self._max_observations:
+            obs.pop(0)  # Remove oldest
     
     def _label_key(self, labels: dict) -> tuple:
         return tuple(labels.get(l, "") for l in self.labels)
     
     def collect(self) -> list[dict]:
+        """Collect histogram metrics using pre-computed statistics."""
         results = []
-        for key, observations in self._observations.items():
+        for key, stats in self._stats.items():
             labels = dict(zip(self.labels, key))
-            
-            # Calculate bucket counts
-            bucket_counts = {}
-            for bucket in self.buckets:
-                bucket_counts[bucket] = sum(1 for o in observations if o <= bucket)
-            bucket_counts[float("inf")] = len(observations)
-            
-            # Sum and count
-            total = sum(observations)
-            count = len(observations)
-            
+
             results.append({
                 "name": self.name,
                 "type": "histogram",
                 "labels": labels,
-                "buckets": bucket_counts,
-                "sum": total,
-                "count": count,
+                "buckets": stats["bucket_counts"].copy(),
+                "sum": stats["sum"],
+                "count": stats["count"],
             })
-        
+
         return results
 
 
@@ -153,43 +167,57 @@ class Summary:
     description: str
     labels: list[str] = field(default_factory=list)
     quantiles: list[float] = field(default_factory=lambda: [0.5, 0.9, 0.99])
+    # FIX: Bounded storage to prevent unbounded memory growth
     _observations: dict[tuple, list[float]] = field(default_factory=dict)
-    
+    _stats: dict[tuple, dict] = field(default_factory=dict)
+    _max_observations: int = 10000  # Limit for quantile calculation
+
     def observe(self, value: float, **labels) -> None:
-        """Observe a value."""
+        """Observe a value with bounded memory."""
         key = self._label_key(labels)
         if key not in self._observations:
             self._observations[key] = []
-        self._observations[key].append(value)
-    
+            self._stats[key] = {"count": 0, "sum": 0.0}
+
+        # Update running stats (unbounded but just two numbers)
+        self._stats[key]["count"] += 1
+        self._stats[key]["sum"] += value
+
+        # Bounded observation storage for quantile calculation
+        obs = self._observations[key]
+        obs.append(value)
+        if len(obs) > self._max_observations:
+            obs.pop(0)  # Remove oldest
+
     def _label_key(self, labels: dict) -> tuple:
         return tuple(labels.get(l, "") for l in self.labels)
-    
+
     def collect(self) -> list[dict]:
         results = []
         for key, observations in self._observations.items():
             labels = dict(zip(self.labels, key))
             sorted_obs = sorted(observations)
-            count = len(sorted_obs)
-            
+            recent_count = len(sorted_obs)
+            stats = self._stats.get(key, {"count": 0, "sum": 0.0})
+
             quantile_values = {}
             for q in self.quantiles:
-                if count > 0:
-                    idx = int(q * count)
-                    idx = min(idx, count - 1)
+                if recent_count > 0:
+                    idx = int(q * recent_count)
+                    idx = min(idx, recent_count - 1)
                     quantile_values[q] = sorted_obs[idx]
                 else:
                     quantile_values[q] = 0
-            
+
             results.append({
                 "name": self.name,
                 "type": "summary",
                 "labels": labels,
                 "quantiles": quantile_values,
-                "sum": sum(observations),
-                "count": count,
+                "sum": stats["sum"],  # Use running total
+                "count": stats["count"],  # Use running count
             })
-        
+
         return results
 
 

@@ -348,8 +348,13 @@ class GAMESDKClient:
             if e.response.status_code == 429:
                 raise RateLimitError("Rate limit exceeded")
             elif e.response.status_code == 401:
+                # FIX: Add recursion guard to prevent infinite loop on auth failure
+                # Check if this is already a retry attempt
+                if kwargs.get("_auth_retry"):
+                    raise AuthenticationError("Authentication failed after retry")
                 # Token may have expired, try to refresh
                 await self._authenticate()
+                kwargs["_auth_retry"] = True
                 return await self._make_request(method, endpoint, **kwargs)
             elif e.response.status_code == 404:
                 raise AgentNotFoundError(f"Resource not found: {endpoint}")

@@ -399,19 +399,21 @@ async def find_paths(
     """
     Find shortest paths between two nodes.
     """
-    path_query = """
+    # SECURITY FIX: Neo4j doesn't support parameterizing path length bounds.
+    # max_hops is validated by FastAPI (int between 1-10), so safe to use in f-string.
+    path_query = f"""
     MATCH path = shortestPath(
-        (source:Capsule {id: $source_id})-[*1..$max_hops]-(target:Capsule {id: $target_id})
+        (source:Capsule {{id: $source_id}})-[*1..{max_hops}]-(target:Capsule {{id: $target_id}})
     )
-    RETURN [n IN nodes(path) | {id: n.id, title: n.title, type: n.type}] AS nodes,
-           [r IN relationships(path) | {type: type(r)}] AS relationships,
+    RETURN [n IN nodes(path) | {{id: n.id, title: n.title, type: n.type}}] AS nodes,
+           [r IN relationships(path) | {{type: type(r)}}] AS relationships,
            length(path) AS path_length
     LIMIT $limit
     """
 
     paths = await graph_repo.client.execute(
         path_query,
-        {"source_id": source_id, "target_id": target_id, "max_hops": max_hops, "limit": limit}
+        {"source_id": source_id, "target_id": target_id, "limit": limit}
     )
 
     return {

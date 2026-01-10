@@ -23,9 +23,11 @@ services:
     image: neo4j:5.15.0-enterprise
     container_name: forge-neo4j
     restart: unless-stopped
+    # SECURITY FIX: Bind to localhost only - don't expose database externally
+    # Use internal Docker network for service-to-service communication
     ports:
-      - "7474:7474"  # HTTP
-      - "7687:7687"  # Bolt
+      - "127.0.0.1:7474:7474"  # HTTP - localhost only
+      - "127.0.0.1:7687:7687"  # Bolt - localhost only
     environment:
       NEO4J_AUTH: "${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD}"
       NEO4J_ACCEPT_LICENSE_AGREEMENT: "yes"
@@ -65,14 +67,15 @@ services:
     image: redis:7-alpine
     container_name: forge-redis
     restart: unless-stopped
+    # SECURITY FIX: Bind to localhost only - don't expose Redis externally
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     command: >
       redis-server
       --appendonly yes
       --maxmemory 1gb
       --maxmemory-policy allkeys-lru
-      --requirepass ${REDIS_PASSWORD}
+      --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
     volumes:
       - redis_data:/data
     networks:
@@ -284,7 +287,9 @@ services:
       - ./promtail.yml:/etc/promtail/config.yml:ro
       - api_logs:/var/log/forge:ro
       - nginx_logs:/var/log/nginx:ro
-      - /var/run/docker.sock:/var/run/docker.sock
+      # SECURITY FIX: Mount Docker socket as read-only to limit attack surface
+      # Consider using a Docker API proxy like tecnativa/docker-socket-proxy for better security
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     command: -config.file=/etc/promtail/config.yml
     networks:
       - forge-network

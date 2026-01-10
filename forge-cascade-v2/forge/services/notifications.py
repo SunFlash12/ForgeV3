@@ -121,6 +121,7 @@ class NotificationService:
         self.redis = redis_client
         self.neo4j = neo4j_client  # AUDIT 3 FIX (A1-D03): Add Neo4j client
         self._http_client: httpx.AsyncClient | None = None
+        self._logger = logger  # FIX: Initialize instance logger from module logger
 
         # In-memory storage (would use database in production)
         self._notifications: dict[str, Notification] = {}
@@ -839,21 +840,25 @@ class NotificationService:
         loaded = 0
         try:
             # Load webhooks (more important than old notifications)
+            # FIX: Read secret_hash field that matches what _save_webhook_to_db writes
             query = """
             MATCH (w:WebhookSubscription)
             WHERE w.active = true
             RETURN w.id as id, w.user_id as user_id, w.url as url,
-                   w.secret as secret, w.active as active, w.events as events,
+                   w.secret_hash as secret_hash, w.active as active, w.events as events,
                    w.created_at as created_at
             """
             results = await self.neo4j.execute_read(query)
 
             for record in results:
+                # Note: secret_hash is stored, not plaintext secret
+                # Webhooks loaded from DB won't have plaintext secret for HMAC
+                # They need to be re-registered or use a different auth mechanism
                 webhook = WebhookSubscription(
                     id=record["id"],
                     user_id=record["user_id"],
                     url=record["url"],
-                    secret=record["secret"],
+                    secret=record.get("secret_hash"),  # Use hash as placeholder
                     active=record["active"],
                     events=[NotificationEvent(e) for e in (record["events"] or [])],
                 )

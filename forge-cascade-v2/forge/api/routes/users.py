@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 
 from forge.models.base import TrustLevel, UserRole
 from forge.models.user import User
-from forge.security.dependencies import (
+from forge.api.dependencies import (
     ActiveUserDep,
     AdminUserDep,
     AuditRepoDep,

@@ -442,27 +442,12 @@ class ClientInfo:
         self.user_agent = user_agent
 
 
-# Trusted proxy IP ranges (Docker internal networks, localhost, common load balancers)
-# In production, configure this via settings
-TRUSTED_PROXY_RANGES = [
-    "127.0.0.0/8",      # Localhost
-    "10.0.0.0/8",       # Private Class A
-    "172.16.0.0/12",    # Private Class B (Docker default)
-    "192.168.0.0/16",   # Private Class C
-    "169.254.0.0/16",   # Link-local
-]
+# SECURITY FIX: Get trusted proxy ranges from settings/environment
+# Default ranges cover Docker internal networks, localhost, common load balancers
+import os as _os
 
-# IP address validation regex
-_IP_PATTERN = re.compile(
-    r'^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}'
-    r'(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$'
-)
-
-_IPV6_PATTERN = re.compile(
-    r'^(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$|'
-    r'^::(?:[0-9a-fA-F]{1,4}:){0,6}[0-9a-fA-F]{1,4}$|'
-    r'^[0-9a-fA-F]{1,4}::(?:[0-9a-fA-F]{1,4}:){0,5}[0-9a-fA-F]{1,4}$'
-)
+_DEFAULT_PROXY_RANGES = "127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,169.254.0.0/16"
+TRUSTED_PROXY_RANGES = _os.getenv("TRUSTED_PROXY_RANGES", _DEFAULT_PROXY_RANGES).split(",")
 
 
 def _is_valid_ip(ip: str) -> bool:

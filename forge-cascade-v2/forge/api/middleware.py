@@ -414,6 +414,11 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             pipe.expire(hour_key, 7200)  # 2 hour TTL
             results = await pipe.execute()
 
+            # SECURITY FIX: Validate pipeline results before indexing
+            if not results or len(results) < 4:
+                logger.warning("redis_pipeline_incomplete", results_count=len(results) if results else 0)
+                return self._check_memory_rate_limit(key, minute_limit, hour_limit, burst)
+
             minute_count = results[0]
             hour_count = results[2]
 

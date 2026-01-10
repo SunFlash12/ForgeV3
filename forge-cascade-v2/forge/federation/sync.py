@@ -687,7 +687,7 @@ class SyncService:
                 result = await session.run(query, {
                     "id": peer.id,
                     "name": peer.name,
-                    "endpoint": peer.endpoint,
+                    "endpoint": peer.url,  # FIX: Use 'url' attribute from FederatedPeer model
                     "public_key": peer.public_key,
                     "status": peer.status.value if hasattr(peer.status, 'value') else str(peer.status),
                     "trust_score": peer.trust_score,

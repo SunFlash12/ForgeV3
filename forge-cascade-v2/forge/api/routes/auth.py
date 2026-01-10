@@ -278,12 +278,13 @@ async def register(
     """
     from forge.security.auth_service import RegistrationError
 
-    # Resilience: Content validation for username and display_name
-    content_to_validate = request.username
-    if request.display_name:
-        content_to_validate += f" {request.display_name}"
-    validation_result = await validate_capsule_content(content_to_validate)
+    # SECURITY FIX: Validate username and display_name separately to avoid
+    # false positives from concatenation (e.g., valid "test" + "user" = "test user")
+    validation_result = await validate_capsule_content(request.username)
     check_content_validation(validation_result)
+    if request.display_name:
+        validation_result = await validate_capsule_content(request.display_name)
+        check_content_validation(validation_result)
 
     # Validate password strength on backend
     try:
