@@ -400,7 +400,7 @@ class Pipeline:
         # Execute phases
         errors = []
         events_emitted = []
-        start_time = asyncio.get_event_loop().time()
+        start_time = asyncio.get_running_loop().time()
         
         try:
             for phase in self.PHASE_ORDER:
@@ -489,7 +489,7 @@ class Pipeline:
         )
         
         status = PipelineStatus.FAILED if failed_required or errors else PipelineStatus.COMPLETED
-        duration_ms = (asyncio.get_event_loop().time() - start_time) * 1000
+        duration_ms = (asyncio.get_running_loop().time() - start_time) * 1000
         
         # Build result
         result = PipelineResult(
@@ -540,7 +540,7 @@ class Pipeline:
         config: PhaseConfig
     ) -> PhaseResult:
         """Execute a single phase."""
-        start_time = asyncio.get_event_loop().time()
+        start_time = asyncio.get_running_loop().time()
         started_at = datetime.utcnow()
         
         self._logger.debug(
@@ -561,7 +561,7 @@ class Pipeline:
                 )
                 result.started_at = started_at
                 result.completed_at = datetime.utcnow()
-                result.duration_ms = (asyncio.get_event_loop().time() - start_time) * 1000
+                result.duration_ms = (asyncio.get_running_loop().time() - start_time) * 1000
                 return result
                 
             except asyncio.TimeoutError:
@@ -582,7 +582,7 @@ class Pipeline:
                 phase=phase,
                 status=PipelineStatus.COMPLETED,
                 data=context.data.copy(),
-                duration_ms=(asyncio.get_event_loop().time() - start_time) * 1000,
+                duration_ms=(asyncio.get_running_loop().time() - start_time) * 1000,
                 started_at=started_at,
                 completed_at=datetime.utcnow()
             )
@@ -604,7 +604,7 @@ class Pipeline:
                 phase=phase,
                 status=PipelineStatus.COMPLETED,
                 data=context.data.copy(),
-                duration_ms=(asyncio.get_event_loop().time() - start_time) * 1000,
+                duration_ms=(asyncio.get_running_loop().time() - start_time) * 1000,
                 started_at=started_at,
                 completed_at=datetime.utcnow()
             )
@@ -719,7 +719,7 @@ class Pipeline:
         all_success = all(r.success for r in results) if results else True
         status = PipelineStatus.COMPLETED if all_success and not errors else PipelineStatus.FAILED
         
-        duration_ms = (asyncio.get_event_loop().time() - start_time) * 1000
+        duration_ms = (asyncio.get_running_loop().time() - start_time) * 1000
         
         self._logger.debug(
             "phase_completed",

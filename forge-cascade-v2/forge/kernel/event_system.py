@@ -520,7 +520,7 @@ class EventBus:
     
     async def _process_event(self, event: Event) -> None:
         """Process a single event by dispatching to matching subscribers."""
-        start_time = asyncio.get_event_loop().time()
+        start_time = asyncio.get_running_loop().time()
         
         # Find matching subscriptions using type index
         potential_subs = self._type_index.get(event.event_type, set())
@@ -542,7 +542,7 @@ class EventBus:
                     self._metrics.events_delivered += 1
         
         # Record metrics
-        duration_ms = (asyncio.get_event_loop().time() - start_time) * 1000
+        duration_ms = (asyncio.get_running_loop().time() - start_time) * 1000
         self._metrics.record_delivery(duration_ms)
     
     async def _deliver_event(

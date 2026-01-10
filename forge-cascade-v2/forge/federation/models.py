@@ -86,13 +86,21 @@ class FederatedPeer(ForgeModel):
     )
 
     # Trust & Status
+    # Note: Peer trust uses 0.0-1.0 scale for granular trust scoring.
+    # This differs from capsule TrustLevel (0-100) used in min_trust_to_sync.
+    # Use trust_score_as_int property for 0-100 scale conversion.
     trust_score: float = Field(
         default=0.3,
         ge=0.0,
         le=1.0,
-        description="Trust level: 0.0=untrusted, 1.0=fully trusted"
+        description="Peer trust: 0.0=untrusted, 1.0=fully trusted (0.0-1.0 scale)"
     )
     status: PeerStatus = Field(default=PeerStatus.PENDING)
+
+    @property
+    def trust_score_as_int(self) -> int:
+        """Convert trust_score (0.0-1.0) to integer scale (0-100) for TrustLevel compatibility."""
+        return int(self.trust_score * 100)
 
     # Sync configuration
     sync_direction: SyncDirection = Field(default=SyncDirection.BIDIRECTIONAL)

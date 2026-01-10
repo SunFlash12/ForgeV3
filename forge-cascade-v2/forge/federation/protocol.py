@@ -759,7 +759,11 @@ class FederationProtocol:
     API_VERSION = "1.0"
     HANDSHAKE_TIMEOUT = 30  # seconds
     REQUEST_TIMEOUT = 60  # seconds
-    DEFAULT_KEY_PATH = "/app/data/federation_keys"  # Docker volume mount point
+    # Configurable via FEDERATION_KEY_PATH env var; fallback supports both Docker and local dev
+    DEFAULT_KEY_PATH = os.getenv(
+        "FEDERATION_KEY_PATH",
+        "/app/data/federation_keys" if os.path.exists("/app") else "./data/federation_keys"
+    )
 
     def __init__(
         self,

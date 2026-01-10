@@ -255,7 +255,7 @@ class BaseOverlay(ABC):
         if context.fuel_budget:
             timeout_ms = context.fuel_budget.timeout_ms
         
-        start_time = asyncio.get_event_loop().time()
+        start_time = asyncio.get_running_loop().time()
         
         try:
             # Execute with timeout
@@ -265,7 +265,7 @@ class BaseOverlay(ABC):
             )
             
             # Record metrics
-            duration_ms = (asyncio.get_event_loop().time() - start_time) * 1000
+            duration_ms = (asyncio.get_running_loop().time() - start_time) * 1000
             result.duration_ms = duration_ms
             
             self.execution_count += 1
