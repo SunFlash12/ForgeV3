@@ -18,36 +18,38 @@ Security Features:
 from __future__ import annotations
 
 import secrets
-from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, status, Response, Request, Cookie
+from fastapi import APIRouter, Cookie, HTTPException, Request, Response, status
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from forge.api.dependencies import (
-    AuthServiceDep,
-    UserRepoDep,
-    CurrentUserDep,
     ActiveUserDep,
     AuditRepoDep,
-    SettingsDep,
-    CorrelationIdDep,
+    AuthServiceDep,
     ClientInfoDep,
+    CorrelationIdDep,
+    SettingsDep,
+    UserRepoDep,
 )
-from forge.models.user import User, TrustLevel, UserUpdate
-from forge.security.password import verify_password, hash_password, PasswordValidationError, validate_password_strength
+from forge.models.user import TrustLevel, User, UserUpdate
 
 # Resilience integration - validation and metrics
 from forge.resilience.integration import (
-    validate_capsule_content,
     check_content_validation,
     record_login_attempt,
-    record_registration,
-    record_token_refresh,
     record_logout,
     record_password_change,
+    record_registration,
+    record_token_refresh,
+    validate_capsule_content,
 )
-
+from forge.security.password import (
+    PasswordValidationError,
+    hash_password,
+    validate_password_strength,
+    verify_password,
+)
 
 router = APIRouter()
 
@@ -57,6 +59,7 @@ router = APIRouter()
 # =============================================================================
 
 from forge.config import get_settings
+
 
 def get_cookie_settings() -> dict:
     """
@@ -147,8 +150,8 @@ class RegisterRequest(BaseModel):
     """User registration request."""
     username: str = Field(..., min_length=3, max_length=50, pattern=r"^[a-zA-Z0-9_-]+$")
     email: EmailStr
-    # SECURITY FIX (Audit 2): Add max_length to prevent DoS via large payloads
-    password: str = Field(..., min_length=8, max_length=128)
+    # SECURITY FIX (Audit 4 - M): Bcrypt truncates at 72 bytes, so limit max_length
+    password: str = Field(..., min_length=8, max_length=72)
     display_name: str | None = Field(default=None, max_length=100)
 
 
@@ -175,9 +178,10 @@ class RefreshRequest(BaseModel):
 
 class ChangePasswordRequest(BaseModel):
     """Password change request."""
-    # SECURITY FIX (Audit 2): Add length limits to both password fields
+    # Current password can be longer in case user previously set a long password
     current_password: str = Field(..., min_length=1, max_length=128)
-    new_password: str = Field(..., min_length=8, max_length=128)
+    # SECURITY FIX (Audit 4 - M): Bcrypt truncates at 72 bytes, so limit new password
+    new_password: str = Field(..., min_length=8, max_length=72)
 
 
 # Reserved metadata keys that could cause security issues (prototype pollution, etc.)
@@ -243,9 +247,9 @@ class UserResponse(BaseModel):
     roles: list[str]
     is_active: bool
     created_at: str
-    
+
     @classmethod
-    def from_user(cls, user: User) -> "UserResponse":
+    def from_user(cls, user: User) -> UserResponse:
         return cls(
             id=user.id,
             username=user.username,
@@ -406,7 +410,7 @@ async def login(
             user=UserResponse.from_user(user),
         )
 
-    except Exception as e:
+    except Exception:
         # Resilience: Record failed login
         record_login_attempt(success=False, reason="invalid_credentials")
         raise HTTPException(
@@ -478,7 +482,7 @@ async def refresh_token(
             expires_in=expires_in,
         )
 
-    except ValueError as e:
+    except ValueError:
         # Resilience: Record failed token refresh
         record_token_refresh(success=False)
         raise HTTPException(
@@ -583,16 +587,16 @@ async def update_profile(
 
     if has_updates:
         updated_user = await user_repo.update(user.id, update_data)
-        
+
         await audit_repo.log_user_action(
             actor_id=user.id,
             target_user_id=user.id,
             action="profile_updated",
             details={"fields": [f for f in ["display_name", "email"] if getattr(request, f) is not None]},
         )
-        
+
         return UserResponse.from_user(updated_user)
-    
+
     return UserResponse.from_user(user)
 
 
@@ -620,7 +624,7 @@ async def change_password(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Current password is incorrect",
         )
-    
+
     # Update password
     new_hash = hash_password(request.new_password)
     await user_repo.update(user.id, {"password_hash": new_hash})
@@ -689,7 +693,7 @@ def _score_to_next_level(score: float, current: TrustLevel) -> float | None:
 # SECURITY FIX (Audit 3): MFA Endpoints
 # =============================================================================
 
-from forge.security.mfa import get_mfa_service, MFAStatus
+from forge.security.mfa import get_mfa_service
 
 
 class MFASetupResponse(BaseModel):
@@ -864,7 +868,7 @@ async def regenerate_backup_codes(
         )
 
         return new_codes
-    except ValueError as e:
+    except ValueError:
         # SECURITY FIX (Audit 3): Generic message for MFA errors
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
