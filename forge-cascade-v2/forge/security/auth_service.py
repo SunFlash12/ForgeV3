@@ -3,11 +3,16 @@ Authentication Service for Forge Cascade V2
 
 Provides high-level authentication operations including login,
 registration, token refresh, and session management.
+
+SECURITY FIX (Audit 4 - M2): Added IP-based rate limiting to prevent
+credential stuffing attacks across multiple accounts.
 """
 
 import secrets
 import hashlib
-from datetime import datetime, timedelta
+import threading
+from collections import OrderedDict
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from ..config import get_settings
@@ -65,22 +70,149 @@ class RegistrationError(AuthenticationError):
     pass
 
 
+class IPRateLimitExceededError(AuthenticationError):
+    """Too many login attempts from this IP address."""
+    pass
+
+
+class IPRateLimiter:
+    """
+    SECURITY FIX (Audit 4 - M2): IP-based rate limiting to prevent credential stuffing.
+
+    Tracks failed login attempts per IP address (not per account) to prevent
+    attackers from trying different passwords across many accounts from the same IP.
+
+    This complements per-account lockout by also limiting the total number of
+    failed attempts from a single IP address across ALL accounts.
+    """
+
+    # Rate limit settings
+    MAX_ATTEMPTS_PER_WINDOW = 20  # Max failed attempts per IP per window
+    WINDOW_SECONDS = 300  # 5 minute window
+    LOCKOUT_SECONDS = 900  # 15 minute lockout after exceeding limit
+    MAX_IPS = 50000  # Max tracked IPs (memory limit)
+
+    def __init__(self):
+        self._attempts: OrderedDict[str, list[datetime]] = OrderedDict()
+        self._lockouts: dict[str, datetime] = {}
+        self._lock = threading.Lock()
+
+    def _cleanup_old_entries(self) -> None:
+        """Remove expired entries (must hold lock)."""
+        now = datetime.now(timezone.utc)
+        cutoff = now - timedelta(seconds=self.WINDOW_SECONDS)
+
+        # Clean up old attempts
+        to_remove = []
+        for ip, attempts in self._attempts.items():
+            # Remove old attempts within each IP
+            self._attempts[ip] = [a for a in attempts if a > cutoff]
+            if not self._attempts[ip]:
+                to_remove.append(ip)
+
+        for ip in to_remove:
+            del self._attempts[ip]
+
+        # Clean up expired lockouts
+        expired_lockouts = [ip for ip, exp in self._lockouts.items() if exp < now]
+        for ip in expired_lockouts:
+            del self._lockouts[ip]
+
+    def check_rate_limit(self, ip_address: str) -> tuple[bool, int]:
+        """
+        Check if IP is rate limited.
+
+        Returns:
+            Tuple of (is_allowed, seconds_until_allowed)
+        """
+        if not ip_address:
+            return (True, 0)  # No IP means we can't rate limit
+
+        with self._lock:
+            now = datetime.now(timezone.utc)
+
+            # Check if IP is in lockout
+            lockout_until = self._lockouts.get(ip_address)
+            if lockout_until and lockout_until > now:
+                seconds_remaining = int((lockout_until - now).total_seconds())
+                return (False, seconds_remaining)
+
+            # Count recent attempts
+            attempts = self._attempts.get(ip_address, [])
+            cutoff = now - timedelta(seconds=self.WINDOW_SECONDS)
+            recent_attempts = [a for a in attempts if a > cutoff]
+
+            if len(recent_attempts) >= self.MAX_ATTEMPTS_PER_WINDOW:
+                # Trigger lockout
+                self._lockouts[ip_address] = now + timedelta(seconds=self.LOCKOUT_SECONDS)
+                return (False, self.LOCKOUT_SECONDS)
+
+            return (True, 0)
+
+    def record_attempt(self, ip_address: str, success: bool) -> None:
+        """
+        Record a login attempt.
+
+        Only failed attempts count against the rate limit.
+        Successful logins reset the counter for that IP.
+        """
+        if not ip_address:
+            return
+
+        with self._lock:
+            self._cleanup_old_entries()
+
+            if success:
+                # Successful login - clear failed attempts for this IP
+                self._attempts.pop(ip_address, None)
+                self._lockouts.pop(ip_address, None)
+            else:
+                # Failed login - record attempt
+                if ip_address not in self._attempts:
+                    # Enforce max IPs limit
+                    if len(self._attempts) >= self.MAX_IPS:
+                        # Remove oldest 10%
+                        to_remove = self.MAX_IPS // 10
+                        for _ in range(to_remove):
+                            if self._attempts:
+                                self._attempts.popitem(last=False)
+
+                    self._attempts[ip_address] = []
+
+                self._attempts[ip_address].append(datetime.now(timezone.utc))
+
+
+# Global IP rate limiter instance
+_ip_rate_limiter = IPRateLimiter()
+
+
+def get_ip_rate_limiter() -> IPRateLimiter:
+    """Get the global IP rate limiter."""
+    return _ip_rate_limiter
+
+
 class AuthService:
     """
     Authentication service providing login, registration, and token management.
+
+    SECURITY FIX (Audit 4 - M2): Now includes IP-based rate limiting to prevent
+    credential stuffing attacks across multiple accounts.
     """
-    
+
     # Lockout settings
     MAX_FAILED_ATTEMPTS = 5
     LOCKOUT_DURATION_MINUTES = 30
-    
+
     def __init__(
         self,
         user_repo: UserRepository,
-        audit_repo: AuditRepository
+        audit_repo: AuditRepository,
+        ip_rate_limiter: IPRateLimiter | None = None,
     ):
         self.user_repo = user_repo
         self.audit_repo = audit_repo
+        # SECURITY FIX (Audit 4 - M2): IP-based rate limiting
+        self._ip_rate_limiter = ip_rate_limiter or get_ip_rate_limiter()
     
     # =========================================================================
     # Registration
@@ -159,28 +291,55 @@ class AuthService:
     ) -> tuple[User, Token]:
         """
         Authenticate user and return tokens.
-        
+
+        SECURITY FIX (Audit 4 - M2): Now checks IP-based rate limiting before
+        processing login to prevent credential stuffing attacks.
+
         Args:
             username_or_email: Username or email address
             password: Plain text password
             ip_address: Client IP for audit logging
             user_agent: Client user agent
-            
+
         Returns:
             Tuple of (User, Token)
-            
+
         Raises:
             InvalidCredentialsError: If credentials are incorrect
             AccountLockedError: If account is locked
             AccountDeactivatedError: If account is deactivated
+            IPRateLimitExceededError: If too many failed attempts from this IP
         """
+        # SECURITY FIX (Audit 4 - M2): Check IP-based rate limit FIRST
+        # This prevents credential stuffing across multiple accounts
+        if ip_address:
+            is_allowed, seconds_remaining = self._ip_rate_limiter.check_rate_limit(ip_address)
+            if not is_allowed:
+                await self.audit_repo.log_user_action(
+                    actor_id="unknown",
+                    target_user_id="unknown",
+                    action="login_blocked",
+                    details={
+                        "reason": "ip_rate_limited",
+                        "seconds_remaining": seconds_remaining,
+                    },
+                    ip_address=ip_address,
+                    user_agent=user_agent
+                )
+                raise IPRateLimitExceededError(
+                    f"Too many login attempts. Please wait {seconds_remaining} seconds."
+                )
+
         # Find user
         user = await self.user_repo.get_by_username_or_email(username_or_email)
         
         if not user:
+            # SECURITY FIX (Audit 4 - M2): Record failed attempt for IP rate limiting
+            if ip_address:
+                self._ip_rate_limiter.record_attempt(ip_address, success=False)
+
             # SECURITY FIX (Audit 3): Don't log the attempted username/email to prevent
             # user enumeration via log analysis. Hash it for correlation if needed.
-            import hashlib
             masked_identifier = hashlib.sha256(username_or_email.encode()).hexdigest()[:16]
             await self.audit_repo.log_user_action(
                 actor_id="unknown",
@@ -220,16 +379,20 @@ class AuthService:
         
         # Verify password
         if not verify_password(password, user.password_hash):
+            # SECURITY FIX (Audit 4 - M2): Record failed attempt for IP rate limiting
+            if ip_address:
+                self._ip_rate_limiter.record_attempt(ip_address, success=False)
+
             # Record failed attempt
             await self.user_repo.record_failed_login(user.id)
-            
+
             # Check if we should lock the account
             if user.failed_login_attempts >= self.MAX_FAILED_ATTEMPTS - 1:
                 lockout_until = datetime.utcnow() + timedelta(
                     minutes=self.LOCKOUT_DURATION_MINUTES
                 )
                 await self.user_repo.set_lockout(user.id, lockout_until)
-                
+
                 await self.audit_repo.log_user_action(
                     actor_id=user.id,
                     target_user_id=user.id,
@@ -241,7 +404,7 @@ class AuthService:
                     ip_address=ip_address,
                     user_agent=user_agent
                 )
-            
+
             await self.audit_repo.log_user_action(
                 actor_id=user.id,
                 target_user_id=user.id,
@@ -261,7 +424,11 @@ class AuthService:
         # Clear any lockout and record successful login
         await self.user_repo.clear_lockout(user.id)
         await self.user_repo.record_login(user.id)
-        
+
+        # SECURITY FIX (Audit 4 - M2): Record successful login to clear IP rate limit
+        if ip_address:
+            self._ip_rate_limiter.record_attempt(ip_address, success=True)
+
         # Create tokens
         role_value = user.role.value if hasattr(user.role, 'value') else user.role
         token = create_token_pair(
