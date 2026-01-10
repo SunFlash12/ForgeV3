@@ -3,11 +3,18 @@ Capsule Repository
 
 Repository for Capsule CRUD operations, symbolic inheritance (lineage),
 and semantic search using vector embeddings.
+
+Integrity Features:
+- Computes content_hash (SHA-256) on create
+- Computes merkle_root for lineage verification
+- Stores parent_content_hash on fork for immutable snapshots
+- Optional integrity verification on read
 """
 
 from __future__ import annotations
 
 import json
+import secrets
 from datetime import datetime
 from typing import Any
 
@@ -20,6 +27,7 @@ from forge.models.capsule import (
     CapsuleSearchResult,
     CapsuleUpdate,
     CapsuleWithLineage,
+    IntegrityStatus,
     LineageNode,
 )
 from forge.models.semantic_edges import (
@@ -32,6 +40,10 @@ from forge.models.semantic_edges import (
     SemanticRelationType,
 )
 from forge.repositories.base import BaseRepository
+from forge.security.capsule_integrity import (
+    CapsuleIntegrityService,
+    ContentHashMismatchError,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -79,6 +91,11 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
         """
         Create a new capsule with optional symbolic inheritance.
 
+        Integrity features:
+        - Computes SHA-256 content_hash
+        - Computes merkle_root for lineage verification
+        - Stores parent_content_hash on fork (immutable snapshot)
+
         Args:
             data: Capsule creation data
             owner_id: ID of the owner user
@@ -89,6 +106,43 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
         """
         capsule_id = self._generate_id()
         now = self._now()
+
+        # ═══════════════════════════════════════════════════════════════
+        # INTEGRITY: Compute content hash and merkle root
+        # ═══════════════════════════════════════════════════════════════
+        content_hash = CapsuleIntegrityService.compute_content_hash(data.content)
+
+        # For Merkle tree: get parent's content_hash and merkle_root if forking
+        parent_content_hash: str | None = None
+        parent_merkle_root: str | None = None
+
+        if data.parent_id:
+            # Fetch parent's integrity data
+            parent_query = """
+            MATCH (parent:Capsule {id: $parent_id})
+            RETURN parent.content_hash AS content_hash,
+                   parent.merkle_root AS merkle_root,
+                   parent.content AS content
+            """
+            parent_result = await self.client.execute_single(
+                parent_query, {"parent_id": data.parent_id}
+            )
+            if parent_result:
+                # Get parent's content hash (compute if not stored)
+                parent_content_hash = parent_result.get("content_hash")
+                if not parent_content_hash and parent_result.get("content"):
+                    parent_content_hash = CapsuleIntegrityService.compute_content_hash(
+                        parent_result["content"]
+                    )
+                parent_merkle_root = parent_result.get("merkle_root")
+                # If parent has no merkle_root, use its content_hash
+                if not parent_merkle_root and parent_content_hash:
+                    parent_merkle_root = parent_content_hash
+
+        # Compute this capsule's merkle_root
+        merkle_root = CapsuleIntegrityService.compute_merkle_root(
+            content_hash, parent_merkle_root
+        )
 
         # Build the query based on whether we have a parent
         if data.parent_id:
@@ -110,12 +164,18 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
                 is_archived: false,
                 view_count: 0,
                 fork_count: 0,
+                content_hash: $content_hash,
+                merkle_root: $merkle_root,
+                parent_content_hash: $parent_content_hash,
+                integrity_status: $integrity_status,
                 created_at: $now,
                 updated_at: $now
             })
             CREATE (c)-[:DERIVED_FROM {
                 reason: $evolution_reason,
-                timestamp: $now
+                timestamp: $now,
+                parent_content_hash: $parent_content_hash,
+                parent_merkle_root: $parent_merkle_root
             }]->(parent)
             WITH c, parent
             SET parent.fork_count = parent.fork_count + 1
@@ -139,6 +199,10 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
                 is_archived: false,
                 view_count: 0,
                 fork_count: 0,
+                content_hash: $content_hash,
+                merkle_root: $merkle_root,
+                parent_content_hash: null,
+                integrity_status: $integrity_status,
                 created_at: $now,
                 updated_at: $now
             })
@@ -158,6 +222,11 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
             "parent_id": data.parent_id,
             "evolution_reason": data.evolution_reason,
             "embedding": embedding,
+            "content_hash": content_hash,
+            "merkle_root": merkle_root,
+            "parent_content_hash": parent_content_hash,
+            "parent_merkle_root": parent_merkle_root,
+            "integrity_status": IntegrityStatus.VALID.value,
             "now": now.isoformat(),
         }
 
@@ -169,6 +238,7 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
                 capsule_id=capsule_id,
                 parent_id=data.parent_id,
                 owner_id=owner_id,
+                content_hash=content_hash[:16] + "...",
             )
             return self._to_model(result["capsule"])
 
@@ -186,8 +256,9 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
         SECURITY FIX (Audit 4 - H27): Now verifies caller owns the capsule
         before allowing updates.
 
-        Note: This creates a new version rather than modifying in place
-        for audit trail purposes.
+        Integrity: Recomputes content_hash if content changes.
+        Note: merkle_root is NOT recomputed on update - it represents the
+        hash chain at creation time. Updates are tracked via version history.
 
         Args:
             entity_id: Capsule ID
@@ -213,6 +284,16 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
         if data.content is not None:
             set_clauses.append("c.content = $content")
             params["content"] = data.content
+            # INTEGRITY: Recompute content hash when content changes
+            new_hash = CapsuleIntegrityService.compute_content_hash(data.content)
+            set_clauses.append("c.content_hash = $content_hash")
+            set_clauses.append("c.integrity_status = $integrity_status")
+            # Clear signature since content changed
+            set_clauses.append("c.signature = null")
+            set_clauses.append("c.signed_at = null")
+            set_clauses.append("c.signed_by = null")
+            params["content_hash"] = new_hash
+            params["integrity_status"] = IntegrityStatus.VALID.value
 
         if data.title is not None:
             set_clauses.append("c.title = $title")
@@ -1359,3 +1440,240 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
         if isinstance(value, str):
             return datetime.fromisoformat(value.replace("Z", "+00:00"))
         return self._now()
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # INTEGRITY VERIFICATION
+    # ═══════════════════════════════════════════════════════════════════════════
+
+    async def verify_integrity(
+        self,
+        capsule_id: str,
+        update_status: bool = True,
+    ) -> dict[str, Any]:
+        """
+        Verify content integrity of a capsule.
+
+        Computes SHA-256 hash of content and compares with stored hash.
+        Optionally updates the integrity_status field in the database.
+
+        Args:
+            capsule_id: Capsule ID to verify
+            update_status: Whether to update integrity_status in DB
+
+        Returns:
+            Verification result dictionary with details
+
+        Raises:
+            ContentHashMismatchError: If hash doesn't match (optional)
+        """
+        query = """
+        MATCH (c:Capsule {id: $id})
+        RETURN c.content AS content,
+               c.content_hash AS content_hash,
+               c.merkle_root AS merkle_root,
+               c.parent_content_hash AS parent_content_hash,
+               c.signature AS signature,
+               c.integrity_status AS integrity_status
+        """
+
+        result = await self.client.execute_single(query, {"id": capsule_id})
+
+        if not result or result.get("content") is None:
+            return {
+                "capsule_id": capsule_id,
+                "found": False,
+                "valid": False,
+                "error": "Capsule not found",
+            }
+
+        content = result["content"]
+        stored_hash = result.get("content_hash")
+        computed_hash = CapsuleIntegrityService.compute_content_hash(content)
+
+        is_valid = True
+        errors = []
+
+        if stored_hash:
+            if not CapsuleIntegrityService.verify_content_hash(content, stored_hash):
+                is_valid = False
+                errors.append("Content hash mismatch")
+        else:
+            errors.append("No content_hash stored - cannot verify")
+
+        verification_result = {
+            "capsule_id": capsule_id,
+            "found": True,
+            "valid": is_valid,
+            "content_hash_expected": stored_hash,
+            "content_hash_computed": computed_hash,
+            "has_signature": result.get("signature") is not None,
+            "has_merkle_root": result.get("merkle_root") is not None,
+            "errors": errors,
+            "verified_at": self._now().isoformat(),
+        }
+
+        # Update integrity status in DB if requested
+        if update_status:
+            new_status = IntegrityStatus.VALID if is_valid else IntegrityStatus.CORRUPTED
+            update_query = """
+            MATCH (c:Capsule {id: $id})
+            SET c.integrity_status = $status,
+                c.integrity_verified_at = $verified_at
+            """
+            await self.client.execute(
+                update_query,
+                {
+                    "id": capsule_id,
+                    "status": new_status.value,
+                    "verified_at": self._now().isoformat(),
+                },
+            )
+            verification_result["status_updated"] = True
+            verification_result["new_status"] = new_status.value
+
+        self.logger.info(
+            "capsule_integrity_verified",
+            capsule_id=capsule_id,
+            valid=is_valid,
+            hash_match=stored_hash == computed_hash if stored_hash else None,
+        )
+
+        return verification_result
+
+    async def verify_lineage_integrity(
+        self,
+        capsule_id: str,
+    ) -> dict[str, Any]:
+        """
+        Verify integrity of entire lineage chain from root to given capsule.
+
+        Checks:
+        1. Content hash of each capsule in the chain
+        2. Merkle root chain integrity
+
+        Args:
+            capsule_id: Leaf capsule ID to verify chain for
+
+        Returns:
+            Verification result with details about each capsule in chain
+        """
+        # Get all ancestors ordered from root to leaf
+        ancestors = await self.get_ancestors(capsule_id, max_depth=20)
+
+        # Also get the target capsule
+        target_query = """
+        MATCH (c:Capsule {id: $id})
+        RETURN c {.*} AS capsule
+        """
+        target_result = await self.client.execute_single(
+            target_query, {"id": capsule_id}
+        )
+
+        if not target_result or not target_result.get("capsule"):
+            return {
+                "capsule_id": capsule_id,
+                "found": False,
+                "valid": False,
+                "error": "Capsule not found",
+            }
+
+        target = self._to_model(target_result["capsule"])
+
+        # Build chain from root to leaf
+        chain = list(reversed(ancestors)) + [target]
+
+        all_valid = True
+        verified_capsules = []
+        failed_capsules = []
+        broken_at = None
+
+        previous_merkle_root: str | None = None
+
+        for capsule in chain:
+            # Verify content hash
+            content_hash = getattr(capsule, "content_hash", None)
+            computed = CapsuleIntegrityService.compute_content_hash(capsule.content)
+
+            hash_valid = True
+            if content_hash:
+                hash_valid = CapsuleIntegrityService.verify_content_hash(
+                    capsule.content, content_hash
+                )
+
+            # Verify Merkle root
+            merkle_root = getattr(capsule, "merkle_root", None)
+            merkle_valid = True
+
+            if merkle_root:
+                expected_merkle = CapsuleIntegrityService.compute_merkle_root(
+                    computed, previous_merkle_root
+                )
+                merkle_valid = secrets.compare_digest(merkle_root, expected_merkle)
+                previous_merkle_root = merkle_root
+            else:
+                # If no merkle root stored, use computed content hash for next iteration
+                previous_merkle_root = computed
+
+            is_valid = hash_valid and merkle_valid
+
+            if is_valid:
+                verified_capsules.append(capsule.id)
+            else:
+                failed_capsules.append(capsule.id)
+                if all_valid:
+                    broken_at = capsule.id
+                all_valid = False
+
+        return {
+            "capsule_id": capsule_id,
+            "found": True,
+            "chain_length": len(chain),
+            "all_hashes_valid": len(failed_capsules) == 0,
+            "merkle_chain_valid": all_valid,
+            "broken_at": broken_at,
+            "verified_capsules": verified_capsules,
+            "failed_capsules": failed_capsules,
+            "verified_at": self._now().isoformat(),
+        }
+
+    async def get_with_integrity_check(
+        self,
+        capsule_id: str,
+        verify: bool = True,
+        raise_on_failure: bool = False,
+    ) -> tuple[Capsule | None, dict[str, Any] | None]:
+        """
+        Get a capsule with optional integrity verification.
+
+        Args:
+            capsule_id: Capsule ID
+            verify: Whether to verify integrity
+            raise_on_failure: Whether to raise exception on integrity failure
+
+        Returns:
+            Tuple of (capsule, verification_result)
+            verification_result is None if verify=False
+
+        Raises:
+            ContentHashMismatchError: If raise_on_failure=True and hash mismatch
+        """
+        # Get the capsule
+        capsule = await self.get(capsule_id)
+
+        if not capsule:
+            return None, None
+
+        if not verify:
+            return capsule, None
+
+        # Verify integrity
+        verification = await self.verify_integrity(capsule_id, update_status=False)
+
+        if raise_on_failure and not verification.get("valid", False):
+            raise ContentHashMismatchError(
+                capsule_id=capsule_id,
+                expected=verification.get("content_hash_expected", "unknown"),
+                computed=verification.get("content_hash_computed", "unknown"),
+            )
+
+        return capsule, verification

@@ -40,8 +40,17 @@ from forge.models.capsule import (
     CapsuleCreate,
     CapsuleType,
     CapsuleUpdate,
+    IntegrityReport,
+    IntegrityStatus,
+    LineageIntegrityReport,
 )
 from forge.models.events import EventType
+from forge.models.user import KeyStorageStrategy
+from forge.security.capsule_integrity import CapsuleIntegrityService
+from forge.security.key_management import (
+    KeyManagementService,
+    KeyNotFoundError,
+)
 
 # Resilience integration - caching, validation, metrics
 from forge.resilience.integration import (
@@ -1043,3 +1052,386 @@ async def archive_capsule(
     )
 
     return CapsuleResponse.from_capsule(archived)
+
+
+# =============================================================================
+# Integrity Verification Endpoints
+# =============================================================================
+
+
+@router.get("/{capsule_id}/integrity", response_model=IntegrityReport)
+async def verify_capsule_integrity(
+    capsule_id: str,
+    user: ActiveUserDep,
+    capsule_repo: CapsuleRepoDep,
+    update_status: bool = Query(
+        default=True,
+        description="Whether to update integrity_status in database",
+    ),
+) -> IntegrityReport:
+    """
+    Verify the integrity of a capsule's content.
+
+    Performs:
+    - Content hash verification (SHA-256)
+    - Signature verification (if signed)
+    - Merkle root verification (if has lineage)
+
+    Returns comprehensive integrity report.
+    """
+    result = await capsule_repo.verify_integrity(
+        capsule_id=capsule_id,
+        update_status=update_status,
+    )
+
+    if not result.get("found", False):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Capsule not found",
+        )
+
+    # Determine overall status
+    if result.get("valid", False):
+        overall_status = IntegrityStatus.VALID
+    else:
+        overall_status = IntegrityStatus.CORRUPTED
+
+    return IntegrityReport(
+        capsule_id=capsule_id,
+        content_hash_valid=result.get("valid", False),
+        content_hash_expected=result.get("content_hash_expected"),
+        content_hash_computed=result.get("content_hash_computed"),
+        signature_valid=None,  # Phase 2
+        merkle_chain_valid=None,  # Checked in lineage endpoint
+        overall_status=overall_status,
+        checked_at=datetime.fromisoformat(result.get("verified_at", datetime.utcnow().isoformat())),
+        details={
+            "has_signature": result.get("has_signature", False),
+            "has_merkle_root": result.get("has_merkle_root", False),
+            "errors": result.get("errors", []),
+            "status_updated": result.get("status_updated", False),
+        },
+    )
+
+
+@router.get("/{capsule_id}/lineage/integrity", response_model=LineageIntegrityReport)
+async def verify_lineage_integrity(
+    capsule_id: str,
+    user: ActiveUserDep,
+    capsule_repo: CapsuleRepoDep,
+) -> LineageIntegrityReport:
+    """
+    Verify the integrity of the entire lineage chain for a capsule.
+
+    Traces from root ancestor to the specified capsule and verifies:
+    - Content hash of each capsule in chain
+    - Merkle root chain integrity (each child correctly chains to parent)
+
+    Returns detailed report showing which capsules passed/failed.
+    """
+    result = await capsule_repo.verify_lineage_integrity(capsule_id=capsule_id)
+
+    if not result.get("found", False):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Capsule not found",
+        )
+
+    return LineageIntegrityReport(
+        capsule_id=capsule_id,
+        chain_length=result.get("chain_length", 0),
+        all_hashes_valid=result.get("all_hashes_valid", False),
+        merkle_chain_valid=result.get("merkle_chain_valid", False),
+        broken_at=result.get("broken_at"),
+        verified_capsules=result.get("verified_capsules", []),
+        failed_capsules=result.get("failed_capsules", []),
+        checked_at=datetime.fromisoformat(result.get("verified_at", datetime.utcnow().isoformat())),
+    )
+
+
+# =============================================================================
+# Capsule Signing Endpoints
+# =============================================================================
+
+
+class SignCapsuleRequest(BaseModel):
+    """Request to sign a capsule with user's private key."""
+
+    password: str | None = Field(
+        default=None,
+        description="Password for SERVER_CUSTODY or PASSWORD_DERIVED strategies",
+    )
+    private_key_b64: str | None = Field(
+        default=None,
+        description="Base64 private key for CLIENT_ONLY strategy",
+    )
+
+
+class SignatureResponse(BaseModel):
+    """Response after signing a capsule."""
+
+    capsule_id: str
+    signature: str
+    content_hash: str
+    signed_at: str
+    signed_by: str
+    algorithm: str = "Ed25519"
+
+
+class SignatureVerifyResponse(BaseModel):
+    """Response from signature verification."""
+
+    capsule_id: str
+    signature_valid: bool
+    content_hash_valid: bool
+    signer_id: str | None
+    signer_public_key: str | None
+    verified_at: str
+    details: dict
+
+
+@router.post("/{capsule_id}/sign", response_model=SignatureResponse)
+async def sign_capsule(
+    capsule_id: str,
+    request: SignCapsuleRequest,
+    user: StandardUserDep,
+    capsule_repo: CapsuleRepoDep,
+    audit_repo: AuditRepoDep,
+    correlation_id: CorrelationIdDep,
+) -> SignatureResponse:
+    """
+    Sign a capsule with the current user's Ed25519 private key.
+
+    The signature proves the user vouches for this capsule's content.
+    Only the capsule owner can sign their capsules.
+
+    Key retrieval depends on user's key_storage_strategy:
+    - SERVER_CUSTODY: Provide password to decrypt stored key
+    - CLIENT_ONLY: Provide private_key_b64 directly
+    - PASSWORD_DERIVED: Provide password to derive key
+    """
+    # Get capsule
+    capsule = await capsule_repo.get_by_id(capsule_id)
+    if not capsule:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Capsule not found",
+        )
+
+    # Only owner can sign
+    if capsule.owner_id != user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the capsule owner can sign it",
+        )
+
+    # Get user's signing key configuration
+    # Note: In production, this would come from user_repo.get_by_id(user.id)
+    # For now, we check the user object's attributes
+    key_strategy = getattr(user, "key_storage_strategy", KeyStorageStrategy.NONE)
+
+    if key_strategy == KeyStorageStrategy.NONE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User has no signing keys configured. Set up keys first.",
+        )
+
+    # Get private key based on strategy
+    try:
+        if key_strategy == KeyStorageStrategy.SERVER_CUSTODY:
+            if not request.password:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Password required for SERVER_CUSTODY key strategy",
+                )
+            encrypted_key = getattr(user, "encrypted_private_key", None)
+            if not encrypted_key:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="No encrypted key found for user",
+                )
+            private_key = KeyManagementService.decrypt_private_key(
+                encrypted_key, request.password
+            )
+
+        elif key_strategy == KeyStorageStrategy.CLIENT_ONLY:
+            if not request.private_key_b64:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Private key required for CLIENT_ONLY strategy",
+                )
+            import base64
+            private_key = base64.b64decode(request.private_key_b64)
+
+        elif key_strategy == KeyStorageStrategy.PASSWORD_DERIVED:
+            if not request.password:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Password required for PASSWORD_DERIVED strategy",
+                )
+            salt_b64 = getattr(user, "signing_key_salt", None)
+            if not salt_b64:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="No key salt found for user",
+                )
+            private_key = KeyManagementService.get_private_key_password_derived(
+                request.password, salt_b64
+            )
+
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unknown key storage strategy: {key_strategy}",
+            )
+
+    except KeyNotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        ) from e
+    except Exception as e:
+        logger.warning("capsule_sign_failed", error=str(e), capsule_id=capsule_id)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Failed to retrieve private key. Check password or key configuration.",
+        ) from e
+
+    # Compute content hash and sign
+    content_hash = CapsuleIntegrityService.compute_content_hash(capsule.content)
+    signature = CapsuleIntegrityService.sign_capsule(content_hash, private_key)
+    signed_at = datetime.utcnow()
+
+    # Update capsule with signature
+    update_query = """
+    MATCH (c:Capsule {id: $id})
+    SET c.signature = $signature,
+        c.signed_at = $signed_at,
+        c.signed_by = $signed_by,
+        c.signature_algorithm = 'Ed25519'
+    RETURN c {.*} AS capsule
+    """
+    await capsule_repo.client.execute_single(
+        update_query,
+        {
+            "id": capsule_id,
+            "signature": signature,
+            "signed_at": signed_at.isoformat(),
+            "signed_by": user.id,
+        },
+    )
+
+    # Audit log
+    await audit_repo.log_capsule_action(
+        actor_id=user.id,
+        capsule_id=capsule_id,
+        action="sign",
+        details={"algorithm": "Ed25519"},
+        correlation_id=correlation_id,
+    )
+
+    logger.info(
+        "capsule_signed",
+        capsule_id=capsule_id,
+        user_id=user.id,
+        content_hash=content_hash[:16] + "...",
+    )
+
+    return SignatureResponse(
+        capsule_id=capsule_id,
+        signature=signature,
+        content_hash=content_hash,
+        signed_at=signed_at.isoformat(),
+        signed_by=user.id,
+        algorithm="Ed25519",
+    )
+
+
+@router.get("/{capsule_id}/signature/verify", response_model=SignatureVerifyResponse)
+async def verify_capsule_signature(
+    capsule_id: str,
+    user: ActiveUserDep,
+    capsule_repo: CapsuleRepoDep,
+) -> SignatureVerifyResponse:
+    """
+    Verify a capsule's Ed25519 signature.
+
+    Checks that:
+    1. The signature is valid for the content hash
+    2. The content hash matches the current content
+    3. The signer's public key is retrieved from their user record
+
+    Returns detailed verification results.
+    """
+    # Get capsule with signature info
+    query = """
+    MATCH (c:Capsule {id: $id})
+    RETURN c.content AS content,
+           c.content_hash AS content_hash,
+           c.signature AS signature,
+           c.signed_by AS signed_by,
+           c.signed_at AS signed_at
+    """
+    result = await capsule_repo.client.execute_single(query, {"id": capsule_id})
+
+    if not result:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Capsule not found",
+        )
+
+    signature = result.get("signature")
+    if not signature:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Capsule is not signed",
+        )
+
+    content = result["content"]
+    stored_hash = result.get("content_hash")
+    signed_by = result.get("signed_by")
+
+    # Compute and verify content hash
+    computed_hash = CapsuleIntegrityService.compute_content_hash(content)
+    content_hash_valid = stored_hash and CapsuleIntegrityService.verify_content_hash(
+        content, stored_hash
+    )
+
+    # Get signer's public key
+    signer_public_key = None
+    signature_valid = False
+
+    if signed_by:
+        signer_query = """
+        MATCH (u:User {id: $id})
+        RETURN u.signing_public_key AS public_key
+        """
+        signer_result = await capsule_repo.client.execute_single(
+            signer_query, {"id": signed_by}
+        )
+        if signer_result:
+            signer_public_key = signer_result.get("public_key")
+
+            if signer_public_key:
+                # Verify signature
+                hash_to_verify = stored_hash or computed_hash
+                signature_valid = CapsuleIntegrityService.verify_signature(
+                    hash_to_verify, signature, signer_public_key
+                )
+
+    verified_at = datetime.utcnow()
+
+    return SignatureVerifyResponse(
+        capsule_id=capsule_id,
+        signature_valid=signature_valid,
+        content_hash_valid=content_hash_valid or False,
+        signer_id=signed_by,
+        signer_public_key=signer_public_key,
+        verified_at=verified_at.isoformat(),
+        details={
+            "stored_hash": stored_hash,
+            "computed_hash": computed_hash,
+            "has_signer_key": signer_public_key is not None,
+            "signed_at": result.get("signed_at"),
+        },
+    )

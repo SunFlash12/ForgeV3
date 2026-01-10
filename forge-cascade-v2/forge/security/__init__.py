@@ -100,6 +100,24 @@ from .prompt_sanitization import (
     sanitize_for_prompt,
     validate_llm_output,
 )
+from .capsule_integrity import (
+    CapsuleIntegrityService,
+    ContentHashMismatchError,
+    IntegrityError,
+    MerkleChainError,
+    SignatureVerificationError,
+    get_integrity_service,
+)
+from .key_management import (
+    InvalidKeyError,
+    KeyDecryptionError,
+    KeyDerivationError,
+    KeyManagementError,
+    KeyManagementService,
+    KeyNotFoundError,
+    SigningKeyInfo,
+    get_key_management_service,
+)
 from .safe_regex import (
     RegexTimeoutError,
     RegexValidationError,
@@ -129,6 +147,24 @@ from .tokens import (
 )
 
 __all__ = [
+    # Capsule Integrity
+    "CapsuleIntegrityService",
+    "get_integrity_service",
+    "IntegrityError",
+    "ContentHashMismatchError",
+    "SignatureVerificationError",
+    "MerkleChainError",
+
+    # Key Management
+    "KeyManagementService",
+    "get_key_management_service",
+    "KeyManagementError",
+    "KeyNotFoundError",
+    "KeyDecryptionError",
+    "KeyDerivationError",
+    "InvalidKeyError",
+    "SigningKeyInfo",
+
     # MFA
     "MFAService",
     "MFASetupResult",
