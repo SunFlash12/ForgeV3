@@ -29,25 +29,25 @@ import ssl
 import threading
 from collections import OrderedDict
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
 import httpx
+from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ed25519
-from cryptography.hazmat.backends import default_backend
-from cryptography.exceptions import InvalidSignature
 
+from forge.config import get_settings
 from forge.federation.models import (
     FederatedPeer,
     PeerHandshake,
-    SyncPayload,
     PeerStatus,
     SyncDirection,
+    SyncPayload,
 )
-from forge.config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +83,7 @@ class PinnedConnection:
 
     def is_expired(self) -> bool:
         """Check if the pinned IPs have expired and need re-resolution."""
-        age = (datetime.now(timezone.utc) - self.pinned_at).total_seconds()
+        age = (datetime.now(UTC) - self.pinned_at).total_seconds()
         return age > self.ttl_seconds
 
 
@@ -146,7 +146,7 @@ class DNSPinStore:
         pin = PinnedConnection(
             hostname=hostname,
             pinned_ips=ips,
-            pinned_at=datetime.now(timezone.utc),
+            pinned_at=datetime.now(UTC),
             port=port,
             ttl_seconds=self._ttl,
         )
@@ -237,7 +237,7 @@ class CertificatePinStore:
         if not pin_file.exists():
             return
         try:
-            with open(pin_file, 'r') as f:
+            with open(pin_file) as f:
                 data = json.load(f)
             for peer_id, pin_data in data.items():
                 self._pins[peer_id] = PinnedCertificate(
@@ -297,7 +297,7 @@ class CertificatePinStore:
             fingerprint: SHA-256 hex fingerprint of the DER-encoded certificate
             pin_type: "tofu" for trust-on-first-use, "explicit" for admin-configured
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         pin = PinnedCertificate(
             peer_id=peer_id,
             hostname=hostname,
@@ -360,7 +360,7 @@ class CertificatePinStore:
         if pin.fingerprint_sha256 == cert_fingerprint:
             # Update last_verified
             with self._lock:
-                pin.last_verified = datetime.now(timezone.utc)
+                pin.last_verified = datetime.now(UTC)
                 self._save_pins()
             return True
 
@@ -368,7 +368,7 @@ class CertificatePinStore:
         if (pin.next_fingerprint and
             pin.next_fingerprint.lower() == cert_fingerprint and
             pin.next_valid_from and
-            datetime.now(timezone.utc) >= pin.next_valid_from):
+            datetime.now(UTC) >= pin.next_valid_from):
 
             logger.info(f"Peer {peer_id} rotated to pre-announced certificate")
             # Promote next cert to primary
@@ -376,7 +376,7 @@ class CertificatePinStore:
                 pin.fingerprint_sha256 = cert_fingerprint
                 pin.next_fingerprint = None
                 pin.next_valid_from = None
-                pin.last_verified = datetime.now(timezone.utc)
+                pin.last_verified = datetime.now(UTC)
                 self._save_pins()
             return True
 
@@ -471,7 +471,7 @@ class NonceStore:
         self._lock = threading.Lock()
         self._ttl = ttl_seconds or self.DEFAULT_TTL_SECONDS
         self._max_nonces = max_nonces or self.MAX_NONCES
-        self._last_cleanup = datetime.now(timezone.utc)
+        self._last_cleanup = datetime.now(UTC)
         self._cleanup_interval = 60  # Run cleanup every 60 seconds at most
 
     def generate_nonce(self) -> str:
@@ -513,7 +513,7 @@ class NonceStore:
                 logger.warning(f"NonceStore at capacity, evicted {to_remove} oldest entries")
 
             # Add nonce
-            self._nonces[nonce] = datetime.now(timezone.utc)
+            self._nonces[nonce] = datetime.now(UTC)
             return True
 
     def is_valid_and_unused(self, nonce: str) -> bool:
@@ -534,7 +534,7 @@ class NonceStore:
         try:
             int(nonce, 16)  # Verify it's valid hex
         except ValueError:
-            logger.warning(f"Invalid nonce format: not valid hex")
+            logger.warning("Invalid nonce format: not valid hex")
             return False
 
         with self._lock:
@@ -545,7 +545,7 @@ class NonceStore:
         """
         Remove expired nonces. Must be called while holding the lock.
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # Only run cleanup periodically
         if (now - self._last_cleanup).total_seconds() < self._cleanup_interval:
@@ -632,7 +632,7 @@ def validate_url_for_ssrf(
     try:
         parsed = urlparse(url)
     except Exception as e:
-        raise SSRFError(f"Invalid URL format: {e}")
+        raise SSRFError(f"Invalid URL format: {e}") from e
 
     # SECURITY: Require HTTPS in production
     settings = get_settings()
@@ -670,13 +670,13 @@ def validate_url_for_ssrf(
     try:
         # Resolve all IP addresses for the hostname
         addr_info = socket.getaddrinfo(hostname, port, proto=socket.IPPROTO_TCP)
-        resolved_ips = list(set(info[4][0] for info in addr_info))
+        resolved_ips = list({info[4][0] for info in addr_info})
 
         for ip_str in resolved_ips:
             try:
                 ip = ipaddress.ip_address(ip_str)
-            except ValueError:
-                raise SSRFError(f"Invalid IP address resolved: {ip_str}")
+            except ValueError as exc:
+                raise SSRFError(f"Invalid IP address resolved: {ip_str}") from exc
 
             # Block private and special IP ranges unless explicitly allowed
             if not allow_private:
@@ -696,9 +696,9 @@ def validate_url_for_ssrf(
                     raise SSRFError(f"Cloud metadata address blocked: {ip_str}")
 
     except socket.gaierror as e:
-        raise SSRFError(f"DNS resolution failed for {hostname}: {e}")
+        raise SSRFError(f"DNS resolution failed for {hostname}: {e}") from e
     except OSError as e:
-        raise SSRFError(f"Network error resolving {hostname}: {e}")
+        raise SSRFError(f"Network error resolving {hostname}: {e}") from e
 
     # SECURITY FIX (Audit 4 - H3): Detect DNS rebinding attack
     if existing_pinned_ips is not None:
@@ -1061,7 +1061,7 @@ class FederationProtocol:
 
     async def create_handshake(self) -> PeerHandshake:
         """Create a handshake message for peer introduction."""
-        timestamp = datetime.now(timezone.utc)
+        timestamp = datetime.now(UTC)
         # SECURITY FIX: Generate nonce for replay prevention
         nonce = self._nonce_store.generate_nonce()
 
@@ -1097,7 +1097,7 @@ class FederationProtocol:
     def verify_handshake(self, handshake: PeerHandshake) -> bool:
         """Verify an incoming handshake."""
         # Check timestamp freshness (within 5 minutes in the past, 30 seconds in future for clock skew)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         time_diff = (now - handshake.timestamp).total_seconds()
         if time_diff > 300:  # More than 5 minutes old
             logger.warning("Handshake timestamp too old")
@@ -1334,7 +1334,7 @@ class FederationProtocol:
 
             # SECURITY FIX (Audit 4 - H29): Add nonce to prevent replay attacks
             # Each sync request includes a unique nonce that is signed
-            nonce = f"{int(datetime.now(timezone.utc).timestamp() * 1000)}_{secrets.token_hex(16)}"
+            nonce = f"{int(datetime.now(UTC).timestamp() * 1000)}_{secrets.token_hex(16)}"
             params["nonce"] = nonce
 
             # Sign request including nonce
@@ -1483,7 +1483,7 @@ class FederationProtocol:
         next_cursor: str | None = None,
     ) -> SyncPayload:
         """Create a signed sync payload with nonce for replay prevention."""
-        timestamp = datetime.now(timezone.utc)
+        timestamp = datetime.now(UTC)
         # SECURITY FIX: Generate nonce for replay prevention
         nonce = self._nonce_store.generate_nonce()
 

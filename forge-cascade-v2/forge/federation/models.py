@@ -4,10 +4,12 @@ Federation Data Models
 Defines the data structures for federated knowledge sharing between Forge instances.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from enum import Enum
 from typing import Any
+
 from pydantic import Field, HttpUrl
+
 from forge.models.base import ForgeModel, generate_id
 
 
@@ -126,7 +128,7 @@ class FederatedPeer(ForgeModel):
     admin_contact: str | None = None
 
     # Timestamps
-    registered_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    registered_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     last_sync_at: datetime | None = None
     last_seen_at: datetime | None = None
 
@@ -174,7 +176,7 @@ class FederatedCapsule(ForgeModel):
     remote_updated_at: datetime | None = None
 
     # Timestamps
-    first_seen_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    first_seen_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     last_synced_at: datetime | None = None
 
     # Review
@@ -206,7 +208,7 @@ class FederatedEdge(ForgeModel):
     sync_status: FederatedSyncStatus = Field(default=FederatedSyncStatus.PENDING)
 
     # Timestamps
-    first_seen_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    first_seen_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     last_synced_at: datetime | None = None
 
 
@@ -220,7 +222,7 @@ class SyncState(ForgeModel):
 
     # Operation
     direction: SyncDirection
-    started_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    started_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     completed_at: datetime | None = None
 
     # Progress
