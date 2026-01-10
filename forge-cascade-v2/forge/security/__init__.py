@@ -121,9 +121,11 @@ from .tokens import (
     extract_token_from_header,
     get_token_claims,
     get_token_expiry,
+    hash_refresh_token,
     is_token_expired,
     verify_access_token,
     verify_refresh_token,
+    verify_refresh_token_hash,
 )
 
 __all__ = [
@@ -163,6 +165,8 @@ __all__ = [
     "decode_token",
     "verify_access_token",
     "verify_refresh_token",
+    "hash_refresh_token",
+    "verify_refresh_token_hash",
     "get_token_expiry",
     "is_token_expired",
     "extract_token_from_header",

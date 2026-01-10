@@ -194,13 +194,12 @@ class UserInDB(User):
     """User with database-specific fields."""
 
     password_hash: str = Field(description="Hashed password")
-    # TODO: SECURITY - Store hash of refresh token instead of raw token.
-    # If database is compromised, raw tokens can be used directly.
-    # Recommended: Store SHA-256 hash, compare hashes on verification.
-    # This requires updates to token service (hash on store, hash on verify).
+    # SECURITY FIX (Audit 4): Refresh tokens are now stored as SHA-256 hashes.
+    # See user_repository.py update_refresh_token() and validate_refresh_token().
+    # If database is compromised, attackers cannot use the hashes directly.
     refresh_token: str | None = Field(
         default=None,
-        description="Current refresh token (should be hashed in production)",
+        description="SHA-256 hash of refresh token (not raw token)",
     )
     failed_login_attempts: int = Field(
         default=0,
