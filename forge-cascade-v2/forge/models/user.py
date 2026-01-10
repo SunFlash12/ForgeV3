@@ -65,6 +65,23 @@ class AuthProvider(str, Enum):
     WEB3 = "web3"           # Wallet-based auth
 
 
+class KeyStorageStrategy(str, Enum):
+    """
+    Strategy for storing Ed25519 signing keys.
+
+    Users can choose how their capsule signing keys are managed:
+    - SERVER_CUSTODY: Server generates and stores encrypted private key
+    - CLIENT_ONLY: User manages keys externally, only public key stored
+    - PASSWORD_DERIVED: Keys derived from password using HKDF
+    - NONE: No signing enabled (capsules are unsigned)
+    """
+
+    SERVER_CUSTODY = "server_custody"      # Server stores encrypted private key
+    CLIENT_ONLY = "client_only"            # User manages keys externally
+    PASSWORD_DERIVED = "password_derived"  # Keys derived from password
+    NONE = "none"                          # No signing (unsigned capsules)
+
+
 class UserBase(ForgeModel):
     """Base fields shared across user schemas."""
 
@@ -209,6 +226,30 @@ class UserInDB(User):
     lockout_until: datetime | None = Field(
         default=None,
         description="Account lockout timestamp",
+    )
+
+    # ═══════════════════════════════════════════════════════════════
+    # SIGNING KEY FIELDS (for Ed25519 capsule signatures)
+    # ═══════════════════════════════════════════════════════════════
+    key_storage_strategy: KeyStorageStrategy = Field(
+        default=KeyStorageStrategy.NONE,
+        description="How signing keys are managed",
+    )
+    signing_public_key: str | None = Field(
+        default=None,
+        description="Base64-encoded Ed25519 public key (32 bytes)",
+    )
+    encrypted_private_key: str | None = Field(
+        default=None,
+        description="AES-256-GCM encrypted private key (for SERVER_CUSTODY)",
+    )
+    signing_key_salt: str | None = Field(
+        default=None,
+        description="Salt for password-derived keys (for PASSWORD_DERIVED)",
+    )
+    signing_key_created_at: datetime | None = Field(
+        default=None,
+        description="When signing keys were set up",
     )
 
 
