@@ -16,6 +16,11 @@ from forge.services.embedding import (
     init_embedding_service,
     shutdown_embedding_service,
 )
+from forge.services.ghost_council import (
+    get_ghost_council_service,
+    init_ghost_council_service,
+    shutdown_ghost_council_service,
+)
 from forge.services.llm import (
     LLMConfig,
     LLMProvider,
@@ -25,11 +30,6 @@ from forge.services.llm import (
 from forge.services.search import (
     init_search_service,
     shutdown_search_service,
-)
-from forge.services.ghost_council import (
-    init_ghost_council_service,
-    shutdown_ghost_council_service,
-    get_ghost_council_service,
 )
 
 logger = structlog.get_logger(__name__)
@@ -42,42 +42,51 @@ def init_all_services(
 ) -> None:
     """
     Initialize all services based on configuration.
-    
+
     Called during application startup.
-    
+
     Args:
         db_client: Neo4j client for direct database access
         capsule_repo: Capsule repository for search
         event_bus: Event bus for service events
     """
     logger.info("initializing_services")
-    
+
     # Initialize embedding service
     embedding_provider_map = {
         "openai": EmbeddingProvider.OPENAI,
         "sentence_transformers": EmbeddingProvider.SENTENCE_TRANSFORMERS,
         "mock": EmbeddingProvider.MOCK,
     }
-    
+
+    # SECURITY FIX (Audit 4 - M): Warn when falling back to mock provider
+    configured_embedding = settings.embedding_provider
+    embedding_provider = embedding_provider_map.get(configured_embedding)
+    if embedding_provider is None:
+        logger.warning(
+            "embedding_provider_not_recognized",
+            configured=configured_embedding,
+            valid_providers=list(embedding_provider_map.keys()),
+            fallback="mock",
+        )
+        embedding_provider = EmbeddingProvider.MOCK
+
     embedding_config = EmbeddingConfig(
-        provider=embedding_provider_map.get(
-            settings.embedding_provider, 
-            EmbeddingProvider.MOCK
-        ),
+        provider=embedding_provider,
         model=settings.embedding_model,
         dimensions=settings.embedding_dimensions,
         api_key=settings.embedding_api_key,
         cache_enabled=settings.embedding_cache_enabled,
         batch_size=settings.embedding_batch_size,
     )
-    
+
     embedding_service = init_embedding_service(embedding_config)
     logger.info(
         "embedding_service_ready",
         provider=settings.embedding_provider,
         dimensions=settings.embedding_dimensions,
     )
-    
+
     # Initialize LLM service
     llm_provider_map = {
         "anthropic": LLMProvider.ANTHROPIC,
@@ -85,24 +94,36 @@ def init_all_services(
         "ollama": LLMProvider.OLLAMA,
         "mock": LLMProvider.MOCK,
     }
-    
+
+    # SECURITY FIX (Audit 4 - M): Warn when falling back to mock provider
+    configured_llm = settings.llm_provider
+    llm_provider = llm_provider_map.get(configured_llm)
+    if llm_provider is None:
+        logger.warning(
+            "llm_provider_not_recognized",
+            configured=configured_llm,
+            valid_providers=list(llm_provider_map.keys()),
+            fallback="mock",
+        )
+        llm_provider = LLMProvider.MOCK
+
     llm_config = LLMConfig(
-        provider=llm_provider_map.get(settings.llm_provider, LLMProvider.MOCK),
+        provider=llm_provider,
         model=settings.llm_model,
         api_key=settings.llm_api_key,
         max_tokens=settings.llm_max_tokens,
         temperature=settings.llm_temperature,
     )
-    
-    llm_service = init_llm_service(llm_config)
+
+    init_llm_service(llm_config)
     logger.info(
         "llm_service_ready",
         provider=settings.llm_provider,
         model=settings.llm_model,
     )
-    
+
     # Initialize search service
-    search_service = init_search_service(
+    init_search_service(
         embedding_service=embedding_service,
         capsule_repo=capsule_repo,
         db_client=db_client,
@@ -138,8 +159,9 @@ def _setup_ghost_council_event_handlers(ghost_council, event_bus) -> None:
         ghost_council: The Ghost Council service instance
         event_bus: The event system to subscribe to
     """
-    from forge.models.events import EventType
     import asyncio
+
+    from forge.models.events import EventType
 
     # Events that may indicate serious issues
     serious_event_types = {
