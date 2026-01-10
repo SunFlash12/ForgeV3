@@ -507,7 +507,7 @@ class EmbeddingMigrationService:
                 if job.capsule_filter.get("min_trust") is not None:
                     min_trust = job.capsule_filter["min_trust"]
                     # Validate min_trust is a number in valid range
-                    if isinstance(min_trust, (int, float)) and 0 <= min_trust <= 100:
+                    if isinstance(min_trust, int | float) and 0 <= min_trust <= 100:
                         conditions.append("c.trust_level >= $min_trust")
                         params["min_trust"] = int(min_trust)
 
