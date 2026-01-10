@@ -24,7 +24,7 @@ from forge.models.capsule import Capsule
 from forge.models.semantic_edges import SemanticRelationType, SemanticEdge
 from forge.repositories.capsule_repository import CapsuleRepository
 from forge.services.embedding import EmbeddingService, get_embedding_service
-from forge.services.llm import get_llm_service
+from forge.services.llm import get_llm_service, LLMMessage
 
 logger = structlog.get_logger(__name__)
 
@@ -281,8 +281,10 @@ Only return the JSON object, no other text."""
             target_content=safe_target_content,
         )
 
+        # FIX: Convert prompt to message list for LLMService API
+        messages = [LLMMessage(role="user", content=prompt)]
         response = await self.llm.complete(
-            prompt=prompt,
+            messages=messages,
             max_tokens=500,
             temperature=0.1,  # Low temperature for consistent classification
         )
@@ -291,7 +293,8 @@ Only return the JSON object, no other text."""
         import json
         try:
             # Extract JSON from response (handle potential markdown wrapping)
-            text = response.text.strip()
+            # FIX: Use .content instead of .text to match LLMResponse
+            text = response.content.strip()
             if text.startswith("```"):
                 text = text.split("```")[1]
                 if text.startswith("json"):
