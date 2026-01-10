@@ -5,6 +5,7 @@ Runs the Virtuals Protocol API as a standalone service on port 8003.
 This server uses a simplified in-memory implementation for the Virtuals endpoints.
 """
 
+import os
 from datetime import datetime
 from typing import Any, Optional
 from uuid import uuid4
@@ -20,13 +21,31 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# CORS middleware
+# SECURITY FIX (Audit 4 - M18): Environment-based CORS configuration
+# Don't use allow_origins=["*"] with allow_credentials=True in production
+_environment = os.environ.get("ENVIRONMENT", "development")
+_allowed_origins = os.environ.get("CORS_ALLOWED_ORIGINS", "").split(",")
+if not _allowed_origins or _allowed_origins == [""]:
+    # Default origins based on environment
+    if _environment == "production":
+        _allowed_origins = [
+            "https://forgecascade.org",
+            "https://app.forgecascade.org",
+        ]
+    else:
+        _allowed_origins = [
+            "http://localhost:3000",
+            "http://localhost:5173",
+            "http://127.0.0.1:3000",
+            "http://127.0.0.1:5173",
+        ]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
 )
 
 # ═══════════════════════════════════════════════════════════════════════════
