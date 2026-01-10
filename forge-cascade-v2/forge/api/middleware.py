@@ -339,6 +339,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         # Fallback in-memory storage
         self._minute_buckets: dict[str, RateLimitEntry] = defaultdict(RateLimitEntry)
         self._hour_buckets: dict[str, RateLimitEntry] = defaultdict(RateLimitEntry)
+        self._last_bucket_cleanup = time.time()
 
         # Initialize Redis if available
         if redis_url and REDIS_AVAILABLE:
@@ -468,7 +469,41 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         minute_entry.count += 1
         hour_entry.count += 1
 
+        # Periodic cleanup of expired entries (every 5 minutes)
+        self._cleanup_rate_limit_buckets(now)
+
         return False, 0, max(0, minute_limit - minute_entry.count)
+
+    def _cleanup_rate_limit_buckets(self, now: float) -> None:
+        """Remove expired entries from rate limit buckets to prevent memory leaks."""
+        # Only clean every 5 minutes
+        if now - self._last_bucket_cleanup < 300:
+            return
+
+        self._last_bucket_cleanup = now
+
+        # Clean minute buckets (entries older than 2 minutes are stale)
+        expired_minute_keys = [
+            key for key, entry in self._minute_buckets.items()
+            if now - entry.window_start > 120
+        ]
+        for key in expired_minute_keys:
+            del self._minute_buckets[key]
+
+        # Clean hour buckets (entries older than 2 hours are stale)
+        expired_hour_keys = [
+            key for key, entry in self._hour_buckets.items()
+            if now - entry.window_start > 7200
+        ]
+        for key in expired_hour_keys:
+            del self._hour_buckets[key]
+
+        if expired_minute_keys or expired_hour_keys:
+            logger.debug(
+                "rate_limit_buckets_cleaned",
+                minute_entries_removed=len(expired_minute_keys),
+                hour_entries_removed=len(expired_hour_keys),
+            )
 
     def _get_rate_limit_key(self, request: Request) -> str:
         """Get key for rate limiting (user ID or IP)."""

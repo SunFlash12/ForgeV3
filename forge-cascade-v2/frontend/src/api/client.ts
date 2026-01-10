@@ -124,15 +124,26 @@ class ForgeApiClient {
         // Handle CSRF errors
         if (error.response?.status === 403) {
           const data = error.response.data;
-          // Type-safe CSRF error detection
+          // Type-safe CSRF error detection - case-insensitive for robustness
           const errorMessage = typeof data === 'object' && data !== null && 'error' in data
-            ? String(data.error)
+            ? String(data.error).toLowerCase()
             : '';
           const detailMessage = typeof data === 'object' && data !== null && 'detail' in data
-            ? String(data.detail)
+            ? String(data.detail).toLowerCase()
+            : '';
+          const errorCode = typeof data === 'object' && data !== null && 'code' in data
+            ? String(data.code).toLowerCase()
             : '';
 
-          if (errorMessage.includes('CSRF') || detailMessage.includes('CSRF')) {
+          // Check for CSRF-related errors (case-insensitive, multiple patterns)
+          const csrfPatterns = ['csrf', 'cross-site', 'token invalid', 'token missing'];
+          const isCsrfError = csrfPatterns.some(pattern =>
+            errorMessage.includes(pattern) ||
+            detailMessage.includes(pattern) ||
+            errorCode.includes(pattern)
+          );
+
+          if (isCsrfError) {
             // CSRF token expired/invalid - try to refresh
             try {
               await this.refreshToken();
