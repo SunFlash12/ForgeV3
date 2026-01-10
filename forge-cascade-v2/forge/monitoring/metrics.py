@@ -14,12 +14,11 @@ Metrics Categories:
 
 from __future__ import annotations
 
-import time
 import asyncio
+import time
+from collections.abc import Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Callable, Optional
 from functools import wraps
 
 import structlog
@@ -38,22 +37,22 @@ class Counter:
     description: str
     labels: list[str] = field(default_factory=list)
     _values: dict[tuple, float] = field(default_factory=dict)
-    
+
     def inc(self, value: float = 1.0, **labels) -> None:
         """Increment the counter."""
         key = self._label_key(labels)
         self._values[key] = self._values.get(key, 0) + value
-    
+
     def _label_key(self, labels: dict) -> tuple:
         return tuple(labels.get(l, "") for l in self.labels)
-    
+
     def collect(self) -> list[dict]:
         """Collect all metric values."""
         return [
             {
                 "name": self.name,
                 "type": "counter",
-                "labels": dict(zip(self.labels, key)),
+                "labels": dict(zip(self.labels, key, strict=False)),
                 "value": value,
             }
             for key, value in self._values.items()
@@ -67,31 +66,31 @@ class Gauge:
     description: str
     labels: list[str] = field(default_factory=list)
     _values: dict[tuple, float] = field(default_factory=dict)
-    
+
     def set(self, value: float, **labels) -> None:
         """Set the gauge value."""
         key = self._label_key(labels)
         self._values[key] = value
-    
+
     def inc(self, value: float = 1.0, **labels) -> None:
         """Increment the gauge."""
         key = self._label_key(labels)
         self._values[key] = self._values.get(key, 0) + value
-    
+
     def dec(self, value: float = 1.0, **labels) -> None:
         """Decrement the gauge."""
         key = self._label_key(labels)
         self._values[key] = self._values.get(key, 0) - value
-    
+
     def _label_key(self, labels: dict) -> tuple:
         return tuple(labels.get(l, "") for l in self.labels)
-    
+
     def collect(self) -> list[dict]:
         return [
             {
                 "name": self.name,
                 "type": "gauge",
-                "labels": dict(zip(self.labels, key)),
+                "labels": dict(zip(self.labels, key, strict=False)),
                 "value": value,
             }
             for key, value in self._values.items()
@@ -119,7 +118,7 @@ class Histogram:
 
         # Initialize stats if needed
         if key not in self._stats:
-            self._stats[key] = {"count": 0, "sum": 0.0, "bucket_counts": {b: 0 for b in self.buckets}}
+            self._stats[key] = {"count": 0, "sum": 0.0, "bucket_counts": dict.fromkeys(self.buckets, 0)}
             self._stats[key]["bucket_counts"][float("inf")] = 0
             self._recent_observations[key] = []
 
@@ -138,15 +137,15 @@ class Histogram:
         obs.append(value)
         if len(obs) > self._max_observations:
             obs.pop(0)  # Remove oldest
-    
+
     def _label_key(self, labels: dict) -> tuple:
         return tuple(labels.get(l, "") for l in self.labels)
-    
+
     def collect(self) -> list[dict]:
         """Collect histogram metrics using pre-computed statistics."""
         results = []
         for key, stats in self._stats.items():
-            labels = dict(zip(self.labels, key))
+            labels = dict(zip(self.labels, key, strict=False))
 
             results.append({
                 "name": self.name,
@@ -195,7 +194,7 @@ class Summary:
     def collect(self) -> list[dict]:
         results = []
         for key, observations in self._observations.items():
-            labels = dict(zip(self.labels, key))
+            labels = dict(zip(self.labels, key, strict=False))
             sorted_obs = sorted(observations)
             recent_count = len(sorted_obs)
             stats = self._stats.get(key, {"count": 0, "sum": 0.0})
@@ -228,26 +227,26 @@ class Summary:
 class MetricsRegistry:
     """
     Central registry for all application metrics.
-    
+
     Usage:
         metrics = MetricsRegistry()
-        
+
         # Define metrics
         http_requests = metrics.counter(
             "forge_http_requests_total",
             "Total HTTP requests",
             ["method", "endpoint", "status"],
         )
-        
+
         # Use metrics
         http_requests.inc(method="GET", endpoint="/api/v1/capsules", status="200")
     """
-    
+
     def __init__(self, prefix: str = "forge"):
         self.prefix = prefix
         self._metrics: dict[str, Counter | Gauge | Histogram | Summary] = {}
         self._start_time = time.time()
-    
+
     def counter(
         self,
         name: str,
@@ -263,7 +262,7 @@ class MetricsRegistry:
                 labels=labels or [],
             )
         return self._metrics[full_name]
-    
+
     def gauge(
         self,
         name: str,
@@ -279,7 +278,7 @@ class MetricsRegistry:
                 labels=labels or [],
             )
         return self._metrics[full_name]
-    
+
     def histogram(
         self,
         name: str,
@@ -297,7 +296,7 @@ class MetricsRegistry:
                 buckets=buckets or [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0],
             )
         return self._metrics[full_name]
-    
+
     def summary(
         self,
         name: str,
@@ -315,34 +314,34 @@ class MetricsRegistry:
                 quantiles=quantiles or [0.5, 0.9, 0.99],
             )
         return self._metrics[full_name]
-    
+
     def collect_all(self) -> list[dict]:
         """Collect all metrics."""
         results = []
         for metric in self._metrics.values():
             results.extend(metric.collect())
         return results
-    
+
     def to_prometheus_format(self) -> str:
         """Export metrics in Prometheus text format."""
         lines = []
-        
+
         for metric in self._metrics.values():
             # Add HELP and TYPE
             lines.append(f"# HELP {metric.name} {metric.description}")
-            
+
             if isinstance(metric, Counter):
                 lines.append(f"# TYPE {metric.name} counter")
                 for item in metric.collect():
                     label_str = self._format_labels(item["labels"])
                     lines.append(f"{metric.name}{label_str} {item['value']}")
-            
+
             elif isinstance(metric, Gauge):
                 lines.append(f"# TYPE {metric.name} gauge")
                 for item in metric.collect():
                     label_str = self._format_labels(item["labels"])
                     lines.append(f"{metric.name}{label_str} {item['value']}")
-            
+
             elif isinstance(metric, Histogram):
                 lines.append(f"# TYPE {metric.name} histogram")
                 for item in metric.collect():
@@ -351,11 +350,11 @@ class MetricsRegistry:
                         bucket_labels = {**base_labels, "le": str(bucket)}
                         label_str = self._format_labels(bucket_labels)
                         lines.append(f"{metric.name}_bucket{label_str} {count}")
-                    
+
                     label_str = self._format_labels(base_labels)
                     lines.append(f"{metric.name}_sum{label_str} {item['sum']}")
                     lines.append(f"{metric.name}_count{label_str} {item['count']}")
-            
+
             elif isinstance(metric, Summary):
                 lines.append(f"# TYPE {metric.name} summary")
                 for item in metric.collect():
@@ -364,20 +363,20 @@ class MetricsRegistry:
                         q_labels = {**base_labels, "quantile": str(quantile)}
                         label_str = self._format_labels(q_labels)
                         lines.append(f"{metric.name}{label_str} {value}")
-                    
+
                     label_str = self._format_labels(base_labels)
                     lines.append(f"{metric.name}_sum{label_str} {item['sum']}")
                     lines.append(f"{metric.name}_count{label_str} {item['count']}")
-            
+
             lines.append("")
-        
+
         # Add process metrics
         lines.append(f"# HELP {self.prefix}_process_start_time_seconds Start time of the process")
         lines.append(f"# TYPE {self.prefix}_process_start_time_seconds gauge")
         lines.append(f"{self.prefix}_process_start_time_seconds {self._start_time}")
-        
+
         return "\n".join(lines)
-    
+
     def _format_labels(self, labels: dict) -> str:
         """Format labels for Prometheus output."""
         if not labels:
@@ -554,7 +553,7 @@ def track_time(histogram: Histogram, **labels):
                 return await func(*args, **kwargs)
             finally:
                 histogram.observe(time.time() - start, **labels)
-        
+
         @wraps(func)
         def sync_wrapper(*args, **kwargs):
             start = time.time()
@@ -562,7 +561,7 @@ def track_time(histogram: Histogram, **labels):
                 return func(*args, **kwargs)
             finally:
                 histogram.observe(time.time() - start, **labels)
-        
+
         if asyncio.iscoroutinefunction(func):
             return async_wrapper
         return sync_wrapper
@@ -587,20 +586,20 @@ def add_metrics_middleware(app):
     """Add metrics middleware to FastAPI app."""
     from fastapi import Request
     from starlette.middleware.base import BaseHTTPMiddleware
-    
+
     class MetricsMiddleware(BaseHTTPMiddleware):
         async def dispatch(self, request: Request, call_next):
             method = request.method
             path = request.url.path
-            
+
             # Track in-progress requests
             http_requests_in_progress.inc(method=method)
             start_time = time.time()
-            
+
             try:
                 response = await call_next(request)
                 status = str(response.status_code)
-                
+
                 # Record metrics
                 http_requests_total.inc(method=method, endpoint=path, status=status)
                 http_request_duration_seconds.observe(
@@ -608,21 +607,21 @@ def add_metrics_middleware(app):
                     method=method,
                     endpoint=path,
                 )
-                
+
                 return response
-            except Exception as e:
+            except Exception:
                 http_requests_total.inc(method=method, endpoint=path, status="500")
                 raise
             finally:
                 http_requests_in_progress.dec(method=method)
-    
+
     app.add_middleware(MetricsMiddleware)
 
 
 def create_metrics_endpoint(app):
     """Create /metrics endpoint for Prometheus scraping."""
     from fastapi import Response
-    
+
     @app.get("/metrics", include_in_schema=False)
     async def prometheus_metrics():
         return Response(

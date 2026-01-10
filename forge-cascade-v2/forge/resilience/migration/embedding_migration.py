@@ -9,20 +9,20 @@ Supports batch processing, progress tracking, and rollback capabilities.
 from __future__ import annotations
 
 import asyncio
+import secrets
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Callable, Dict, List, Optional
 from enum import Enum
-import secrets
+from typing import Any
 
 import structlog
 
+from forge.database.client import get_db_client
 from forge.resilience.config import get_resilience_config
 from forge.resilience.migration.version_registry import (
-    EmbeddingVersionRegistry,
     get_version_registry,
 )
-from forge.database.client import get_db_client
 
 logger = structlog.get_logger(__name__)
 
@@ -74,15 +74,15 @@ class MigrationJob:
     from_version: str
     to_version: str
     created_at: datetime = field(default_factory=datetime.utcnow)
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
     status: MigrationStatus = MigrationStatus.PENDING
     progress: MigrationProgress = field(default_factory=MigrationProgress)
-    error_message: Optional[str] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    error_message: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     # Filtering
-    capsule_filter: Optional[Dict[str, Any]] = None
+    capsule_filter: dict[str, Any] | None = None
 
     # Configuration
     batch_size: int = 100
@@ -90,7 +90,7 @@ class MigrationJob:
     max_retries: int = 3
     cleanup_old: bool = False
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "job_id": self.job_id,
@@ -128,14 +128,14 @@ class EmbeddingMigrationService:
     def __init__(self):
         self._config = get_resilience_config().embedding_migration
         self._registry = get_version_registry()
-        self._jobs: Dict[str, MigrationJob] = {}
-        self._active_job: Optional[str] = None
-        self._task: Optional[asyncio.Task] = None
+        self._jobs: dict[str, MigrationJob] = {}
+        self._active_job: str | None = None
+        self._task: asyncio.Task | None = None
 
         # Callbacks
-        self._embed_callback: Optional[Callable] = None
-        self._store_callback: Optional[Callable] = None
-        self._cleanup_callback: Optional[Callable] = None
+        self._embed_callback: Callable | None = None
+        self._store_callback: Callable | None = None
+        self._cleanup_callback: Callable | None = None
 
         # Statistics
         self._stats = {
@@ -147,7 +147,7 @@ class EmbeddingMigrationService:
 
     def set_embed_callback(
         self,
-        callback: Callable[[str, str], List[float]]
+        callback: Callable[[str, str], list[float]]
     ) -> None:
         """
         Set callback for generating embeddings.
@@ -159,7 +159,7 @@ class EmbeddingMigrationService:
 
     def set_store_callback(
         self,
-        callback: Callable[[str, List[float], str], bool]
+        callback: Callable[[str, list[float], str], bool]
     ) -> None:
         """
         Set callback for storing embeddings.
@@ -185,7 +185,7 @@ class EmbeddingMigrationService:
         self,
         from_version: str,
         to_version: str,
-        capsule_filter: Optional[Dict[str, Any]] = None,
+        capsule_filter: dict[str, Any] | None = None,
         cleanup_old: bool = None
     ) -> MigrationJob:
         """
@@ -350,14 +350,14 @@ class EmbeddingMigrationService:
         await self.start_job(rollback_job.job_id)
         return True
 
-    def get_job(self, job_id: str) -> Optional[MigrationJob]:
+    def get_job(self, job_id: str) -> MigrationJob | None:
         """Get a migration job by ID."""
         return self._jobs.get(job_id)
 
     def list_jobs(
         self,
-        status: Optional[MigrationStatus] = None
-    ) -> List[MigrationJob]:
+        status: MigrationStatus | None = None
+    ) -> list[MigrationJob]:
         """List all migration jobs, optionally filtered by status."""
         jobs = list(self._jobs.values())
         if status:
@@ -427,7 +427,7 @@ class EmbeddingMigrationService:
     async def _get_capsules_to_migrate(
         self,
         job: MigrationJob
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Get list of capsules that need migration.
 
@@ -446,7 +446,7 @@ class EmbeddingMigrationService:
 
             # Build filter conditions
             conditions = ["c.is_archived = false"]
-            params: Dict[str, Any] = {}
+            params: dict[str, Any] = {}
 
             # Filter by embedding version if capsules track it
             # Currently capsules may not have embedding_version field,
@@ -552,7 +552,7 @@ class EmbeddingMigrationService:
     async def _process_batch(
         self,
         job: MigrationJob,
-        batch: List[Dict[str, Any]]
+        batch: list[dict[str, Any]]
     ) -> None:
         """Process a batch of capsules."""
         for capsule in batch:
@@ -582,7 +582,7 @@ class EmbeddingMigrationService:
 
     async def _migrate_capsule(
         self,
-        capsule: Dict[str, Any],
+        capsule: dict[str, Any],
         from_version: str,
         to_version: str,
         cleanup_old: bool
@@ -683,13 +683,13 @@ class EmbeddingMigrationService:
                 error=str(e),
             )
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get migration statistics."""
         return dict(self._stats)
 
 
 # Global service instance
-_migration_service: Optional[EmbeddingMigrationService] = None
+_migration_service: EmbeddingMigrationService | None = None
 
 
 async def get_migration_service() -> EmbeddingMigrationService:

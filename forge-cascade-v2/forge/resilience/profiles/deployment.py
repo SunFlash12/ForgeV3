@@ -9,23 +9,22 @@ Provides pre-configured settings for different deployment scenarios.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
-from enum import Enum
+from typing import Any
 
 import structlog
 
 from forge.resilience.config import (
-    ForgeResilienceConfig,
-    DeploymentProfile,
     CacheConfig,
-    ObservabilityConfig,
     ContentValidationConfig,
+    DeploymentProfile,
+    ForgeResilienceConfig,
     LineageTierConfig,
+    ObservabilityConfig,
     PartitionConfig,
-    TenantIsolationConfig,
     PrivacyConfig,
-    StarterPackConfig,
     RunbookConfig,
+    StarterPackConfig,
+    TenantIsolationConfig,
 )
 
 logger = structlog.get_logger(__name__)
@@ -86,7 +85,7 @@ class DeploymentProfileSpec:
     description: str
     capabilities: ProfileCapabilities
     limits: ProfileLimits
-    recommended_resources: Dict[str, str] = field(default_factory=dict)
+    recommended_resources: dict[str, str] = field(default_factory=dict)
 
 
 # Profile specifications
@@ -205,13 +204,13 @@ class DeploymentProfileManager:
     """
 
     def __init__(self):
-        self._profiles: Dict[DeploymentProfile, DeploymentProfileSpec] = {
+        self._profiles: dict[DeploymentProfile, DeploymentProfileSpec] = {
             DeploymentProfile.LITE: LITE_PROFILE,
             DeploymentProfile.STANDARD: STANDARD_PROFILE,
             DeploymentProfile.ENTERPRISE: ENTERPRISE_PROFILE,
         }
-        self._current_profile: Optional[DeploymentProfile] = None
-        self._current_config: Optional[ForgeResilienceConfig] = None
+        self._current_profile: DeploymentProfile | None = None
+        self._current_config: ForgeResilienceConfig | None = None
 
     def get_profile_spec(
         self,
@@ -220,14 +219,14 @@ class DeploymentProfileManager:
         """Get specification for a profile."""
         return self._profiles[profile]
 
-    def list_profiles(self) -> List[DeploymentProfileSpec]:
+    def list_profiles(self) -> list[DeploymentProfileSpec]:
         """List all available profiles."""
         return list(self._profiles.values())
 
     def apply_profile(
         self,
         profile: DeploymentProfile,
-        custom_overrides: Optional[Dict[str, Any]] = None
+        custom_overrides: dict[str, Any] | None = None
     ) -> ForgeResilienceConfig:
         """
         Apply a deployment profile.
@@ -379,7 +378,7 @@ class DeploymentProfileManager:
     def _apply_overrides(
         self,
         config: ForgeResilienceConfig,
-        overrides: Dict[str, Any]
+        overrides: dict[str, Any]
     ) -> None:
         """Apply custom overrides to configuration."""
         for key, value in overrides.items():
@@ -400,8 +399,8 @@ class DeploymentProfileManager:
     def validate_profile_requirements(
         self,
         profile: DeploymentProfile,
-        system_resources: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        system_resources: dict[str, Any]
+    ) -> dict[str, Any]:
         """
         Validate system resources against profile requirements.
 
@@ -440,11 +439,11 @@ class DeploymentProfileManager:
             "recommended": spec.recommended_resources,
         }
 
-    def get_current_profile(self) -> Optional[DeploymentProfile]:
+    def get_current_profile(self) -> DeploymentProfile | None:
         """Get the currently applied profile."""
         return self._current_profile
 
-    def get_current_config(self) -> Optional[ForgeResilienceConfig]:
+    def get_current_config(self) -> ForgeResilienceConfig | None:
         """Get the current configuration."""
         return self._current_config
 
@@ -471,7 +470,7 @@ class DeploymentProfileManager:
 
 
 # Global instance
-_profile_manager: Optional[DeploymentProfileManager] = None
+_profile_manager: DeploymentProfileManager | None = None
 
 
 def get_profile_manager() -> DeploymentProfileManager:
@@ -484,14 +483,14 @@ def get_profile_manager() -> DeploymentProfileManager:
 
 def apply_profile(
     profile: DeploymentProfile,
-    overrides: Optional[Dict[str, Any]] = None
+    overrides: dict[str, Any] | None = None
 ) -> ForgeResilienceConfig:
     """Convenience function to apply a deployment profile."""
     manager = get_profile_manager()
     return manager.apply_profile(profile, overrides)
 
 
-def get_current_profile() -> Optional[DeploymentProfile]:
+def get_current_profile() -> DeploymentProfile | None:
     """Get the currently applied profile."""
     manager = get_profile_manager()
     return manager.get_current_profile()

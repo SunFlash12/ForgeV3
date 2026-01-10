@@ -16,7 +16,6 @@ SECURITY FIXES (Audit 4):
 - H29: Nonce in sync requests
 """
 
-import asyncio
 import base64
 import hashlib
 import ipaddress
@@ -25,19 +24,17 @@ import logging
 import os
 import secrets
 import socket
-import ssl
 import threading
 from collections import OrderedDict
-from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta, timezone
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
 import httpx
 from cryptography.exceptions import InvalidSignature
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ed25519
 
 from forge.config import get_settings
@@ -45,7 +42,6 @@ from forge.federation.models import (
     FederatedPeer,
     PeerHandshake,
     PeerStatus,
-    SyncDirection,
     SyncPayload,
 )
 

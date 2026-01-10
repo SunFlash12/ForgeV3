@@ -9,11 +9,12 @@ Integrates with OpenTelemetry for distributed tracing across services.
 from __future__ import annotations
 
 import functools
+from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Callable, Dict, Generator, Optional, TypeVar
 from enum import Enum
+from typing import Any, TypeVar
 
 import structlog
 
@@ -27,11 +28,11 @@ F = TypeVar('F', bound=Callable[..., Any])
 # Try to import OpenTelemetry, but allow graceful degradation
 try:
     from opentelemetry import trace
+    from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+    from opentelemetry.sdk.resources import SERVICE_NAME, SERVICE_VERSION, Resource
     from opentelemetry.sdk.trace import TracerProvider
     from opentelemetry.sdk.trace.export import BatchSpanProcessor
-    from opentelemetry.sdk.resources import Resource, SERVICE_NAME, SERVICE_VERSION
-    from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
-    from opentelemetry.trace import Status, StatusCode, SpanKind
+    from opentelemetry.trace import SpanKind, Status, StatusCode
     from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
     OTEL_AVAILABLE = True
 except ImportError:
@@ -76,10 +77,10 @@ class SpanContext:
 
     trace_id: str
     span_id: str
-    parent_span_id: Optional[str] = None
+    parent_span_id: str | None = None
     operation: str = ""
     start_time: datetime = field(default_factory=datetime.utcnow)
-    attributes: Dict[str, Any] = field(default_factory=dict)
+    attributes: dict[str, Any] = field(default_factory=dict)
 
 
 class NoOpSpan:
@@ -100,7 +101,7 @@ class NoOpSpan:
     def record_exception(self, exception: Exception) -> None:
         pass
 
-    def add_event(self, name: str, attributes: Optional[Dict] = None) -> None:
+    def add_event(self, name: str, attributes: dict | None = None) -> None:
         pass
 
 
@@ -197,8 +198,8 @@ class ForgeTracer:
     def span(
         self,
         operation: str,
-        kind: Optional[Any] = None,
-        attributes: Optional[Dict[str, Any]] = None
+        kind: Any | None = None,
+        attributes: dict[str, Any] | None = None
     ) -> Generator:
         """
         Create a trace span for an operation.
@@ -235,8 +236,8 @@ class ForgeTracer:
     def capsule_span(
         self,
         operation_type: OperationType,
-        capsule_id: Optional[str] = None,
-        capsule_type: Optional[str] = None,
+        capsule_id: str | None = None,
+        capsule_type: str | None = None,
         **extra_attributes
     ) -> Generator:
         """Create a span for capsule operations."""
@@ -274,7 +275,7 @@ class ForgeTracer:
     def governance_span(
         self,
         operation_type: OperationType,
-        proposal_id: Optional[str] = None,
+        proposal_id: str | None = None,
         **extra_attributes
     ) -> Generator:
         """Create a span for governance operations."""
@@ -309,21 +310,21 @@ class ForgeTracer:
         with self.span(f"db.{operation}", kind=span_kind, attributes=attributes) as span:
             yield span
 
-    def extract_context(self, headers: Dict[str, str]) -> Any:
+    def extract_context(self, headers: dict[str, str]) -> Any:
         """Extract trace context from HTTP headers."""
         if not OTEL_AVAILABLE or not self._propagator:
             return None
 
         return self._propagator.extract(carrier=headers)
 
-    def inject_context(self, headers: Dict[str, str]) -> None:
+    def inject_context(self, headers: dict[str, str]) -> None:
         """Inject trace context into HTTP headers."""
         if not OTEL_AVAILABLE or not self._propagator:
             return
 
         self._propagator.inject(carrier=headers)
 
-    def get_current_trace_id(self) -> Optional[str]:
+    def get_current_trace_id(self) -> str | None:
         """Get the current trace ID."""
         if not OTEL_AVAILABLE:
             return None
@@ -338,7 +339,7 @@ class ForgeTracer:
 
 
 # Global tracer instance
-_forge_tracer: Optional[ForgeTracer] = None
+_forge_tracer: ForgeTracer | None = None
 
 
 def get_tracer() -> ForgeTracer:
@@ -352,7 +353,7 @@ def get_tracer() -> ForgeTracer:
 
 def trace_operation(
     operation: str,
-    attributes: Optional[Dict[str, Any]] = None
+    attributes: dict[str, Any] | None = None
 ) -> Callable[[F], F]:
     """
     Decorator to trace a function execution.

@@ -9,11 +9,11 @@ Ensures optimal query performance through intelligent capsule placement.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Set, Tuple
 from enum import Enum
-import hashlib
+from typing import Any
 
 import structlog
 
@@ -51,8 +51,8 @@ class PartitionStats:
     total_size_bytes: int = 0
     avg_query_latency_ms: float = 0.0
     queries_per_second: float = 0.0
-    last_write_at: Optional[datetime] = None
-    last_query_at: Optional[datetime] = None
+    last_write_at: datetime | None = None
+    last_query_at: datetime | None = None
 
 
 @dataclass
@@ -67,15 +67,15 @@ class Partition:
     stats: PartitionStats = field(default_factory=PartitionStats)
 
     # Partition boundaries
-    domain_tags: Set[str] = field(default_factory=set)
-    user_ids: Set[str] = field(default_factory=set)
-    hash_range: Tuple[int, int] = (0, 100)
+    domain_tags: set[str] = field(default_factory=set)
+    user_ids: set[str] = field(default_factory=set)
+    hash_range: tuple[int, int] = (0, 100)
 
     # Configuration
     max_capsules: int = 50000
     max_edges: int = 500000
 
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     @property
     def is_full(self) -> bool:
@@ -87,7 +87,7 @@ class Partition:
         """Get partition utilization percentage."""
         return (self.stats.capsule_count / self.max_capsules) * 100 if self.max_capsules > 0 else 0.0
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "partition_id": self.partition_id,
@@ -114,11 +114,11 @@ class RebalanceJob:
     job_id: str
     source_partition: str
     target_partition: str
-    capsules_to_move: List[str] = field(default_factory=list)
+    capsules_to_move: list[str] = field(default_factory=list)
     moved_count: int = 0
     status: str = "pending"
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
 
 
 class PartitionManager:
@@ -134,11 +134,11 @@ class PartitionManager:
 
     def __init__(self):
         self._config = get_resilience_config().partitioning
-        self._partitions: Dict[str, Partition] = {}
-        self._capsule_partition_map: Dict[str, str] = {}
-        self._rebalance_jobs: Dict[str, RebalanceJob] = {}
+        self._partitions: dict[str, Partition] = {}
+        self._capsule_partition_map: dict[str, str] = {}
+        self._rebalance_jobs: dict[str, RebalanceJob] = {}
         self._initialized = False
-        self._rebalance_task: Optional[asyncio.Task] = None
+        self._rebalance_task: asyncio.Task | None = None
 
     async def initialize(self) -> None:
         """Initialize the partition manager."""
@@ -178,8 +178,8 @@ class PartitionManager:
         self,
         name: str,
         strategy: PartitionStrategy = PartitionStrategy.DOMAIN,
-        domain_tags: Optional[Set[str]] = None,
-        max_capsules: Optional[int] = None
+        domain_tags: set[str] | None = None,
+        max_capsules: int | None = None
     ) -> Partition:
         """
         Create a new partition.
@@ -220,19 +220,19 @@ class PartitionManager:
 
         return partition
 
-    def get_partition(self, partition_id: str) -> Optional[Partition]:
+    def get_partition(self, partition_id: str) -> Partition | None:
         """Get partition by ID."""
         return self._partitions.get(partition_id)
 
-    def list_partitions(self) -> List[Partition]:
+    def list_partitions(self) -> list[Partition]:
         """List all partitions."""
         return list(self._partitions.values())
 
     def assign_capsule(
         self,
         capsule_id: str,
-        domain_tags: Optional[Set[str]] = None,
-        owner_id: Optional[str] = None
+        domain_tags: set[str] | None = None,
+        owner_id: str | None = None
     ) -> str:
         """
         Assign a capsule to a partition.
@@ -266,15 +266,15 @@ class PartitionManager:
 
         return partition_id
 
-    def get_capsule_partition(self, capsule_id: str) -> Optional[str]:
+    def get_capsule_partition(self, capsule_id: str) -> str | None:
         """Get the partition ID for a capsule."""
         return self._capsule_partition_map.get(capsule_id)
 
     def _find_best_partition(
         self,
         capsule_id: str,
-        domain_tags: Optional[Set[str]],
-        owner_id: Optional[str]
+        domain_tags: set[str] | None,
+        owner_id: str | None
     ) -> str:
         """Find the best partition for a capsule."""
         candidates = []
@@ -309,8 +309,8 @@ class PartitionManager:
         self,
         partition: Partition,
         capsule_id: str,
-        domain_tags: Optional[Set[str]],
-        owner_id: Optional[str]
+        domain_tags: set[str] | None,
+        owner_id: str | None
     ) -> float:
         """Calculate affinity score for a partition."""
         score = 0.0
@@ -336,7 +336,7 @@ class PartitionManager:
 
         return score
 
-    async def trigger_rebalance(self) -> Optional[RebalanceJob]:
+    async def trigger_rebalance(self) -> RebalanceJob | None:
         """
         Trigger partition rebalancing if needed.
 
@@ -469,14 +469,14 @@ class PartitionManager:
             except Exception as e:
                 logger.error("background_rebalance_error", error=str(e))
 
-    def get_partition_stats(self) -> Dict[str, Any]:
+    def get_partition_stats(self) -> dict[str, Any]:
         """Get statistics for all partitions."""
         return {
             p.partition_id: p.to_dict()
             for p in self._partitions.values()
         }
 
-    def get_rebalance_status(self) -> List[Dict[str, Any]]:
+    def get_rebalance_status(self) -> list[dict[str, Any]]:
         """Get status of rebalancing jobs."""
         return [
             {
@@ -491,7 +491,7 @@ class PartitionManager:
 
 
 # Global instance
-_partition_manager: Optional[PartitionManager] = None
+_partition_manager: PartitionManager | None = None
 
 
 async def get_partition_manager() -> PartitionManager:

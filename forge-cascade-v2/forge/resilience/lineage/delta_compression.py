@@ -8,13 +8,13 @@ Reduces storage requirements by storing only differences between versions.
 
 from __future__ import annotations
 
-import json
 import hashlib
+import json
 import zlib
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
 from enum import Enum
+from typing import Any
 
 import structlog
 
@@ -36,9 +36,9 @@ class DiffEntry:
 
     operation: DiffOperation
     path: str                      # JSONPath to the changed element
-    old_value: Optional[Any] = None
-    new_value: Optional[Any] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    old_value: Any | None = None
+    new_value: Any | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -49,10 +49,10 @@ class LineageDiff:
     base_hash: str                 # Hash of the base snapshot
     target_hash: str               # Hash of the resulting snapshot
     created_at: datetime = field(default_factory=datetime.utcnow)
-    entries: List[DiffEntry] = field(default_factory=list)
+    entries: list[DiffEntry] = field(default_factory=list)
     compression_ratio: float = 1.0
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
             "diff_id": self.diff_id,
@@ -73,7 +73,7 @@ class LineageDiff:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'LineageDiff':
+    def from_dict(cls, data: dict[str, Any]) -> LineageDiff:
         """Create from dictionary."""
         entries = [
             DiffEntry(
@@ -104,7 +104,7 @@ class LineageSnapshot:
     capsule_id: str
     version: int
     created_at: datetime
-    data: Dict[str, Any]
+    data: dict[str, Any]
     hash: str = ""
 
     def __post_init__(self):
@@ -127,8 +127,8 @@ class DeltaCompressor:
 
     def __init__(self, max_delta_chain: int = 10):
         self._max_delta_chain = max_delta_chain
-        self._snapshots: Dict[str, LineageSnapshot] = {}
-        self._deltas: Dict[str, List[LineageDiff]] = {}  # capsule_id -> deltas
+        self._snapshots: dict[str, LineageSnapshot] = {}
+        self._deltas: dict[str, list[LineageDiff]] = {}  # capsule_id -> deltas
         self._stats = {
             "snapshots_created": 0,
             "deltas_created": 0,
@@ -138,7 +138,7 @@ class DeltaCompressor:
     def create_snapshot(
         self,
         capsule_id: str,
-        data: Dict[str, Any],
+        data: dict[str, Any],
         version: int = 1
     ) -> LineageSnapshot:
         """
@@ -189,7 +189,7 @@ class DeltaCompressor:
         entries = self._diff_dicts("", old_snapshot.data, new_snapshot.data)
 
         # Calculate compression ratio
-        old_size = len(json.dumps(old_snapshot.data))
+        len(json.dumps(old_snapshot.data))
         new_size = len(json.dumps(new_snapshot.data))
         diff_size = len(json.dumps([e.new_value for e in entries]))
         compression_ratio = diff_size / new_size if new_size > 0 else 1.0
@@ -217,9 +217,9 @@ class DeltaCompressor:
     def _diff_dicts(
         self,
         path: str,
-        old: Dict[str, Any],
-        new: Dict[str, Any]
-    ) -> List[DiffEntry]:
+        old: dict[str, Any],
+        new: dict[str, Any]
+    ) -> list[DiffEntry]:
         """Recursively compute differences between dictionaries."""
         entries = []
 
@@ -263,9 +263,9 @@ class DeltaCompressor:
     def _diff_lists(
         self,
         path: str,
-        old: List[Any],
-        new: List[Any]
-    ) -> List[DiffEntry]:
+        old: list[Any],
+        new: list[Any]
+    ) -> list[DiffEntry]:
         """Compute differences between lists."""
         entries = []
 
@@ -350,7 +350,7 @@ class DeltaCompressor:
 
         return result
 
-    def _apply_entry(self, data: Dict[str, Any], entry: DiffEntry) -> None:
+    def _apply_entry(self, data: dict[str, Any], entry: DiffEntry) -> None:
         """Apply a single diff entry to data."""
         path_parts = self._parse_path(entry.path)
 
@@ -383,7 +383,7 @@ class DeltaCompressor:
         elif entry.operation == DiffOperation.MODIFY:
             current[final_key] = entry.new_value
 
-    def _parse_path(self, path: str) -> List[Any]:
+    def _parse_path(self, path: str) -> list[Any]:
         """Parse a JSONPath-like string into components."""
         if not path:
             return []
@@ -437,7 +437,7 @@ class DeltaCompressor:
             )
             # In production, would trigger snapshot consolidation
 
-    def get_deltas(self, capsule_id: str) -> List[LineageDiff]:
+    def get_deltas(self, capsule_id: str) -> list[LineageDiff]:
         """Get all deltas for a capsule."""
         return self._deltas.get(capsule_id, [])
 
@@ -480,13 +480,13 @@ class DeltaCompressor:
             data=data,
         )
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get compression statistics."""
         return dict(self._stats)
 
 
 # Global compressor instance
-_delta_compressor: Optional[DeltaCompressor] = None
+_delta_compressor: DeltaCompressor | None = None
 
 
 def get_delta_compressor() -> DeltaCompressor:

@@ -12,8 +12,8 @@ from forge.resilience.migration.embedding_migration import (
     MigrationStatus,
 )
 from forge.resilience.migration.version_registry import (
-    EmbeddingVersionRegistry,
     EmbeddingVersion,
+    EmbeddingVersionRegistry,
 )
 
 __all__ = [

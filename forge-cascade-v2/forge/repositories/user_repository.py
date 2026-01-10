@@ -10,18 +10,17 @@ from typing import Any
 
 import structlog
 
-from forge.database.client import Neo4jClient
+from forge.models.base import TrustLevel
 from forge.models.user import (
+    AuthProvider,
+    TrustFlameAdjustment,
     User,
     UserCreate,
-    UserUpdate,
     UserInDB,
     UserPublic,
     UserRole,
-    AuthProvider,
-    TrustFlameAdjustment,
+    UserUpdate,
 )
-from forge.models.base import TrustLevel
 from forge.repositories.base import BaseRepository
 
 logger = structlog.get_logger(__name__)
@@ -41,7 +40,7 @@ USER_PUBLIC_FIELDS = ".id, .username, .display_name, .bio, .avatar_url, .trust_f
 class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
     """
     Repository for User entities.
-    
+
     Provides CRUD operations, authentication helpers,
     and trust flame management.
     """
@@ -62,18 +61,18 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
     ) -> UserInDB:
         """
         Create a new user.
-        
+
         Args:
             data: User creation data
             password_hash: Hashed password
             role: User role
-            
+
         Returns:
             Created user with DB fields
         """
         user_id = self._generate_id()
         now = self._now()
-        
+
         query = """
         CREATE (u:User {
             id: $id,
@@ -97,7 +96,7 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
         })
         RETURN u {.*} AS user
         """
-        
+
         params = {
             "id": user_id,
             "username": data.username,
@@ -111,9 +110,9 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
             "auth_provider": AuthProvider.LOCAL.value,
             "now": now.isoformat(),
         }
-        
+
         result = await self.client.execute_single(query, params)
-        
+
         if result and result.get("user"):
             self.logger.info(
                 "Created user",
@@ -121,7 +120,7 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
                 username=data.username,
             )
             return UserInDB.model_validate(result["user"])
-        
+
         raise RuntimeError("Failed to create user")
 
     async def get_by_id(self, entity_id: str) -> User | None:
@@ -151,11 +150,11 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
     async def update(self, entity_id: str, data: UserUpdate) -> User | None:
         """
         Update user profile.
-        
+
         Args:
             entity_id: User ID
             data: Update data
-            
+
         Returns:
             Updated user or None
         """
@@ -164,23 +163,23 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
             "id": entity_id,
             "now": self._now().isoformat(),
         }
-        
+
         if data.display_name is not None:
             set_clauses.append("u.display_name = $display_name")
             params["display_name"] = data.display_name
-        
+
         if data.bio is not None:
             set_clauses.append("u.bio = $bio")
             params["bio"] = data.bio
-        
+
         if data.avatar_url is not None:
             set_clauses.append("u.avatar_url = $avatar_url")
             params["avatar_url"] = data.avatar_url
-        
+
         if data.email is not None:
             set_clauses.append("u.email = $email")
             params["email"] = data.email
-        
+
         # SECURITY FIX (Audit 3): Use explicit field list to exclude password_hash
         query = f"""
         MATCH (u:User {{id: $id}})
@@ -289,7 +288,7 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
         SET u.password_hash = $password_hash, u.updated_at = $now
         RETURN u.id AS id
         """
-        
+
         result = await self.client.execute_single(
             query,
             {
@@ -298,7 +297,7 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
                 "now": self._now().isoformat(),
             },
         )
-        
+
         return result is not None and result.get("id") == user_id
 
     async def update_refresh_token(
@@ -312,12 +311,12 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
         SET u.refresh_token = $refresh_token
         RETURN u.id AS id
         """
-        
+
         result = await self.client.execute_single(
             query,
             {"id": user_id, "refresh_token": refresh_token},
         )
-        
+
         return result is not None and result.get("id") == user_id
 
     async def record_login(self, user_id: str) -> None:
@@ -326,7 +325,7 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
         MATCH (u:User {id: $id})
         SET u.last_login = $now, u.failed_login_attempts = 0
         """
-        
+
         await self.client.execute(
             query,
             {"id": user_id, "now": self._now().isoformat()},
@@ -335,7 +334,7 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
     async def record_failed_login(self, user_id: str) -> int:
         """
         Record failed login attempt.
-        
+
         Returns:
             New failed attempt count
         """
@@ -344,7 +343,7 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
         SET u.failed_login_attempts = u.failed_login_attempts + 1
         RETURN u.failed_login_attempts AS attempts
         """
-        
+
         result = await self.client.execute_single(query, {"id": user_id})
         return result.get("attempts", 0) if result else 0
 
@@ -354,7 +353,7 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
         MATCH (u:User {id: $id})
         SET u.lockout_until = $until
         """
-        
+
         await self.client.execute(
             query,
             {"id": user_id, "until": until.isoformat()},
@@ -366,7 +365,7 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
         MATCH (u:User {id: $id})
         SET u.lockout_until = null, u.failed_login_attempts = 0
         """
-        
+
         await self.client.execute(query, {"id": user_id})
 
     async def set_verified(self, user_id: str, verified: bool = True) -> None:
@@ -375,7 +374,7 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
         MATCH (u:User {id: $id})
         SET u.is_verified = $verified
         """
-        
+
         await self.client.execute(
             query,
             {"id": user_id, "verified": verified},
@@ -390,13 +389,13 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
     ) -> TrustFlameAdjustment | None:
         """
         Adjust user's trust flame score.
-        
+
         Args:
             user_id: User ID
             adjustment: Amount to adjust (+/-)
             reason: Reason for adjustment
             adjusted_by: ID of user/system making adjustment
-            
+
         Returns:
             Adjustment record or None
         """
@@ -410,15 +409,15 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
         END
         RETURN old_value, u.trust_flame AS new_value, u.id AS user_id
         """
-        
+
         result = await self.client.execute_single(
             query,
             {"id": user_id, "adjustment": adjustment},
         )
-        
+
         if not result:
             return None
-        
+
         adjustment_record = TrustFlameAdjustment(
             user_id=user_id,
             old_value=result["old_value"],
@@ -426,7 +425,7 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
             reason=reason,
             adjusted_by=adjusted_by,
         )
-        
+
         self.logger.info(
             "Trust flame adjusted",
             user_id=user_id,
@@ -434,7 +433,7 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
             new_value=adjustment_record.new_value,
             reason=reason,
         )
-        
+
         return adjustment_record
 
     async def get_by_trust_level(
@@ -453,12 +452,12 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
         ORDER BY u.trust_flame DESC
         LIMIT $limit
         """
-        
+
         results = await self.client.execute(
             query,
             {"min_trust": min_trust, "limit": limit},
         )
-        
+
         return [
             UserPublic.model_validate(r["user"])
             for r in results
@@ -482,7 +481,7 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
         WHERE toLower(u.username) = toLower($username)
         RETURN count(u) > 0 AS exists
         """
-        
+
         result = await self.client.execute_single(query, {"username": username})
         return result.get("exists", False) if result else False
 

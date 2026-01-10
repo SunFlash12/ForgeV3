@@ -4,10 +4,12 @@ Notification Models
 Data structures for the webhook and notification system.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
+
 from pydantic import Field
+
 from forge.models.base import ForgeModel, generate_id
 
 
@@ -108,7 +110,7 @@ class WebhookSubscription(ForgeModel):
     description: str | None = None
 
     # Timestamps
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     last_triggered_at: datetime | None = None
     last_success_at: datetime | None = None
     last_failure_at: datetime | None = None
@@ -147,7 +149,7 @@ class Notification(ForgeModel):
     dismissed_at: datetime | None = None
 
     # Metadata
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     expires_at: datetime | None = None
 
     # Source
@@ -180,7 +182,7 @@ class WebhookDelivery(ForgeModel):
     next_retry_at: datetime | None = None
 
     # Timestamps
-    attempted_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    attempted_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     completed_at: datetime | None = None
 
 
@@ -213,7 +215,7 @@ class NotificationPreferences(ForgeModel):
         default_factory=lambda: [DeliveryChannel.IN_APP]
     )
 
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class WebhookPayload(ForgeModel):

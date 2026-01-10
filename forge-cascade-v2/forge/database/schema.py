@@ -11,12 +11,13 @@ from typing import Any
 import structlog
 from neo4j.exceptions import (
     ClientError,
-    DatabaseError,
     ConstraintError,
+    DatabaseError,
     ServiceUnavailable,
 )
-from forge.database.client import Neo4jClient
+
 from forge.config import settings
+from forge.database.client import Neo4jClient
 
 logger = structlog.get_logger(__name__)
 
@@ -72,36 +73,36 @@ class SchemaManager:
     async def setup_all(self) -> dict[str, bool]:
         """
         Set up all schema elements.
-        
+
         Returns:
             Dict of schema element names to success status
         """
         results = {}
-        
+
         # Create constraints
         constraint_results = await self.create_constraints()
         results.update(constraint_results)
-        
+
         # Create indexes
         index_results = await self.create_indexes()
         results.update(index_results)
-        
+
         # Create vector indexes
         vector_results = await self.create_vector_indexes()
         results.update(vector_results)
-        
+
         logger.info(
             "Schema setup complete",
             total=len(results),
             successful=sum(1 for v in results.values() if v),
             failed=sum(1 for v in results.values() if not v),
         )
-        
+
         return results
 
     async def create_constraints(self) -> dict[str, bool]:
         """Create uniqueness and existence constraints."""
-        
+
         constraints = [
             # Capsule constraints
             (
@@ -109,7 +110,7 @@ class SchemaManager:
                 "CREATE CONSTRAINT capsule_id_unique IF NOT EXISTS "
                 "FOR (c:Capsule) REQUIRE c.id IS UNIQUE"
             ),
-            
+
             # User constraints
             (
                 "user_id_unique",
@@ -126,7 +127,7 @@ class SchemaManager:
                 "CREATE CONSTRAINT user_email_unique IF NOT EXISTS "
                 "FOR (u:User) REQUIRE u.email IS UNIQUE"
             ),
-            
+
             # Overlay constraints
             (
                 "overlay_id_unique",
@@ -138,28 +139,28 @@ class SchemaManager:
                 "CREATE CONSTRAINT overlay_name_unique IF NOT EXISTS "
                 "FOR (o:Overlay) REQUIRE o.name IS UNIQUE"
             ),
-            
+
             # Proposal constraints
             (
                 "proposal_id_unique",
                 "CREATE CONSTRAINT proposal_id_unique IF NOT EXISTS "
                 "FOR (p:Proposal) REQUIRE p.id IS UNIQUE"
             ),
-            
+
             # Vote constraints
             (
                 "vote_id_unique",
                 "CREATE CONSTRAINT vote_id_unique IF NOT EXISTS "
                 "FOR (v:Vote) REQUIRE v.id IS UNIQUE"
             ),
-            
+
             # AuditLog constraints
             (
                 "auditlog_id_unique",
                 "CREATE CONSTRAINT auditlog_id_unique IF NOT EXISTS "
                 "FOR (a:AuditLog) REQUIRE a.id IS UNIQUE"
             ),
-            
+
             # Event constraints
             (
                 "event_id_unique",
@@ -199,7 +200,7 @@ class SchemaManager:
                 "FOR (s:SemanticEdge) REQUIRE s.id IS UNIQUE"
             ),
         ]
-        
+
         results = {}
         for name, query in constraints:
             try:
@@ -235,7 +236,7 @@ class SchemaManager:
 
     async def create_indexes(self) -> dict[str, bool]:
         """Create regular indexes for common queries."""
-        
+
         indexes = [
             # Capsule indexes
             (
@@ -258,7 +259,7 @@ class SchemaManager:
                 "CREATE INDEX capsule_created_idx IF NOT EXISTS "
                 "FOR (c:Capsule) ON (c.created_at)"
             ),
-            
+
             # User indexes
             (
                 "user_role_idx",
@@ -275,7 +276,7 @@ class SchemaManager:
                 "CREATE INDEX user_trust_idx IF NOT EXISTS "
                 "FOR (u:User) ON (u.trust_flame)"
             ),
-            
+
             # Overlay indexes
             (
                 "overlay_state_idx",
@@ -287,7 +288,7 @@ class SchemaManager:
                 "CREATE INDEX overlay_trust_idx IF NOT EXISTS "
                 "FOR (o:Overlay) ON (o.trust_level)"
             ),
-            
+
             # Proposal indexes
             (
                 "proposal_status_idx",
@@ -299,7 +300,7 @@ class SchemaManager:
                 "CREATE INDEX proposal_proposer_idx IF NOT EXISTS "
                 "FOR (p:Proposal) ON (p.proposer_id)"
             ),
-            
+
             # AuditLog indexes
             (
                 "audit_entity_idx",
@@ -321,7 +322,7 @@ class SchemaManager:
                 "CREATE INDEX audit_correlation_idx IF NOT EXISTS "
                 "FOR (a:AuditLog) ON (a.correlation_id)"
             ),
-            
+
             # Event indexes
             (
                 "event_type_idx",
@@ -420,7 +421,7 @@ class SchemaManager:
                 "FOR (s:SemanticEdge) ON (s.created_at)"
             ),
         ]
-        
+
         results = {}
         for name, query in indexes:
             try:
@@ -453,10 +454,10 @@ class SchemaManager:
     async def create_vector_indexes(self) -> dict[str, bool]:
         """
         Create vector indexes for semantic search.
-        
+
         Neo4j 5.x supports native vector indexing.
         """
-        
+
         vector_indexes = [
             # Capsule embeddings for semantic search
             (
@@ -473,7 +474,7 @@ class SchemaManager:
                 """
             ),
         ]
-        
+
         results = {}
         for name, query in vector_indexes:
             try:
@@ -549,19 +550,19 @@ class SchemaManager:
         )
 
         results = {}
-        
+
         # Get all constraints
         constraints = await self.client.execute(
             "SHOW CONSTRAINTS YIELD name RETURN name"
         )
-        
+
         for constraint in constraints:
             name = constraint.get("name")
             if name:
                 # SECURITY FIX (Audit 2): Validate identifier before using in DROP
                 if not _validate_identifier(name):
                     logger.warning(f"Skipping invalid constraint name: {name[:50]}")
-                    results[f"drop_constraint_invalid"] = False
+                    results["drop_constraint_invalid"] = False
                     continue
                 try:
                     await self.client.execute(f"DROP CONSTRAINT {name} IF EXISTS")
@@ -587,14 +588,14 @@ class SchemaManager:
         indexes = await self.client.execute(
             "SHOW INDEXES YIELD name RETURN name"
         )
-        
+
         for index in indexes:
             name = index.get("name")
             if name:
                 # SECURITY FIX (Audit 2): Validate identifier before using in DROP
                 if not _validate_identifier(name):
                     logger.warning(f"Skipping invalid index name: {name[:50]}")
-                    results[f"drop_index_invalid"] = False
+                    results["drop_index_invalid"] = False
                     continue
                 try:
                     await self.client.execute(f"DROP INDEX {name} IF EXISTS")
@@ -621,7 +622,7 @@ class SchemaManager:
     async def verify_schema(self) -> dict[str, Any]:
         """
         Verify that all required schema elements exist.
-        
+
         Returns:
             Verification results with missing elements
         """
@@ -682,20 +683,20 @@ class SchemaManager:
         expected_vector_indexes = {
             "capsule_embeddings",
         }
-        
+
         # Get existing constraints
         constraints = await self.client.execute(
             "SHOW CONSTRAINTS YIELD name RETURN name"
         )
         existing_constraints = {c["name"] for c in constraints}
-        
+
         # Get existing indexes
         indexes = await self.client.execute(
             "SHOW INDEXES YIELD name, type RETURN name, type"
         )
         existing_indexes = {i["name"] for i in indexes if i.get("type") != "VECTOR"}
         existing_vector = {i["name"] for i in indexes if i.get("type") == "VECTOR"}
-        
+
         return {
             "constraints": {
                 "expected": len(expected_constraints),

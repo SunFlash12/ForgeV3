@@ -8,8 +8,8 @@ Reduces LLM API calls and improves response times for repeated queries.
 import hashlib
 import json
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Any, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 import structlog
 
@@ -72,7 +72,7 @@ class QueryCache:
         self,
         question: str,
         user_trust: int,
-    ) -> Optional[CachedQueryResult]:
+    ) -> CachedQueryResult | None:
         """
         Get a cached query result.
 
@@ -134,7 +134,7 @@ class QueryCache:
         parameters: dict[str, Any],
         result_summary: str = "",
         result_count: int = 0,
-        ttl_seconds: Optional[int] = None,
+        ttl_seconds: int | None = None,
     ) -> bool:
         """
         Cache a query result.
@@ -162,7 +162,7 @@ class QueryCache:
                 "parameters": parameters,
                 "result_summary": result_summary,
                 "result_count": result_count,
-                "cached_at": datetime.now(timezone.utc).isoformat(),
+                "cached_at": datetime.now(UTC).isoformat(),
                 "ttl_seconds": ttl,
                 "hit_count": 0,
             }
@@ -297,7 +297,7 @@ class InMemoryQueryCache:
         content = f"{normalized}:trust:{user_trust}"
         return hashlib.sha256(content.encode()).hexdigest()[:32]
 
-    async def get(self, question: str, user_trust: int) -> Optional[CachedQueryResult]:
+    async def get(self, question: str, user_trust: int) -> CachedQueryResult | None:
         query_hash = self._hash_query(question, user_trust)
 
         if query_hash not in self._cache:
@@ -309,7 +309,7 @@ class InMemoryQueryCache:
         # Check expiration
         cached_at = datetime.fromisoformat(entry["cached_at"])
         ttl = entry.get("ttl_seconds", 3600)
-        if (datetime.now(timezone.utc) - cached_at).total_seconds() > ttl:
+        if (datetime.now(UTC) - cached_at).total_seconds() > ttl:
             del self._cache[query_hash]
             self._stats["misses"] += 1
             return None
@@ -337,7 +337,7 @@ class InMemoryQueryCache:
         parameters: dict[str, Any],
         result_summary: str = "",
         result_count: int = 0,
-        ttl_seconds: Optional[int] = None,
+        ttl_seconds: int | None = None,
     ) -> bool:
         query_hash = self._hash_query(question, user_trust)
 
@@ -355,7 +355,7 @@ class InMemoryQueryCache:
             "parameters": parameters,
             "result_summary": result_summary,
             "result_count": result_count,
-            "cached_at": datetime.now(timezone.utc).isoformat(),
+            "cached_at": datetime.now(UTC).isoformat(),
             "ttl_seconds": ttl_seconds or 3600,
             "hit_count": 0,
         }
@@ -377,7 +377,7 @@ class InMemoryQueryCache:
         return count
 
     async def cleanup_expired(self) -> dict[str, int]:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         expired = []
 
         for key, entry in self._cache.items():
@@ -410,7 +410,7 @@ class InMemoryQueryCache:
 
 
 # Global cache instance
-_query_cache: Optional[QueryCache | InMemoryQueryCache] = None
+_query_cache: QueryCache | InMemoryQueryCache | None = None
 
 
 async def init_query_cache() -> QueryCache | InMemoryQueryCache:
@@ -455,7 +455,7 @@ async def init_query_cache() -> QueryCache | InMemoryQueryCache:
     return _query_cache
 
 
-def get_query_cache() -> Optional[QueryCache | InMemoryQueryCache]:
+def get_query_cache() -> QueryCache | InMemoryQueryCache | None:
     """Get the query cache instance."""
     return _query_cache
 

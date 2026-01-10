@@ -11,14 +11,12 @@ to prevent injection attacks.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
 import structlog
 
 from forge.database.client import Neo4jClient
-
 
 # =============================================================================
 # CYPHER SECURITY VALIDATION
@@ -109,7 +107,7 @@ class CypherValidator:
         for pattern in cls.INJECTION_PATTERNS:
             if re.search(pattern, cypher, re.IGNORECASE | re.DOTALL):
                 raise CypherSecurityError(
-                    f"Potential Cypher injection detected"
+                    "Potential Cypher injection detected"
                 )
 
         # Check for write operations
@@ -217,7 +215,6 @@ from forge.models.query import (
     OrderBy,
     PathPattern,
     QueryComplexity,
-    QueryError,
     QueryIntent,
     QueryOperator,
     QueryResult,
@@ -226,7 +223,7 @@ from forge.models.query import (
     SortDirection,
     get_default_schema,
 )
-from forge.services.llm import LLMConfig, LLMMessage, LLMResponse, LLMService
+from forge.services.llm import LLMMessage, LLMService
 
 logger = structlog.get_logger(__name__)
 
@@ -327,7 +324,7 @@ class QueryCompiler:
         Returns:
             CompiledQuery with Cypher and parameters
         """
-        start_time = datetime.utcnow()
+        datetime.utcnow()
 
         # Extract intent using LLM
         intent = await self._extract_intent(question)
@@ -748,7 +745,7 @@ class KnowledgeQueryService:
         Returns:
             QueryResult with rows and optional synthesized answer
         """
-        start_time = datetime.utcnow()
+        datetime.utcnow()
 
         # Compile question to Cypher
         compiled = await self.compiler.compile(question, user_trust)

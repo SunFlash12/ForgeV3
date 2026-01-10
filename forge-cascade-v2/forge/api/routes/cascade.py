@@ -25,32 +25,28 @@ See: https://github.com/forge/forge-cascade/issues/XXX
 
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 
 from forge.api.dependencies import (
-    EventSystemDep,
-    OverlayManagerDep,
-    PipelineDep,
-    AuditRepoDep,
     ActiveUserDep,
-    TrustedUserDep,
+    AuditRepoDep,
     CorrelationIdDep,
+    EventSystemDep,
+    PipelineDep,
+    TrustedUserDep,
 )
-from forge.models.events import EventType
 
 # Resilience integration - metrics and caching
 from forge.resilience.integration import (
-    record_cascade_triggered,
-    record_cascade_propagated,
-    record_cascade_completed,
-    record_pipeline_executed,
     invalidate_cascade_cache,
+    record_cascade_completed,
+    record_cascade_propagated,
+    record_cascade_triggered,
+    record_pipeline_executed,
 )
-
 
 router = APIRouter()
 

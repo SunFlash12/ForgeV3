@@ -8,11 +8,10 @@ Provides domain-specific capsules, overlays, and configurations.
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Set
 from enum import Enum
+from typing import Any
 
 import structlog
 
@@ -49,8 +48,8 @@ class PackCapsule:
     title: str
     content: str
     capsule_type: str
-    tags: List[str] = field(default_factory=list)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    tags: list[str] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -60,7 +59,7 @@ class PackOverlay:
     overlay_id: str
     name: str
     overlay_type: str
-    config: Dict[str, Any] = field(default_factory=dict)
+    config: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -87,18 +86,18 @@ class StarterPack:
     status: PackStatus = PackStatus.PUBLISHED
 
     # Pack contents
-    capsules: List[PackCapsule] = field(default_factory=list)
-    overlays: List[PackOverlay] = field(default_factory=list)
-    dependencies: List[PackDependency] = field(default_factory=list)
+    capsules: list[PackCapsule] = field(default_factory=list)
+    overlays: list[PackOverlay] = field(default_factory=list)
+    dependencies: list[PackDependency] = field(default_factory=list)
 
     # Configuration
     default_trust_level: int = 60
     auto_activate_overlays: bool = True
-    tags: List[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
 
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "pack_id": self.pack_id,
@@ -117,7 +116,7 @@ class StarterPack:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'StarterPack':
+    def from_dict(cls, data: dict[str, Any]) -> StarterPack:
         """Create from dictionary."""
         capsules = [
             PackCapsule(**c) for c in data.get("capsules", [])
@@ -158,8 +157,8 @@ class PackInstallation:
     pack_version: str
     installed_at: datetime = field(default_factory=datetime.utcnow)
     installed_by: str = ""
-    capsules_created: List[str] = field(default_factory=list)
-    overlays_activated: List[str] = field(default_factory=list)
+    capsules_created: list[str] = field(default_factory=list)
+    overlays_activated: list[str] = field(default_factory=list)
     status: str = "completed"
 
 
@@ -176,8 +175,8 @@ class StarterPackManager:
 
     def __init__(self):
         self._config = get_resilience_config().starter_packs
-        self._packs: Dict[str, StarterPack] = {}
-        self._installations: Dict[str, List[PackInstallation]] = {}  # user_id -> installations
+        self._packs: dict[str, StarterPack] = {}
+        self._installations: dict[str, list[PackInstallation]] = {}  # user_id -> installations
         self._initialized = False
 
         # Callbacks for installation
@@ -345,15 +344,15 @@ class StarterPackManager:
             name=pack.name
         )
 
-    def get_pack(self, pack_id: str) -> Optional[StarterPack]:
+    def get_pack(self, pack_id: str) -> StarterPack | None:
         """Get a starter pack by ID."""
         return self._packs.get(pack_id)
 
     def list_packs(
         self,
-        category: Optional[PackCategory] = None,
-        tags: Optional[List[str]] = None
-    ) -> List[StarterPack]:
+        category: PackCategory | None = None,
+        tags: list[str] | None = None
+    ) -> list[StarterPack]:
         """List available starter packs with optional filtering."""
         packs = list(self._packs.values())
 
@@ -371,7 +370,7 @@ class StarterPackManager:
 
         return packs
 
-    def search_packs(self, query: str) -> List[StarterPack]:
+    def search_packs(self, query: str) -> list[StarterPack]:
         """Search packs by name or description."""
         query_lower = query.lower()
         return [
@@ -465,7 +464,7 @@ class StarterPackManager:
         template: PackCapsule,
         user_id: str,
         trust_level: int
-    ) -> Optional[str]:
+    ) -> str | None:
         """
         Create a capsule from template.
 
@@ -500,7 +499,7 @@ class StarterPackManager:
                 )
         return None
 
-    def _validate_pack_content(self, content: str) -> Optional[str]:
+    def _validate_pack_content(self, content: str) -> str | None:
         """
         SECURITY FIX (Audit 4 - H30): Validate and sanitize pack content.
 
@@ -513,7 +512,6 @@ class StarterPackManager:
         Returns sanitized content or None if content is rejected.
         """
         import re
-        import html
 
         if not content:
             return ""
@@ -575,7 +573,7 @@ class StarterPackManager:
         self,
         overlay_config: PackOverlay,
         user_id: str
-    ) -> Optional[str]:
+    ) -> str | None:
         """Activate an overlay from pack configuration."""
         if self._activate_overlay_callback:
             try:
@@ -592,7 +590,7 @@ class StarterPackManager:
                 )
         return None
 
-    def get_installations(self, user_id: str) -> List[PackInstallation]:
+    def get_installations(self, user_id: str) -> list[PackInstallation]:
         """Get all installations for a user."""
         return self._installations.get(user_id, [])
 
@@ -638,7 +636,7 @@ class StarterPackManager:
 
 
 # Global instance
-_pack_manager: Optional[StarterPackManager] = None
+_pack_manager: StarterPackManager | None = None
 
 
 def get_pack_manager() -> StarterPackManager:

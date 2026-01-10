@@ -16,12 +16,11 @@ from __future__ import annotations
 
 import logging
 import sys
-from datetime import datetime, timezone
-from typing import Any, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 import structlog
 from structlog.typing import EventDict, WrappedLogger
-
 
 # =============================================================================
 # Custom Processors
@@ -33,7 +32,7 @@ def add_timestamp(
     event_dict: EventDict,
 ) -> EventDict:
     """Add ISO8601 timestamp to log entry."""
-    event_dict["timestamp"] = datetime.now(timezone.utc).isoformat()
+    event_dict["timestamp"] = datetime.now(UTC).isoformat()
     return event_dict
 
 
@@ -81,11 +80,11 @@ def sanitize_sensitive_data(
         "credit_card",
         "ssn",
     }
-    
+
     def _sanitize(obj: Any, depth: int = 0) -> Any:
         if depth > 10:  # Prevent infinite recursion
             return obj
-        
+
         if isinstance(obj, dict):
             return {
                 k: "[REDACTED]" if any(s in k.lower() for s in sensitive_keys) else _sanitize(v, depth + 1)
@@ -94,7 +93,7 @@ def sanitize_sensitive_data(
         elif isinstance(obj, list):
             return [_sanitize(item, depth + 1) for item in obj]
         return obj
-    
+
     return _sanitize(event_dict)
 
 
@@ -105,7 +104,7 @@ def drop_color_codes(
 ) -> EventDict:
     """Remove ANSI color codes for clean log output."""
     import re
-    
+
     def _clean(obj: Any) -> Any:
         if isinstance(obj, str):
             return re.sub(r'\x1b\[[0-9;]*m', '', obj)
@@ -114,7 +113,7 @@ def drop_color_codes(
         elif isinstance(obj, list):
             return [_clean(item) for item in obj]
         return obj
-    
+
     return _clean(event_dict)
 
 
@@ -131,7 +130,7 @@ def configure_logging(
 ) -> None:
     """
     Configure structured logging for the application.
-    
+
     Args:
         level: Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
         json_output: Use JSON format (for production)
@@ -148,19 +147,19 @@ def configure_logging(
         structlog.processors.StackInfoRenderer(),
         structlog.processors.UnicodeDecoder(),
     ]
-    
+
     # Add custom processors
     if include_timestamps:
         processors.insert(0, add_timestamp)
-    
+
     if include_service_info:
         processors.insert(0, add_service_info)
-    
+
     processors.append(add_log_level)
-    
+
     if sanitize_logs:
         processors.append(sanitize_sensitive_data)
-    
+
     # Add format-specific processors
     if json_output:
         processors.append(drop_color_codes)
@@ -172,7 +171,7 @@ def configure_logging(
                 exception_formatter=structlog.dev.rich_traceback,
             )
         )
-    
+
     # Configure structlog
     structlog.configure(
         processors=processors,
@@ -181,14 +180,14 @@ def configure_logging(
         logger_factory=structlog.stdlib.LoggerFactory(),
         cache_logger_on_first_use=True,
     )
-    
+
     # Configure standard library logging
     logging.basicConfig(
         format="%(message)s",
         stream=sys.stdout,
         level=getattr(logging, level.upper()),
     )
-    
+
     # Reduce noise from third-party loggers
     logging.getLogger("uvicorn").setLevel(logging.WARNING)
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
@@ -196,13 +195,13 @@ def configure_logging(
     logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 
-def get_logger(name: Optional[str] = None) -> structlog.BoundLogger:
+def get_logger(name: str | None = None) -> structlog.BoundLogger:
     """
     Get a logger instance.
-    
+
     Args:
         name: Logger name (defaults to module name)
-        
+
     Returns:
         Configured structlog logger
     """
@@ -235,7 +234,7 @@ def clear_context() -> None:
 class LoggingContextMiddleware:
     """
     FastAPI middleware to add request context to logs.
-    
+
     Automatically binds:
     - correlation_id
     - request_id
@@ -243,28 +242,28 @@ class LoggingContextMiddleware:
     - path
     - method
     """
-    
+
     def __init__(self, app):
         self.app = app
-    
+
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
-        
+
         from uuid import uuid4
-        
+
         # Extract or generate correlation ID
         headers = dict(scope.get("headers", []))
         correlation_id = headers.get(b"x-correlation-id", b"").decode() or str(uuid4())
-        
+
         # Bind context
         bind_context(
             correlation_id=correlation_id,
             path=scope.get("path", ""),
             method=scope.get("method", ""),
         )
-        
+
         try:
             await self.app(scope, receive, send)
         finally:
@@ -277,11 +276,11 @@ class LoggingContextMiddleware:
 
 class DatadogFormatter:
     """Format logs for Datadog ingestion."""
-    
+
     @staticmethod
     def format(event_dict: EventDict) -> str:
         import json
-        
+
         # Datadog expects specific field names
         dd_dict = {
             "message": event_dict.pop("event", ""),
@@ -290,27 +289,27 @@ class DatadogFormatter:
             "service": event_dict.pop("service", "forge-cascade"),
             "dd.trace_id": event_dict.pop("correlation_id", ""),
         }
-        
+
         # Add remaining fields as attributes
         dd_dict.update(event_dict)
-        
+
         return json.dumps(dd_dict)
 
 
 class CloudWatchFormatter:
     """Format logs for AWS CloudWatch."""
-    
+
     @staticmethod
     def format(event_dict: EventDict) -> str:
         import json
-        
+
         cw_dict = {
             "message": event_dict.pop("event", ""),
             "level": event_dict.pop("level", "info"),
             "timestamp": event_dict.pop("timestamp", ""),
             "extra": event_dict,
         }
-        
+
         return json.dumps(cw_dict)
 
 
@@ -318,8 +317,8 @@ class CloudWatchFormatter:
 # Performance Logging
 # =============================================================================
 
-from contextlib import contextmanager
 import time
+from contextlib import contextmanager
 
 
 @contextmanager
@@ -331,14 +330,14 @@ def log_duration(
 ):
     """
     Context manager to log operation duration.
-    
+
     Usage:
         with log_duration(logger, "database_query", table="users"):
             result = await db.query(...)
     """
     start_time = time.monotonic()
     log_method = getattr(logger, level)
-    
+
     try:
         yield
         duration_ms = (time.monotonic() - start_time) * 1000

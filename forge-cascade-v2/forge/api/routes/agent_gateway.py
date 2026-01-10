@@ -5,26 +5,23 @@ REST and WebSocket endpoints for AI agent access to the knowledge graph.
 """
 
 import logging
-import json
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Depends, Query, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 
+from forge.api.dependencies import ActiveUserDep
 from forge.models.agent_gateway import (
-    AgentSession,
+    AgentCapability,
+    AgentCapsuleCreation,
     AgentQuery,
-    QueryResult,
+    AgentSession,
+    AgentTrustLevel,
     QueryType,
     ResponseFormat,
-    AgentCapability,
-    AgentTrustLevel,
-    AgentCapsuleCreation,
-    GatewayStats,
 )
-from forge.services.agent_gateway import get_gateway_service, AgentGatewayService
-from forge.api.dependencies import ActiveUserDep
+from forge.services.agent_gateway import AgentGatewayService, get_gateway_service
 
 logger = logging.getLogger(__name__)
 

@@ -4,120 +4,99 @@ Forge Cascade V2 Security Module
 Provides authentication, authorization, and trust enforcement.
 """
 
-from .password import (
-    hash_password,
-    verify_password,
-    needs_rehash,
-    get_password_strength
+from .auth_service import (
+    AccountDeactivatedError,
+    AccountLockedError,
+    AccountNotVerifiedError,
+    AuthenticationError,
+    AuthService,
+    InvalidCredentialsError,
+    RegistrationError,
+    get_auth_service,
 )
-
+from .authorization import (
+    # Role-Based
+    ROLE_HIERARCHY,
+    ROLE_PERMISSIONS,
+    # Capability-Based
+    TRUST_LEVEL_CAPABILITIES,
+    TRUST_LEVEL_PERMISSIONS,
+    # Trust Level
+    TRUST_LEVEL_VALUES,
+    # Combined
+    AuthorizationContext,
+    # Exceptions
+    AuthorizationError,
+    InsufficientRoleError,
+    InsufficientTrustError,
+    MissingCapabilityError,
+    check_all_capabilities,
+    check_any_capability,
+    check_capability,
+    check_role,
+    check_trust_level,
+    create_auth_context,
+    get_capabilities_for_trust,
+    get_role_permissions,
+    get_trust_level_from_score,
+    get_trust_permissions,
+    has_role_permission,
+    require_capabilities,
+    require_capability,
+    require_role,
+    require_trust_level,
+)
+from .dependencies import (
+    # Type aliases
+    AuthContext,
+    # Composite
+    AuthenticatedRequest,
+    ClientIP,
+    CurrentUserId,
+    OptionalAuthContext,
+    RequireAdmin,
+    RequireCoreTrust,
+    RequireModerator,
+    RequireSandboxTrust,
+    RequireStandardTrust,
+    RequireSystem,
+    RequireTrustedTrust,
+    # Resource access
+    ResourceAccessChecker,
+    UserAgent,
+    get_auth_context,
+    # Request info
+    get_client_ip,
+    get_current_user_id,
+    get_optional_auth_context,
+    # Core dependencies
+    get_token,
+    get_user_agent,
+    require_all_capabilities_dep,
+    require_any_capability_dep,
+    # Capability dependencies
+    require_capability_dep,
+    # Role dependencies
+    require_role_dep,
+    # Trust dependencies
+    require_trust,
+)
+from .password import get_password_strength, hash_password, needs_rehash, verify_password
 from .tokens import (
+    TokenError,
+    TokenExpiredError,
+    TokenInvalidError,
     create_access_token,
     create_refresh_token,
     create_token_pair,
     decode_token,
-    verify_access_token,
-    verify_refresh_token,
-    get_token_expiry,
-    is_token_expired,
     extract_token_from_header,
     get_token_claims,
-    TokenError,
-    TokenExpiredError,
-    TokenInvalidError
+    get_token_expiry,
+    is_token_expired,
+    verify_access_token,
+    verify_refresh_token,
 )
-
-from .authorization import (
-    # Exceptions
-    AuthorizationError,
-    InsufficientTrustError,
-    InsufficientRoleError,
-    MissingCapabilityError,
-    
-    # Trust Level
-    TRUST_LEVEL_VALUES,
-    TRUST_LEVEL_PERMISSIONS,
-    get_trust_level_from_score,
-    check_trust_level,
-    require_trust_level,
-    get_trust_permissions,
-    
-    # Role-Based
-    ROLE_HIERARCHY,
-    ROLE_PERMISSIONS,
-    check_role,
-    require_role,
-    get_role_permissions,
-    has_role_permission,
-    
-    # Capability-Based
-    TRUST_LEVEL_CAPABILITIES,
-    get_capabilities_for_trust,
-    check_capability,
-    check_all_capabilities,
-    check_any_capability,
-    require_capability,
-    require_capabilities,
-    
-    # Combined
-    AuthorizationContext,
-    create_auth_context
-)
-
-from .auth_service import (
-    AuthService,
-    get_auth_service,
-    AuthenticationError,
-    InvalidCredentialsError,
-    AccountLockedError,
-    AccountNotVerifiedError,
-    AccountDeactivatedError,
-    RegistrationError
-)
-
-from .dependencies import (
-    # Core dependencies
-    get_token,
-    get_optional_auth_context,
-    get_auth_context,
-    get_current_user_id,
-    
-    # Type aliases
-    AuthContext,
-    OptionalAuthContext,
-    CurrentUserId,
-    
-    # Trust dependencies
-    require_trust,
-    RequireSandboxTrust,
-    RequireStandardTrust,
-    RequireTrustedTrust,
-    RequireCoreTrust,
-    
-    # Role dependencies
-    require_role_dep,
-    RequireModerator,
-    RequireAdmin,
-    RequireSystem,
-    
-    # Capability dependencies
-    require_capability_dep,
-    require_any_capability_dep,
-    require_all_capabilities_dep,
-    
-    # Resource access
-    ResourceAccessChecker,
-    
-    # Request info
-    get_client_ip,
-    get_user_agent,
-    ClientIP,
-    UserAgent,
-    
-    # Composite
-    AuthenticatedRequest
-)
-
 
 __all__ = [
     # Password
@@ -125,7 +104,7 @@ __all__ = [
     "verify_password",
     "needs_rehash",
     "get_password_strength",
-    
+
     # Tokens
     "create_access_token",
     "create_refresh_token",
@@ -140,7 +119,7 @@ __all__ = [
     "TokenError",
     "TokenExpiredError",
     "TokenInvalidError",
-    
+
     # Authorization
     "AuthorizationError",
     "InsufficientTrustError",
@@ -167,7 +146,7 @@ __all__ = [
     "require_capabilities",
     "AuthorizationContext",
     "create_auth_context",
-    
+
     # Auth Service
     "AuthService",
     "get_auth_service",
@@ -177,7 +156,7 @@ __all__ = [
     "AccountNotVerifiedError",
     "AccountDeactivatedError",
     "RegistrationError",
-    
+
     # Dependencies
     "get_token",
     "get_optional_auth_context",

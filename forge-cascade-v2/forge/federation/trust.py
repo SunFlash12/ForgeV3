@@ -13,13 +13,13 @@ from unbounded trust history growth.
 import asyncio
 import logging
 from collections import deque
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime
 from typing import Any
 
 from forge.federation.models import (
     FederatedPeer,
-    PeerStatus,
     FederationStats,
+    PeerStatus,
 )
 
 logger = logging.getLogger(__name__)
@@ -40,7 +40,7 @@ class TrustEvent:
         self.event_type = event_type
         self.delta = delta
         self.reason = reason
-        self.timestamp = timestamp or datetime.now(timezone.utc)
+        self.timestamp = timestamp or datetime.now(UTC)
 
 
 class PeerTrustManager:
@@ -269,7 +269,7 @@ class PeerTrustManager:
             return peer.trust_score
 
         # Calculate weeks since last seen
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         inactive_duration = now - peer.last_seen_at
         inactive_weeks = inactive_duration.days / 7
 
@@ -423,7 +423,7 @@ class PeerTrustManager:
             # Store revocation metadata
             if not hasattr(peer, 'metadata') or peer.metadata is None:
                 peer.metadata = {}
-            peer.metadata['revoked_at'] = datetime.now(timezone.utc).isoformat()
+            peer.metadata['revoked_at'] = datetime.now(UTC).isoformat()
             peer.metadata['revoked_by'] = revoked_by
             peer.metadata['revocation_reason'] = reason
 
@@ -465,7 +465,7 @@ class PeerTrustManager:
             return True, "Peer has never been verified"
 
         # Calculate time since last verification
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         if isinstance(last_verified, str):
             last_verified = datetime.fromisoformat(last_verified.replace('Z', '+00:00'))
 
@@ -628,13 +628,13 @@ class PeerTrustManager:
         recent_failures = sum(
             1 for e in history
             if e.event_type == "sync_failure"
-            and (datetime.now(timezone.utc) - e.timestamp).days < 7
+            and (datetime.now(UTC) - e.timestamp).days < 7
         )
 
         recent_successes = sum(
             1 for e in history
             if e.event_type == "sync_success"
-            and (datetime.now(timezone.utc) - e.timestamp).days < 7
+            and (datetime.now(UTC) - e.timestamp).days < 7
         )
 
         # Check for concerning patterns

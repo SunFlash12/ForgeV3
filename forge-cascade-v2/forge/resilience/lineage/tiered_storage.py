@@ -10,13 +10,13 @@ Three-tier storage system for lineage data:
 
 from __future__ import annotations
 
-import json
+import asyncio
 import gzip
+import json
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Tuple
 from enum import Enum
-import asyncio
+from typing import Any
 
 import structlog
 
@@ -39,19 +39,19 @@ class LineageEntry:
 
     entry_id: str
     capsule_id: str
-    parent_id: Optional[str]
+    parent_id: str | None
     relationship_type: str  # DERIVED_FROM, REFERENCES, etc.
     created_at: datetime
     trust_level: int
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     # Storage management
     tier: StorageTier = StorageTier.HOT
     compressed: bool = False
-    archived_at: Optional[datetime] = None
+    archived_at: datetime | None = None
     last_accessed: datetime = field(default_factory=datetime.utcnow)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
             "entry_id": self.entry_id,
@@ -68,7 +68,7 @@ class LineageEntry:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'LineageEntry':
+    def from_dict(cls, data: dict[str, Any]) -> LineageEntry:
         """Create from dictionary."""
         return cls(
             entry_id=data["entry_id"],
@@ -91,8 +91,8 @@ class TierStats:
 
     entry_count: int = 0
     total_size_bytes: int = 0
-    oldest_entry: Optional[datetime] = None
-    newest_entry: Optional[datetime] = None
+    oldest_entry: datetime | None = None
+    newest_entry: datetime | None = None
     avg_trust_level: float = 0.0
 
 
@@ -115,9 +115,9 @@ class TieredLineageStorage:
         self._initialized = False
 
         # In-memory tier storage (production would use actual storage backends)
-        self._tier1_storage: Dict[str, LineageEntry] = {}
-        self._tier2_storage: Dict[str, bytes] = {}  # Compressed
-        self._tier3_storage: Dict[str, str] = {}    # S3 keys
+        self._tier1_storage: dict[str, LineageEntry] = {}
+        self._tier2_storage: dict[str, bytes] = {}  # Compressed
+        self._tier3_storage: dict[str, str] = {}    # S3 keys
 
         # Statistics
         self._stats = {
@@ -127,7 +127,7 @@ class TieredLineageStorage:
         }
 
         # Background migration task
-        self._migration_task: Optional[asyncio.Task] = None
+        self._migration_task: asyncio.Task | None = None
 
     async def initialize(self) -> None:
         """Initialize the tiered storage system."""
@@ -205,7 +205,7 @@ class TieredLineageStorage:
             )
             return False
 
-    async def get(self, entry_id: str) -> Optional[LineageEntry]:
+    async def get(self, entry_id: str) -> LineageEntry | None:
         """
         Retrieve a lineage entry from any tier.
 
@@ -244,7 +244,7 @@ class TieredLineageStorage:
         self,
         capsule_id: str,
         depth: int = 10
-    ) -> List[LineageEntry]:
+    ) -> list[LineageEntry]:
         """
         Get the lineage chain for a capsule.
 
@@ -372,7 +372,7 @@ class TieredLineageStorage:
         s3_key = f"lineage/{entry.created_at.year}/{entry.created_at.month}/{entry.entry_id}.json.gz"
 
         # Compress data
-        compressed = self._compress_entry(entry)
+        self._compress_entry(entry)
 
         # In production: upload to S3
         # await s3_client.put_object(
@@ -389,7 +389,7 @@ class TieredLineageStorage:
 
         return s3_key
 
-    async def _retrieve_from_cold(self, s3_key: str) -> Optional[LineageEntry]:
+    async def _retrieve_from_cold(self, s3_key: str) -> LineageEntry | None:
         """
         Retrieve entry from cold storage.
 
@@ -410,7 +410,7 @@ class TieredLineageStorage:
 
         return None
 
-    async def _find_entry_by_capsule(self, capsule_id: str) -> Optional[LineageEntry]:
+    async def _find_entry_by_capsule(self, capsule_id: str) -> LineageEntry | None:
         """Find lineage entry by capsule ID."""
         # Check all tiers
         for entry in self._tier1_storage.values():
@@ -482,13 +482,13 @@ class TieredLineageStorage:
         if stats.newest_entry is None or entry.created_at > stats.newest_entry:
             stats.newest_entry = entry.created_at
 
-    def get_tier_stats(self) -> Dict[str, TierStats]:
+    def get_tier_stats(self) -> dict[str, TierStats]:
         """Get statistics for all tiers."""
         return {tier.value: stats for tier, stats in self._stats.items()}
 
 
 # Global instance
-_tiered_storage: Optional[TieredLineageStorage] = None
+_tiered_storage: TieredLineageStorage | None = None
 
 
 async def get_tiered_storage() -> TieredLineageStorage:

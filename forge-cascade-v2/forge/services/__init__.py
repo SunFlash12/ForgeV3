@@ -8,41 +8,39 @@ Contains external service integrations:
 """
 
 from .embedding import (
-    EmbeddingService,
     EmbeddingConfig,
     EmbeddingProvider,
     EmbeddingResult,
+    EmbeddingService,
     get_embedding_service,
     init_embedding_service,
 )
+from .ghost_council import (
+    DEFAULT_COUNCIL_MEMBERS,
+    GhostCouncilConfig,
+    GhostCouncilService,
+    IssueCategory,
+    IssueSeverity,
+    SeriousIssue,
+    get_ghost_council_service,
+    init_ghost_council_service,
+)
 from .llm import (
-    LLMService,
     LLMConfig,
-    LLMProvider,
     LLMMessage,
+    LLMProvider,
     LLMResponse,
+    LLMService,
     get_llm_service,
     init_llm_service,
 )
-from .search import (
-    SearchService,
-    SearchMode,
-    SearchFilters,
-    SearchRequest,
-    SearchResponse,
-    SearchResultItem,
-    get_search_service,
-    init_search_service,
-)
-from .ghost_council import (
-    GhostCouncilService,
-    GhostCouncilConfig,
-    SeriousIssue,
-    IssueSeverity,
-    IssueCategory,
-    get_ghost_council_service,
-    init_ghost_council_service,
-    DEFAULT_COUNCIL_MEMBERS,
+from .query_cache import (
+    CachedQueryResult,
+    InMemoryQueryCache,
+    QueryCache,
+    close_query_cache,
+    get_query_cache,
+    init_query_cache,
 )
 from .scheduler import (
     BackgroundScheduler,
@@ -51,13 +49,15 @@ from .scheduler import (
     get_scheduler,
     setup_scheduler,
 )
-from .query_cache import (
-    QueryCache,
-    InMemoryQueryCache,
-    CachedQueryResult,
-    get_query_cache,
-    init_query_cache,
-    close_query_cache,
+from .search import (
+    SearchFilters,
+    SearchMode,
+    SearchRequest,
+    SearchResponse,
+    SearchResultItem,
+    SearchService,
+    get_search_service,
+    init_search_service,
 )
 
 __all__ = [

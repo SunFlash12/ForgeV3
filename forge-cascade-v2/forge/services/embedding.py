@@ -14,12 +14,11 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-import json
-from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from enum import Enum
-from typing import Any, Optional
 import struct
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from enum import Enum
+from typing import Any
 
 import structlog
 
@@ -44,8 +43,8 @@ class EmbeddingConfig:
     provider: EmbeddingProvider = EmbeddingProvider.MOCK
     model: str = "text-embedding-3-small"
     dimensions: int = 1536
-    api_key: Optional[str] = None  # SECURITY: Load from env, redact in logs
-    api_base: Optional[str] = None
+    api_key: str | None = None  # SECURITY: Load from env, redact in logs
+    api_base: str | None = None
     batch_size: int = 100
     max_retries: int = 3
     timeout_seconds: float = 30.0
@@ -83,7 +82,7 @@ class EmbeddingResult:
     dimensions: int
     tokens_used: int = 0
     cached: bool = False
-    
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "embedding": self.embedding,
@@ -96,17 +95,17 @@ class EmbeddingResult:
 
 class EmbeddingProviderBase(ABC):
     """Base class for embedding providers."""
-    
+
     @abstractmethod
     async def embed(self, text: str) -> EmbeddingResult:
         """Generate embedding for a single text."""
         pass
-    
+
     @abstractmethod
     async def embed_batch(self, texts: list[str]) -> list[EmbeddingResult]:
         """Generate embeddings for multiple texts."""
         pass
-    
+
     @abstractmethod
     def get_dimensions(self) -> int:
         """Get the embedding dimensions."""
@@ -116,24 +115,24 @@ class EmbeddingProviderBase(ABC):
 class MockEmbeddingProvider(EmbeddingProviderBase):
     """
     Mock embedding provider for testing.
-    
+
     Generates deterministic embeddings based on text hash.
     This allows consistent results for testing while
     maintaining semantic similarity properties (same text = same embedding).
     """
-    
+
     def __init__(self, dimensions: int = 1536):
         self._dimensions = dimensions
-    
+
     def get_dimensions(self) -> int:
         return self._dimensions
-    
+
     def _hash_to_embedding(self, text: str) -> list[float]:
         """Convert text hash to normalized embedding vector."""
         # Use SHA-256 to get deterministic bytes
         text_bytes = text.encode('utf-8')
-        hash_bytes = hashlib.sha256(text_bytes).digest()
-        
+        hashlib.sha256(text_bytes).digest()
+
         # Extend hash to fill dimensions
         extended = bytearray()
         counter = 0
@@ -141,7 +140,7 @@ class MockEmbeddingProvider(EmbeddingProviderBase):
             combined = text_bytes + counter.to_bytes(4, 'big')
             extended.extend(hashlib.sha256(combined).digest())
             counter += 1
-        
+
         # Convert to floats in range [-1, 1]
         embedding = []
         for i in range(self._dimensions):
@@ -151,21 +150,21 @@ class MockEmbeddingProvider(EmbeddingProviderBase):
             value = struct.unpack('>I', chunk)[0]
             normalized = (value / (2**32 - 1)) * 2 - 1
             embedding.append(normalized)
-        
+
         # L2 normalize
         magnitude = sum(x**2 for x in embedding) ** 0.5
         if magnitude > 0:
             embedding = [x / magnitude for x in embedding]
-        
+
         return embedding
-    
+
     async def embed(self, text: str) -> EmbeddingResult:
         """Generate mock embedding."""
         # Simulate small delay
         await asyncio.sleep(0.001)
-        
+
         embedding = self._hash_to_embedding(text)
-        
+
         return EmbeddingResult(
             embedding=embedding,
             model="mock-embedding",
@@ -173,7 +172,7 @@ class MockEmbeddingProvider(EmbeddingProviderBase):
             tokens_used=len(text.split()),
             cached=False,
         )
-    
+
     async def embed_batch(self, texts: list[str]) -> list[EmbeddingResult]:
         """Generate mock embeddings for batch."""
         results = []
@@ -186,25 +185,25 @@ class MockEmbeddingProvider(EmbeddingProviderBase):
 class OpenAIEmbeddingProvider(EmbeddingProviderBase):
     """
     OpenAI embedding provider.
-    
+
     Supports:
     - text-embedding-3-small (1536 dimensions)
     - text-embedding-3-large (3072 dimensions, configurable)
     - text-embedding-ada-002 (1536 dimensions, legacy)
     """
-    
+
     MODEL_DIMENSIONS = {
         "text-embedding-3-small": 1536,
         "text-embedding-3-large": 3072,
         "text-embedding-ada-002": 1536,
     }
-    
+
     def __init__(
         self,
         api_key: str,
         model: str = "text-embedding-3-small",
-        dimensions: Optional[int] = None,
-        api_base: Optional[str] = None,
+        dimensions: int | None = None,
+        api_base: str | None = None,
         timeout: float = 30.0,
     ):
         self._api_key = api_key
@@ -212,18 +211,18 @@ class OpenAIEmbeddingProvider(EmbeddingProviderBase):
         self._api_base = api_base or "https://api.openai.com/v1"
         self._timeout = timeout
         # SECURITY FIX (Audit 3): Reuse HTTP client instead of creating new one per request
-        self._http_client: Optional["httpx.AsyncClient"] = None
+        self._http_client: httpx.AsyncClient | None = None
 
         # Determine dimensions
         if dimensions:
             self._dimensions = dimensions
         else:
             self._dimensions = self.MODEL_DIMENSIONS.get(model, 1536)
-    
+
     def get_dimensions(self) -> int:
         return self._dimensions
 
-    def _get_client(self) -> "httpx.AsyncClient":
+    def _get_client(self) -> httpx.AsyncClient:
         """Get or create the HTTP client (lazy initialization)."""
         import httpx
         if self._http_client is None:
@@ -263,16 +262,16 @@ class OpenAIEmbeddingProvider(EmbeddingProviderBase):
         response = await client.post(url, headers=headers, json=payload)
         response.raise_for_status()
         data = response.json()
-        
+
         results = []
-        for i, item in enumerate(data.get("data", [])):
+        for _i, item in enumerate(data.get("data", [])):
             embedding = item["embedding"]
-            
+
             # Normalize if needed
             magnitude = sum(x**2 for x in embedding) ** 0.5
             if magnitude > 0:
                 embedding = [x / magnitude for x in embedding]
-            
+
             results.append(EmbeddingResult(
                 embedding=embedding,
                 model=self._model,
@@ -280,30 +279,30 @@ class OpenAIEmbeddingProvider(EmbeddingProviderBase):
                 tokens_used=data.get("usage", {}).get("total_tokens", 0) // len(texts),
                 cached=False,
             ))
-        
+
         return results
 
 
 class SentenceTransformersProvider(EmbeddingProviderBase):
     """
     Local sentence-transformers embedding provider.
-    
+
     Runs locally without API calls. Good for:
     - Development/testing
     - Privacy-sensitive deployments
     - Cost optimization
-    
+
     Recommended models:
     - all-MiniLM-L6-v2 (384 dims, fast)
     - all-mpnet-base-v2 (768 dims, better quality)
     - all-MiniLM-L12-v2 (384 dims, balanced)
     """
-    
+
     def __init__(self, model: str = "all-MiniLM-L6-v2"):
         self._model_name = model
         self._model = None
         self._dimensions = None
-    
+
     def _load_model(self):
         """Lazy load the model."""
         if self._model is None:
@@ -318,27 +317,27 @@ class SentenceTransformersProvider(EmbeddingProviderBase):
                     "sentence-transformers not installed. "
                     "Install with: pip install sentence-transformers"
                 )
-    
+
     def get_dimensions(self) -> int:
         self._load_model()
         return self._dimensions or 384
-    
+
     async def embed(self, text: str) -> EmbeddingResult:
         """Generate embedding locally."""
         results = await self.embed_batch([text])
         return results[0]
-    
+
     async def embed_batch(self, texts: list[str]) -> list[EmbeddingResult]:
         """Generate embeddings locally."""
         self._load_model()
-        
+
         # Run in thread pool to not block async loop
         loop = asyncio.get_event_loop()
         embeddings = await loop.run_in_executor(
             None,
             lambda: self._model.encode(texts, normalize_embeddings=True)
         )
-        
+
         results = []
         for embedding in embeddings:
             results.append(EmbeddingResult(
@@ -348,7 +347,7 @@ class SentenceTransformersProvider(EmbeddingProviderBase):
                 tokens_used=0,  # Local, no token counting
                 cached=False,
             ))
-        
+
         return results
 
 
@@ -369,7 +368,7 @@ class EmbeddingCache:
         """Create cache key from text and model."""
         return hashlib.sha256(f"{model}:{text}".encode()).hexdigest()
 
-    async def get(self, text: str, model: str) -> Optional[EmbeddingResult]:
+    async def get(self, text: str, model: str) -> EmbeddingResult | None:
         """Get cached embedding if exists (thread-safe)."""
         key = self._make_key(text, model)
         # SECURITY FIX (Audit 3): Use lock for thread-safe cache access
@@ -418,32 +417,32 @@ class EmbeddingCache:
 class EmbeddingService:
     """
     Main embedding service for Forge.
-    
+
     Provides a unified interface for generating embeddings
     across different providers with caching support.
-    
+
     Usage:
         service = EmbeddingService(EmbeddingConfig(
             provider=EmbeddingProvider.OPENAI,
             api_key="sk-..."
         ))
-        
+
         result = await service.embed("Knowledge about Python")
         # result.embedding is a 1536-dimensional vector
-        
+
         # Batch embedding
         results = await service.embed_batch([
             "First capsule content",
             "Second capsule content",
         ])
     """
-    
-    def __init__(self, config: Optional[EmbeddingConfig] = None):
+
+    def __init__(self, config: EmbeddingConfig | None = None):
         self._config = config or EmbeddingConfig()
         self._provider = self._create_provider()
         # Use configurable cache size for cost optimization
         self._cache = EmbeddingCache(max_size=self._config.cache_size) if self._config.cache_enabled else None
-        
+
         logger.info(
             "embedding_service_initialized",
             provider=self._config.provider.value,
@@ -451,7 +450,7 @@ class EmbeddingService:
             dimensions=self._config.dimensions,
             cache_enabled=self._config.cache_enabled,
         )
-    
+
     def _create_provider(self) -> EmbeddingProviderBase:
         """Create the appropriate provider based on config."""
         if self._config.provider == EmbeddingProvider.OPENAI:
@@ -464,25 +463,25 @@ class EmbeddingService:
                 api_base=self._config.api_base,
                 timeout=self._config.timeout_seconds,
             )
-        
+
         elif self._config.provider == EmbeddingProvider.SENTENCE_TRANSFORMERS:
             return SentenceTransformersProvider(model=self._config.model)
-        
+
         else:  # MOCK
             return MockEmbeddingProvider(dimensions=self._config.dimensions)
-    
+
     @property
     def dimensions(self) -> int:
         """Get embedding dimensions."""
         return self._provider.get_dimensions()
-    
+
     async def embed(self, text: str) -> EmbeddingResult:
         """
         Generate embedding for a single text.
-        
+
         Args:
             text: The text to embed
-            
+
         Returns:
             EmbeddingResult with the embedding vector
         """
@@ -499,16 +498,16 @@ class EmbeddingService:
         # Cache result
         if self._cache:
             await self._cache.set(text, self._config.model, result)
-        
+
         logger.debug(
             "embedding_generated",
             text_length=len(text),
             dimensions=result.dimensions,
             tokens=result.tokens_used,
         )
-        
+
         return result
-    
+
     # SECURITY FIX (Audit 4 - H25): Maximum batch size to prevent cost abuse
     MAX_BATCH_SIZE = 10000
 
@@ -547,10 +546,10 @@ class EmbeddingService:
                 f"Batch size {len(texts)} exceeds maximum of {self.MAX_BATCH_SIZE}. "
                 "Please split your request into smaller batches."
             )
-        
-        results: list[Optional[EmbeddingResult]] = [None] * len(texts)
+
+        results: list[EmbeddingResult | None] = [None] * len(texts)
         texts_to_embed: list[tuple[int, str]] = []
-        
+
         # Check cache for each text
         for i, text in enumerate(texts):
             if self._cache:
@@ -559,26 +558,26 @@ class EmbeddingService:
                     results[i] = cached
                     continue
             texts_to_embed.append((i, text))
-        
+
         cache_hits = len(texts) - len(texts_to_embed)
         if cache_hits > 0:
             logger.debug("embedding_batch_cache_hits", hits=cache_hits, total=len(texts))
-        
+
         # Batch embed remaining texts
         if texts_to_embed:
             batch_size = self._config.batch_size
-            
+
             for batch_start in range(0, len(texts_to_embed), batch_size):
                 batch = texts_to_embed[batch_start:batch_start + batch_size]
                 batch_texts = [t for _, t in batch]
-                
+
                 if show_progress:
                     logger.info(
                         "embedding_batch_progress",
                         batch=batch_start // batch_size + 1,
                         total_batches=(len(texts_to_embed) + batch_size - 1) // batch_size,
                     )
-                
+
                 # Retry logic
                 for attempt in range(self._config.max_retries):
                     try:
@@ -593,22 +592,22 @@ class EmbeddingService:
                             error=str(e),
                         )
                         await asyncio.sleep(2 ** attempt)
-                
+
                 # Store results and cache
-                for (original_idx, text), result in zip(batch, batch_results):
+                for (original_idx, text), result in zip(batch, batch_results, strict=False):
                     results[original_idx] = result
                     if self._cache:
                         await self._cache.set(text, self._config.model, result)
-        
+
         logger.info(
             "embedding_batch_complete",
             total=len(texts),
             cache_hits=cache_hits,
             generated=len(texts_to_embed),
         )
-        
+
         return results  # type: ignore
-    
+
     async def cache_stats(self) -> dict[str, Any]:
         """Get cache statistics."""
         if self._cache:
@@ -625,7 +624,7 @@ class EmbeddingService:
 # Global Instance
 # =============================================================================
 
-_embedding_service: Optional[EmbeddingService] = None
+_embedding_service: EmbeddingService | None = None
 
 
 def get_embedding_service() -> EmbeddingService:
@@ -657,14 +656,14 @@ def cosine_similarity(a: list[float], b: list[float]) -> float:
     """Calculate cosine similarity between two vectors."""
     if len(a) != len(b):
         raise ValueError("Vectors must have same dimensions")
-    
-    dot_product = sum(x * y for x, y in zip(a, b))
+
+    dot_product = sum(x * y for x, y in zip(a, b, strict=False))
     magnitude_a = sum(x ** 2 for x in a) ** 0.5
     magnitude_b = sum(x ** 2 for x in b) ** 0.5
-    
+
     if magnitude_a == 0 or magnitude_b == 0:
         return 0.0
-    
+
     return dot_product / (magnitude_a * magnitude_b)
 
 
@@ -672,8 +671,8 @@ def euclidean_distance(a: list[float], b: list[float]) -> float:
     """Calculate Euclidean distance between two vectors."""
     if len(a) != len(b):
         raise ValueError("Vectors must have same dimensions")
-    
-    return sum((x - y) ** 2 for x, y in zip(a, b)) ** 0.5
+
+    return sum((x - y) ** 2 for x, y in zip(a, b, strict=False)) ** 0.5
 
 
 __all__ = [

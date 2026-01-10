@@ -5,7 +5,7 @@ Foundation classes for all Forge models including enums,
 mixins, and base model configuration.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum, IntEnum
 from typing import Any
 from uuid import UUID, uuid4
@@ -20,14 +20,13 @@ def convert_neo4j_datetime(value: Any) -> datetime:
     SECURITY FIX (Audit 4 - L5): Uses datetime.now(timezone.utc) instead of
     deprecated datetime.utcnow() for proper timezone-aware handling.
     """
-    from datetime import timezone
 
     if value is None:
-        return datetime.now(timezone.utc)
+        return datetime.now(UTC)
     if isinstance(value, datetime):
         # Ensure timezone-aware
         if value.tzinfo is None:
-            return value.replace(tzinfo=timezone.utc)
+            return value.replace(tzinfo=UTC)
         return value
     # Handle Neo4j DateTime object
     if hasattr(value, 'to_native'):
@@ -66,7 +65,7 @@ class TimestampMixin(BaseModel):
 class TrustLevel(IntEnum):
     """
     Trust hierarchy levels for entities in the Forge system.
-    
+
     Higher values indicate more trust and more capabilities.
     """
 

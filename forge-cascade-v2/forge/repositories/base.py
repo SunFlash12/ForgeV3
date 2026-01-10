@@ -5,9 +5,9 @@ Abstract base class for all repositories with common CRUD operations
 and Neo4j query patterns.
 """
 
-from abc import ABC, abstractmethod
-from datetime import datetime
 import re
+from abc import ABC, abstractmethod
+from datetime import UTC, datetime
 from typing import Any, Generic, TypeVar
 from uuid import uuid4
 
@@ -55,7 +55,7 @@ UpdateT = TypeVar("UpdateT", bound=BaseModel)  # Update schema type
 class BaseRepository(ABC, Generic[T, CreateT, UpdateT]):
     """
     Abstract base repository with common CRUD operations.
-    
+
     Provides a foundation for entity-specific repositories with
     Neo4j Cypher query patterns.
     """
@@ -63,7 +63,7 @@ class BaseRepository(ABC, Generic[T, CreateT, UpdateT]):
     def __init__(self, client: Neo4jClient):
         """
         Initialize repository with database client.
-        
+
         Args:
             client: Neo4j client instance
         """
@@ -88,16 +88,15 @@ class BaseRepository(ABC, Generic[T, CreateT, UpdateT]):
 
     def _now(self) -> datetime:
         """Get current UTC timestamp (timezone-aware)."""
-        from datetime import timezone
-        return datetime.now(timezone.utc)
+        return datetime.now(UTC)
 
     def _to_model(self, record: dict[str, Any]) -> T | None:
         """
         Convert a Neo4j record to a Pydantic model.
-        
+
         Args:
             record: Dict from Neo4j query result
-            
+
         Returns:
             Pydantic model instance or None
         """
@@ -116,10 +115,10 @@ class BaseRepository(ABC, Generic[T, CreateT, UpdateT]):
     def _to_models(self, records: list[dict[str, Any]]) -> list[T]:
         """
         Convert multiple Neo4j records to Pydantic models.
-        
+
         Args:
             records: List of dicts from Neo4j query
-            
+
         Returns:
             List of Pydantic model instances
         """
@@ -128,10 +127,10 @@ class BaseRepository(ABC, Generic[T, CreateT, UpdateT]):
     async def get_by_id(self, entity_id: str) -> T | None:
         """
         Get an entity by its ID.
-        
+
         Args:
             entity_id: The entity's unique ID
-            
+
         Returns:
             Entity model or None if not found
         """
@@ -139,9 +138,9 @@ class BaseRepository(ABC, Generic[T, CreateT, UpdateT]):
         MATCH (n:{self.node_label} {{id: $id}})
         RETURN n {{.*}} AS entity
         """
-        
+
         result = await self.client.execute_single(query, {"id": entity_id})
-        
+
         if result and result.get("entity"):
             return self._to_model(result["entity"])
         return None
@@ -195,7 +194,7 @@ class BaseRepository(ABC, Generic[T, CreateT, UpdateT]):
     async def count(self) -> int:
         """
         Count total entities.
-        
+
         Returns:
             Total count
         """
@@ -206,10 +205,10 @@ class BaseRepository(ABC, Generic[T, CreateT, UpdateT]):
     async def exists(self, entity_id: str) -> bool:
         """
         Check if an entity exists.
-        
+
         Args:
             entity_id: The entity's ID
-            
+
         Returns:
             True if exists
         """
@@ -217,17 +216,17 @@ class BaseRepository(ABC, Generic[T, CreateT, UpdateT]):
         MATCH (n:{self.node_label} {{id: $id}})
         RETURN count(n) > 0 AS exists
         """
-        
+
         result = await self.client.execute_single(query, {"id": entity_id})
         return result.get("exists", False) if result else False
 
     async def delete(self, entity_id: str) -> bool:
         """
         Delete an entity by ID.
-        
+
         Args:
             entity_id: The entity's ID
-            
+
         Returns:
             True if deleted
         """
@@ -236,17 +235,17 @@ class BaseRepository(ABC, Generic[T, CreateT, UpdateT]):
         DETACH DELETE n
         RETURN count(n) AS deleted
         """
-        
+
         result = await self.client.execute_single(query, {"id": entity_id})
         deleted = result.get("deleted", 0) if result else 0
-        
+
         if deleted > 0:
             self.logger.info(
                 "Deleted entity",
                 entity_type=self.node_label,
                 entity_id=entity_id,
             )
-        
+
         return deleted > 0
 
     async def update_field(
@@ -328,11 +327,11 @@ class BaseRepository(ABC, Generic[T, CreateT, UpdateT]):
     async def create(self, data: CreateT, **kwargs: Any) -> T:
         """
         Create a new entity.
-        
+
         Args:
             data: Creation schema
             **kwargs: Additional arguments
-            
+
         Returns:
             Created entity
         """
@@ -342,11 +341,11 @@ class BaseRepository(ABC, Generic[T, CreateT, UpdateT]):
     async def update(self, entity_id: str, data: UpdateT) -> T | None:
         """
         Update an existing entity.
-        
+
         Args:
             entity_id: Entity ID
             data: Update schema
-            
+
         Returns:
             Updated entity or None
         """

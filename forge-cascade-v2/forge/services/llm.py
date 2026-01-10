@@ -18,11 +18,10 @@ from __future__ import annotations
 import asyncio
 import json
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Optional
-import hashlib
+from typing import Any
 
 import structlog
 
@@ -42,8 +41,8 @@ class LLMConfig:
     """Configuration for LLM service."""
     provider: LLMProvider = LLMProvider.MOCK
     model: str = "claude-sonnet-4-20250514"
-    api_key: Optional[str] = None
-    api_base: Optional[str] = None
+    api_key: str | None = None
+    api_base: str | None = None
     max_tokens: int = 4096
     temperature: float = 0.7
     timeout_seconds: float = 60.0
@@ -65,7 +64,7 @@ class LLMResponse:
     tokens_used: int = 0
     finish_reason: str = "stop"
     latency_ms: float = 0.0
-    
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "content": self.content,
@@ -78,13 +77,13 @@ class LLMResponse:
 
 class LLMProviderBase(ABC):
     """Base class for LLM providers."""
-    
+
     @abstractmethod
     async def complete(
         self,
         messages: list[LLMMessage],
-        max_tokens: Optional[int] = None,
-        temperature: Optional[float] = None,
+        max_tokens: int | None = None,
+        temperature: float | None = None,
     ) -> LLMResponse:
         """Generate a completion."""
         pass
@@ -92,27 +91,27 @@ class LLMProviderBase(ABC):
 
 class MockLLMProvider(LLMProviderBase):
     """Mock LLM provider for testing."""
-    
+
     def __init__(self):
         self._call_count = 0
-    
+
     async def complete(
         self,
         messages: list[LLMMessage],
-        max_tokens: Optional[int] = None,
-        temperature: Optional[float] = None,
+        max_tokens: int | None = None,
+        temperature: float | None = None,
     ) -> LLMResponse:
         """Generate mock response based on message content."""
         await asyncio.sleep(0.1)  # Simulate latency
         self._call_count += 1
-        
+
         # Get the last user message
         user_message = ""
         for msg in reversed(messages):
             if msg.role == "user":
                 user_message = msg.content.lower()
                 break
-        
+
         # Generate contextual mock responses
         if "proposal" in user_message or "governance" in user_message:
             content = json.dumps({
@@ -148,7 +147,7 @@ class MockLLMProvider(LLMProviderBase):
             })
         else:
             content = "I understand your request. Based on my analysis, I recommend proceeding with caution while considering all stakeholders."
-        
+
         return LLMResponse(
             content=content,
             model="mock-llm",
@@ -161,18 +160,18 @@ class MockLLMProvider(LLMProviderBase):
 class AnthropicProvider(LLMProviderBase):
     """
     Anthropic Claude provider.
-    
+
     Recommended models:
     - claude-sonnet-4-20250514 (balanced)
     - claude-opus-4-20250514 (most capable)
     - claude-haiku-3-20240307 (fastest)
     """
-    
+
     def __init__(
         self,
         api_key: str,
         model: str = "claude-sonnet-4-20250514",
-        api_base: Optional[str] = None,
+        api_base: str | None = None,
         timeout: float = 60.0,
     ):
         self._api_key = api_key
@@ -180,9 +179,9 @@ class AnthropicProvider(LLMProviderBase):
         self._api_base = api_base or "https://api.anthropic.com"
         self._timeout = timeout
         # SECURITY FIX (Audit 3): Reuse HTTP client instead of creating new one per request
-        self._http_client: Optional["httpx.AsyncClient"] = None
+        self._http_client: httpx.AsyncClient | None = None
 
-    def _get_client(self) -> "httpx.AsyncClient":
+    def _get_client(self) -> httpx.AsyncClient:
         """Get or create the HTTP client (lazy initialization)."""
         import httpx
         if self._http_client is None:
@@ -198,8 +197,8 @@ class AnthropicProvider(LLMProviderBase):
     async def complete(
         self,
         messages: list[LLMMessage],
-        max_tokens: Optional[int] = None,
-        temperature: Optional[float] = None,
+        max_tokens: int | None = None,
+        temperature: float | None = None,
     ) -> LLMResponse:
         """Generate completion via Anthropic API."""
         import time
@@ -243,18 +242,18 @@ class AnthropicProvider(LLMProviderBase):
         response = await client.post(url, headers=headers, json=payload)
         response.raise_for_status()
         data = response.json()
-        
+
         latency_ms = (time.monotonic() - start_time) * 1000
-        
+
         content = ""
         for block in data.get("content", []):
             if block.get("type") == "text":
                 content += block.get("text", "")
-        
+
         return LLMResponse(
             content=content,
             model=self._model,
-            tokens_used=data.get("usage", {}).get("input_tokens", 0) + 
+            tokens_used=data.get("usage", {}).get("input_tokens", 0) +
                        data.get("usage", {}).get("output_tokens", 0),
             finish_reason=data.get("stop_reason", "stop"),
             latency_ms=latency_ms,
@@ -264,15 +263,15 @@ class AnthropicProvider(LLMProviderBase):
 class OpenAIProvider(LLMProviderBase):
     """
     OpenAI GPT provider.
-    
+
     Supports GPT-4, GPT-4-turbo, GPT-3.5-turbo.
     """
-    
+
     def __init__(
         self,
         api_key: str,
         model: str = "gpt-4-turbo-preview",
-        api_base: Optional[str] = None,
+        api_base: str | None = None,
         timeout: float = 60.0,
     ):
         self._api_key = api_key
@@ -280,9 +279,9 @@ class OpenAIProvider(LLMProviderBase):
         self._api_base = api_base or "https://api.openai.com/v1"
         self._timeout = timeout
         # SECURITY FIX (Audit 3): Reuse HTTP client instead of creating new one per request
-        self._http_client: Optional["httpx.AsyncClient"] = None
+        self._http_client: httpx.AsyncClient | None = None
 
-    def _get_client(self) -> "httpx.AsyncClient":
+    def _get_client(self) -> httpx.AsyncClient:
         """Get or create the HTTP client (lazy initialization)."""
         import httpx
         if self._http_client is None:
@@ -298,8 +297,8 @@ class OpenAIProvider(LLMProviderBase):
     async def complete(
         self,
         messages: list[LLMMessage],
-        max_tokens: Optional[int] = None,
-        temperature: Optional[float] = None,
+        max_tokens: int | None = None,
+        temperature: float | None = None,
     ) -> LLMResponse:
         """Generate completion via OpenAI API."""
         import time
@@ -331,12 +330,12 @@ class OpenAIProvider(LLMProviderBase):
         response = await client.post(url, headers=headers, json=payload)
         response.raise_for_status()
         data = response.json()
-        
+
         latency_ms = (time.monotonic() - start_time) * 1000
-        
+
         choice = data.get("choices", [{}])[0]
         content = choice.get("message", {}).get("content", "")
-        
+
         return LLMResponse(
             content=content,
             model=self._model,
@@ -349,10 +348,10 @@ class OpenAIProvider(LLMProviderBase):
 class OllamaProvider(LLMProviderBase):
     """
     Ollama provider for local models.
-    
+
     Supports models like llama2, mistral, codellama, etc.
     """
-    
+
     def __init__(
         self,
         model: str = "llama2",
@@ -363,9 +362,9 @@ class OllamaProvider(LLMProviderBase):
         self._api_base = api_base
         self._timeout = timeout
         # SECURITY FIX (Audit 3): Reuse HTTP client instead of creating new one per request
-        self._http_client: Optional["httpx.AsyncClient"] = None
+        self._http_client: httpx.AsyncClient | None = None
 
-    def _get_client(self) -> "httpx.AsyncClient":
+    def _get_client(self) -> httpx.AsyncClient:
         """Get or create the HTTP client (lazy initialization)."""
         import httpx
         if self._http_client is None:
@@ -381,8 +380,8 @@ class OllamaProvider(LLMProviderBase):
     async def complete(
         self,
         messages: list[LLMMessage],
-        max_tokens: Optional[int] = None,
-        temperature: Optional[float] = None,
+        max_tokens: int | None = None,
+        temperature: float | None = None,
     ) -> LLMResponse:
         """Generate completion via Ollama API."""
         import time
@@ -415,11 +414,11 @@ class OllamaProvider(LLMProviderBase):
         response = await client.post(url, json=payload)
         response.raise_for_status()
         data = response.json()
-        
+
         latency_ms = (time.monotonic() - start_time) * 1000
-        
+
         content = data.get("message", {}).get("content", "")
-        
+
         return LLMResponse(
             content=content,
             model=self._model,
@@ -432,36 +431,36 @@ class OllamaProvider(LLMProviderBase):
 class LLMService:
     """
     Main LLM service for Forge.
-    
+
     Provides high-level methods for:
     - Ghost Council recommendations
     - Constitutional AI review
     - Capsule analysis
     - General completions
-    
+
     Usage:
         service = LLMService(LLMConfig(
             provider=LLMProvider.ANTHROPIC,
             api_key="sk-ant-..."
         ))
-        
+
         # Ghost Council recommendation
         result = await service.ghost_council_review(proposal)
-        
+
         # Constitutional AI check
         result = await service.constitutional_review(content, context)
     """
-    
-    def __init__(self, config: Optional[LLMConfig] = None):
+
+    def __init__(self, config: LLMConfig | None = None):
         self._config = config or LLMConfig()
         self._provider = self._create_provider()
-        
+
         logger.info(
             "llm_service_initialized",
             provider=self._config.provider.value,
             model=self._config.model,
         )
-    
+
     def _create_provider(self) -> LLMProviderBase:
         """Create the appropriate provider."""
         if self._config.provider == LLMProvider.ANTHROPIC:
@@ -473,7 +472,7 @@ class LLMService:
                 api_base=self._config.api_base,
                 timeout=self._config.timeout_seconds,
             )
-        
+
         elif self._config.provider == LLMProvider.OPENAI:
             if not self._config.api_key:
                 raise ValueError("API key required for OpenAI provider")
@@ -483,37 +482,37 @@ class LLMService:
                 api_base=self._config.api_base,
                 timeout=self._config.timeout_seconds,
             )
-        
+
         elif self._config.provider == LLMProvider.OLLAMA:
             return OllamaProvider(
                 model=self._config.model,
                 api_base=self._config.api_base or "http://localhost:11434",
                 timeout=self._config.timeout_seconds,
             )
-        
+
         else:  # MOCK
             return MockLLMProvider()
-    
+
     async def complete(
         self,
         messages: list[LLMMessage],
-        max_tokens: Optional[int] = None,
-        temperature: Optional[float] = None,
+        max_tokens: int | None = None,
+        temperature: float | None = None,
     ) -> LLMResponse:
         """
         Generate a completion.
-        
+
         Args:
             messages: Conversation messages
             max_tokens: Maximum tokens to generate
             temperature: Sampling temperature
-            
+
         Returns:
             LLMResponse with generated content
         """
         max_tokens = max_tokens or self._config.max_tokens
         temperature = temperature if temperature is not None else self._config.temperature
-        
+
         for attempt in range(self._config.max_retries):
             try:
                 response = await self._provider.complete(
@@ -521,16 +520,16 @@ class LLMService:
                     max_tokens=max_tokens,
                     temperature=temperature,
                 )
-                
+
                 logger.debug(
                     "llm_completion",
                     model=response.model,
                     tokens=response.tokens_used,
                     latency_ms=response.latency_ms,
                 )
-                
+
                 return response
-                
+
             except Exception as e:
                 if attempt == self._config.max_retries - 1:
                     raise
@@ -540,39 +539,38 @@ class LLMService:
                     error=str(e),
                 )
                 await asyncio.sleep(2 ** attempt)
-        
+
         raise RuntimeError("LLM completion failed after retries")
-    
+
     async def ghost_council_review(
         self,
         proposal_title: str,
         proposal_description: str,
         proposal_type: str,
         proposer_trust: int,
-        context: Optional[dict[str, Any]] = None,
+        context: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """
         Get Ghost Council recommendation on a proposal.
-        
+
         The Ghost Council is an AI advisory board that analyzes proposals
         and provides recommendations. It has no voting power but offers
         transparent analysis.
-        
+
         Args:
             proposal_title: Title of the proposal
             proposal_description: Full description
             proposal_type: Type (policy, upgrade, parameter, etc.)
             proposer_trust: Trust level of proposer
             context: Additional context (system state, related proposals)
-            
+
         Returns:
             Dict with recommendation, confidence, reasoning, concerns
         """
         # SECURITY FIX (Audit 4): Import prompt sanitization
         from forge.security.prompt_sanitization import (
-            sanitize_for_prompt,
             sanitize_dict_for_prompt,
-            validate_llm_output,
+            sanitize_for_prompt,
         )
 
         system_prompt = """You are the Ghost Council, an AI advisory board for the Forge governance system.
@@ -628,14 +626,14 @@ Be balanced and thorough. Acknowledge uncertainty where it exists."""
 """
 
         user_prompt += "\nProvide your Ghost Council analysis as JSON:"
-        
+
         messages = [
             LLMMessage(role="system", content=system_prompt),
             LLMMessage(role="user", content=user_prompt),
         ]
-        
+
         response = await self.complete(messages, temperature=0.3)
-        
+
         # Parse JSON response
         try:
             # Extract JSON from response (handle markdown code blocks)
@@ -643,20 +641,20 @@ Be balanced and thorough. Acknowledge uncertainty where it exists."""
             if content.startswith("```"):
                 lines = content.split("\n")
                 content = "\n".join(lines[1:-1])
-            
+
             result = json.loads(content)
             result["model"] = response.model
             result["tokens_used"] = response.tokens_used
-            
+
             logger.info(
                 "ghost_council_review",
                 proposal_title=proposal_title,
                 recommendation=result.get("recommendation"),
                 confidence=result.get("confidence"),
             )
-            
+
             return result
-            
+
         except json.JSONDecodeError:
             # Return raw response if JSON parsing fails
             logger.warning("ghost_council_json_parse_failed", content=response.content[:200])
@@ -668,28 +666,28 @@ Be balanced and thorough. Acknowledge uncertainty where it exists."""
                 "suggested_amendments": [],
                 "raw_response": response.content,
             }
-    
+
     async def constitutional_review(
         self,
         content: str,
         content_type: str,
         action: str,
         actor_trust: int,
-        context: Optional[dict[str, Any]] = None,
+        context: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """
         Perform Constitutional AI review.
-        
+
         Checks content/actions against Forge's constitutional principles
         to detect ethical drift and policy violations.
-        
+
         Args:
             content: The content or action description to review
             content_type: Type of content (capsule, proposal, overlay, etc.)
             action: The action being taken (create, modify, delete, execute)
             actor_trust: Trust level of the actor
             context: Additional context
-            
+
         Returns:
             Dict with compliance status, score, principle evaluations
         """
@@ -730,32 +728,32 @@ Respond with a JSON object:
 {content[:5000]}  # Truncate very long content
 
 """
-        
+
         if context:
             user_prompt += f"""
 **Context:**
 {json.dumps(context, indent=2)}
 """
-        
+
         user_prompt += "\nProvide your constitutional review as JSON:"
-        
+
         messages = [
             LLMMessage(role="system", content=system_prompt),
             LLMMessage(role="user", content=user_prompt),
         ]
-        
+
         response = await self.complete(messages, temperature=0.2)
-        
+
         try:
             content = response.content.strip()
             if content.startswith("```"):
                 lines = content.split("\n")
                 content = "\n".join(lines[1:-1])
-            
+
             result = json.loads(content)
             result["model"] = response.model
-            result["reviewed_at"] = datetime.now(timezone.utc).isoformat()
-            
+            result["reviewed_at"] = datetime.now(UTC).isoformat()
+
             logger.info(
                 "constitutional_review",
                 content_type=content_type,
@@ -764,9 +762,9 @@ Respond with a JSON object:
                 score=result.get("score"),
                 severity=result.get("severity"),
             )
-            
+
             return result
-            
+
         except json.JSONDecodeError:
             logger.warning("constitutional_review_json_parse_failed")
             return {
@@ -779,21 +777,21 @@ Respond with a JSON object:
                 "requires_human_review": True,
                 "raw_response": response.content,
             }
-    
+
     async def analyze_capsule(
         self,
         content: str,
         capsule_type: str,
-        existing_tags: Optional[list[str]] = None,
+        existing_tags: list[str] | None = None,
     ) -> dict[str, Any]:
         """
         Analyze capsule content for insights.
-        
+
         Args:
             content: Capsule content
             capsule_type: Type of capsule
             existing_tags: Current tags if any
-            
+
         Returns:
             Dict with summary, topics, sentiment, quality score, suggested tags
         """
@@ -820,28 +818,28 @@ Respond with a JSON object:
 {content[:8000]}
 
 """
-        
+
         if existing_tags:
             user_prompt += f"**Existing Tags:** {', '.join(existing_tags)}\n"
-        
+
         user_prompt += "\nProvide your analysis as JSON:"
-        
+
         messages = [
             LLMMessage(role="system", content=system_prompt),
             LLMMessage(role="user", content=user_prompt),
         ]
-        
+
         response = await self.complete(messages, temperature=0.4)
-        
+
         try:
             content = response.content.strip()
             if content.startswith("```"):
                 lines = content.split("\n")
                 content = "\n".join(lines[1:-1])
-            
+
             result = json.loads(content)
             return result
-            
+
         except json.JSONDecodeError:
             return {
                 "summary": response.content[:200],
@@ -857,7 +855,7 @@ Respond with a JSON object:
 # Global Instance
 # =============================================================================
 
-_llm_service: Optional[LLMService] = None
+_llm_service: LLMService | None = None
 
 
 def get_llm_service() -> LLMService:

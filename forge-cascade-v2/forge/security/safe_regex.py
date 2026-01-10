@@ -14,11 +14,11 @@ untrusted input to prevent ReDoS attacks.
 from __future__ import annotations
 
 import re
-import signal
-import threading
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FuturesTimeoutError
 from functools import lru_cache
-from typing import Any, Optional, Pattern
+from re import Pattern
+from typing import Any
 
 import structlog
 
@@ -48,7 +48,7 @@ REDOS_SUSPICIOUS_PATTERNS = [
 ]
 
 # Thread pool for timeout execution
-_executor: Optional[ThreadPoolExecutor] = None
+_executor: ThreadPoolExecutor | None = None
 
 
 def _get_executor() -> ThreadPoolExecutor:
@@ -69,7 +69,7 @@ class RegexTimeoutError(Exception):
     pass
 
 
-def validate_pattern(pattern: str) -> tuple[bool, Optional[str]]:
+def validate_pattern(pattern: str) -> tuple[bool, str | None]:
     """
     Validate a regex pattern for safety.
 
@@ -91,7 +91,7 @@ def validate_pattern(pattern: str) -> tuple[bool, Optional[str]]:
     for suspicious in REDOS_SUSPICIOUS_PATTERNS:
         try:
             if re.search(suspicious, pattern):
-                return False, f"Pattern contains potentially vulnerable construct"
+                return False, "Pattern contains potentially vulnerable construct"
         except re.error:
             pass
 
@@ -166,7 +166,7 @@ def safe_match(
     flags: int = 0,
     timeout: float = DEFAULT_REGEX_TIMEOUT,
     validate: bool = True
-) -> Optional[re.Match]:
+) -> re.Match | None:
     """
     Safely perform re.match with timeout and validation.
 
@@ -199,7 +199,7 @@ def safe_search(
     flags: int = 0,
     timeout: float = DEFAULT_REGEX_TIMEOUT,
     validate: bool = True
-) -> Optional[re.Match]:
+) -> re.Match | None:
     """
     Safely perform re.search with timeout and validation.
 

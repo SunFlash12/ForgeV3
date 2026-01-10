@@ -6,24 +6,23 @@ Provides AI agents with programmatic access to Forge's knowledge graph.
 
 import asyncio
 import hashlib
-import secrets
 import logging
-from datetime import datetime, timezone, timedelta
-from decimal import Decimal
-from typing import Any, AsyncIterator
+import secrets
+from collections.abc import AsyncIterator
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from forge.models.agent_gateway import (
-    AgentSession,
-    AgentQuery,
-    QueryResult,
-    QueryType,
-    ResponseFormat,
+    AccessType,
     AgentCapability,
+    AgentCapsuleCreation,
+    AgentQuery,
+    AgentSession,
     AgentTrustLevel,
     CapsuleAccess,
-    AccessType,
-    AgentCapsuleCreation,
     GatewayStats,
+    QueryResult,
+    QueryType,
     StreamChunk,
 )
 from forge.models.capsule import TrustLevel
@@ -193,7 +192,7 @@ class AgentGatewayService:
             allowed_capsule_types=allowed_capsule_types or [],
             requests_per_minute=rpm,
             requests_per_hour=rph,
-            expires_at=datetime.now(timezone.utc) + timedelta(days=expires_in_days),
+            expires_at=datetime.now(UTC) + timedelta(days=expires_in_days),
         )
 
         self._sessions[session.id] = session
@@ -224,7 +223,7 @@ class AgentGatewayService:
             return None
 
         # Check expiration
-        if session.expires_at and datetime.now(timezone.utc) > session.expires_at:
+        if session.expires_at and datetime.now(UTC) > session.expires_at:
             session.is_active = False
             return None
 
@@ -277,7 +276,7 @@ class AgentGatewayService:
 
     async def check_rate_limit(self, session: AgentSession) -> tuple[bool, str | None]:
         """Check if session is within rate limits. Returns (allowed, reason)."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         session_id = session.id
 
         # Get request history
@@ -314,7 +313,7 @@ class AgentGatewayService:
         query: AgentQuery,
     ) -> QueryResult:
         """Execute an agent query against the knowledge graph."""
-        start_time = datetime.now(timezone.utc)
+        start_time = datetime.now(UTC)
 
         # Check rate limit
         allowed, reason = await self.check_rate_limit(session)
@@ -367,7 +366,7 @@ class AgentGatewayService:
                 )
 
             # Calculate execution time
-            end_time = datetime.now(timezone.utc)
+            end_time = datetime.now(UTC)
             result.execution_time_ms = int((end_time - start_time).total_seconds() * 1000)
 
             # Update session stats
@@ -565,8 +564,8 @@ class AgentGatewayService:
         3. Uses comprehensive write operation detection
         4. Whitelist-based validation for allowed clauses
         """
-        import unicodedata
         import re
+        import unicodedata
 
         # Step 1: Unicode normalize to catch homoglyphs
         normalized = unicodedata.normalize('NFKC', cypher_query)
@@ -877,7 +876,7 @@ class AgentGatewayService:
         records: list[dict[str, Any]],
     ) -> list[dict[str, Any]]:
         """Filter records based on agent trust level."""
-        trust_value = self.TRUST_LEVEL_VALUES.get(session.trust_level, 0)
+        self.TRUST_LEVEL_VALUES.get(session.trust_level, 0)
 
         # Map trust level to capsule trust threshold
         # Untrusted agents can only see COMMUNITY+ capsules
@@ -949,7 +948,7 @@ class AgentGatewayService:
         # In production, use LLM to synthesize
         # For now, create a simple summary
         count = len(results)
-        types = set(r.get("type", "unknown") for r in results)
+        types = {r.get("type", "unknown") for r in results}
 
         answer = f"Found {count} relevant capsule(s) "
         if types:
@@ -979,7 +978,7 @@ class AgentGatewayService:
 
     async def get_stats(self) -> GatewayStats:
         """Get gateway statistics."""
-        self._stats.calculated_at = datetime.now(timezone.utc)
+        self._stats.calculated_at = datetime.now(UTC)
         self._stats.active_sessions = len([s for s in self._sessions.values() if s.is_active])
 
         if self._stats.queries_today > 0:

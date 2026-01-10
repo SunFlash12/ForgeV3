@@ -16,23 +16,23 @@ import ipaddress
 import json
 import logging
 import socket
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import urlparse
 
 import httpx
 
+from forge.models.base import generate_id
 from forge.models.notifications import (
+    DeliveryChannel,
     Notification,
     NotificationEvent,
+    NotificationPreferences,
     NotificationPriority,
-    WebhookSubscription,
     WebhookDelivery,
     WebhookPayload,
-    NotificationPreferences,
-    DeliveryChannel,
+    WebhookSubscription,
 )
-from forge.models.base import generate_id
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +81,7 @@ def validate_webhook_url(url: str) -> str:
     # Resolve hostname and check for private IPs
     try:
         addr_info = socket.getaddrinfo(hostname, parsed.port or 443, proto=socket.IPPROTO_TCP)
-        ip_addresses = set(info[4][0] for info in addr_info)
+        ip_addresses = {info[4][0] for info in addr_info}
 
         for ip_str in ip_addresses:
             try:
@@ -205,7 +205,7 @@ class NotificationService:
         prefs = await self.get_user_preferences(user_id)
 
         # Check mute status
-        if prefs.mute_all or (prefs.mute_until and prefs.mute_until > datetime.now(timezone.utc)):
+        if prefs.mute_all or (prefs.mute_until and prefs.mute_until > datetime.now(UTC)):
             logger.debug(f"User {user_id} has notifications muted")
             return notification
 
@@ -292,7 +292,7 @@ class NotificationService:
         # In production, get users from database
         # For now, send to all webhook subscribers
         sent = 0
-        webhook_users = set(w.user_id for w in self._webhooks.values() if w.active)
+        webhook_users = {w.user_id for w in self._webhooks.values() if w.active}
 
         for user_id in webhook_users:
             if user_filter and not user_filter(user_id):
@@ -342,14 +342,14 @@ class NotificationService:
         notification = self._notifications.get(notification_id)
         if notification and notification.user_id == user_id:
             notification.read = True
-            notification.read_at = datetime.now(timezone.utc)
+            notification.read_at = datetime.now(UTC)
             return True
         return False
 
     async def mark_all_as_read(self, user_id: str) -> int:
         """Mark all notifications as read for a user."""
         count = 0
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         for n in self._notifications.values():
             if n.user_id == user_id and not n.read:
                 n.read = True
@@ -362,7 +362,7 @@ class NotificationService:
         notification = self._notifications.get(notification_id)
         if notification and notification.user_id == user_id:
             notification.dismissed = True
-            notification.dismissed_at = datetime.now(timezone.utc)
+            notification.dismissed_at = datetime.now(UTC)
             return True
         return False
 
@@ -444,7 +444,7 @@ class NotificationService:
 
             payload = {
                 "event": "webhook.verify",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "webhook_id": webhook.id,
             }
 
@@ -520,7 +520,7 @@ class NotificationService:
 
         payload = WebhookPayload(
             event=notification.event_type.value,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             webhook_id=webhook.id,
             delivery_id=delivery_id,
             data={
@@ -554,7 +554,7 @@ class NotificationService:
             # SECURITY FIX (Audit 3): Validate webhook URL to prevent SSRF
             validated_url = validate_webhook_url(webhook.url)
 
-            start = datetime.now(timezone.utc)
+            start = datetime.now(UTC)
             response = await self._http_client.post(
                 validated_url,
                 json=payload.model_dump(mode='json'),
@@ -565,40 +565,40 @@ class NotificationService:
                     "X-Forge-Delivery": delivery_id,
                 },
             )
-            elapsed = (datetime.now(timezone.utc) - start).total_seconds() * 1000
+            elapsed = (datetime.now(UTC) - start).total_seconds() * 1000
 
             delivery.status_code = response.status_code
             delivery.response_body = response.text[:1000] if response.text else None
             delivery.response_time_ms = elapsed
-            delivery.completed_at = datetime.now(timezone.utc)
+            delivery.completed_at = datetime.now(UTC)
 
             if response.status_code >= 200 and response.status_code < 300:
                 delivery.success = True
                 webhook.total_success += 1
                 webhook.consecutive_failures = 0
-                webhook.last_success_at = datetime.now(timezone.utc)
+                webhook.last_success_at = datetime.now(UTC)
             else:
                 delivery.success = False
                 delivery.error = f"HTTP {response.status_code}"
                 webhook.total_failure += 1
                 webhook.consecutive_failures += 1
-                webhook.last_failure_at = datetime.now(timezone.utc)
+                webhook.last_failure_at = datetime.now(UTC)
 
                 # Schedule retry
                 await self._schedule_retry(delivery, webhook)
 
         except Exception as e:
             delivery.error = str(e)
-            delivery.completed_at = datetime.now(timezone.utc)
+            delivery.completed_at = datetime.now(UTC)
             webhook.total_failure += 1
             webhook.consecutive_failures += 1
-            webhook.last_failure_at = datetime.now(timezone.utc)
+            webhook.last_failure_at = datetime.now(UTC)
 
             # Schedule retry
             await self._schedule_retry(delivery, webhook)
 
         webhook.total_sent += 1
-        webhook.last_triggered_at = datetime.now(timezone.utc)
+        webhook.last_triggered_at = datetime.now(UTC)
 
         self._deliveries[delivery.id] = delivery
         return delivery
@@ -617,7 +617,7 @@ class NotificationService:
 
         delay = self.RETRY_DELAYS[min(delivery.retry_count, len(self.RETRY_DELAYS) - 1)]
         delivery.retry_count += 1
-        delivery.next_retry_at = datetime.now(timezone.utc) + timedelta(seconds=delay)
+        delivery.next_retry_at = datetime.now(UTC) + timedelta(seconds=delay)
 
         await self._retry_queue.put((delivery, webhook))
 
@@ -629,7 +629,7 @@ class NotificationService:
 
                 # Wait until retry time
                 if delivery.next_retry_at:
-                    wait_time = (delivery.next_retry_at - datetime.now(timezone.utc)).total_seconds()
+                    wait_time = (delivery.next_retry_at - datetime.now(UTC)).total_seconds()
                     if wait_time > 0:
                         await asyncio.sleep(wait_time)
 
@@ -650,7 +650,7 @@ class NotificationService:
             # SECURITY FIX (Audit 3): Validate webhook URL to prevent SSRF
             validated_url = validate_webhook_url(webhook.url)
 
-            start = datetime.now(timezone.utc)
+            start = datetime.now(UTC)
             response = await self._http_client.post(
                 validated_url,
                 json=delivery.payload,
@@ -662,11 +662,11 @@ class NotificationService:
                     "X-Forge-Retry": str(delivery.retry_count),
                 },
             )
-            elapsed = (datetime.now(timezone.utc) - start).total_seconds() * 1000
+            elapsed = (datetime.now(UTC) - start).total_seconds() * 1000
 
             delivery.status_code = response.status_code
             delivery.response_time_ms = elapsed
-            delivery.completed_at = datetime.now(timezone.utc)
+            delivery.completed_at = datetime.now(UTC)
 
             if response.status_code >= 200 and response.status_code < 300:
                 delivery.success = True
@@ -716,7 +716,7 @@ class NotificationService:
             if hasattr(prefs, key):
                 setattr(prefs, key, value)
 
-        prefs.updated_at = datetime.now(timezone.utc)
+        prefs.updated_at = datetime.now(UTC)
         return prefs
 
     # =========================================================================

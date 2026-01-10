@@ -9,11 +9,12 @@ Ensures complete separation of tenant data and access control.
 from __future__ import annotations
 
 import functools
+from collections.abc import Callable
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Callable, Dict, List, Optional, Set, TypeVar
 from enum import Enum
+from typing import Any, TypeVar
 
 import structlog
 
@@ -24,7 +25,7 @@ logger = structlog.get_logger(__name__)
 F = TypeVar('F', bound=Callable[..., Any])
 
 # Context variable for current tenant
-_current_tenant: ContextVar[Optional['TenantContext']] = ContextVar(
+_current_tenant: ContextVar[TenantContext | None] = ContextVar(
     'current_tenant',
     default=None
 )
@@ -52,7 +53,7 @@ class TenantLimits:
     allow_ghost_council: bool = False
 
     @classmethod
-    def for_tier(cls, tier: TenantTier) -> 'TenantLimits':
+    def for_tier(cls, tier: TenantTier) -> TenantLimits:
         """Get limits for a subscription tier."""
         tier_limits = {
             TenantTier.FREE: cls(
@@ -98,8 +99,8 @@ class TenantContext:
     tenant_name: str
     tier: TenantTier = TenantTier.STANDARD
     limits: TenantLimits = field(default_factory=TenantLimits)
-    features: Set[str] = field(default_factory=set)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    features: set[str] = field(default_factory=set)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     # Usage tracking
     current_capsule_count: int = 0
@@ -143,8 +144,8 @@ class TenantIsolator:
 
     def __init__(self):
         self._config = get_resilience_config().tenant_isolation
-        self._tenants: Dict[str, TenantContext] = {}
-        self._cross_tenant_attempts: List[Dict] = []
+        self._tenants: dict[str, TenantContext] = {}
+        self._cross_tenant_attempts: list[dict] = []
 
     def register_tenant(self, context: TenantContext) -> None:
         """Register a tenant context."""
@@ -155,7 +156,7 @@ class TenantIsolator:
             tier=context.tier.value
         )
 
-    def get_tenant(self, tenant_id: str) -> Optional[TenantContext]:
+    def get_tenant(self, tenant_id: str) -> TenantContext | None:
         """Get tenant context by ID."""
         return self._tenants.get(tenant_id)
 
@@ -163,7 +164,7 @@ class TenantIsolator:
         """Set the current tenant context."""
         _current_tenant.set(context)
 
-    def get_current_tenant(self) -> Optional[TenantContext]:
+    def get_current_tenant(self) -> TenantContext | None:
         """Get the current tenant context."""
         return _current_tenant.get()
 
@@ -260,7 +261,7 @@ class TenantIsolator:
 
         return True
 
-    def get_tenant_filter(self) -> Optional[Dict[str, str]]:
+    def get_tenant_filter(self) -> dict[str, str] | None:
         """
         Get a filter dictionary for tenant-scoped queries.
 
@@ -355,13 +356,13 @@ class TenantIsolator:
         if len(self._cross_tenant_attempts) > 1000:
             self._cross_tenant_attempts = self._cross_tenant_attempts[-1000:]
 
-    def get_audit_log(self) -> List[Dict]:
+    def get_audit_log(self) -> list[dict]:
         """Get cross-tenant access attempt audit log."""
         return list(self._cross_tenant_attempts)
 
 
 # Global isolator instance
-_tenant_isolator: Optional[TenantIsolator] = None
+_tenant_isolator: TenantIsolator | None = None
 
 
 def get_tenant_isolator() -> TenantIsolator:
@@ -415,7 +416,7 @@ class tenant_scope:
 
     def __init__(self, context: TenantContext):
         self._context = context
-        self._previous: Optional[TenantContext] = None
+        self._previous: TenantContext | None = None
 
     def __enter__(self) -> TenantContext:
         isolator = get_tenant_isolator()

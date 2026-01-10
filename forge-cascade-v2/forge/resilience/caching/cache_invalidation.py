@@ -9,10 +9,11 @@ Subscribes to capsule change events and invalidates affected cache entries.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Callable, Optional, Set
 from enum import Enum
+from typing import Any
 
 import structlog
 
@@ -60,7 +61,7 @@ class CacheInvalidator:
 
     def __init__(
         self,
-        cache: Optional[QueryCache] = None,
+        cache: QueryCache | None = None,
         strategy: InvalidationStrategy = InvalidationStrategy.IMMEDIATE,
         debounce_seconds: float = 0.5
     ):
@@ -71,15 +72,15 @@ class CacheInvalidator:
 
         # Pending invalidations for debouncing
         self._pending: dict[str, InvalidationEvent] = {}
-        self._debounce_task: Optional[asyncio.Task] = None
+        self._debounce_task: asyncio.Task | None = None
 
         # Callbacks for custom invalidation logic
         self._callbacks: list[Callable[[InvalidationEvent], None]] = []
 
         # Track stale entries for lazy invalidation
-        self._stale_entries: Set[str] = set()
+        self._stale_entries: set[str] = set()
 
-    async def initialize(self, cache: Optional[QueryCache] = None) -> None:
+    async def initialize(self, cache: QueryCache | None = None) -> None:
         """Initialize the invalidator with a cache instance."""
         if cache:
             self._cache = cache
@@ -114,7 +115,7 @@ class CacheInvalidator:
     async def on_capsule_created(
         self,
         capsule_id: str,
-        metadata: Optional[dict] = None
+        metadata: dict | None = None
     ) -> None:
         """Handle capsule creation event."""
         event = InvalidationEvent(
@@ -127,7 +128,7 @@ class CacheInvalidator:
     async def on_capsule_updated(
         self,
         capsule_id: str,
-        metadata: Optional[dict] = None
+        metadata: dict | None = None
     ) -> None:
         """Handle capsule update event."""
         event = InvalidationEvent(
@@ -140,7 +141,7 @@ class CacheInvalidator:
     async def on_capsule_deleted(
         self,
         capsule_id: str,
-        metadata: Optional[dict] = None
+        metadata: dict | None = None
     ) -> None:
         """Handle capsule deletion event."""
         event = InvalidationEvent(
@@ -154,7 +155,7 @@ class CacheInvalidator:
         self,
         capsule_id: str,
         parent_ids: list[str],
-        metadata: Optional[dict] = None
+        metadata: dict | None = None
     ) -> None:
         """Handle lineage relationship change."""
         # Invalidate cache for all affected capsules
@@ -269,7 +270,7 @@ class CacheInvalidator:
         self._pending.clear()
 
         if self._cache:
-            for capsule_id, event in pending.items():
+            for capsule_id, _event in pending.items():
                 count = await self._cache.invalidate_for_capsule(capsule_id)
                 self._stats.entries_invalidated += count
 
@@ -308,7 +309,7 @@ class CacheInvalidator:
 
 
 # Global invalidator instance
-_cache_invalidator: Optional[CacheInvalidator] = None
+_cache_invalidator: CacheInvalidator | None = None
 
 
 async def get_cache_invalidator() -> CacheInvalidator:

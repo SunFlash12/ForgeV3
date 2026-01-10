@@ -15,21 +15,21 @@ SECURITY FIXES (Audit 2):
 - Hardcoded algorithm list to prevent algorithm confusion attacks
 """
 
-from datetime import datetime, timedelta, timezone
-from typing import Any, Optional, Set
-from uuid import uuid4
+import asyncio
 import threading
 import time
-import asyncio
+from datetime import UTC, datetime, timedelta
+from typing import Any
+from uuid import uuid4
 
 # SECURITY FIX: Use PyJWT instead of abandoned python-jose
 import jwt as pyjwt
-from jwt.exceptions import ExpiredSignatureError, InvalidTokenError, DecodeError
-from pydantic import ValidationError
 import structlog
+from jwt.exceptions import DecodeError, ExpiredSignatureError, InvalidTokenError
+from pydantic import ValidationError
 
 from ..config import get_settings
-from ..models.user import TokenPayload, Token
+from ..models.user import Token, TokenPayload
 
 settings = get_settings()
 logger = structlog.get_logger(__name__)
@@ -63,16 +63,16 @@ class TokenBlacklist:
     # In-memory fallback storage
     # SECURITY FIX (Audit 3): Bounded memory - max 100,000 blacklisted tokens
     _MAX_BLACKLIST_SIZE: int = 100000
-    _blacklist: Set[str] = set()
+    _blacklist: set[str] = set()
     _expiry_times: dict[str, float] = {}
     _access_order: list[str] = []  # Track access order for LRU eviction
     _sync_lock = threading.Lock()  # For sync methods only
-    _async_lock: Optional[asyncio.Lock] = None  # Lazy-initialized for async methods
+    _async_lock: asyncio.Lock | None = None  # Lazy-initialized for async methods
     _last_cleanup: float = 0
     _cleanup_interval: float = 300  # 5 minutes
 
     # Redis connection
-    _redis_client: Optional[Any] = None
+    _redis_client: Any | None = None
     _redis_initialized: bool = False
     _redis_prefix: str = "forge:token:blacklist:"
 
@@ -84,7 +84,7 @@ class TokenBlacklist:
         return cls._async_lock
 
     @classmethod
-    async def initialize(cls, redis_url: Optional[str] = None) -> bool:
+    async def initialize(cls, redis_url: str | None = None) -> bool:
         """
         Initialize Redis connection for distributed blacklist.
 
@@ -128,7 +128,7 @@ class TokenBlacklist:
             return False
 
     @classmethod
-    async def add_async(cls, jti: str, expires_at: Optional[float] = None) -> None:
+    async def add_async(cls, jti: str, expires_at: float | None = None) -> None:
         """
         Add a token to the blacklist (async version).
 
@@ -175,7 +175,7 @@ class TokenBlacklist:
             logger.debug("token_blacklisted_memory", jti=jti[:16] + "...")
 
     @classmethod
-    async def is_blacklisted_async(cls, jti: Optional[str]) -> bool:
+    async def is_blacklisted_async(cls, jti: str | None) -> bool:
         """Check if a token is blacklisted (async version)."""
         if not jti:
             return False
@@ -196,7 +196,7 @@ class TokenBlacklist:
             return jti in cls._blacklist
 
     @classmethod
-    def add(cls, jti: str, expires_at: Optional[float] = None) -> None:
+    def add(cls, jti: str, expires_at: float | None = None) -> None:
         """
         Add a token to the blacklist (sync version for backwards compatibility).
 
@@ -215,7 +215,7 @@ class TokenBlacklist:
             cls._evict_lru_unlocked()  # Enforce memory bounds
 
     @classmethod
-    def is_blacklisted(cls, jti: Optional[str]) -> bool:
+    def is_blacklisted(cls, jti: str | None) -> bool:
         """Check if a token is blacklisted (sync version)."""
         if not jti:
             return False
@@ -396,7 +396,7 @@ class KeyRotationManager:
         if not cls._keys:
             cls._current_key_id = "key_1"
             cls._keys[cls._current_key_id] = settings.jwt_secret_key
-            cls._key_created_at[cls._current_key_id] = datetime.now(timezone.utc)
+            cls._key_created_at[cls._current_key_id] = datetime.now(UTC)
             logger.info("key_rotation_initialized", current_key_id=cls._current_key_id)
 
     @classmethod
@@ -462,7 +462,7 @@ class KeyRotationManager:
 
             # Add new key
             cls._keys[new_key_id] = new_secret
-            cls._key_created_at[new_key_id] = datetime.now(timezone.utc)
+            cls._key_created_at[new_key_id] = datetime.now(UTC)
 
             # Update current key
             old_key_id = cls._current_key_id
@@ -562,7 +562,7 @@ class KeyRotationManager:
             "total_keys": len(cls._keys),
             "key_ids": list(cls._keys.keys()),
             "key_ages": {
-                kid: (datetime.now(timezone.utc) - created).total_seconds()
+                kid: (datetime.now(UTC) - created).total_seconds()
                 for kid, created in cls._key_created_at.items()
             }
         }
@@ -573,7 +573,7 @@ def create_access_token(
     username: str,
     role: str,
     trust_flame: int,
-    additional_claims: Optional[dict[str, Any]] = None
+    additional_claims: dict[str, Any] | None = None
 ) -> str:
     """
     Create a JWT access token.
@@ -588,7 +588,7 @@ def create_access_token(
     Returns:
         Encoded JWT access token
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     expire = now + timedelta(minutes=settings.jwt_access_token_expire_minutes)
 
     payload = {
@@ -631,7 +631,7 @@ def create_refresh_token(
     Returns:
         Encoded JWT refresh token
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     expire = now + timedelta(days=settings.jwt_refresh_token_expire_days)
 
     payload = {
@@ -661,19 +661,19 @@ def create_token_pair(
 ) -> Token:
     """
     Create both access and refresh tokens.
-    
+
     Args:
         user_id: User's unique identifier
         username: User's username
         role: User's role
         trust_flame: User's trust score
-        
+
     Returns:
         Token model with both access and refresh tokens
     """
     access_token = create_access_token(user_id, username, role, trust_flame)
     refresh_token = create_refresh_token(user_id, username)
-    
+
     return Token(
         access_token=access_token,
         refresh_token=refresh_token,
@@ -867,31 +867,31 @@ def get_token_claims(token: str) -> dict[str, Any]:
 def verify_refresh_token(token: str) -> TokenPayload:
     """
     Verify a refresh token.
-    
+
     Args:
         token: JWT refresh token
-        
+
     Returns:
         TokenPayload if valid
-        
+
     Raises:
         TokenError: If token is invalid or not a refresh token
     """
     payload = decode_token(token)
-    
+
     if payload.type != "refresh":
         raise TokenInvalidError("Not a refresh token")
-    
+
     return payload
 
 
-def get_token_expiry(token: str) -> Optional[datetime]:
+def get_token_expiry(token: str) -> datetime | None:
     """
     Get the expiration time of a token.
-    
+
     Args:
         token: JWT token
-        
+
     Returns:
         Datetime of expiration, or None if no expiration
     """
@@ -907,10 +907,10 @@ def get_token_expiry(token: str) -> Optional[datetime]:
 def is_token_expired(token: str) -> bool:
     """
     Check if a token is expired.
-    
+
     Args:
         token: JWT token
-        
+
     Returns:
         True if expired, False otherwise
     """
@@ -926,79 +926,79 @@ def is_token_expired(token: str) -> bool:
 def extract_token_from_header(authorization: str) -> str:
     """
     Extract JWT token from Authorization header.
-    
+
     Expected format: "Bearer <token>"
-    
+
     Args:
         authorization: Authorization header value
-        
+
     Returns:
         JWT token string
-        
+
     Raises:
         TokenInvalidError: If header format is invalid
     """
     parts = authorization.split()
-    
+
     if len(parts) != 2:
         raise TokenInvalidError("Invalid authorization header format")
-    
+
     scheme, token = parts
-    
+
     if scheme.lower() != "bearer":
         raise TokenInvalidError("Invalid authentication scheme")
-    
+
     return token
 
 
 def verify_token(token: str, secret_key: str = None, expected_type: str = "access") -> TokenPayload:
     """
     Verify a JWT token.
-    
+
     This is a convenience function that wraps decode_token for API usage.
-    
+
     Args:
         token: JWT token string
         secret_key: Secret key (uses settings if not provided)
         expected_type: Expected token type ('access' or 'refresh')
-        
+
     Returns:
         TokenPayload if valid
-        
+
     Raises:
         TokenExpiredError: If token has expired
         TokenInvalidError: If token is invalid or wrong type
     """
     payload = decode_token(token)
-    
+
     if expected_type and payload.type != expected_type:
         raise TokenInvalidError(f"Expected {expected_type} token, got {payload.type}")
-    
+
     return payload
 
 
 class TokenService:
     """
     Service class for token operations.
-    
+
     Provides a class-based interface for token management.
     """
-    
+
     @staticmethod
     def create_access_token(user_id: str, **kwargs) -> str:
         """Create an access token."""
         return create_access_token(user_id, **kwargs)
-    
+
     @staticmethod
     def create_refresh_token(user_id: str) -> str:
         """Create a refresh token."""
         return create_refresh_token(user_id)
-    
+
     @staticmethod
     def create_token_pair(user_id: str, **kwargs) -> "Token":
         """Create an access/refresh token pair."""
         return create_token_pair(user_id, **kwargs)
-    
+
     @staticmethod
     def verify_access_token(token: str) -> TokenPayload:
         """Verify an access token (sync - in-memory blacklist only)."""
@@ -1013,17 +1013,17 @@ class TokenService:
     def verify_refresh_token(token: str) -> TokenPayload:
         """Verify a refresh token."""
         return verify_refresh_token(token)
-    
+
     @staticmethod
     def verify(token: str, expected_type: str = "access") -> TokenPayload:
         """Verify a token of expected type."""
         return verify_token(token, expected_type=expected_type)
-    
+
     @staticmethod
     def decode(token: str, verify_exp: bool = True) -> TokenPayload:
         """Decode a token."""
         return decode_token(token, verify_exp)
-    
+
     @staticmethod
     def is_expired(token: str) -> bool:
         """Check if token is expired."""

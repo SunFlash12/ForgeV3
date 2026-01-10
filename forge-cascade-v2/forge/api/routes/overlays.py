@@ -11,37 +11,35 @@ Provides:
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from forge.api.dependencies import (
-    OverlayRepoDep,
-    OverlayManagerDep,
-    CanaryManagerDep,
-    AuditRepoDep,
     ActiveUserDep,
-    TrustedUserDep,
-    CoreUserDep,
     AdminUserDep,
+    AuditRepoDep,
+    CanaryManagerDep,
+    CoreUserDep,
     CorrelationIdDep,
+    OverlayManagerDep,
+    TrustedUserDep,
 )
-from forge.models.overlay import OverlayState, OverlayPhase
+from forge.models.overlay import OverlayPhase, OverlayState
 
 # Resilience integration - metrics and caching
 from forge.resilience.integration import (
-    record_overlay_activated,
-    record_overlay_deactivated,
-    record_overlay_config_updated,
-    record_canary_started,
+    invalidate_overlay_cache,
     record_canary_advanced,
     record_canary_rolled_back,
+    record_canary_started,
+    record_overlay_activated,
+    record_overlay_config_updated,
+    record_overlay_deactivated,
     record_overlays_reloaded,
-    invalidate_overlay_cache,
 )
-
 
 router = APIRouter()
 
@@ -65,7 +63,7 @@ class OverlayResponse(BaseModel):
     updated_at: str
 
     @classmethod
-    def from_overlay(cls, overlay: Any) -> "OverlayResponse":
+    def from_overlay(cls, overlay: Any) -> OverlayResponse:
         """Create response from BaseOverlay instance."""
         # Map phase enum to integer (1-7 for pipeline phases)
         phase_map = {
@@ -180,13 +178,13 @@ async def get_overlay(
     Get a specific overlay's information.
     """
     overlay = overlay_manager.get_by_id(overlay_id)
-    
+
     if not overlay:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Overlay not found",
         )
-    
+
     return OverlayResponse.from_overlay(overlay)
 
 
@@ -202,16 +200,16 @@ async def activate_overlay(
     Activate an overlay.
     """
     overlay = overlay_manager.get_by_id(overlay_id)
-    
+
     if not overlay:
         raise HTTPException(status_code=404, detail="Overlay not found")
-    
+
     if overlay.state == OverlayState.ACTIVE:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Overlay already active",
         )
-    
+
     await overlay_manager.activate(overlay_id)
 
     # Resilience: Record activation metric and invalidate cache
@@ -239,26 +237,26 @@ async def deactivate_overlay(
 ) -> OverlayResponse:
     """
     Deactivate an overlay.
-    
+
     Critical overlays cannot be deactivated.
     """
     overlay = overlay_manager.get_by_id(overlay_id)
-    
+
     if not overlay:
         raise HTTPException(status_code=404, detail="Overlay not found")
-    
+
     if overlay.is_critical:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot deactivate critical overlay",
         )
-    
+
     if overlay.state != OverlayState.ACTIVE:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Overlay not active",
         )
-    
+
     await overlay_manager.deactivate(overlay_id)
 
     # Resilience: Record deactivation metric and invalidate cache
@@ -287,14 +285,14 @@ async def update_overlay_config(
 ) -> OverlayResponse:
     """
     Update overlay configuration.
-    
+
     Changes take effect immediately.
     """
     overlay = overlay_manager.get_by_id(overlay_id)
-    
+
     if not overlay:
         raise HTTPException(status_code=404, detail="Overlay not found")
-    
+
     # Merge config
     new_config = {**overlay.config, **request.config}
     overlay.config = new_config
@@ -329,16 +327,16 @@ async def get_overlay_metrics(
     Get overlay execution metrics.
     """
     overlay = overlay_manager.get_by_id(overlay_id)
-    
+
     if not overlay:
         raise HTTPException(status_code=404, detail="Overlay not found")
-    
+
     stats = overlay.get_stats() if hasattr(overlay, 'get_stats') else {}
-    
+
     total = stats.get('total_executions', 0)
     successful = stats.get('successful_executions', 0)
     failed = total - successful
-    
+
     # Get last execution time (BaseOverlay uses last_execution, not last_active)
     last_exec = getattr(overlay, 'last_execution', None) or getattr(overlay, 'last_active', None)
 
@@ -395,9 +393,8 @@ async def get_all_overlay_metrics(
 
 def _canary_to_response(overlay_id: str, deployment: Any) -> CanaryStatusResponse:
     """Convert canary deployment to response format matching frontend."""
-    from datetime import datetime, timezone
 
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now_iso = datetime.now(UTC).isoformat()
 
     return CanaryStatusResponse(
         overlay_id=overlay_id,
@@ -425,7 +422,6 @@ async def get_canary_status(
     """
     Get canary deployment status for an overlay.
     """
-    from datetime import datetime, timezone
 
     overlay = overlay_manager.get_by_id(overlay_id)
 
@@ -437,7 +433,7 @@ async def get_canary_status(
 
     if not deployment:
         # Return empty canary status when no deployment exists
-        now_iso = datetime.now(timezone.utc).isoformat()
+        now_iso = datetime.now(UTC).isoformat()
         return CanaryStatusResponse(
             overlay_id=overlay_id,
             current_stage=0,
@@ -552,13 +548,13 @@ async def rollback_canary_deployment(
     Rollback a canary deployment.
     """
     deployment = canary_manager.get_deployment(overlay_id)
-    
+
     if not deployment:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No active canary deployment",
         )
-    
+
     await canary_manager.rollback(overlay_id)
 
     # Resilience: Record canary rollback metric
@@ -588,7 +584,7 @@ async def reload_all_overlays(
 ) -> dict:
     """
     Reload all overlays (admin action).
-    
+
     This restarts all overlays, useful after configuration changes.
     """
     await overlay_manager.stop()

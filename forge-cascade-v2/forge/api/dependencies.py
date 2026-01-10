@@ -13,41 +13,38 @@ Provides:
 from __future__ import annotations
 
 import ipaddress
-import re
-from functools import lru_cache
-from typing import Annotated, Any, AsyncGenerator
+from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from forge.config import Settings, get_settings
 from forge.database.client import Neo4jClient
+from forge.immune import (
+    CanaryManager,
+    CircuitBreakerRegistry,
+    ForgeAnomalySystem,
+    ForgeHealthChecker,
+)
 from forge.kernel.event_system import EventSystem
 from forge.kernel.overlay_manager import OverlayManager
 from forge.kernel.pipeline import CascadePipeline
-from forge.models.user import User, TrustLevel
-from forge.repositories.capsule_repository import CapsuleRepository
-from forge.repositories.user_repository import UserRepository
-from forge.repositories.governance_repository import GovernanceRepository
-from forge.repositories.overlay_repository import OverlayRepository
+from forge.models.user import TrustLevel, User
 from forge.repositories.audit_repository import AuditRepository
+from forge.repositories.capsule_repository import CapsuleRepository
+from forge.repositories.governance_repository import GovernanceRepository
 from forge.repositories.graph_repository import GraphRepository
+from forge.repositories.overlay_repository import OverlayRepository
 from forge.repositories.temporal_repository import TemporalRepository
-from forge.security.tokens import verify_token, TokenPayload
-from forge.security.authorization import (
-    TrustAuthorizer,
-    RoleAuthorizer,
-    CapabilityAuthorizer,
-)
+from forge.repositories.user_repository import UserRepository
 from forge.security.auth_service import AuthService
-from forge.immune import (
-    CircuitBreakerRegistry,
-    ForgeHealthChecker,
-    ForgeAnomalySystem,
-    CanaryManager,
+from forge.security.authorization import (
+    CapabilityAuthorizer,
+    RoleAuthorizer,
+    TrustAuthorizer,
 )
+from forge.security.tokens import TokenPayload, verify_token
 from forge.services.embedding import EmbeddingService, get_embedding_service
-
 
 # Security scheme
 security = HTTPBearer(auto_error=False)
@@ -413,7 +410,7 @@ AuthServiceDep = Annotated[AuthService, Depends(get_auth_service)]
 
 class PaginationParams:
     """Standard pagination parameters."""
-    
+
     def __init__(
         self,
         page: int = 1,
@@ -556,11 +553,11 @@ __all__ = [
     # Settings
     "SettingsDep",
     "get_app_settings",
-    
+
     # Database
     "DbClientDep",
     "get_db_client",
-    
+
     # Repositories
     "CapsuleRepoDep",
     "UserRepoDep",
@@ -569,23 +566,23 @@ __all__ = [
     "AuditRepoDep",
     "GraphRepoDep",
     "TemporalRepoDep",
-    
+
     # Kernel
     "EventSystemDep",
     "OverlayManagerDep",
     "PipelineDep",
-    
+
     # Immune
     "CircuitRegistryDep",
     "HealthCheckerDep",
     "AnomalySystemDep",
     "CanaryManagerDep",
-    
+
     # Auth
     "OptionalUserDep",
     "CurrentUserDep",
     "ActiveUserDep",
-    
+
     # Authorization
     "SandboxUserDep",
     "StandardUserDep",
@@ -596,14 +593,14 @@ __all__ = [
     "require_trust_level",
     "require_roles",
     "require_capabilities",
-    
+
     # Services
     "AuthServiceDep",
-    
+
     # Pagination
     "PaginationParams",
     "PaginationDep",
-    
+
     # Context
     "CorrelationIdDep",
     "ClientInfo",

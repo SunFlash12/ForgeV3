@@ -13,7 +13,6 @@ from typing import Any
 
 import structlog
 
-
 # SECURITY FIX: Pattern for validating Neo4j identifiers (labels, relationship types, graph names)
 # Only allows alphanumeric characters and underscores to prevent Cypher injection
 _SAFE_IDENTIFIER_PATTERN = re.compile(r'^[a-zA-Z][a-zA-Z0-9_]*$')
@@ -725,7 +724,7 @@ class GraphAlgorithmProvider:
 
         Finds all paths and computes trust with decay.
         """
-        start_time = datetime.utcnow()
+        datetime.utcnow()
 
         # SECURITY FIX: Validate all user-controlled identifiers to prevent Cypher injection
         rel_types = validate_relationship_pattern(request.relationship_types)

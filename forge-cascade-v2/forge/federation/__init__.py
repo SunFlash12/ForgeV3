@@ -32,16 +32,16 @@ Usage:
 """
 
 from forge.federation.models import (
-    FederatedPeer,
+    ConflictResolution,
     FederatedCapsule,
     FederatedEdge,
-    SyncState,
-    SyncDirection,
-    PeerStatus,
-    ConflictResolution,
-    PeerHandshake,
-    SyncPayload,
+    FederatedPeer,
     FederationStats,
+    PeerHandshake,
+    PeerStatus,
+    SyncDirection,
+    SyncPayload,
+    SyncState,
 )
 from forge.federation.protocol import FederationProtocol
 from forge.federation.sync import SyncService

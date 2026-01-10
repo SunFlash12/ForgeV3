@@ -11,11 +11,11 @@ Sophisticated pricing algorithm for knowledge capsules based on:
 
 import logging
 import math
-from datetime import datetime, timezone, timedelta
-from decimal import Decimal, ROUND_HALF_UP
-from typing import Any
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from decimal import ROUND_HALF_UP, Decimal
 from enum import Enum
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -96,7 +96,7 @@ class PricingResult:
     # Recommendations
     recommendations: list[str] = field(default_factory=list)
 
-    calculated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    calculated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 class TrustBasedPricingEngine:

@@ -14,27 +14,26 @@ Future work needed:
 """
 
 import logging
-from datetime import datetime, timezone, timedelta
+import math
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
-import math
 
 from forge.models.marketplace import (
     CapsuleListing,
-    ListingStatus,
-    LicenseType,
-    Currency,
-    Purchase,
     Cart,
     CartItem,
+    Currency,
     License,
-    PriceSuggestion,
-    RevenueDistribution,
+    LicenseType,
+    ListingStatus,
     MarketplaceStats,
     PaymentMethod,
     PaymentStatus,
+    PriceSuggestion,
+    Purchase,
+    RevenueDistribution,
 )
-from forge.models.base import generate_id, TrustLevel
 
 logger = logging.getLogger(__name__)
 
@@ -118,7 +117,7 @@ class MarketplaceService:
             raise ValueError("Only draft listings can be published")
 
         listing.status = ListingStatus.ACTIVE
-        listing.published_at = datetime.now(timezone.utc)
+        listing.published_at = datetime.now(UTC)
         # AUDIT 3 FIX (A1-D03): Persist status change
         await self._persist_listing(listing)
         return listing
@@ -189,7 +188,7 @@ class MarketplaceService:
             if key in allowed_fields and hasattr(listing, key):
                 setattr(listing, key, value)
 
-        listing.updated_at = datetime.now(timezone.utc)
+        listing.updated_at = datetime.now(UTC)
         return listing
 
     async def cancel_listing(self, listing_id: str, seller_id: str) -> CapsuleListing:
@@ -242,7 +241,7 @@ class MarketplaceService:
             currency=listing.currency,
             title=listing.title,
         ))
-        cart.updated_at = datetime.now(timezone.utc)
+        cart.updated_at = datetime.now(UTC)
 
         return cart
 
@@ -250,14 +249,14 @@ class MarketplaceService:
         """Remove a listing from cart."""
         cart = await self.get_cart(user_id)
         cart.items = [item for item in cart.items if item.listing_id != listing_id]
-        cart.updated_at = datetime.now(timezone.utc)
+        cart.updated_at = datetime.now(UTC)
         return cart
 
     async def clear_cart(self, user_id: str) -> Cart:
         """Clear all items from cart."""
         cart = await self.get_cart(user_id)
         cart.items = []
-        cart.updated_at = datetime.now(timezone.utc)
+        cart.updated_at = datetime.now(UTC)
         return cart
 
     # =========================================================================
@@ -345,7 +344,7 @@ class MarketplaceService:
 
         # Set license expiration for subscriptions
         if listing.license_type == LicenseType.SUBSCRIPTION and listing.subscription_period_days:
-            purchase.license_expires_at = datetime.now(timezone.utc) + timedelta(
+            purchase.license_expires_at = datetime.now(UTC) + timedelta(
                 days=listing.subscription_period_days
             )
 
@@ -421,7 +420,7 @@ class MarketplaceService:
             if license.holder_id == user_id and license.capsule_id == capsule_id:
                 if license.revoked_at:
                     continue
-                if license.expires_at and license.expires_at < datetime.now(timezone.utc):
+                if license.expires_at and license.expires_at < datetime.now(UTC):
                     continue
                 return license
         return None
@@ -431,7 +430,7 @@ class MarketplaceService:
         license = self._licenses.get(license_id)
         if license:
             license.access_count += 1
-            license.last_accessed_at = datetime.now(timezone.utc)
+            license.last_accessed_at = datetime.now(UTC)
 
     # =========================================================================
     # Pricing
@@ -508,7 +507,7 @@ class MarketplaceService:
 
     async def get_marketplace_stats(self) -> MarketplaceStats:
         """Get overall marketplace statistics."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         week_start = today_start - timedelta(days=7)
         month_start = today_start - timedelta(days=30)
@@ -548,7 +547,7 @@ class MarketplaceService:
         prices = [l.price for l in active_listings]
         avg_price = sum(prices) / len(prices) if prices else Decimal("0")
 
-        sellers = set(l.seller_id for l in all_listings)
+        sellers = {l.seller_id for l in all_listings}
         avg_per_seller = len(all_listings) / len(sellers) if sellers else 0
 
         return MarketplaceStats(

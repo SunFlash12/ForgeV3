@@ -12,21 +12,20 @@ from typing import Any
 from pydantic import Field, field_validator
 
 from forge.models.base import (
+    CapsuleType,
     ForgeModel,
     TimestampMixin,
     TrustLevel,
-    CapsuleType,
-    generate_id,
 )
 
 
 class ContentBlock(ForgeModel):
     """
     A block of content within a capsule.
-    
+
     ContentBlocks allow for structured content with different types.
     """
-    
+
     content: str = Field(description="The content text")
     content_type: str = Field(default="text", description="Type of content (text, code, markdown, etc.)")
     language: str | None = Field(default=None, description="Programming language for code blocks")

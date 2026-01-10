@@ -5,28 +5,21 @@ Endpoints for the capsule marketplace.
 """
 
 import logging
-from decimal import Decimal
 from datetime import datetime
+from decimal import Decimal
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from forge.models.marketplace import (
-    CapsuleListing,
-    ListingStatus,
-    LicenseType,
-    Currency,
-    Purchase,
-    Cart,
-    CartItem,
-    PriceSuggestion,
-    MarketplaceStats,
-    ListingVisibility,
-    PaymentMethod,
-)
-from forge.services.marketplace import get_marketplace_service, MarketplaceService
 from forge.api.dependencies import ActiveUserDep
+from forge.models.marketplace import (
+    Currency,
+    LicenseType,
+    ListingStatus,
+    ListingVisibility,
+)
+from forge.services.marketplace import MarketplaceService, get_marketplace_service
 
 logger = logging.getLogger(__name__)
 
@@ -700,7 +693,7 @@ async def analyze_pricing(
     Returns comprehensive breakdown of pricing factors, multipliers,
     and recommendations.
     """
-    from forge.services.pricing_engine import get_pricing_engine, PricingFactors
+    from forge.services.pricing_engine import get_pricing_engine
 
     engine = await get_pricing_engine()
 
@@ -735,8 +728,9 @@ async def get_lineage_distribution(
     Shows which ancestor capsule owners would receive revenue
     and their respective shares.
     """
-    from forge.services.pricing_engine import get_pricing_engine
     from decimal import Decimal
+
+    from forge.services.pricing_engine import get_pricing_engine
 
     engine = await get_pricing_engine()
 
@@ -767,7 +761,7 @@ async def get_lineage_distribution(
 @router.get("/pricing/tiers")
 async def get_pricing_tiers() -> dict[str, Any]:
     """Get information about pricing tiers and base prices."""
-    from forge.services.pricing_engine import TrustBasedPricingEngine, PricingTier
+    from forge.services.pricing_engine import PricingTier, TrustBasedPricingEngine
 
     return {
         "tiers": [

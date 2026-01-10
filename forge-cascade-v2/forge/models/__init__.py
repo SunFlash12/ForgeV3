@@ -5,47 +5,47 @@ Pydantic models for all domain entities.
 """
 
 from forge.models.base import (
-    ForgeModel,
-    TimestampMixin,
-    TrustLevel,
     CapsuleType,
+    ForgeModel,
     OverlayState,
     ProposalStatus,
+    TimestampMixin,
+    TrustLevel,
 )
 from forge.models.capsule import (
     Capsule,
     CapsuleCreate,
-    CapsuleUpdate,
     CapsuleInDB,
+    CapsuleUpdate,
     CapsuleWithLineage,
     LineageNode,
 )
-from forge.models.user import (
-    User,
-    UserCreate,
-    UserUpdate,
-    UserInDB,
-    UserPublic,
-    Token,
-    TokenPayload,
-)
-from forge.models.overlay import (
-    Overlay,
-    OverlayManifest,
-    OverlayMetrics,
-    Capability,
+from forge.models.events import (
+    CascadeEvent,
+    Event,
+    EventType,
 )
 from forge.models.governance import (
+    ConstitutionalAnalysis,
     Proposal,
     ProposalCreate,
     Vote,
     VoteCreate,
-    ConstitutionalAnalysis,
 )
-from forge.models.events import (
-    Event,
-    EventType,
-    CascadeEvent,
+from forge.models.overlay import (
+    Capability,
+    Overlay,
+    OverlayManifest,
+    OverlayMetrics,
+)
+from forge.models.user import (
+    Token,
+    TokenPayload,
+    User,
+    UserCreate,
+    UserInDB,
+    UserPublic,
+    UserUpdate,
 )
 
 __all__ = [

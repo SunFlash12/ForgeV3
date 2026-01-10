@@ -13,25 +13,23 @@ from typing import Any
 
 import structlog
 
-from forge.database.client import Neo4jClient
+from forge.models.base import CapsuleType, TrustLevel, generate_id
 from forge.models.capsule import (
     Capsule,
     CapsuleCreate,
-    CapsuleUpdate,
-    CapsuleInDB,
-    CapsuleWithLineage,
     CapsuleSearchResult,
+    CapsuleUpdate,
+    CapsuleWithLineage,
     LineageNode,
 )
-from forge.models.base import TrustLevel, CapsuleType, generate_id
 from forge.models.semantic_edges import (
-    SemanticEdge,
-    SemanticEdgeCreate,
-    SemanticRelationType,
-    SemanticNeighbor,
     ContradictionCluster,
     ContradictionSeverity,
     ContradictionStatus,
+    SemanticEdge,
+    SemanticEdgeCreate,
+    SemanticNeighbor,
+    SemanticRelationType,
 )
 from forge.repositories.base import BaseRepository
 
@@ -80,18 +78,18 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
     ) -> Capsule:
         """
         Create a new capsule with optional symbolic inheritance.
-        
+
         Args:
             data: Capsule creation data
             owner_id: ID of the owner user
             embedding: Vector embedding for semantic search
-            
+
         Returns:
             Created capsule
         """
         capsule_id = self._generate_id()
         now = self._now()
-        
+
         # Build the query based on whether we have a parent
         if data.parent_id:
             query = """
@@ -146,7 +144,7 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
             })
             RETURN c {.*} AS capsule
             """
-        
+
         params = {
             "id": capsule_id,
             "content": data.content,
@@ -162,9 +160,9 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
             "embedding": embedding,
             "now": now.isoformat(),
         }
-        
+
         result = await self.client.execute_single(query, params)
-        
+
         if result and result.get("capsule"):
             self.logger.info(
                 "Created capsule",
@@ -173,7 +171,7 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
                 owner_id=owner_id,
             )
             return self._to_model(result["capsule"])
-        
+
         raise RuntimeError("Failed to create capsule")
 
     async def update(
@@ -211,23 +209,23 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
         if caller_id:
             params["caller_id"] = caller_id
             owner_check = " AND c.owner_id = $caller_id"
-        
+
         if data.content is not None:
             set_clauses.append("c.content = $content")
             params["content"] = data.content
-        
+
         if data.title is not None:
             set_clauses.append("c.title = $title")
             params["title"] = data.title
-        
+
         if data.summary is not None:
             set_clauses.append("c.summary = $summary")
             params["summary"] = data.summary
-        
+
         if data.tags is not None:
             set_clauses.append("c.tags = $tags")
             params["tags"] = data.tags
-        
+
         if data.metadata is not None:
             set_clauses.append("c.metadata = $metadata")
             params["metadata"] = data.metadata
@@ -266,13 +264,13 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
     async def get_lineage(self, capsule_id: str) -> CapsuleWithLineage | None:
         """
         Get a capsule with its full lineage (ancestry chain).
-        
+
         This traces the DERIVED_FROM relationships back to the
         original ancestor (the "Isnad" - chain of transmission).
-        
+
         Args:
             capsule_id: Capsule ID
-            
+
         Returns:
             Capsule with lineage information
         """
@@ -304,16 +302,16 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
                children,
                size([x IN lineage WHERE x.id IS NOT NULL]) AS lineage_depth
         """
-        
+
         result = await self.client.execute_single(query, {"id": capsule_id})
-        
+
         if not result or not result.get("capsule"):
             return None
-        
+
         capsule_data = result["capsule"]
         lineage_data = result.get("lineage", [])
         children_data = result.get("children", [])
-        
+
         # Convert to models
         lineage = [
             LineageNode(
@@ -328,7 +326,7 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
             for l in lineage_data
             if l.get("id")
         ]
-        
+
         children = [
             LineageNode(
                 id=c["id"],
@@ -342,10 +340,10 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
             for c in children_data
             if c.get("id")
         ]
-        
+
         # Sort lineage by depth (oldest first)
         lineage.sort(key=lambda x: x.depth, reverse=True)
-        
+
         return CapsuleWithLineage(
             **capsule_data,
             lineage=lineage,
@@ -363,14 +361,14 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
     ) -> list[CapsuleSearchResult]:
         """
         Search capsules by semantic similarity using vector index.
-        
+
         Args:
             query_embedding: Query vector embedding
             limit: Maximum results
             min_trust: Minimum trust level
             capsule_type: Filter by type
             owner_id: Filter by owner
-            
+
         Returns:
             List of search results with scores
         """
@@ -381,17 +379,17 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
             "limit": limit,
             "min_trust": min_trust,
         }
-        
+
         if capsule_type:
             where_clauses.append("capsule.type = $type")
             params["type"] = capsule_type.value
-        
+
         if owner_id:
             where_clauses.append("capsule.owner_id = $owner_id")
             params["owner_id"] = owner_id
-        
+
         where_clause = " AND ".join(where_clauses)
-        
+
         query = f"""
         CALL db.index.vector.queryNodes('capsule_embeddings', $limit, $embedding)
         YIELD node AS capsule, score
@@ -399,10 +397,10 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
         RETURN capsule {{.*}} AS capsule, score
         ORDER BY score DESC
         """
-        
+
         try:
             results = await self.client.execute(query, params)
-            
+
             return [
                 CapsuleSearchResult(
                     capsule=self._to_model(r["capsule"]),
@@ -429,18 +427,18 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
     ) -> list[Capsule]:
         """
         Get capsules owned by a user.
-        
+
         Args:
             owner_id: Owner user ID
             skip: Pagination offset
             limit: Maximum results
             include_archived: Include archived capsules
-            
+
         Returns:
             List of capsules
         """
         archive_filter = "" if include_archived else "AND c.is_archived = false"
-        
+
         query = f"""
         MATCH (c:Capsule {{owner_id: $owner_id}})
         WHERE true {archive_filter}
@@ -449,12 +447,12 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
         SKIP $skip
         LIMIT $limit
         """
-        
+
         results = await self.client.execute(
             query,
             {"owner_id": owner_id, "skip": skip, "limit": limit},
         )
-        
+
         return self._to_models([r["capsule"] for r in results if r.get("capsule")])
 
     async def archive(self, capsule_id: str) -> Capsule | None:
@@ -476,7 +474,7 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
         RETURN child {.*} AS capsule
         ORDER BY child.created_at DESC
         """
-        
+
         results = await self.client.execute(query, {"id": capsule_id})
         return self._to_models([r["capsule"] for r in results if r.get("capsule")])
 
@@ -523,7 +521,7 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
             query,
             {"id": capsule_id},
         )
-        
+
         return [
             LineageNode(**r["node"])
             for r in results
@@ -1157,9 +1155,9 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
         )
 
         clusters = []
-        for i, r in enumerate(results):
+        for _i, r in enumerate(results):
             node_ids = r.get("node_ids", [])
-            edges_data = r.get("edges", [])
+            r.get("edges", [])
 
             if len(node_ids) >= min_size:
                 cluster = ContradictionCluster(

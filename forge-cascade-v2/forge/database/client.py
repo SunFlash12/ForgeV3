@@ -5,22 +5,22 @@ Async wrapper for Neo4j Python driver with connection pooling,
 transaction management, and retry logic.
 """
 
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import Any, AsyncGenerator
+from typing import Any
 
 import structlog
-from neo4j import AsyncGraphDatabase, AsyncDriver, AsyncSession, AsyncTransaction
+from neo4j import AsyncDriver, AsyncGraphDatabase, AsyncSession, AsyncTransaction
 from neo4j.exceptions import (
-    Neo4jError,
     ServiceUnavailable,
     SessionExpired,
     TransientError,
 )
 from tenacity import (
     retry,
+    retry_if_exception_type,
     stop_after_attempt,
     wait_exponential,
-    retry_if_exception_type,
 )
 
 from forge.config import settings
@@ -35,7 +35,7 @@ RETRYABLE_EXCEPTIONS = (ServiceUnavailable, SessionExpired, TransientError)
 class Neo4jClient:
     """
     Async Neo4j client for Forge.
-    
+
     Provides connection pooling, transaction management,
     and helper methods for common operations.
     """
@@ -49,7 +49,7 @@ class Neo4jClient:
     ):
         """
         Initialize Neo4j client.
-        
+
         Args:
             uri: Neo4j connection URI (defaults to settings)
             user: Username (defaults to settings)
@@ -60,7 +60,7 @@ class Neo4jClient:
         self._user = user or settings.neo4j_user
         self._password = password or settings.neo4j_password
         self._database = database or settings.neo4j_database
-        
+
         self._driver: AsyncDriver | None = None
         self._connected = False
 
@@ -115,7 +115,7 @@ class Neo4jClient:
     async def session(self) -> AsyncGenerator[AsyncSession, None]:
         """
         Get a Neo4j session.
-        
+
         Usage:
             async with client.session() as session:
                 result = await session.run("MATCH (n) RETURN n")
@@ -162,11 +162,11 @@ class Neo4jClient:
     ) -> list[dict[str, Any]]:
         """
         Execute a Cypher query and return results.
-        
+
         Args:
             query: Cypher query string
             parameters: Query parameters
-            
+
         Returns:
             List of result records as dictionaries
         """
@@ -187,11 +187,11 @@ class Neo4jClient:
     ) -> dict[str, Any] | None:
         """
         Execute a query and return a single result.
-        
+
         Args:
             query: Cypher query string
             parameters: Query parameters
-            
+
         Returns:
             Single result record or None
         """
@@ -212,11 +212,11 @@ class Neo4jClient:
     ) -> dict[str, Any]:
         """
         Execute a write query within a transaction.
-        
+
         Args:
             query: Cypher query string
             parameters: Query parameters
-            
+
         Returns:
             Query result summary
         """

@@ -13,16 +13,15 @@ import structlog
 from forge.database.client import Neo4jClient
 from forge.models.base import ProposalStatus
 from forge.models.governance import (
+    ConstitutionalAnalysis,
+    GhostCouncilOpinion,
+    GovernanceStats,
     Proposal,
     ProposalCreate,
     ProposalType,
     Vote,
     VoteCreate,
-    VoteChoice,
     VoteDelegation,
-    ConstitutionalAnalysis,
-    GhostCouncilOpinion,
-    GovernanceStats,
 )
 from forge.repositories.base import BaseRepository
 
@@ -31,7 +30,7 @@ logger = structlog.get_logger(__name__)
 
 class ProposalUpdate:
     """Schema for updating a proposal."""
-    
+
     def __init__(
         self,
         title: str | None = None,
@@ -46,7 +45,7 @@ class ProposalUpdate:
 class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpdate]):
     """
     Repository for governance operations.
-    
+
     Handles:
     - Proposal lifecycle (DRAFT → VOTING → PASSED/REJECTED → EXECUTED)
     - Trust-weighted voting
@@ -78,21 +77,21 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
     ) -> Proposal:
         """
         Create a new proposal.
-        
+
         Args:
             data: Proposal creation data
             proposer_id: ID of the user creating the proposal
-            
+
         Returns:
             Created proposal
         """
         now = self._now()
         proposal_id = self._generate_id()
-        
+
         # Serialize action dict to JSON string for Neo4j
         import json
         action_json = json.dumps(data.action) if data.action else "{}"
-        
+
         query = """
         CREATE (p:Proposal {
             id: $id,
@@ -116,7 +115,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
         })
         RETURN p {.*} AS entity
         """
-        
+
         result = await self.client.execute_single(
             query,
             {
@@ -134,7 +133,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
                 "updated_at": now.isoformat(),
             },
         )
-        
+
         self.logger.info(
             "Created proposal",
             proposal_id=proposal_id,
@@ -142,7 +141,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
             type=data.type.value if hasattr(data.type, "value") else str(data.type),
             proposer_id=proposer_id,
         )
-        
+
         return self._to_model(result["entity"])
 
     async def update(
@@ -152,43 +151,43 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
     ) -> Proposal | None:
         """
         Update a proposal (only allowed in DRAFT status).
-        
+
         Args:
             entity_id: Proposal ID
             data: Update fields
-            
+
         Returns:
             Updated proposal or None
         """
         import json
-        
+
         set_parts = ["p.updated_at = $now"]
         params: dict[str, Any] = {
             "id": entity_id,
             "now": self._now().isoformat(),
         }
-        
+
         if data.title is not None:
             set_parts.append("p.title = $title")
             params["title"] = data.title
-            
+
         if data.description is not None:
             set_parts.append("p.description = $description")
             params["description"] = data.description
-            
+
         if data.action is not None:
             set_parts.append("p.action = $action")
             params["action"] = json.dumps(data.action)
-        
+
         query = f"""
         MATCH (p:Proposal {{id: $id}})
         WHERE p.status = 'draft'
         SET {', '.join(set_parts)}
         RETURN p {{.*}} AS entity
         """
-        
+
         result = await self.client.execute_single(query, params)
-        
+
         if result and result.get("entity"):
             return self._to_model(result["entity"])
         return None
@@ -196,15 +195,15 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
     async def start_voting(self, proposal_id: str) -> Proposal | None:
         """
         Start the voting period for a proposal.
-        
+
         Args:
             proposal_id: Proposal ID
-            
+
         Returns:
             Updated proposal
         """
         now = self._now()
-        
+
         query = """
         MATCH (p:Proposal {id: $id})
         WHERE p.status = 'draft'
@@ -215,14 +214,14 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
             p.updated_at = $now
         RETURN p {.*} AS entity
         """
-        
+
         # Get voting period days first
         proposal = await self.get_by_id(proposal_id)
         if not proposal:
             return None
-        
+
         ends_at = now + timedelta(days=proposal.voting_period_days)
-        
+
         result = await self.client.execute_single(
             query,
             {
@@ -232,7 +231,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
                 "now": now.isoformat(),
             },
         )
-        
+
         if result and result.get("entity"):
             self.logger.info(
                 "Voting started",
@@ -245,17 +244,17 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
     async def close_voting(self, proposal_id: str) -> Proposal | None:
         """
         Close voting and determine outcome.
-        
+
         Args:
             proposal_id: Proposal ID
-            
+
         Returns:
             Updated proposal with final status
         """
         proposal = await self.get_by_id(proposal_id)
         if not proposal or proposal.status != ProposalStatus.VOTING:
             return None
-        
+
         # SECURITY FIX (Audit 3): Complete quorum verification
         # Get total eligible voters and check quorum
         eligible_voters = await self._count_eligible_voters()
@@ -291,7 +290,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
             approval_ratio=proposal.approval_ratio,
             pass_threshold=proposal.pass_threshold,
         )
-        
+
         new_status = ProposalStatus.PASSED if passed else ProposalStatus.REJECTED
 
         # SECURITY FIX (Audit 3): Calculate timelock for passed proposals
@@ -326,7 +325,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
                 "execution_allowed_after": execution_allowed_after.isoformat() if execution_allowed_after else None,
             },
         )
-        
+
         if result and result.get("entity"):
             self.logger.info(
                 "Voting closed",
@@ -433,11 +432,11 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
     async def cancel(self, proposal_id: str, reason: str) -> Proposal | None:
         """
         Cancel a proposal.
-        
+
         Args:
             proposal_id: Proposal ID
             reason: Cancellation reason
-            
+
         Returns:
             Updated proposal
         """
@@ -450,7 +449,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
             p.updated_at = $now
         RETURN p {.*} AS entity
         """
-        
+
         result = await self.client.execute_single(
             query,
             {
@@ -459,7 +458,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
                 "now": self._now().isoformat(),
             },
         )
-        
+
         if result and result.get("entity"):
             return self._to_model(result["entity"])
         return None
@@ -596,12 +595,12 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
         MATCH (v:Vote {proposal_id: $proposal_id, voter_id: $voter_id})
         RETURN v {.*} AS vote
         """
-        
+
         result = await self.client.execute_single(
             query,
             {"proposal_id": proposal_id, "voter_id": voter_id},
         )
-        
+
         if result and result.get("vote"):
             return Vote.model_validate(result["vote"])
         return None
@@ -620,12 +619,12 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
         SKIP $skip
         LIMIT $limit
         """
-        
+
         results = await self.client.execute(
             query,
             {"proposal_id": proposal_id, "skip": skip, "limit": limit},
         )
-        
+
         return [
             Vote.model_validate(r["vote"])
             for r in results
@@ -644,12 +643,12 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
         ORDER BY v.created_at DESC
         LIMIT $limit
         """
-        
+
         results = await self.client.execute(
             query,
             {"voter_id": voter_id, "limit": limit},
         )
-        
+
         return [
             Vote.model_validate(r["vote"])
             for r in results
@@ -666,15 +665,14 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
     ) -> bool:
         """
         Create a vote delegation.
-        
+
         Args:
             delegation: Delegation configuration
-            
+
         Returns:
             True if created
         """
-        import json
-        
+
         query = """
         MERGE (d:VoteDelegation {
             delegator_id: $delegator_id,
@@ -686,7 +684,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
             d.created_at = $created_at
         RETURN d {.*} AS delegation
         """
-        
+
         result = await self.client.execute_single(
             query,
             {
@@ -705,7 +703,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
                 "created_at": delegation.created_at.isoformat(),
             },
         )
-        
+
         return result is not None
 
     async def revoke_delegation(
@@ -722,12 +720,12 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
         DELETE d
         RETURN count(*) AS deleted
         """
-        
+
         result = await self.client.execute_single(
             query,
             {"delegator_id": delegator_id, "delegate_id": delegate_id},
         )
-        
+
         return result and result.get("deleted", 0) > 0
 
     async def get_delegates(self, delegator_id: str) -> list[VoteDelegation]:
@@ -737,12 +735,12 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
         WHERE d.expires_at IS NULL OR d.expires_at > $now
         RETURN d {.*} AS delegation
         """
-        
+
         results = await self.client.execute(
             query,
             {"delegator_id": delegator_id, "now": self._now().isoformat()},
         )
-        
+
         delegations = []
         for r in results:
             if r.get("delegation"):
@@ -774,16 +772,15 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
     ) -> bool:
         """
         Save Constitutional AI review for a proposal.
-        
+
         Args:
             proposal_id: Proposal ID
             analysis: Constitutional analysis
-            
+
         Returns:
             True if saved
         """
-        import json
-        
+
         query = """
         MATCH (p:Proposal {id: $proposal_id})
         SET
@@ -791,7 +788,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
             p.updated_at = $now
         RETURN p {.*} AS entity
         """
-        
+
         result = await self.client.execute_single(
             query,
             {
@@ -800,7 +797,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
                 "now": self._now().isoformat(),
             },
         )
-        
+
         if result:
             self.logger.info(
                 "Constitutional review saved",
@@ -808,7 +805,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
                 recommendation=analysis.recommendation,
                 overall_score=analysis.overall_score,
             )
-        
+
         return result is not None
 
     async def save_ghost_council_opinion(
@@ -818,11 +815,11 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
     ) -> bool:
         """
         Save Ghost Council opinion for a proposal.
-        
+
         Args:
             proposal_id: Proposal ID
             opinion: Ghost Council collective opinion
-            
+
         Returns:
             True if saved
         """
@@ -833,7 +830,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
             p.updated_at = $now
         RETURN p {.*} AS entity
         """
-        
+
         result = await self.client.execute_single(
             query,
             {
@@ -842,7 +839,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
                 "now": self._now().isoformat(),
             },
         )
-        
+
         if result:
             self.logger.info(
                 "Ghost Council opinion saved",
@@ -850,7 +847,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
                 consensus_vote=opinion.consensus_vote.value,
                 consensus_strength=opinion.consensus_strength,
             )
-        
+
         return result is not None
 
     # ═══════════════════════════════════════════════════════════════
@@ -869,7 +866,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
     async def get_active_proposals(self) -> list[Proposal]:
         """Get all proposals currently accepting votes."""
         now = self._now().isoformat()
-        
+
         query = """
         MATCH (p:Proposal)
         WHERE p.status = 'voting'
@@ -877,7 +874,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
         RETURN p {.*} AS entity
         ORDER BY p.voting_ends_at ASC
         """
-        
+
         results = await self.client.execute(query, {"now": now})
         return self._to_models([r["entity"] for r in results if r.get("entity")])
 
@@ -895,12 +892,12 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
         SKIP $skip
         LIMIT $limit
         """
-        
+
         results = await self.client.execute(
             query,
             {"proposer_id": proposer_id, "skip": skip, "limit": limit},
         )
-        
+
         return self._to_models([r["entity"] for r in results if r.get("entity")])
 
     async def get_by_type(
@@ -919,7 +916,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
         """Get proposals expiring within the specified hours."""
         now = self._now()
         deadline = (now + timedelta(hours=hours)).isoformat()
-        
+
         query = """
         MATCH (p:Proposal)
         WHERE p.status = 'voting'
@@ -928,12 +925,12 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
         RETURN p {.*} AS entity
         ORDER BY p.voting_ends_at ASC
         """
-        
+
         results = await self.client.execute(
             query,
             {"now": now.isoformat(), "deadline": deadline},
         )
-        
+
         return self._to_models([r["entity"] for r in results if r.get("entity")])
 
     # ═══════════════════════════════════════════════════════════════
@@ -1177,7 +1174,6 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
         Returns:
             Created delegation as dict
         """
-        from datetime import datetime
 
         query = """
         CREATE (d:VoteDelegation {
@@ -1231,9 +1227,9 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
             unique_voters: unique_voters
         } AS stats
         """
-        
+
         result = await self.client.execute_single(query)
-        
+
         if result and result.get("stats"):
             return GovernanceStats.model_validate(result["stats"])
         return GovernanceStats()
@@ -1248,12 +1244,12 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
         MATCH (d:VoteDelegation {id: $delegation_id})
         RETURN d {.*} AS delegation
         """
-        
+
         result = await self.client.execute_single(
             query,
             {"delegation_id": delegation_id},
         )
-        
+
         if result and result.get("delegation"):
             return VoteDelegation.model_validate(result["delegation"])
         return None
@@ -1266,12 +1262,12 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
         RETURN d {.*} AS delegation
         ORDER BY d.created_at DESC
         """
-        
+
         results = await self.client.execute(
             query,
             {"user_id": user_id},
         )
-        
+
         delegations = []
         for r in results:
             if r.get("delegation"):
@@ -1279,7 +1275,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
                     delegations.append(VoteDelegation.model_validate(r["delegation"]))
                 except Exception:
                     pass
-        
+
         return delegations
 
     async def revoke_delegation_by_id(self, delegation_id: str) -> bool:
@@ -1289,10 +1285,10 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
         SET d.is_active = false
         RETURN count(*) AS updated
         """
-        
+
         result = await self.client.execute_single(
             query,
             {"delegation_id": delegation_id},
         )
-        
+
         return result and result.get("updated", 0) > 0

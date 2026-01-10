@@ -127,13 +127,13 @@ class Event(ForgeModel):
         description="For tracing related events",
     )
     priority: EventPriority = Field(default=EventPriority.NORMAL)
-    
+
     # Targeting
     target_overlays: list[str] | None = Field(
         default=None,
         description="Specific targets (None = broadcast)",
     )
-    
+
     # Metadata
     metadata: dict[str, Any] = Field(default_factory=dict)
 
@@ -169,7 +169,7 @@ class EventSubscription(ForgeModel):
 class CascadeEvent(ForgeModel):
     """
     Event for the Cascade Effect.
-    
+
     When one overlay has a breakthrough, the insight propagates
     across the ecosystem through cascade events.
     """
@@ -178,7 +178,7 @@ class CascadeEvent(ForgeModel):
     source_overlay: str
     insight_type: str = Field(description="Type of insight being cascaded")
     insight_data: dict[str, Any]
-    
+
     # Propagation tracking
     hop_count: int = Field(
         default=0,
@@ -194,7 +194,7 @@ class CascadeEvent(ForgeModel):
         default_factory=list,
         description="Overlays that have processed this cascade",
     )
-    
+
     # Impact
     impact_score: float = Field(
         default=0.0,
@@ -202,7 +202,7 @@ class CascadeEvent(ForgeModel):
         le=1.0,
         description="Estimated impact of cascade",
     )
-    
+
     timestamp: datetime = Field(default_factory=datetime.utcnow)
     correlation_id: str | None = None
 
@@ -218,15 +218,15 @@ class CascadeChain(ForgeModel):
     cascade_id: str
     initiated_by: str
     initiated_at: datetime
-    
+
     # Chain of events
     events: list[CascadeEvent] = Field(default_factory=list)
-    
+
     # Completion
     completed_at: datetime | None = None
     total_hops: int = 0
     overlays_affected: list[str] = Field(default_factory=list)
-    
+
     # Outcomes
     insights_generated: int = 0
     actions_triggered: int = 0
@@ -248,7 +248,7 @@ class EventHandlerResult(ForgeModel):
     error: str | None = None
     processing_time_ms: float = 0.0
     timestamp: datetime = Field(default_factory=datetime.utcnow)
-    
+
     # Follow-up events
     triggered_events: list[str] = Field(
         default_factory=list,
@@ -262,13 +262,13 @@ class EventMetrics(ForgeModel):
     total_events_published: int = 0
     total_events_delivered: int = 0
     total_events_failed: int = 0
-    
+
     events_by_type: dict[str, int] = Field(default_factory=dict)
     events_by_source: dict[str, int] = Field(default_factory=dict)
-    
+
     avg_processing_time_ms: float = 0.0
     cascade_chains_initiated: int = 0
-    
+
     # Queue status
     queue_size: int = 0
     queue_max_size: int = 10000

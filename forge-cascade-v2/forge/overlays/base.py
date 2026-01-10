@@ -10,7 +10,7 @@ import asyncio
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 from uuid import uuid4
 
 import structlog
@@ -21,7 +21,6 @@ from ..models.overlay import (
     Capability,
     FuelBudget,
     Overlay,
-    OverlayExecution,
     OverlayHealthCheck,
     OverlayManifest,
     OverlayState,

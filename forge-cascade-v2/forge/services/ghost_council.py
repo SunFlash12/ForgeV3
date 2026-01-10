@@ -14,27 +14,27 @@ Features:
 
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import json
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Optional, Callable, Literal
+from typing import Any, Literal
 from uuid import uuid4
 
 import structlog
 
+from forge.models.events import EventType
 from forge.models.governance import (
     GhostCouncilMember,
-    GhostCouncilVote,
     GhostCouncilOpinion,
-    VoteChoice,
-    Proposal,
-    PerspectiveType,
+    GhostCouncilVote,
     PerspectiveAnalysis,
+    PerspectiveType,
+    Proposal,
+    VoteChoice,
 )
-from forge.models.events import EventType
 
 logger = structlog.get_logger(__name__)
 
@@ -70,8 +70,8 @@ class SeriousIssue:
     source: str  # What component detected this
     context: dict[str, Any] = field(default_factory=dict)
     resolved: bool = False
-    resolution: Optional[str] = None
-    ghost_council_opinion: Optional[GhostCouncilOpinion] = None
+    resolution: str | None = None
+    ghost_council_opinion: GhostCouncilOpinion | None = None
 
 
 @dataclass
@@ -394,8 +394,8 @@ class GhostCouncilService:
 
     def __init__(
         self,
-        config: Optional[GhostCouncilConfig] = None,
-        members: Optional[list[GhostCouncilMember]] = None,
+        config: GhostCouncilConfig | None = None,
+        members: list[GhostCouncilMember] | None = None,
     ):
         self._config = config or GhostCouncilConfig()
 
@@ -452,10 +452,10 @@ class GhostCouncilService:
         """Check if a cached opinion is still valid."""
         if not self._config.cache_enabled:
             return False
-        age_days = (datetime.now(timezone.utc) - cached_at).days
+        age_days = (datetime.now(UTC) - cached_at).days
         return age_days < self._config.cache_ttl_days
 
-    def _get_cached_opinion(self, proposal: Proposal) -> Optional[GhostCouncilOpinion]:
+    def _get_cached_opinion(self, proposal: Proposal) -> GhostCouncilOpinion | None:
         """Get cached opinion if available and valid."""
         if not self._config.cache_enabled:
             return None
@@ -483,7 +483,7 @@ class GhostCouncilService:
             return
 
         cache_key = self._hash_proposal(proposal)
-        self._opinion_cache[cache_key] = (opinion, datetime.now(timezone.utc))
+        self._opinion_cache[cache_key] = (opinion, datetime.now(UTC))
 
         # Limit cache size to prevent memory issues
         max_cache_size = 1000
@@ -513,8 +513,8 @@ class GhostCouncilService:
     async def deliberate_proposal(
         self,
         proposal: Proposal,
-        context: Optional[dict[str, Any]] = None,
-        constitutional_review: Optional[dict[str, Any]] = None,
+        context: dict[str, Any] | None = None,
+        constitutional_review: dict[str, Any] | None = None,
         skip_cache: bool = False,
     ) -> GhostCouncilOpinion:
         """
@@ -549,7 +549,7 @@ class GhostCouncilService:
         )
 
         # Get LLM service
-        from forge.services.llm import get_llm_service, LLMMessage
+        from forge.services.llm import get_llm_service
         llm = get_llm_service()
 
         member_votes: list[GhostCouncilVote] = []
@@ -571,7 +571,7 @@ class GhostCouncilService:
         # Build final opinion with aggregated perspectives
         opinion = GhostCouncilOpinion(
             proposal_id=proposal.id,
-            deliberated_at=datetime.now(timezone.utc),
+            deliberated_at=datetime.now(UTC),
             member_votes=member_votes,
             consensus_vote=consensus["vote"],
             consensus_strength=consensus["strength"],
@@ -612,8 +612,8 @@ class GhostCouncilService:
         self,
         member: GhostCouncilMember,
         proposal: Proposal,
-        context: Optional[dict[str, Any]],
-        constitutional_review: Optional[dict[str, Any]],
+        context: dict[str, Any] | None,
+        constitutional_review: dict[str, Any] | None,
         llm,
     ) -> GhostCouncilVote:
         """
@@ -692,8 +692,8 @@ Respond in JSON format:
 
         # SECURITY FIX (Audit 4): Import prompt sanitization
         from forge.security.prompt_sanitization import (
-            sanitize_for_prompt,
             sanitize_dict_for_prompt,
+            sanitize_for_prompt,
         )
 
         # SECURITY FIX (Audit 4): Sanitize all user-provided content
@@ -998,7 +998,7 @@ Constitutional AI Review:
         self._active_issues[issue.id] = issue
 
         # Get LLM service
-        from forge.services.llm import get_llm_service, LLMMessage
+        from forge.services.llm import get_llm_service
         llm = get_llm_service()
 
         member_votes: list[GhostCouncilVote] = []
@@ -1018,7 +1018,7 @@ Constitutional AI Review:
         # Build opinion
         opinion = GhostCouncilOpinion(
             proposal_id=f"issue_{issue.id}",  # Use issue ID as proposal ID
-            deliberated_at=datetime.now(timezone.utc),
+            deliberated_at=datetime.now(UTC),
             member_votes=member_votes,
             consensus_vote=consensus["vote"],
             consensus_strength=consensus["strength"],
@@ -1257,7 +1257,7 @@ Provide your Ghost Council tri-perspective assessment as JSON:"""
         event_type: EventType,
         payload: dict[str, Any],
         source: str,
-    ) -> Optional[SeriousIssue]:
+    ) -> SeriousIssue | None:
         """
         Detect if an event constitutes a serious issue.
 
@@ -1282,7 +1282,7 @@ Provide your Ghost Council tri-perspective assessment as JSON:"""
                     title=f"Security Threat Detected: {payload.get('threat_type', 'Unknown')}",
                     description=payload.get("description", "A security threat has been detected"),
                     affected_entities=payload.get("affected_entities", []),
-                    detected_at=datetime.now(timezone.utc),
+                    detected_at=datetime.now(UTC),
                     source=source,
                     context=payload,
                 )
@@ -1301,7 +1301,7 @@ Provide your Ghost Council tri-perspective assessment as JSON:"""
                     title=f"Significant Trust Drop: {payload.get('user_id', 'Unknown')}",
                     description=f"User trust dropped by {trust_drop} points (from {old_trust} to {new_trust})",
                     affected_entities=[payload.get("user_id", "unknown")],
-                    detected_at=datetime.now(timezone.utc),
+                    detected_at=datetime.now(UTC),
                     source=source,
                     context=payload,
                 )
@@ -1317,7 +1317,7 @@ Provide your Ghost Council tri-perspective assessment as JSON:"""
                     title=f"Governance Alert: {action.replace('_', ' ').title()}",
                     description=payload.get("description", f"Governance action: {action}"),
                     affected_entities=[payload.get("proposal_id", "unknown")],
-                    detected_at=datetime.now(timezone.utc),
+                    detected_at=datetime.now(UTC),
                     source=source,
                     context=payload,
                 )
@@ -1333,7 +1333,7 @@ Provide your Ghost Council tri-perspective assessment as JSON:"""
                     title=f"System Error: {payload.get('error_type', 'Multiple errors')}",
                     description=payload.get("message", "Multiple system errors detected"),
                     affected_entities=payload.get("affected_components", []),
-                    detected_at=datetime.now(timezone.utc),
+                    detected_at=datetime.now(UTC),
                     source=source,
                     context=payload,
                 )
@@ -1349,7 +1349,7 @@ Provide your Ghost Council tri-perspective assessment as JSON:"""
                     title=f"Immune System Alert: {alert_type.replace('_', ' ').title()}",
                     description=payload.get("description", f"Immune system triggered: {alert_type}"),
                     affected_entities=payload.get("affected_entities", []),
-                    detected_at=datetime.now(timezone.utc),
+                    detected_at=datetime.now(UTC),
                     source=source,
                     context=payload,
                 )
@@ -1403,7 +1403,7 @@ Provide your Ghost Council tri-perspective assessment as JSON:"""
 # Global Instance
 # =============================================================================
 
-_ghost_council_service: Optional[GhostCouncilService] = None
+_ghost_council_service: GhostCouncilService | None = None
 
 
 def get_ghost_council_service() -> GhostCouncilService:
@@ -1415,8 +1415,8 @@ def get_ghost_council_service() -> GhostCouncilService:
 
 
 def init_ghost_council_service(
-    config: Optional[GhostCouncilConfig] = None,
-    members: Optional[list[GhostCouncilMember]] = None,
+    config: GhostCouncilConfig | None = None,
+    members: list[GhostCouncilMember] | None = None,
 ) -> GhostCouncilService:
     """Initialize the global Ghost Council service."""
     global _ghost_council_service

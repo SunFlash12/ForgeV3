@@ -5,37 +5,32 @@ Provides dependency injection for authentication and authorization
 in FastAPI route handlers.
 """
 
-from typing import Annotated, Optional
+from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from ..models.base import TrustLevel
-from ..models.user import UserRole
 from ..models.overlay import Capability
-from .tokens import (
-    verify_access_token,
-    extract_token_from_header,
-    TokenError,
-    TokenExpiredError,
-    TokenInvalidError
-)
+from ..models.user import UserRole
 from .authorization import (
     AuthorizationContext,
     create_auth_context,
-    check_trust_level,
-    check_role,
-    check_capability
 )
-
+from .tokens import (
+    TokenError,
+    TokenExpiredError,
+    TokenInvalidError,
+    verify_access_token,
+)
 
 # HTTP Bearer security scheme
 security = HTTPBearer(auto_error=False)
 
 
 async def get_token(
-    credentials: Annotated[Optional[HTTPAuthorizationCredentials], Depends(security)]
-) -> Optional[str]:
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(security)]
+) -> str | None:
     """Extract bearer token from request."""
     if credentials is None:
         return None
@@ -43,8 +38,8 @@ async def get_token(
 
 
 async def get_optional_auth_context(
-    token: Annotated[Optional[str], Depends(get_token)]
-) -> Optional[AuthorizationContext]:
+    token: Annotated[str | None, Depends(get_token)]
+) -> AuthorizationContext | None:
     """
     Get authorization context if token is present.
 
@@ -79,7 +74,7 @@ async def get_optional_auth_context(
 
 
 async def get_auth_context(
-    token: Annotated[Optional[str], Depends(get_token)]
+    token: Annotated[str | None, Depends(get_token)]
 ) -> AuthorizationContext:
     """
     Get authorization context from token (required).
@@ -138,7 +133,7 @@ async def get_current_user_id(
 
 # Type aliases for cleaner route signatures
 AuthContext = Annotated[AuthorizationContext, Depends(get_auth_context)]
-OptionalAuthContext = Annotated[Optional[AuthorizationContext], Depends(get_optional_auth_context)]
+OptionalAuthContext = Annotated[AuthorizationContext | None, Depends(get_optional_auth_context)]
 CurrentUserId = Annotated[str, Depends(get_current_user_id)]
 
 
@@ -149,7 +144,7 @@ CurrentUserId = Annotated[str, Depends(get_current_user_id)]
 def require_trust(required_level: TrustLevel):
     """
     Create dependency that requires minimum trust level.
-    
+
     Usage:
         @app.post("/proposals")
         async def create_proposal(
@@ -167,7 +162,7 @@ def require_trust(required_level: TrustLevel):
                 detail=f"Requires {required_level.name} trust level"
             )
         return auth
-    
+
     return dependency
 
 
@@ -185,7 +180,7 @@ RequireCoreTrust = Annotated[AuthorizationContext, Depends(require_trust(TrustLe
 def require_role_dep(required_role: UserRole):
     """
     Create dependency that requires minimum role.
-    
+
     Usage:
         @app.delete("/users/{user_id}")
         async def delete_user(
@@ -203,7 +198,7 @@ def require_role_dep(required_role: UserRole):
                 detail=f"Requires {required_role.value} role"
             )
         return auth
-    
+
     return dependency
 
 
@@ -220,7 +215,7 @@ RequireSystem = Annotated[AuthorizationContext, Depends(require_role_dep(UserRol
 def require_capability_dep(required_capability: Capability):
     """
     Create dependency that requires a specific capability.
-    
+
     Usage:
         @app.post("/overlays/{overlay_id}/execute")
         async def execute_overlay(
@@ -238,7 +233,7 @@ def require_capability_dep(required_capability: Capability):
                 detail=f"Requires {required_capability.value} capability"
             )
         return auth
-    
+
     return dependency
 
 
@@ -255,7 +250,7 @@ def require_any_capability_dep(*capabilities: Capability):
                 detail=f"Requires one of: {[c.value for c in capabilities]}"
             )
         return auth
-    
+
     return dependency
 
 
@@ -273,7 +268,7 @@ def require_all_capabilities_dep(*capabilities: Capability):
                 detail=f"Missing capabilities: {[c.value for c in missing]}"
             )
         return auth
-    
+
     return dependency
 
 
@@ -284,10 +279,10 @@ def require_all_capabilities_dep(*capabilities: Capability):
 class ResourceAccessChecker:
     """
     Dependency factory for resource access checks.
-    
+
     Usage:
         async def get_capsule(capsule_id: str) -> Capsule: ...
-        
+
         @app.get("/capsules/{capsule_id}")
         async def read_capsule(
             capsule_id: str,
@@ -300,7 +295,7 @@ class ResourceAccessChecker:
         ):
             ...
     """
-    
+
     def __init__(
         self,
         get_owner_id: callable,
@@ -310,14 +305,14 @@ class ResourceAccessChecker:
         self.get_owner_id = get_owner_id
         self.get_trust_level = get_trust_level
         self.require_ownership = require_ownership
-    
+
     async def __call__(
         self,
         resource: any,
         auth: Annotated[AuthorizationContext, Depends(get_auth_context)]
     ) -> bool:
         owner_id = self.get_owner_id(resource)
-        
+
         # If ownership is required, check that
         if self.require_ownership:
             if auth.user_id != owner_id and not auth.has_role(UserRole.ADMIN):
@@ -326,18 +321,18 @@ class ResourceAccessChecker:
                     detail="You don't own this resource"
                 )
             return True
-        
+
         # Otherwise check if user can access based on trust level
         trust_level = TrustLevel.STANDARD
         if self.get_trust_level:
             trust_level = self.get_trust_level(resource)
-        
+
         if not auth.can_access_resource(trust_level, owner_id):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Insufficient access rights"
             )
-        
+
         return True
 
 
@@ -382,7 +377,7 @@ def _is_trusted_proxy(ip: str) -> bool:
     return False
 
 
-async def get_client_ip(request: Request) -> Optional[str]:
+async def get_client_ip(request: Request) -> str | None:
     """
     Extract client IP address from request.
 
@@ -419,14 +414,14 @@ async def get_client_ip(request: Request) -> Optional[str]:
     return direct_ip
 
 
-async def get_user_agent(request: Request) -> Optional[str]:
+async def get_user_agent(request: Request) -> str | None:
     """Extract user agent from request."""
     return request.headers.get("User-Agent")
 
 
 # Type aliases
-ClientIP = Annotated[Optional[str], Depends(get_client_ip)]
-UserAgent = Annotated[Optional[str], Depends(get_user_agent)]
+ClientIP = Annotated[str | None, Depends(get_client_ip)]
+UserAgent = Annotated[str | None, Depends(get_user_agent)]
 
 
 # =============================================================================
@@ -436,7 +431,7 @@ UserAgent = Annotated[Optional[str], Depends(get_user_agent)]
 class AuthenticatedRequest:
     """
     Composite dependency that provides full request context.
-    
+
     Usage:
         @app.post("/capsules")
         async def create_capsule(
@@ -445,12 +440,12 @@ class AuthenticatedRequest:
         ):
             print(f"User {ctx.user_id} from {ctx.ip_address}")
     """
-    
+
     def __init__(
         self,
         auth: Annotated[AuthorizationContext, Depends(get_auth_context)],
-        ip_address: Annotated[Optional[str], Depends(get_client_ip)],
-        user_agent: Annotated[Optional[str], Depends(get_user_agent)]
+        ip_address: Annotated[str | None, Depends(get_client_ip)],
+        user_agent: Annotated[str | None, Depends(get_user_agent)]
     ):
         self.auth = auth
         self.user_id = auth.user_id
@@ -460,23 +455,23 @@ class AuthenticatedRequest:
         self.capabilities = auth.capabilities
         self.ip_address = ip_address
         self.user_agent = user_agent
-    
+
     def has_trust(self, required: TrustLevel) -> bool:
         return self.auth.has_trust(required)
-    
+
     def has_role(self, required: UserRole) -> bool:
         return self.auth.has_role(required)
-    
+
     def has_capability(self, required: Capability) -> bool:
         return self.auth.has_capability(required)
-    
+
     def can_access_resource(
         self,
         resource_trust_level: TrustLevel,
-        resource_owner_id: Optional[str] = None
+        resource_owner_id: str | None = None
     ) -> bool:
         return self.auth.can_access_resource(resource_trust_level, resource_owner_id)
-    
+
     def can_modify_resource(
         self,
         resource_owner_id: str,

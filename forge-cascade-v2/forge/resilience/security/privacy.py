@@ -10,11 +10,11 @@ from __future__ import annotations
 
 import hashlib
 import re
+import secrets
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Any, Callable, Dict, List, Optional, Set
 from enum import Enum
-import secrets
+from typing import Any
 
 import structlog
 
@@ -64,9 +64,9 @@ class PrivacyRequest:
     request_type: str  # erasure, export, access
     subject_id: str    # User/entity making the request
     created_at: datetime = field(default_factory=datetime.utcnow)
-    completed_at: Optional[datetime] = None
+    completed_at: datetime | None = None
     status: str = "pending"
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -97,10 +97,10 @@ class PrivacyManager:
 
     def __init__(self):
         self._config = get_resilience_config().privacy
-        self._patterns: List[PIIPattern] = []
-        self._pseudonym_map: Dict[str, str] = {}
+        self._patterns: list[PIIPattern] = []
+        self._pseudonym_map: dict[str, str] = {}
         self._retention = RetentionPolicy()
-        self._pending_requests: Dict[str, PrivacyRequest] = {}
+        self._pending_requests: dict[str, PrivacyRequest] = {}
         self._initialized = False
 
     def initialize(self) -> None:
@@ -153,7 +153,7 @@ class PrivacyManager:
         """Add a custom PII detection pattern."""
         self._patterns.append(pattern)
 
-    def detect_pii(self, content: str) -> List[Dict[str, Any]]:
+    def detect_pii(self, content: str) -> list[dict[str, Any]]:
         """
         Detect PII in content.
 
@@ -189,7 +189,7 @@ class PrivacyManager:
         self,
         content: str,
         level: AnonymizationLevel = AnonymizationLevel.MASK,
-        pii_types: Optional[Set[PIIType]] = None
+        pii_types: set[PIIType] | None = None
     ) -> str:
         """
         Anonymize PII in content.
@@ -287,7 +287,7 @@ class PrivacyManager:
     async def process_erasure_request(
         self,
         subject_id: str,
-        scope: Optional[List[str]] = None
+        scope: list[str] | None = None
     ) -> PrivacyRequest:
         """
         Process a right-to-erasure request (GDPR Article 17).
@@ -351,7 +351,7 @@ class PrivacyManager:
 
         return request
 
-    def get_request_status(self, request_id: str) -> Optional[PrivacyRequest]:
+    def get_request_status(self, request_id: str) -> PrivacyRequest | None:
         """Get the status of a privacy request."""
         return self._pending_requests.get(request_id)
 
@@ -370,7 +370,7 @@ class PrivacyManager:
     def calculate_expiry_date(
         self,
         data_type: str,
-        created_at: Optional[datetime] = None
+        created_at: datetime | None = None
     ) -> datetime:
         """
         Calculate expiry date for data based on retention policy.
@@ -406,7 +406,7 @@ class PrivacyManager:
 
 
 # Global privacy manager instance
-_privacy_manager: Optional[PrivacyManager] = None
+_privacy_manager: PrivacyManager | None = None
 
 
 def get_privacy_manager() -> PrivacyManager:
