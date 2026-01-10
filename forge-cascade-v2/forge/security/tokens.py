@@ -155,7 +155,8 @@ class TokenBlacklist:
                 else:
                     # Default 24 hour TTL if none specified
                     await cls._redis_client.setex(key, 86400, "1")
-                logger.debug("token_blacklisted_redis", jti=jti[:8] + "...")
+                # SECURITY FIX (Audit 4 - L2): Log more JTI chars for debugging
+                logger.debug("token_blacklisted_redis", jti=jti[:16] + "...")
                 return
             except Exception as e:
                 logger.warning("token_blacklist_redis_error", error=str(e), operation="add")
@@ -170,7 +171,8 @@ class TokenBlacklist:
             cls._access_order.append(jti)
             cls._maybe_cleanup_unlocked()
             cls._evict_lru_unlocked()  # Enforce memory bounds
-            logger.debug("token_blacklisted_memory", jti=jti[:8] + "...")
+            # SECURITY FIX (Audit 4 - L2): Log more JTI chars for debugging
+            logger.debug("token_blacklisted_memory", jti=jti[:16] + "...")
 
     @classmethod
     async def is_blacklisted_async(cls, jti: Optional[str]) -> bool:

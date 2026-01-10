@@ -22,9 +22,26 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
 BACKUP_DIR="${BACKUP_DIR:-$PROJECT_ROOT/backups/neo4j}"
 
-# Load environment variables from .env if it exists
+# SECURITY FIX (Audit 4 - L8): Safer .env parsing
+# The previous 'export $(grep ... | xargs)' approach could execute shell metacharacters
+# This safer approach reads line by line and validates each variable
 if [ -f "$PROJECT_ROOT/.env" ]; then
-    export $(grep -v '^#' "$PROJECT_ROOT/.env" | xargs)
+    while IFS='=' read -r key value; do
+        # Skip comments and empty lines
+        [[ "$key" =~ ^[[:space:]]*# ]] && continue
+        [[ -z "$key" ]] && continue
+        # Trim whitespace from key
+        key=$(echo "$key" | xargs)
+        # Skip if key doesn't look like a valid env var name
+        [[ ! "$key" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]] && continue
+        # Remove surrounding quotes from value if present
+        value="${value%\"}"
+        value="${value#\"}"
+        value="${value%\'}"
+        value="${value#\'}"
+        # Export the variable
+        export "$key=$value"
+    done < "$PROJECT_ROOT/.env"
 fi
 
 # Ensure backup directory exists

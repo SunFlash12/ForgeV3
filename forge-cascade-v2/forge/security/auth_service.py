@@ -361,8 +361,10 @@ class AuthService:
                 ip_address=ip_address,
                 user_agent=user_agent
             )
+            # SECURITY FIX (Audit 4 - L1): Use generic message to avoid revealing lockout duration
             raise AccountLockedError(
-                f"Account is locked until {user.lockout_until.isoformat()}"
+                "Account is temporarily locked due to too many failed login attempts. "
+                "Please try again later or contact support."
             )
         
         # Check if account is active

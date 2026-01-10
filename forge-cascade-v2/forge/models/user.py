@@ -110,10 +110,11 @@ class UserBase(ForgeModel):
 class UserCreate(UserBase):
     """Schema for creating a new user."""
 
+    # SECURITY FIX (Audit 4 - L3): Bcrypt truncates at 72 bytes, so limit max_length
     password: str = Field(
         min_length=8,
-        max_length=100,
-        description="User password",
+        max_length=72,
+        description="User password (max 72 bytes due to bcrypt limit)",
     )
 
     @field_validator("password")
