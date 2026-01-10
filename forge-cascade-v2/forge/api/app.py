@@ -171,7 +171,8 @@ class ForgeApp:
 
         logger.info(
             "forge_initialized",
-            overlays=len(self.overlay_manager._registry.instances) if self.overlay_manager else 0,
+            # FIX: Use public method instead of accessing private _registry attribute
+            overlays=self.overlay_manager.get_overlay_count() if self.overlay_manager else 0,
             resilience=self.resilience_initialized,
             scheduler=self.scheduler is not None,
         )

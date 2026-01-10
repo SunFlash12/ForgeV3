@@ -875,9 +875,16 @@ def init_llm_service(config: LLMConfig) -> LLMService:
     return _llm_service
 
 
-def shutdown_llm_service() -> None:
-    """Shutdown the global LLM service."""
+async def shutdown_llm_service() -> None:
+    """Shutdown the global LLM service and close HTTP clients."""
     global _llm_service
+    if _llm_service is not None:
+        # FIX: Close the HTTP client before discarding the service
+        if hasattr(_llm_service, '_provider') and hasattr(_llm_service._provider, 'close'):
+            try:
+                await _llm_service._provider.close()
+            except Exception as e:
+                logger.warning("llm_service_close_error", error=str(e))
     _llm_service = None
 
 

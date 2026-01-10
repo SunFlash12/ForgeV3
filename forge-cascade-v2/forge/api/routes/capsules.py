@@ -274,6 +274,20 @@ class SearchRequest(BaseModel):
     limit: int = Field(default=10, ge=1, le=100)
     filters: dict[str, Any] = Field(default_factory=dict)
 
+    # SECURITY FIX: Whitelist allowed filter keys to prevent injection
+    ALLOWED_FILTER_KEYS = {"owner_id", "type", "tag", "min_trust", "max_trust", "created_after", "created_before"}
+
+    @field_validator("filters")
+    @classmethod
+    def validate_filters(cls, v: dict[str, Any]) -> dict[str, Any]:
+        """Validate and whitelist filter keys."""
+        if not v:
+            return v
+        invalid_keys = set(v.keys()) - cls.ALLOWED_FILTER_KEYS
+        if invalid_keys:
+            raise ValueError(f"Invalid filter keys: {invalid_keys}. Allowed: {cls.ALLOWED_FILTER_KEYS}")
+        return v
+
     @field_validator("query")
     @classmethod
     def sanitize_query(cls, v: str) -> str:
@@ -463,15 +477,18 @@ async def search_capsules(
     # Convert text query to embedding vector
     embedding_result = await embedding_service.embed(request.query)
 
-    # Extract filters
+    # Extract validated filters (whitelist enforced by SearchRequest validator)
     owner_id = request.filters.get("owner_id") if request.filters else None
     capsule_type = request.filters.get("type") if request.filters else None
+    min_trust = request.filters.get("min_trust") if request.filters else None
 
     # Search with embedding
     search_results = await capsule_repo.semantic_search(
         query_embedding=embedding_result.embedding,
         limit=request.limit,
         owner_id=owner_id,
+        capsule_type=capsule_type,
+        min_trust=min_trust,
     )
 
     # Extract capsules and scores from results
