@@ -303,12 +303,15 @@
 ### API Module
 - [ ] **MEDIUM** `app.py` - No error recovery if service initialization fails
 - [ ] **MEDIUM** `middleware.py` - Memory bucket cleanup only on minute expiration
-- [ ] **MEDIUM** `dependencies.py` - get_current_user_optional swallows all exceptions
+- [x] **MEDIUM** `dependencies.py` - get_current_user_optional swallows all exceptions
+  - **FIXED**: Now catches ValueError specifically, logs other exceptions with structlog
 - [ ] **MEDIUM** `auth.py:447` - Duplicate ValueError handler
 - [ ] **MEDIUM** `cascade.py` - Metrics calculated in-memory only
 - [ ] **MEDIUM** `graph.py` - Hardcoded query limits (1000 nodes)
-- [ ] **MEDIUM** `websocket/handlers.py` - No subscription limit per connection
-- [ ] **MEDIUM** `websocket/handlers.py` - No rate limiting on WebSocket messages
+- [x] **MEDIUM** `websocket/handlers.py` - No subscription limit per connection
+  - **FIXED**: Added MAX_SUBSCRIPTIONS_PER_CONNECTION (50) with enforcement in subscribe handler
+- [x] **MEDIUM** `websocket/handlers.py` - No rate limiting on WebSocket messages
+  - **FIXED**: Added MAX_MESSAGES_PER_MINUTE (60) with sliding window rate limiting
 
 ### Database Module
 - [ ] **MEDIUM** `schema.py:181-184,377-384` - Generic exception catches
@@ -321,15 +324,18 @@
 - [ ] **MEDIUM** `Header.tsx` - Notification click does nothing
 
 ### DevOps
-- [ ] **MEDIUM** `docker-compose.cloudflare.yml:192-193` - Jaeger exposed externally
-- [ ] **MEDIUM** `ci.yml:43,60-61,112,142` - Test failures ignored with `|| true`
+- [x] **MEDIUM** `docker-compose.cloudflare.yml:192-193` - Jaeger exposed externally
+  - **FIXED**: Changed to 127.0.0.1:16686:16686 to bind to localhost only
+- [x] **MEDIUM** `ci.yml:43,60-61,112,142` - Test failures ignored with `|| true`
+  - **FIXED**: Removed || true from ruff, eslint, and test_ui_integration.py
 
 ### Tests/Scripts
 - [ ] **MEDIUM** `test_endpoints.py:59,75,87,99` - Tests accept HTTP 500 as valid
 - [ ] **MEDIUM** `seed_data.py:446` - Deletes all data without confirmation
 - [ ] **MEDIUM** `neo4j_backup.py:127-139` - No batching for large databases
 - [ ] **MEDIUM** `neo4j_restore.py:97-106` - clear_database has no confirmation
-- [ ] **MEDIUM** `deploy.sh:101` - Unsafe env file sourcing
+- [x] **MEDIUM** `deploy.sh:101` - Unsafe env file sourcing
+  - **FIXED**: Replaced `source` with safe_load_env() that parses KEY=value pairs safely
 
 ### Compliance
 - [ ] **MEDIUM** `consent_service.py` - No TCF string validation

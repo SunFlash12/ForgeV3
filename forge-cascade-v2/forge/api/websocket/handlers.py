@@ -5,6 +5,11 @@ Provides WebSocket endpoints for:
 - /ws/events: Real-time system event streaming
 - /ws/dashboard: Live dashboard metrics and updates
 - /ws/chat/{room_id}: Collaborative chat rooms
+
+Security Features:
+- Authentication required for all endpoints
+- Subscription limits per connection (DoS protection)
+- Message rate limiting (spam protection)
 """
 
 import asyncio
@@ -14,6 +19,11 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any, Callable, Optional
 from uuid import uuid4
+
+# Security limits
+MAX_SUBSCRIPTIONS_PER_CONNECTION = 50  # Maximum topics a single connection can subscribe to
+MAX_MESSAGES_PER_MINUTE = 60  # Rate limit: messages per minute per connection
+RATE_LIMIT_WINDOW_SECONDS = 60  # Rate limiting window
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, status, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -35,7 +45,7 @@ websocket_router = APIRouter()
 
 class WebSocketConnection:
     """Represents a single WebSocket connection with metadata."""
-    
+
     def __init__(
         self,
         websocket: WebSocket,
@@ -50,6 +60,34 @@ class WebSocketConnection:
         self.connected_at = datetime.now(timezone.utc)
         self.last_ping = datetime.now(timezone.utc)
         self.message_count = 0
+        # Rate limiting
+        self._message_timestamps: list[datetime] = []
+
+    def check_rate_limit(self) -> bool:
+        """
+        Check if connection is within rate limits.
+        Returns True if allowed, False if rate limited.
+        """
+        now = datetime.now(timezone.utc)
+        cutoff = now.timestamp() - RATE_LIMIT_WINDOW_SECONDS
+
+        # Remove old timestamps
+        self._message_timestamps = [
+            ts for ts in self._message_timestamps
+            if ts.timestamp() > cutoff
+        ]
+
+        # Check if under limit
+        if len(self._message_timestamps) >= MAX_MESSAGES_PER_MINUTE:
+            return False
+
+        # Record this message
+        self._message_timestamps.append(now)
+        return True
+
+    def can_add_subscription(self) -> bool:
+        """Check if connection can add more subscriptions."""
+        return len(self.subscriptions) < MAX_SUBSCRIPTIONS_PER_CONNECTION
     
     async def send_json(self, data: dict[str, Any]) -> bool:
         """Send JSON data to the client."""
@@ -592,24 +630,49 @@ async def websocket_events(
                     data = json.loads(text)
                 except json.JSONDecodeError:
                     continue
-            
+
+            # Rate limiting check
+            if not connection.check_rate_limit():
+                await connection.send_json({
+                    "type": "error",
+                    "code": "RATE_LIMITED",
+                    "message": f"Rate limit exceeded. Max {MAX_MESSAGES_PER_MINUTE} messages per minute."
+                })
+                continue
+
             msg_type = data.get("type")
-            
+
             if msg_type == "ping":
                 connection.last_ping = datetime.now(timezone.utc)
                 await connection.send_json({"type": "pong"})
-            
+
             elif msg_type == "subscribe":
                 new_topics = data.get("topics", [])
+                added_topics = []
+                skipped_topics = []
+
                 for topic in new_topics:
+                    if topic in connection.subscriptions:
+                        # Already subscribed
+                        continue
+                    if not connection.can_add_subscription():
+                        # Subscription limit reached
+                        skipped_topics.append(topic)
+                        continue
                     connection.subscriptions.add(topic)
                     connection_manager._topic_subscribers[topic].add(connection.connection_id)
-                await connection.send_json({
+                    added_topics.append(topic)
+
+                response = {
                     "type": "subscribed",
-                    "topics": new_topics,
+                    "topics": added_topics,
                     "all_subscriptions": list(connection.subscriptions)
-                })
-            
+                }
+                if skipped_topics:
+                    response["skipped"] = skipped_topics
+                    response["reason"] = f"Subscription limit ({MAX_SUBSCRIPTIONS_PER_CONNECTION}) reached"
+                await connection.send_json(response)
+
             elif msg_type == "unsubscribe":
                 remove_topics = data.get("topics", [])
                 for topic in remove_topics:

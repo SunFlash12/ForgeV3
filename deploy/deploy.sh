@@ -26,6 +26,41 @@ NC='\033[0m' # No Color
 COMPOSE_FILE="docker-compose.prod.yml"
 ENV_FILE=".env"
 
+# SECURITY FIX (Audit 4): Safe env file loading function
+# Only exports simple KEY=value pairs, ignores commands and dangerous patterns
+safe_load_env() {
+    local env_file="$1"
+    if [ ! -f "$env_file" ]; then
+        return 1
+    fi
+
+    # Read file line by line, only process safe key=value pairs
+    while IFS= read -r line || [ -n "$line" ]; do
+        # Skip empty lines and comments
+        [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+
+        # Only match simple KEY=value patterns (alphanumeric keys, no command substitution)
+        if [[ "$line" =~ ^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]]; then
+            key="${BASH_REMATCH[1]}"
+            value="${BASH_REMATCH[2]}"
+
+            # Remove surrounding quotes if present
+            value="${value#\"}"
+            value="${value%\"}"
+            value="${value#\'}"
+            value="${value%\'}"
+
+            # Skip if value contains dangerous patterns (command substitution, etc.)
+            if [[ "$value" =~ [\$\`\;] ]]; then
+                log_warn "Skipping potentially unsafe env var: $key"
+                continue
+            fi
+
+            export "$key=$value"
+        fi
+    done < "$env_file"
+}
+
 # Helper functions
 log_info() {
     echo -e "${GREEN}[INFO]${NC} $1"
@@ -98,7 +133,8 @@ cmd_setup() {
 
 cmd_ssl() {
     check_env
-    source "$ENV_FILE"
+    # SECURITY FIX: Use safe env loading instead of source
+    safe_load_env "$ENV_FILE"
 
     if [ -z "$DOMAIN" ]; then
         log_error "DOMAIN not set in .env file"

@@ -282,13 +282,27 @@ async def get_current_user_optional(
     user_repo: UserRepoDep,
 ) -> User | None:
     """Get current user if authenticated, None otherwise."""
+    import structlog
+    logger = structlog.get_logger(__name__)
+
     if not token:
         return None
-    
+
     try:
         user = await user_repo.get_by_id(token.sub)
         return user
-    except Exception:
+    except ValueError:
+        # User not found - this is expected for deleted/invalid users
+        return None
+    except Exception as e:
+        # Log unexpected errors but don't expose them to avoid info leakage
+        # This prevents silent failures that could mask database issues
+        logger.warning(
+            "user_lookup_failed",
+            user_id=token.sub,
+            error_type=type(e).__name__,
+            error=str(e)[:100],  # Truncate to avoid log spam
+        )
         return None
 
 
