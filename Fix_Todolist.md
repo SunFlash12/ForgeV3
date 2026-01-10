@@ -15,43 +15,50 @@
   - Passwords exposed: SEED_ADMIN_PASSWORD, SEED_ORACLE_PASSWORD, etc.
 
 ### Security - SQL/Cypher Injection
-- [ ] **CRITICAL** `query_compiler.py:605` - SQL injection via string interpolation
+- [x] **CRITICAL** `query_compiler.py:605` - SQL injection via string interpolation
   - Location: `forge-cascade-v2/forge/services/query_compiler.py`
   - Action: Use parameterized queries instead of f-strings
+  - **FIXED**: Uses parameterized queries with $param_name syntax
 
-- [ ] **CRITICAL** `wasm_runtime.py:282-289` - SQL injection in DatabaseReadHostFunction
+- [x] **CRITICAL** `wasm_runtime.py:282-289` - SQL injection in DatabaseReadHostFunction
   - Location: `forge-cascade-v2/forge/kernel/wasm_runtime.py`
   - Action: Use parameterized queries
+  - **FIXED**: Added _validate_cypher_query() and uses params dict
 
 ### Security - Authentication/Authorization
 - [ ] **CRITICAL** `compliance/api/routes.py` - No authentication on any endpoint
   - Location: `forge/compliance/api/routes.py`
   - Action: Add authentication middleware to all compliance endpoints
 
-- [ ] **CRITICAL** `compliance/server.py` - CORS allows any origin (`allow_origins=["*"]`)
+- [x] **CRITICAL** `compliance/server.py` - CORS allows any origin (`allow_origins=["*"]`)
   - Location: `forge/compliance/server.py`
   - Action: Restrict CORS to specific trusted origins
+  - **FIXED**: Now reads from COMPLIANCE_CORS_ORIGINS environment variable
 
 - [ ] **CRITICAL** `compliance/access_control.py` - Policies defined but not enforced
   - Location: `forge/compliance/security/access_control.py`
   - Action: Implement enforcement middleware/decorators
 
 ### Code Errors - Will Crash at Runtime
-- [ ] **CRITICAL** `routes/users.py:15-24` - Wrong import paths, module won't load
+- [x] **CRITICAL** `routes/users.py:15-24` - Wrong import paths, module won't load
   - Location: `forge-cascade-v2/forge/api/routes/users.py`
   - Action: Change `forge.security.dependencies` to `forge.api.dependencies`
+  - **FIXED**: Already uses correct forge.api.dependencies imports
 
-- [ ] **CRITICAL** `mfa.py:459` - Missing `timedelta` import causes NameError
+- [x] **CRITICAL** `mfa.py:459` - Missing `timedelta` import causes NameError
   - Location: `forge-cascade-v2/forge/security/mfa.py`
   - Action: Add `from datetime import timedelta` import
+  - **FIXED**: Has `from datetime import datetime, timedelta, timezone`
 
-- [ ] **CRITICAL** `notifications.py:274,284,309` - Undefined `self._logger`
+- [x] **CRITICAL** `notifications.py:274,284,309` - Undefined `self._logger`
   - Location: `forge-cascade-v2/forge/services/notifications.py`
   - Action: Initialize logger in __init__ or use module-level logger
+  - **FIXED**: __init__ has `self._logger = logger`
 
-- [ ] **CRITICAL** `middleware.py:640` - CSRF comparison fails if tokens None
+- [x] **CRITICAL** `middleware.py:640` - CSRF comparison fails if tokens None
   - Location: `forge-cascade-v2/forge/api/middleware.py`
   - Action: Add null check before hmac.compare_digest()
+  - **FIXED**: Has null check `if not csrf_cookie or not csrf_header:` before comparison
 
 ### Data Integrity - Data Loss on Restart
 - [ ] **CRITICAL** `compliance/engine.py` - In-memory storage loses all data on restart
@@ -63,40 +70,48 @@
   - Action: Implement HSM or persistent key storage
 
 ### API/Logic Errors
-- [ ] **CRITICAL** `semantic_edge_detector.py:284-294` - API mismatch with LLMService
+- [x] **CRITICAL** `semantic_edge_detector.py:284-294` - API mismatch with LLMService
   - Location: `forge-cascade-v2/forge/services/semantic_edge_detector.py`
   - Action: Fix method signature to match LLMService interface
+  - **FIXED**: Convert prompt to messages list, use response.content
 
-- [ ] **CRITICAL** `sync.py:689` - `peer.endpoint` should be `peer.url`
+- [x] **CRITICAL** `sync.py:689` - `peer.endpoint` should be `peer.url`
   - Location: `forge-cascade-v2/forge/federation/sync.py`
   - Action: Change attribute name to match FederatedPeer model
+  - **FIXED**: Uses peer.url with comment explaining the fix
 
-- [ ] **CRITICAL** `temporal_repository.py:390-402` - Diff algorithm fundamentally broken
+- [x] **CRITICAL** `temporal_repository.py:390-402` - Diff algorithm fundamentally broken
   - Location: `forge-cascade-v2/forge/repositories/temporal_repository.py`
   - Action: Rewrite diff algorithm with proper comparison logic
+  - **FIXED**: Reimplemented with proper line-based diff matching
 
 ### DevOps - CI/CD Broken
-- [ ] **CRITICAL** `ci.yml` - Uses non-existent @v6 GitHub Actions
+- [x] **CRITICAL** `ci.yml` - Uses non-existent @v6 GitHub Actions
   - Location: `.github/workflows/ci.yml` (lines 25, 28, etc.)
   - Action: Change @v6 to @v4 for all action references
+  - **FIXED**: Uses @v4 and @v5 for all actions
 
-- [ ] **CRITICAL** `pr-check.yml` - Uses non-existent @v6 GitHub Actions
+- [x] **CRITICAL** `pr-check.yml` - Uses non-existent @v6 GitHub Actions
   - Location: `.github/workflows/pr-check.yml` (lines 17, 24, 37)
   - Action: Change @v6 to @v4
+  - **FIXED**: Uses @v4 and @v5 for all actions
 
-- [ ] **CRITICAL** `release.yml` - Uses non-existent @v6 GitHub Actions
+- [x] **CRITICAL** `release.yml` - Uses non-existent @v6 GitHub Actions
   - Location: `.github/workflows/release.yml` (lines 27, 48, 59)
   - Action: Change @v6 to @v4
+  - **FIXED**: Uses @v4 and @v5 for all actions
 
 ### Infrastructure
-- [ ] **CRITICAL** `nginx.prod.conf:134-136` - HTTP redirect to HTTP (should be HTTPS)
-  - Location: `deploy/nginx/nginx.prod.conf`
+- [x] **CRITICAL** `nginx.prod.conf:134-136` - HTTP redirect to HTTP (should be HTTPS)
+  - Location: `forge-cascade-v2/docker/nginx.prod.conf`
   - Action: Fix redirect to use HTTPS protocol
+  - **FIXED**: Uses `return 301 https://$host$request_uri;`
 
 ### Memory/Performance
-- [ ] **CRITICAL** `metrics.py:110-117` - Unbounded memory (Histogram stores ALL observations)
+- [x] **CRITICAL** `metrics.py:110-117` - Unbounded memory (Histogram stores ALL observations)
   - Location: `forge-cascade-v2/forge/monitoring/metrics.py`
   - Action: Implement sliding window or sampling for histogram
+  - **FIXED**: Uses running statistics with _max_observations limit (10000)
 
 ---
 
