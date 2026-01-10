@@ -46,11 +46,6 @@ from forge.models.capsule import (
 )
 from forge.models.events import EventType
 from forge.models.user import KeyStorageStrategy
-from forge.security.capsule_integrity import CapsuleIntegrityService
-from forge.security.key_management import (
-    KeyManagementService,
-    KeyNotFoundError,
-)
 
 # Resilience integration - caching, validation, metrics
 from forge.resilience.integration import (
@@ -70,6 +65,11 @@ from forge.resilience.integration import (
     record_lineage_query,
     record_search,
     validate_capsule_content,
+)
+from forge.security.capsule_integrity import CapsuleIntegrityService
+from forge.security.key_management import (
+    KeyManagementService,
+    KeyNotFoundError,
 )
 
 router = APIRouter()

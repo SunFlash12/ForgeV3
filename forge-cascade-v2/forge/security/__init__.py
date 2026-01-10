@@ -46,6 +46,14 @@ from .authorization import (
     require_role,
     require_trust_level,
 )
+from .capsule_integrity import (
+    CapsuleIntegrityService,
+    ContentHashMismatchError,
+    IntegrityError,
+    MerkleChainError,
+    SignatureVerificationError,
+    get_integrity_service,
+)
 from .dependencies import (
     # Type aliases
     AuthContext,
@@ -81,6 +89,16 @@ from .dependencies import (
     # Trust dependencies
     require_trust,
 )
+from .key_management import (
+    InvalidKeyError,
+    KeyDecryptionError,
+    KeyDerivationError,
+    KeyManagementError,
+    KeyManagementService,
+    KeyNotFoundError,
+    SigningKeyInfo,
+    get_key_management_service,
+)
 from .mfa import (
     MFAService,
     MFASetupResult,
@@ -99,24 +117,6 @@ from .prompt_sanitization import (
     sanitize_dict_for_prompt,
     sanitize_for_prompt,
     validate_llm_output,
-)
-from .capsule_integrity import (
-    CapsuleIntegrityService,
-    ContentHashMismatchError,
-    IntegrityError,
-    MerkleChainError,
-    SignatureVerificationError,
-    get_integrity_service,
-)
-from .key_management import (
-    InvalidKeyError,
-    KeyDecryptionError,
-    KeyDerivationError,
-    KeyManagementError,
-    KeyManagementService,
-    KeyNotFoundError,
-    SigningKeyInfo,
-    get_key_management_service,
 )
 from .safe_regex import (
     RegexTimeoutError,
