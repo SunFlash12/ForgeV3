@@ -3,14 +3,9 @@ Marketplace Service
 
 Handles capsule listings, purchases, and revenue distribution.
 
-TODO: PERSISTENCE NEEDED - _listings and _carts are stored in-memory only.
-This means all marketplace data is lost on service restart.
-Future work needed:
-1. Create MarketplaceRepository with Neo4j persistence
-2. Store listings as :CapsuleListing nodes linked to :Capsule
-3. Store carts as :Cart nodes linked to :User
-4. Add indexes for efficient querying by seller_id, status, etc.
-5. Implement cache layer with Redis for performance
+PERSISTENCE: All marketplace data (listings, purchases, carts, licenses) is now
+persisted to Neo4j. Data is loaded from the database on service initialization
+and synchronized on every modification.
 """
 
 import logging
@@ -204,6 +199,9 @@ class MarketplaceService:
             raise ValueError("Not authorized to cancel this listing")
 
         listing.status = ListingStatus.CANCELLED
+        listing.updated_at = datetime.now(UTC)
+        # PERSISTENCE: Save status change to database
+        await self._persist_listing(listing)
         return listing
 
     async def record_view(self, listing_id: str) -> None:
@@ -219,7 +217,12 @@ class MarketplaceService:
     async def get_cart(self, user_id: str) -> Cart:
         """Get or create cart for user."""
         if user_id not in self._carts:
-            self._carts[user_id] = Cart(user_id=user_id)
+            # Try to load from database first
+            cart = await self._load_cart_from_db(user_id)
+            if cart:
+                self._carts[user_id] = cart
+            else:
+                self._carts[user_id] = Cart(user_id=user_id)
         return self._carts[user_id]
 
     async def add_to_cart(self, user_id: str, listing_id: str) -> Cart:
@@ -247,6 +250,9 @@ class MarketplaceService:
         ))
         cart.updated_at = datetime.now(UTC)
 
+        # PERSISTENCE: Save cart to database
+        await self._persist_cart(cart)
+
         return cart
 
     async def remove_from_cart(self, user_id: str, listing_id: str) -> Cart:
@@ -254,6 +260,8 @@ class MarketplaceService:
         cart = await self.get_cart(user_id)
         cart.items = [item for item in cart.items if item.listing_id != listing_id]
         cart.updated_at = datetime.now(UTC)
+        # PERSISTENCE: Save cart to database
+        await self._persist_cart(cart)
         return cart
 
     async def clear_cart(self, user_id: str) -> Cart:
@@ -261,6 +269,8 @@ class MarketplaceService:
         cart = await self.get_cart(user_id)
         cart.items = []
         cart.updated_at = datetime.now(UTC)
+        # PERSISTENCE: Save cart to database
+        await self._persist_cart(cart)
         return cart
 
     # =========================================================================
@@ -367,6 +377,8 @@ class MarketplaceService:
             can_derive=listing.license_type == LicenseType.DERIVATIVE,
         )
         self._licenses[license.id] = license
+        # PERSISTENCE: Save license to database
+        await self._persist_license(license)
 
         # Update listing stats
         listing.purchase_count += 1
@@ -673,7 +685,14 @@ class MarketplaceService:
             # Store cart with items serialized as JSON
             import json
             items_json = json.dumps([
-                {"listing_id": item.listing_id, "quantity": item.quantity}
+                {
+                    "listing_id": item.listing_id,
+                    "capsule_id": item.capsule_id,
+                    "quantity": item.quantity,
+                    "price": str(item.price),
+                    "currency": item.currency.value,
+                    "title": item.title,
+                }
                 for item in cart.items
             ])
 
@@ -695,6 +714,82 @@ class MarketplaceService:
             return True
         except Exception as e:
             logger.error(f"Failed to persist cart for user {cart.user_id}: {e}")
+            return False
+
+    async def _load_cart_from_db(self, user_id: str) -> Cart | None:
+        """Load a cart from the database."""
+        if not self.neo4j:
+            return None
+
+        try:
+            import json
+            query = """
+            MATCH (c:MarketplaceCart {user_id: $user_id})
+            RETURN c.user_id as user_id, c.items as items, c.total as total
+            """
+            results = await self.neo4j.execute_read(query, parameters={"user_id": user_id})
+
+            if not results:
+                return None
+
+            record = results[0]
+            items_data = json.loads(record["items"]) if record["items"] else []
+
+            cart = Cart(user_id=user_id)
+            for item_data in items_data:
+                cart.items.append(CartItem(
+                    listing_id=item_data["listing_id"],
+                    capsule_id=item_data.get("capsule_id", ""),
+                    quantity=item_data.get("quantity", 1),
+                    price=Decimal(item_data.get("price", "0")),
+                    currency=Currency(item_data.get("currency", "forge")),
+                    title=item_data.get("title", ""),
+                ))
+
+            return cart
+        except Exception as e:
+            logger.error(f"Failed to load cart for user {user_id}: {e}")
+            return None
+
+    async def _persist_license(self, license: License) -> bool:
+        """Persist a license to Neo4j database."""
+        if not self.neo4j:
+            return False
+
+        try:
+            query = """
+            MERGE (l:MarketplaceLicense {id: $id})
+            SET l.purchase_id = $purchase_id,
+                l.capsule_id = $capsule_id,
+                l.holder_id = $holder_id,
+                l.grantor_id = $grantor_id,
+                l.license_type = $license_type,
+                l.expires_at = $expires_at,
+                l.revoked_at = $revoked_at,
+                l.can_derive = $can_derive,
+                l.access_count = $access_count,
+                l.created_at = $created_at
+            RETURN l.id as id
+            """
+            await self.neo4j.execute_write(
+                query,
+                parameters={
+                    "id": license.id,
+                    "purchase_id": license.purchase_id,
+                    "capsule_id": license.capsule_id,
+                    "holder_id": license.holder_id,
+                    "grantor_id": license.grantor_id,
+                    "license_type": license.license_type.value,
+                    "expires_at": license.expires_at.isoformat() if license.expires_at else None,
+                    "revoked_at": license.revoked_at.isoformat() if license.revoked_at else None,
+                    "can_derive": license.can_derive,
+                    "access_count": license.access_count,
+                    "created_at": license.created_at.isoformat() if license.created_at else None,
+                }
+            )
+            return True
+        except Exception as e:
+            logger.error(f"Failed to persist license {license.id}: {e}")
             return False
 
     async def load_from_database(self) -> int:
@@ -760,7 +855,50 @@ class MarketplaceService:
                 )
                 self._purchases[purchase.id] = purchase
 
-            logger.info(f"Loaded {loaded} listings and {len(self._purchases)} purchases from database")
+            # Load licenses
+            license_query = """
+            MATCH (l:MarketplaceLicense)
+            RETURN l.id as id, l.purchase_id as purchase_id, l.capsule_id as capsule_id,
+                   l.holder_id as holder_id, l.grantor_id as grantor_id,
+                   l.license_type as license_type, l.expires_at as expires_at,
+                   l.revoked_at as revoked_at, l.can_derive as can_derive,
+                   l.access_count as access_count, l.created_at as created_at
+            """
+            license_results = await self.neo4j.execute_read(license_query)
+
+            for record in license_results:
+                expires_at = None
+                if record["expires_at"]:
+                    try:
+                        expires_at = datetime.fromisoformat(record["expires_at"].replace("Z", "+00:00"))
+                    except (ValueError, AttributeError):
+                        pass
+
+                revoked_at = None
+                if record["revoked_at"]:
+                    try:
+                        revoked_at = datetime.fromisoformat(record["revoked_at"].replace("Z", "+00:00"))
+                    except (ValueError, AttributeError):
+                        pass
+
+                lic = License(
+                    id=record["id"],
+                    purchase_id=record["purchase_id"],
+                    capsule_id=record["capsule_id"],
+                    holder_id=record["holder_id"],
+                    grantor_id=record["grantor_id"],
+                    license_type=LicenseType(record["license_type"]) if record["license_type"] else LicenseType.PERPETUAL,
+                    expires_at=expires_at,
+                    revoked_at=revoked_at,
+                    can_derive=record.get("can_derive", False),
+                    access_count=record.get("access_count", 0),
+                )
+                self._licenses[lic.id] = lic
+
+            logger.info(
+                f"Loaded {loaded} listings, {len(self._purchases)} purchases, "
+                f"and {len(self._licenses)} licenses from database"
+            )
             return loaded
         except Exception as e:
             logger.error(f"Failed to load marketplace data: {e}")

@@ -42,11 +42,23 @@ from .service import (
     EscrowError,
     get_acp_service,
 )
+from .nonce_store import (
+    NonceStore,
+    init_nonce_store,
+    get_nonce_store,
+    close_nonce_store,
+)
 
 __all__ = [
+    # Service
     "ACPService",
     "ACPServiceError",
     "InvalidPhaseTransitionError",
     "EscrowError",
     "get_acp_service",
+    # Nonce Store (for replay attack prevention)
+    "NonceStore",
+    "init_nonce_store",
+    "get_nonce_store",
+    "close_nonce_store",
 ]

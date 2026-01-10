@@ -268,12 +268,18 @@ class SyncService:
 
         state.phase = SyncPhase.APPLYING
 
+        # Get edge changes since last sync
+        edges = await self._get_edge_changes(
+            since=peer.last_sync_at,
+            capsule_ids=[c.get("id") for c in capsules if c.get("id")],
+        )
+
         # Create and send payload
         payload = await self.protocol.create_sync_payload(
             sync_id=state.id,
             peer_id=peer.id,
             capsules=capsules,
-            edges=[],  # TODO: Include edge changes
+            edges=edges,
         )
 
         success = await self.protocol.send_sync_push(peer, payload)
@@ -507,8 +513,24 @@ class SyncService:
         """Get a local capsule by ID."""
         if not capsule_id:
             return None
-        # Use capsule repository
-        return None  # Placeholder
+
+        try:
+            async with self.driver.session() as session:
+                query = """
+                MATCH (c:Capsule {id: $id})
+                RETURN c {
+                    .id, .title, .content, .type, .trust_level,
+                    .owner_id, .created_at, .updated_at, .content_hash, .tags
+                } AS capsule
+                """
+                result = await session.run(query, {"id": capsule_id})
+                record = await result.single()
+                if record:
+                    return record["capsule"]
+        except Exception as e:
+            logger.error(f"Failed to get local capsule {capsule_id}: {e}")
+
+        return None
 
     async def _create_local_capsule(
         self,
@@ -516,11 +538,56 @@ class SyncService:
         remote_capsule: dict[str, Any],
     ) -> None:
         """Create a local copy of a remote capsule."""
+        local_id = str(uuid.uuid4())
+
+        # Create actual capsule in Neo4j
+        try:
+            async with self.driver.session() as session:
+                query = """
+                CREATE (c:Capsule {
+                    id: $id,
+                    title: $title,
+                    content: $content,
+                    type: $type,
+                    trust_level: $trust_level,
+                    owner_id: $owner_id,
+                    created_at: datetime(),
+                    updated_at: datetime(),
+                    content_hash: $content_hash,
+                    tags: $tags,
+                    federated: true,
+                    source_peer_id: $peer_id,
+                    source_capsule_id: $remote_id
+                })
+                RETURN c.id AS id
+                """
+                result = await session.run(query, {
+                    "id": local_id,
+                    "title": remote_capsule.get("title", ""),
+                    "content": remote_capsule.get("content", ""),
+                    "type": remote_capsule.get("type", "knowledge"),
+                    # SECURITY: Don't trust remote trust level - use UNVERIFIED default
+                    "trust_level": 20,  # UNVERIFIED - will be recalculated locally
+                    "owner_id": peer.id,  # Attribute to the peer
+                    "content_hash": remote_capsule.get("content_hash", ""),
+                    "tags": remote_capsule.get("tags", []),
+                    "peer_id": peer.id,
+                    "remote_id": remote_capsule["id"],
+                })
+                await result.single()
+                logger.debug(f"Created local capsule {local_id} from peer {peer.name}")
+
+        except Exception as e:
+            logger.error(f"Failed to create local capsule: {e}")
+            return
+
         # Create federated tracking record
         fed_capsule = FederatedCapsule(
             peer_id=peer.id,
             remote_capsule_id=remote_capsule["id"],
+            local_capsule_id=local_id,
             remote_content_hash=remote_capsule.get("content_hash", ""),
+            local_content_hash=remote_capsule.get("content_hash", ""),
             sync_status=FederatedSyncStatus.SYNCED,
             remote_title=remote_capsule.get("title"),
             remote_type=remote_capsule.get("type"),
@@ -528,10 +595,6 @@ class SyncService:
             remote_owner_id=remote_capsule.get("owner_id"),
             last_synced_at=datetime.now(UTC),
         )
-
-        # TODO: Actually create local capsule via repository
-        # local_id = await self.capsule_repo.create(...)
-        # fed_capsule.local_capsule_id = local_id
 
         key = f"{peer.id}:{remote_capsule['id']}"
         self._federated_capsules[key] = fed_capsule
@@ -542,10 +605,35 @@ class SyncService:
         remote_capsule: dict[str, Any],
     ) -> None:
         """Update local capsule with remote changes."""
-        fed_capsule.remote_content_hash = remote_capsule.get("content_hash", "")
-        fed_capsule.last_synced_at = datetime.now(UTC)
+        # Update actual capsule in Neo4j
+        if fed_capsule.local_capsule_id:
+            try:
+                async with self.driver.session() as session:
+                    query = """
+                    MATCH (c:Capsule {id: $id})
+                    SET c.title = $title,
+                        c.content = $content,
+                        c.content_hash = $content_hash,
+                        c.tags = $tags,
+                        c.updated_at = datetime()
+                    RETURN c.id AS id
+                    """
+                    await session.run(query, {
+                        "id": fed_capsule.local_capsule_id,
+                        "title": remote_capsule.get("title", ""),
+                        "content": remote_capsule.get("content", ""),
+                        "content_hash": remote_capsule.get("content_hash", ""),
+                        "tags": remote_capsule.get("tags", []),
+                        # NOTE: Don't update trust_level - must be calculated locally
+                    })
+                    logger.debug(f"Updated local capsule {fed_capsule.local_capsule_id}")
+            except Exception as e:
+                logger.error(f"Failed to update local capsule: {e}")
 
-        # TODO: Update local capsule via repository
+        # Update tracking record
+        fed_capsule.remote_content_hash = remote_capsule.get("content_hash", "")
+        fed_capsule.local_content_hash = remote_capsule.get("content_hash", "")
+        fed_capsule.last_synced_at = datetime.now(UTC)
 
     async def _handle_remote_deletion(
         self,
@@ -581,12 +669,14 @@ class SyncService:
         target_local: str,
     ) -> None:
         """Create a local copy of a remote edge."""
+        relationship_type = remote_edge.get("relationship_type", "RELATED_TO")
+
         fed_edge = FederatedEdge(
             peer_id=peer.id,
             remote_edge_id=remote_edge.get("id", ""),
             source_capsule_id=source_local,
             target_capsule_id=target_local,
-            relationship_type=remote_edge.get("relationship_type", "RELATED_TO"),
+            relationship_type=relationship_type,
             source_is_local=True,
             target_is_local=True,
             sync_status=FederatedSyncStatus.SYNCED,
@@ -595,7 +685,84 @@ class SyncService:
 
         self._federated_edges[fed_edge.id] = fed_edge
 
-        # TODO: Create edge in Neo4j
+        # Create actual edge in Neo4j
+        try:
+            async with self.driver.session() as session:
+                # Use MERGE to avoid duplicates
+                query = f"""
+                MATCH (source:Capsule {{id: $source_id}})
+                MATCH (target:Capsule {{id: $target_id}})
+                MERGE (source)-[r:{relationship_type}]->(target)
+                SET r.federated = true,
+                    r.peer_id = $peer_id,
+                    r.remote_edge_id = $remote_edge_id,
+                    r.created_at = datetime(),
+                    r.weight = $weight,
+                    r.properties = $properties
+                RETURN id(r) AS edge_id
+                """
+                await session.run(query, {
+                    "source_id": source_local,
+                    "target_id": target_local,
+                    "peer_id": peer.id,
+                    "remote_edge_id": remote_edge.get("id", ""),
+                    "weight": remote_edge.get("weight", 1.0),
+                    "properties": str(remote_edge.get("properties", {})),
+                })
+                logger.debug(
+                    f"Created federated edge {relationship_type} "
+                    f"from {source_local} to {target_local}"
+                )
+        except Exception as e:
+            logger.error(f"Failed to create edge in Neo4j: {e}")
+
+    async def _get_edge_changes(
+        self,
+        since: datetime | None,
+        capsule_ids: list[str],
+    ) -> list[dict[str, Any]]:
+        """Get edge changes for the given capsules since a timestamp."""
+        if not capsule_ids:
+            return []
+
+        try:
+            query = """
+            MATCH (source:Capsule)-[r]->(target:Capsule)
+            WHERE source.id IN $capsule_ids OR target.id IN $capsule_ids
+            """
+            params: dict[str, Any] = {"capsule_ids": capsule_ids}
+
+            if since:
+                query += " AND (r.created_at > $since OR r.updated_at > $since)"
+                params["since"] = since.isoformat()
+
+            # Exclude federated edges (they came from other peers)
+            query += " AND (r.federated IS NULL OR r.federated = false)"
+
+            query += """
+            RETURN {
+                id: id(r),
+                source_id: source.id,
+                target_id: target.id,
+                relationship_type: type(r),
+                weight: r.weight,
+                properties: r.properties,
+                created_at: r.created_at
+            } AS edge
+            LIMIT 500
+            """
+
+            async with self.driver.session() as session:
+                result = await session.run(query, params)
+                records = await result.data()
+
+                edges = [record["edge"] for record in records if record.get("edge")]
+                logger.debug(f"Found {len(edges)} edge changes since {since}")
+                return edges
+
+        except Exception as e:
+            logger.error(f"Failed to get edge changes: {e}")
+            return []
 
     async def _get_local_changes(
         self,
@@ -604,8 +771,57 @@ class SyncService:
         types: list[str] | None,
     ) -> list[dict[str, Any]]:
         """Get local capsules that changed since a timestamp."""
-        # TODO: Query local capsules
-        return []
+        try:
+            # Build query to get capsules modified since last sync
+            query = """
+            MATCH (c:Capsule)
+            WHERE c.trust_level >= $min_trust
+            """
+            params: dict[str, Any] = {"min_trust": min_trust}
+
+            if since:
+                query += " AND c.updated_at > $since"
+                params["since"] = since.isoformat()
+
+            if types:
+                query += " AND c.type IN $types"
+                params["types"] = types
+
+            query += """
+            RETURN c {
+                .id, .title, .content, .type, .trust_level,
+                .owner_id, .created_at, .updated_at, .content_hash, .tags
+            } AS capsule
+            ORDER BY c.updated_at DESC
+            LIMIT 500
+            """
+
+            async with self.driver.session() as session:
+                result = await session.run(query, params)
+                records = await result.data()
+
+                capsules = []
+                for record in records:
+                    capsule_data = record.get("capsule")
+                    if capsule_data:
+                        # Filter out capsules that originated from this peer (prevent echo)
+                        # by checking if they have a federated source
+                        capsule_id = capsule_data.get("id")
+                        if capsule_id:
+                            # Check if this is a federated capsule - skip if from any peer
+                            is_federated = any(
+                                fc.local_capsule_id == capsule_id
+                                for fc in self._federated_capsules.values()
+                            )
+                            if not is_federated:
+                                capsules.append(capsule_data)
+
+                logger.debug(f"Found {len(capsules)} local changes since {since}")
+                return capsules
+
+        except Exception as e:
+            logger.error(f"Failed to get local changes: {e}")
+            return []
 
     def _create_skipped_state(self, peer_id: str) -> SyncState:
         """Create a sync state for a skipped sync."""
