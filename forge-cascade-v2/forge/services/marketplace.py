@@ -189,6 +189,10 @@ class MarketplaceService:
                 setattr(listing, key, value)
 
         listing.updated_at = datetime.now(UTC)
+
+        # SECURITY FIX (Audit 4): Persist listing updates to database
+        await self._persist_listing(listing)
+
         return listing
 
     async def cancel_listing(self, listing_id: str, seller_id: str) -> CapsuleListing:
