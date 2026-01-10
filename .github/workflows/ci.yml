@@ -34,8 +34,9 @@ jobs:
       - name: Install Python dependencies
         run: |
           cd forge-cascade-v2
-          pip install -r requirements.txt
-          pip install ruff mypy
+          # Install base + dev deps only for lint (skip ML for speed)
+          pip install -r requirements-base.txt
+          pip install -r requirements-dev.txt
 
       - name: Run Ruff linter
         # SECURITY FIX (Audit 4): Don't ignore lint failures
@@ -99,8 +100,12 @@ jobs:
       - name: Install dependencies
         run: |
           cd forge-cascade-v2
-          pip install -r requirements.txt
-          pip install pytest pytest-asyncio pytest-cov httpx
+          # Install base dependencies (fast)
+          pip install -r requirements-base.txt
+          # Install ML with CPU-only PyTorch (much faster than GPU version)
+          pip install -r requirements-ml.txt --extra-index-url https://download.pytorch.org/whl/cpu
+          # Install dev dependencies
+          pip install -r requirements-dev.txt
 
       - name: Run unit tests
         env:

@@ -1,0 +1,15 @@
+# Forge Cascade V2 - ML Dependencies
+# Optional ML/AI dependencies for semantic search and embeddings
+#
+# For CPU-only installation (faster, no NVIDIA packages):
+#   pip install -r requirements-ml.txt --extra-index-url https://download.pytorch.org/whl/cpu
+#
+# For GPU installation (slower install, requires CUDA):
+#   pip install -r requirements-ml.txt
+
+# ML/AI Core
+scikit-learn==1.6.1
+numpy==2.2.2
+
+# Embeddings (pulls in torch and transformers)
+sentence-transformers==3.3.1

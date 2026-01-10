@@ -1,0 +1,46 @@
+# Forge Cascade V2 - Base Dependencies
+# Core dependencies needed for API functionality
+#
+# SECURITY FIX (Audit 3): Pinned all dependencies to exact versions
+# to prevent supply chain attacks and ensure reproducible builds.
+
+# Web Framework
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+python-multipart==0.0.20
+websockets==14.1
+
+# Database
+neo4j==5.27.0
+
+# Caching
+redis==5.2.1
+
+# Validation & Serialization
+pydantic==2.10.4
+pydantic-settings==2.7.1
+email-validator==2.2.0
+
+# Security
+PyJWT==2.10.1
+cryptography==44.0.0
+passlib[bcrypt]==1.7.4
+
+# Async utilities
+httpx==0.28.1
+aiofiles==24.1.0
+
+# Utilities
+python-dotenv==1.0.1
+structlog==24.4.0
+tenacity==9.0.0
+
+# Observability
+opentelemetry-api==1.29.0
+opentelemetry-sdk==1.29.0
+opentelemetry-exporter-otlp==1.29.0
+opentelemetry-instrumentation-fastapi==0.50b0
+sentry-sdk[fastapi]==2.19.2
+
+# MFA Support
+pyotp==2.9.0
