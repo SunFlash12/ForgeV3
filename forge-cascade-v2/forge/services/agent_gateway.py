@@ -497,6 +497,7 @@ class AgentGatewayService:
     ) -> QueryResult:
         """Execute a graph traversal query."""
         results = []
+        cypher = None  # SECURITY FIX (Audit 4): Initialize to prevent UnboundLocalError
 
         # Parse traversal parameters from context
         start_node = query.context.get("start_node")
