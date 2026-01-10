@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Activity,
@@ -115,13 +115,13 @@ export default function SystemPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['circuit-breakers'] }),
   });
 
-  // Mock historical data for charts
-  const chartData = Array.from({ length: 24 }, (_, i) => ({
+  // Mock historical data for charts (stable placeholder values)
+  const chartData = useMemo(() => Array.from({ length: 24 }, (_, i) => ({
     time: `${i}:00`,
-    events: Math.floor(Math.random() * 100) + 20,
-    errors: Math.floor(Math.random() * 5),
-    latency: Math.floor(Math.random() * 50) + 10,
-  }));
+    events: 50 + (i * 3) % 40,  // Deterministic pattern
+    errors: i % 5,              // Deterministic pattern
+    latency: 20 + (i * 2) % 30, // Deterministic pattern
+  })), []);
 
   if (healthLoading) {
     return (
@@ -177,7 +177,7 @@ export default function SystemPage() {
                 </span>
               </div>
               <p className="text-slate-500">
-                Uptime: {healthData?.uptime_seconds ? formatDistanceToNow(new Date(Date.now() - healthData.uptime_seconds * 1000)) : 'N/A'}
+                Uptime: {healthData?.uptime_seconds ? `${Math.floor(healthData.uptime_seconds / 3600)}h ${Math.floor((healthData.uptime_seconds % 3600) / 60)}m` : 'N/A'}
                 {healthData?.timestamp && ` • Last check: ${format(new Date(healthData.timestamp), 'HH:mm:ss')}`}
               </p>
             </div>

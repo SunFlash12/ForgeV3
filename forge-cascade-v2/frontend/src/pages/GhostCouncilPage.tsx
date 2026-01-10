@@ -30,6 +30,7 @@ import {
 import { api } from '../api/client';
 import { Card, LoadingSpinner, EmptyState } from '../components/common';
 import { Link } from 'react-router-dom';
+import type { Proposal } from '../types';
 
 // Council member icons by icon field (new mapping for expanded council)
 const memberIconMap: Record<string, typeof Shield> = {
@@ -76,6 +77,20 @@ interface CouncilMember {
   persona?: string;
 }
 
+interface CouncilIssue {
+  id: string;
+  category: string;
+  severity: string;
+  title: string;
+  description: string;
+  affected_entities: string[];
+  detected_at: string;
+  source: string;
+  resolved: boolean;
+  resolution: string | null;
+  has_ghost_council_opinion: boolean;
+}
+
 export default function GhostCouncilPage() {
   const [expandedMember, setExpandedMember] = useState<string | null>(null);
   const [showPerspectiveInfo, setShowPerspectiveInfo] = useState(false);
@@ -87,7 +102,7 @@ export default function GhostCouncilPage() {
   });
 
   // Fetch active issues
-  const { data: issues = [], isLoading: issuesLoading } = useQuery({
+  const { data: issues = [], isLoading: issuesLoading } = useQuery<CouncilIssue[]>({
     queryKey: ['ghost-council-issues'],
     queryFn: () => api.getGhostCouncilIssues(),
   });
@@ -99,7 +114,7 @@ export default function GhostCouncilPage() {
   });
 
   // Fetch active proposals for recommendation display
-  const { data: activeProposals } = useQuery({
+  const { data: activeProposals } = useQuery<Proposal[]>({
     queryKey: ['active-proposals'],
     queryFn: () => api.getActiveProposals(),
   });
@@ -307,8 +322,8 @@ export default function GhostCouncilPage() {
                       member={member}
                       isExpanded={expandedMember === member.id}
                       onToggle={() => setExpandedMember(expandedMember === member.id ? null : member.id)}
-                      getIcon={getMemberIcon}
-                      getDomainStyle={getDomainStyle}
+                      icon={getMemberIcon(member)}
+                      domainStyle={getDomainStyle(member.domain)}
                     />
                   ))}
                 </div>
@@ -329,8 +344,8 @@ export default function GhostCouncilPage() {
                       member={member}
                       isExpanded={expandedMember === member.id}
                       onToggle={() => setExpandedMember(expandedMember === member.id ? null : member.id)}
-                      getIcon={getMemberIcon}
-                      getDomainStyle={getDomainStyle}
+                      icon={getMemberIcon(member)}
+                      domainStyle={getDomainStyle(member.domain)}
                     />
                   ))}
                 </div>
@@ -351,8 +366,8 @@ export default function GhostCouncilPage() {
                       member={member}
                       isExpanded={expandedMember === member.id}
                       onToggle={() => setExpandedMember(expandedMember === member.id ? null : member.id)}
-                      getIcon={getMemberIcon}
-                      getDomainStyle={getDomainStyle}
+                      icon={getMemberIcon(member)}
+                      domainStyle={getDomainStyle(member.domain)}
                     />
                   ))}
                 </div>
@@ -373,8 +388,8 @@ export default function GhostCouncilPage() {
                       member={member}
                       isExpanded={expandedMember === member.id}
                       onToggle={() => setExpandedMember(expandedMember === member.id ? null : member.id)}
-                      getIcon={getMemberIcon}
-                      getDomainStyle={getDomainStyle}
+                      icon={getMemberIcon(member)}
+                      domainStyle={getDomainStyle(member.domain)}
                     />
                   ))}
                 </div>
@@ -399,7 +414,7 @@ export default function GhostCouncilPage() {
           />
         ) : (
           <div className="space-y-3">
-            {issues.map((issue: any) => (
+            {issues.map((issue) => (
               <div
                 key={issue.id}
                 className={`p-4 rounded-lg border ${
@@ -462,7 +477,7 @@ export default function GhostCouncilPage() {
             These active proposals can receive Ghost Council recommendations with full tri-perspective analysis.
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {activeProposals.slice(0, 6).map((proposal: any) => (
+            {activeProposals.slice(0, 6).map((proposal) => (
               <Link
                 key={proposal.id}
                 to={`/governance?proposal=${proposal.id}`}
@@ -544,18 +559,15 @@ function MemberCard({
   member,
   isExpanded,
   onToggle,
-  getIcon,
-  getDomainStyle,
+  icon: IconComponent,
+  domainStyle,
 }: {
   member: CouncilMember;
   isExpanded: boolean;
   onToggle: () => void;
-  getIcon: (m: CouncilMember) => typeof Shield;
-  getDomainStyle: (domain?: string) => { bg: string; text: string; border: string };
+  icon: typeof Shield;
+  domainStyle: { bg: string; text: string; border: string };
 }) {
-  const Icon = getIcon(member);
-  const domainStyle = getDomainStyle(member.domain);
-
   return (
     <div
       className={`p-3 bg-white dark:bg-slate-800 rounded-lg border transition cursor-pointer hover:shadow-sm ${
@@ -565,7 +577,7 @@ function MemberCard({
     >
       <div className="flex items-start gap-3">
         <div className={`p-2 ${domainStyle.bg} rounded-lg flex-shrink-0`}>
-          <Icon className={`w-4 h-4 ${domainStyle.text}`} />
+          <IconComponent className={`w-4 h-4 ${domainStyle.text}`} />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between">
