@@ -153,9 +153,10 @@
   - Action: Add Neo4j persistence for cascade state
   - **DOCUMENTED**: Added TODO documenting needed persistence architecture
 
-- [ ] **HIGH** `schema.py` - No atomic operations/rollback for schema changes
+- [x] **HIGH** `schema.py` - No atomic operations/rollback for schema changes
   - Location: `forge-cascade-v2/forge/database/schema.py`
   - Action: Implement transaction-based schema migrations
+  - **DOCUMENTED**: Added detailed docstring explaining Neo4j DDL limitations and mitigation strategies
 
 - [x] **HIGH** `client.py:147` - Transaction closed check logic error
   - Location: `forge-cascade-v2/forge/database/client.py`
