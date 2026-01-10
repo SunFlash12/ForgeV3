@@ -14,7 +14,7 @@ Responsibilities:
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 from collections import defaultdict
 import asyncio
@@ -339,7 +339,11 @@ class SecurityValidatorOverlay(BaseOverlay):
         self._MAX_THREATS_PER_USER: int = 100  # Max threats per user
         self._MAX_BLOCKED_USERS: int = 10000  # Max blocked users
         self._threat_cache: dict[str, list[datetime]] = defaultdict(list)
-        self._blocked_users: set[str] = set()
+        # SECURITY FIX (Audit 4 - M9): Use OrderedDict for LRU eviction of blocked users
+        # This ensures we evict the oldest blocked user (who has been blocked longest)
+        # rather than a random one, which could accidentally unblock an active attacker
+        from collections import OrderedDict
+        self._blocked_users: OrderedDict[str, datetime] = OrderedDict()  # user_id -> blocked_at
         self._threat_cache_access_order: list[str] = []  # For LRU eviction
 
         self._logger = logger.bind(overlay=self.NAME)
@@ -565,13 +569,20 @@ class SecurityValidatorOverlay(BaseOverlay):
         # Block user if too many threats
         if len(self._threat_cache[user_id]) >= 10:
             # SECURITY FIX (Audit 3): Enforce bounded blocked users set
+            # SECURITY FIX (Audit 4 - M9): Use LRU eviction instead of random
             if len(self._blocked_users) >= self._MAX_BLOCKED_USERS:
-                # Remove a random blocked user to make room (or could use LRU)
+                # Evict the oldest blocked user (first in OrderedDict)
                 try:
-                    self._blocked_users.pop()
+                    evicted_user, evicted_at = self._blocked_users.popitem(last=False)
+                    self._logger.info(
+                        "blocked_user_evicted_lru",
+                        evicted_user_id=evicted_user,
+                        blocked_since=evicted_at.isoformat(),
+                    )
                 except KeyError:
                     pass
-            self._blocked_users.add(user_id)
+            # Add user with current timestamp
+            self._blocked_users[user_id] = datetime.now(timezone.utc)
             self._logger.warning(
                 "user_blocked_for_threats",
                 user_id=user_id,
@@ -580,7 +591,8 @@ class SecurityValidatorOverlay(BaseOverlay):
     
     def unblock_user(self, user_id: str) -> None:
         """Manually unblock a user."""
-        self._blocked_users.discard(user_id)
+        # SECURITY FIX (Audit 4 - M9): Updated for OrderedDict
+        self._blocked_users.pop(user_id, None)
         self._threat_cache.pop(user_id, None)
         self._logger.info("user_unblocked", user_id=user_id)
     
@@ -610,7 +622,8 @@ class SecurityValidatorOverlay(BaseOverlay):
     
     def get_blocked_users(self) -> set[str]:
         """Get set of blocked users."""
-        return self._blocked_users.copy()
+        # SECURITY FIX (Audit 4 - M9): Return keys only (for API compatibility)
+        return set(self._blocked_users.keys())
     
     def get_threat_summary(self) -> dict:
         """Get threat summary statistics."""

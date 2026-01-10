@@ -345,22 +345,78 @@ class ResourceAccessChecker:
 # Request Info Extraction
 # =============================================================================
 
+# SECURITY FIX (Audit 4 - M7): Trusted proxy ranges
+# Only trust X-Forwarded-For and X-Real-IP from these ranges
+import ipaddress
+
+TRUSTED_PROXY_RANGES = [
+    "10.0.0.0/8",      # Private class A
+    "172.16.0.0/12",   # Private class B
+    "192.168.0.0/16",  # Private class C
+    "127.0.0.0/8",     # Loopback
+    "::1/128",         # IPv6 loopback
+    "fd00::/8",        # IPv6 private
+]
+
+
+def _is_valid_ip(ip: str) -> bool:
+    """Check if IP string is valid."""
+    try:
+        ipaddress.ip_address(ip)
+        return True
+    except ValueError:
+        return False
+
+
+def _is_trusted_proxy(ip: str) -> bool:
+    """Check if IP is from a trusted proxy range."""
+    if not _is_valid_ip(ip):
+        return False
+    try:
+        client_ip = ipaddress.ip_address(ip)
+        for range_str in TRUSTED_PROXY_RANGES:
+            if client_ip in ipaddress.ip_network(range_str, strict=False):
+                return True
+    except ValueError:
+        pass
+    return False
+
+
 async def get_client_ip(request: Request) -> Optional[str]:
-    """Extract client IP address from request."""
-    # Check for forwarded headers (behind proxy)
+    """
+    Extract client IP address from request.
+
+    SECURITY FIX (Audit 4 - M7): Only trust X-Forwarded-For and X-Real-IP
+    when the direct connection is from a trusted proxy. This prevents IP
+    spoofing from untrusted clients setting these headers directly.
+    """
+    # Get direct client IP
+    direct_ip = request.client.host if request.client else None
+
+    # If direct IP is not from a trusted proxy, use it directly
+    # (don't trust forwarded headers from untrusted sources)
+    if direct_ip and not _is_trusted_proxy(direct_ip):
+        return direct_ip if _is_valid_ip(direct_ip) else None
+
+    # Direct connection is from trusted proxy - check forwarded headers
     forwarded_for = request.headers.get("X-Forwarded-For")
     if forwarded_for:
-        return forwarded_for.split(",")[0].strip()
-    
+        # X-Forwarded-For: client, proxy1, proxy2...
+        # Walk from right to find the first non-proxy IP
+        ips = [ip.strip() for ip in forwarded_for.split(",")]
+        for ip in reversed(ips):
+            if _is_valid_ip(ip) and not _is_trusted_proxy(ip):
+                return ip
+        # If all are proxies, take the leftmost (original client)
+        if ips and _is_valid_ip(ips[0]):
+            return ips[0]
+
     real_ip = request.headers.get("X-Real-IP")
-    if real_ip:
+    if real_ip and _is_valid_ip(real_ip):
         return real_ip
-    
+
     # Direct connection
-    if request.client:
-        return request.client.host
-    
-    return None
+    return direct_ip
 
 
 async def get_user_agent(request: Request) -> Optional[str]:
