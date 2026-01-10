@@ -759,9 +759,20 @@ class AuditRepository:
     ) -> int:
         """
         Archive old events by adding an archive label.
-        
+
         Archived events can still be queried but are excluded from normal queries.
+
+        SECURITY FIX (Audit 4 - M14): Validate archive_label to prevent label injection.
         """
+        import re
+
+        # SECURITY FIX (Audit 4 - M14): Validate label format
+        # Labels must be alphanumeric with underscores only, max 100 chars
+        if not archive_label or len(archive_label) > 100:
+            raise ValueError("archive_label must be 1-100 characters")
+        if not re.match(r'^[A-Za-z][A-Za-z0-9_]*$', archive_label):
+            raise ValueError("archive_label must start with letter and contain only alphanumeric/underscore")
+
         query = f"""
         MATCH (a:AuditLog)
         WHERE a.timestamp < datetime($older_than)
@@ -770,7 +781,7 @@ class AuditRepository:
         SET a:{archive_label}
         RETURN count(a) as archived_count
         """
-        
+
         record = await self.db.execute_single(query, {
             "older_than": older_than.isoformat()
         })

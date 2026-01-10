@@ -66,15 +66,64 @@ REQUIRED_ACTION_FIELDS: dict[str, list[str]] = {
 
 
 class VoteChoice(str, Enum):
-    """Vote options - matches frontend VoteChoice type."""
+    """
+    Vote options - matches frontend VoteChoice type.
+
+    SECURITY FIX (Audit 4 - M17): FOR and AGAINST are aliases that point to
+    APPROVE and REJECT respectively. Use the canonical names (APPROVE/REJECT)
+    in new code, and use from_string() for safe conversion from input strings.
+    """
 
     APPROVE = "APPROVE"  # Frontend expects uppercase
     REJECT = "REJECT"
     ABSTAIN = "ABSTAIN"
 
-    # Aliases for backwards compatibility
+    # Aliases for backwards compatibility (same values = enum aliases)
     FOR = "APPROVE"
     AGAINST = "REJECT"
+
+    @classmethod
+    def from_string(cls, value: str) -> "VoteChoice":
+        """
+        SECURITY FIX (Audit 4 - M17): Safe conversion from string to VoteChoice.
+
+        Handles both canonical names (APPROVE, REJECT, ABSTAIN) and legacy
+        aliases (FOR, AGAINST). Always returns canonical member.
+
+        Args:
+            value: String value to convert
+
+        Returns:
+            VoteChoice enum member
+
+        Raises:
+            ValueError: If value is not a valid vote choice
+        """
+        if not isinstance(value, str):
+            raise ValueError(f"VoteChoice must be string, got {type(value)}")
+
+        # Normalize to uppercase for case-insensitive matching
+        normalized = value.strip().upper()
+
+        # Handle legacy aliases explicitly
+        alias_map = {
+            "FOR": "APPROVE",
+            "AGAINST": "REJECT",
+            "YES": "APPROVE",  # Common alternative
+            "NO": "REJECT",    # Common alternative
+        }
+
+        # Map alias to canonical value
+        canonical = alias_map.get(normalized, normalized)
+
+        # Validate and return
+        try:
+            return cls(canonical)
+        except ValueError:
+            valid_choices = ["APPROVE", "REJECT", "ABSTAIN", "FOR", "AGAINST", "YES", "NO"]
+            raise ValueError(
+                f"Invalid vote choice '{value}'. Valid choices: {valid_choices}"
+            )
 
 
 class ProposalBase(ForgeModel):
