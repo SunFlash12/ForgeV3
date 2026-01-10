@@ -194,9 +194,13 @@ class UserInDB(User):
     """User with database-specific fields."""
 
     password_hash: str = Field(description="Hashed password")
+    # TODO: SECURITY - Store hash of refresh token instead of raw token.
+    # If database is compromised, raw tokens can be used directly.
+    # Recommended: Store SHA-256 hash, compare hashes on verification.
+    # This requires updates to token service (hash on store, hash on verify).
     refresh_token: str | None = Field(
         default=None,
-        description="Current refresh token",
+        description="Current refresh token (should be hashed in production)",
     )
     failed_login_attempts: int = Field(
         default=0,

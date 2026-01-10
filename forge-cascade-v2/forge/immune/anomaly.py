@@ -239,11 +239,21 @@ class StatisticalAnomalyDetector(AnomalyDetector):
         z_score = abs(value - mean) / std
         z_score_anomaly = z_score > self.config.z_score_threshold
         
-        # IQR detection
+        # IQR detection using linear interpolation for accurate percentiles
         sorted_values = sorted(values)
         n = len(sorted_values)
-        q1 = sorted_values[n // 4]
-        q3 = sorted_values[3 * n // 4]
+
+        def percentile(data: list[float], p: float) -> float:
+            """Calculate percentile using linear interpolation."""
+            if len(data) == 1:
+                return data[0]
+            k = (len(data) - 1) * p / 100
+            f = int(k)
+            c = f + 1 if f + 1 < len(data) else f
+            return data[f] + (k - f) * (data[c] - data[f])
+
+        q1 = percentile(sorted_values, 25)
+        q3 = percentile(sorted_values, 75)
         iqr = q3 - q1
         lower_fence = q1 - self.config.iqr_multiplier * iqr
         upper_fence = q3 + self.config.iqr_multiplier * iqr
@@ -862,8 +872,8 @@ class ForgeAnomalySystem:
             detector = StatisticalAnomalyDetector(f"auto_{metric_name}", self.config)
             self._detectors[metric_name] = detector
         
-        # Add metric name to context
-        ctx = context or {}
+        # Add metric name to context (copy to avoid mutating caller's dict)
+        ctx = dict(context) if context else {}
         ctx["metric_name"] = metric_name
         
         # Detect
