@@ -226,7 +226,19 @@ class SearchService:
         embedding_result = await self._embedding_service.embed(request.query)
         query_embedding = embedding_result.embedding
 
-        # Search via repository if available
+        # SECURITY FIX (Audit 4): Use direct search when multiple types/owners
+        # are specified. The repository path only supports single type/owner,
+        # so fall back to direct search which handles multiple values properly.
+        types = request.filters.capsule_types
+        owners = request.filters.owner_ids
+        has_multiple_types = types and len(types) > 1
+        has_multiple_owners = owners and len(owners) > 1
+
+        # Use direct database query when multiple filters are specified (handles them correctly)
+        if self._db and (has_multiple_types or has_multiple_owners):
+            return await self._semantic_search_direct(query_embedding, request)
+
+        # Search via repository if available (single type/owner only)
         if self._capsule_repo:
             search_results = await self._capsule_repo.semantic_search(
                 query_embedding=query_embedding,

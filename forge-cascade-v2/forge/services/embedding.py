@@ -335,7 +335,8 @@ class SentenceTransformersProvider(EmbeddingProviderBase):
         self._load_model()
 
         # Run in thread pool to not block async loop
-        loop = asyncio.get_event_loop()
+        # SECURITY FIX (Audit 4): Use get_running_loop() instead of deprecated get_event_loop()
+        loop = asyncio.get_running_loop()
         embeddings = await loop.run_in_executor(
             None,
             lambda: self._model.encode(texts, normalize_embeddings=True)
