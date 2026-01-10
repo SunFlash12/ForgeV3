@@ -168,6 +168,27 @@ class JurisdictionDeadline:
     notes: str = ""
 
 
+@dataclass
+class DeadlineAlert:
+    """Alert for an approaching or missed deadline."""
+    incident_id: str
+    jurisdiction: Jurisdiction
+    deadline: datetime
+    deadline_type: str  # "dpa", "individual"
+    alert_level: str  # "warning", "urgent", "critical", "overdue"
+    hours_remaining: float
+    alert_sent_at: datetime = field(default_factory=datetime.utcnow)
+
+
+# Alert thresholds in hours before deadline
+DEADLINE_ALERT_THRESHOLDS = {
+    "warning": 24,    # 24 hours before
+    "urgent": 12,     # 12 hours before
+    "critical": 6,    # 6 hours before
+    "imminent": 1,    # 1 hour before
+}
+
+
 class BreachNotificationService:
     """
     Breach detection, assessment, and notification service.
@@ -176,10 +197,23 @@ class BreachNotificationService:
     automated deadline tracking and notification generation.
     """
     
-    def __init__(self):
+    def __init__(self, alert_callback: callable | None = None):
+        """
+        Initialize breach notification service.
+
+        Args:
+            alert_callback: Optional async callback function for sending deadline alerts.
+                            Signature: async def callback(alert: DeadlineAlert) -> None
+        """
         self._incidents: dict[str, BreachIncident] = {}
         self._notifications: dict[str, list[NotificationRecord]] = {}
-        
+
+        # Track sent alerts to prevent duplicates: {incident_id}_{alert_level}
+        self._sent_alerts: set[str] = set()
+
+        # Callback for sending deadline alerts
+        self._alert_callback = alert_callback
+
         # Notification deadlines by jurisdiction (hours from discovery)
         self._jurisdiction_deadlines = {
             Jurisdiction.EU: {"dpa": 72, "individuals": 0},  # Without undue delay
@@ -692,7 +726,7 @@ Sincerely,
     def get_metrics(self) -> dict[str, Any]:
         """Get breach metrics for compliance dashboard."""
         incidents = list(self._incidents.values())
-        
+
         return {
             "total_incidents": len(incidents),
             "by_status": {
@@ -710,6 +744,176 @@ Sincerely,
             ),
             "overdue_notifications": len(self.get_overdue_notifications()),
         }
+
+    # ───────────────────────────────────────────────────────────────
+    # DEADLINE ALERTING (Security Audit Fix)
+    # ───────────────────────────────────────────────────────────────
+
+    def get_approaching_deadlines(self) -> list[DeadlineAlert]:
+        """
+        Get list of incidents with approaching deadlines.
+
+        Returns alerts at various thresholds (24h, 12h, 6h, 1h before deadline).
+        """
+        alerts = []
+        now = datetime.utcnow()
+
+        for incident_id, incident in self._incidents.items():
+            # Skip closed/remediated incidents
+            if incident.status in {BreachStatus.CLOSED, BreachStatus.REMEDIATED}:
+                continue
+
+            # Skip if notification not required
+            if not incident.dpa_notification_required:
+                continue
+
+            # Check if DPA notification already sent
+            notifications = self._notifications.get(incident_id, [])
+            dpa_sent = any(
+                n.recipient_type == "dpa" and n.status == NotificationStatus.SENT
+                for n in notifications
+            )
+
+            if dpa_sent:
+                continue
+
+            # Check deadline
+            if not incident.dpa_notification_deadline:
+                continue
+
+            deadline = incident.dpa_notification_deadline
+            time_remaining = (deadline - now).total_seconds() / 3600  # hours
+
+            # Determine alert level based on time remaining
+            if time_remaining < 0:
+                alert_level = "overdue"
+            elif time_remaining <= DEADLINE_ALERT_THRESHOLDS["imminent"]:
+                alert_level = "imminent"
+            elif time_remaining <= DEADLINE_ALERT_THRESHOLDS["critical"]:
+                alert_level = "critical"
+            elif time_remaining <= DEADLINE_ALERT_THRESHOLDS["urgent"]:
+                alert_level = "urgent"
+            elif time_remaining <= DEADLINE_ALERT_THRESHOLDS["warning"]:
+                alert_level = "warning"
+            else:
+                continue  # No alert needed yet
+
+            # Create alert for each affected jurisdiction
+            for jurisdiction in incident.jurisdictions:
+                alerts.append(DeadlineAlert(
+                    incident_id=incident_id,
+                    jurisdiction=jurisdiction,
+                    deadline=deadline,
+                    deadline_type="dpa",
+                    alert_level=alert_level,
+                    hours_remaining=time_remaining,
+                ))
+
+        return alerts
+
+    async def check_and_alert_deadlines(self) -> list[DeadlineAlert]:
+        """
+        Check all deadlines and send alerts for approaching/missed ones.
+
+        This method should be called periodically (e.g., every 15 minutes)
+        by a scheduler to ensure timely alerts.
+
+        Returns:
+            List of new alerts that were sent.
+        """
+        alerts = self.get_approaching_deadlines()
+        sent_alerts = []
+
+        for alert in alerts:
+            # Create unique key for this alert to prevent duplicates
+            alert_key = f"{alert.incident_id}_{alert.alert_level}"
+
+            # Skip if already sent this alert level for this incident
+            if alert_key in self._sent_alerts:
+                continue
+
+            # Mark as sent
+            self._sent_alerts.add(alert_key)
+
+            # Log the alert
+            if alert.alert_level == "overdue":
+                logger.critical(
+                    "breach_deadline_overdue",
+                    incident_id=alert.incident_id,
+                    jurisdiction=alert.jurisdiction.value,
+                    deadline=alert.deadline.isoformat(),
+                    hours_overdue=abs(alert.hours_remaining),
+                )
+            else:
+                logger.warning(
+                    "breach_deadline_approaching",
+                    incident_id=alert.incident_id,
+                    jurisdiction=alert.jurisdiction.value,
+                    deadline=alert.deadline.isoformat(),
+                    hours_remaining=alert.hours_remaining,
+                    alert_level=alert.alert_level,
+                )
+
+            # Send alert via callback if configured
+            if self._alert_callback:
+                try:
+                    await self._alert_callback(alert)
+                except Exception as e:
+                    logger.error(
+                        "deadline_alert_callback_failed",
+                        incident_id=alert.incident_id,
+                        error=str(e),
+                    )
+
+            sent_alerts.append(alert)
+
+        return sent_alerts
+
+    def set_alert_callback(self, callback: callable) -> None:
+        """
+        Set the callback function for deadline alerts.
+
+        Args:
+            callback: Async function with signature: async def(alert: DeadlineAlert) -> None
+        """
+        self._alert_callback = callback
+
+    def get_alert_summary(self) -> dict[str, Any]:
+        """Get summary of current deadline alert status."""
+        alerts = self.get_approaching_deadlines()
+
+        return {
+            "total_alerts": len(alerts),
+            "by_level": {
+                level: len([a for a in alerts if a.alert_level == level])
+                for level in ["warning", "urgent", "critical", "imminent", "overdue"]
+            },
+            "alerts": [
+                {
+                    "incident_id": a.incident_id,
+                    "jurisdiction": a.jurisdiction.value,
+                    "deadline": a.deadline.isoformat(),
+                    "alert_level": a.alert_level,
+                    "hours_remaining": round(a.hours_remaining, 1),
+                }
+                for a in alerts
+            ],
+        }
+
+    def clear_sent_alerts_for_incident(self, incident_id: str) -> int:
+        """
+        Clear sent alert tracking for an incident.
+
+        Call this when an incident is resolved or notification is sent
+        to allow fresh alerts if needed in the future.
+
+        Returns:
+            Number of alerts cleared.
+        """
+        to_remove = [key for key in self._sent_alerts if key.startswith(f"{incident_id}_")]
+        for key in to_remove:
+            self._sent_alerts.discard(key)
+        return len(to_remove)
 
 
 # Global service instance
