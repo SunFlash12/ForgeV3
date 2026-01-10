@@ -13,30 +13,22 @@ Uses a layered backend approach:
 3. NetworkX fallback (full algorithm support)
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Any, Optional
+from typing import Any
+
 import structlog
 
 from ..models.events import Event, EventType
-from ..models.overlay import Capability
 from ..models.graph_analysis import (
-    NodeRanking,
-    Community,
-    GraphMetrics,
-    TrustTransitivityResult,
+    CentralityRequest,
+    CommunityDetectionRequest,
     GraphBackend,
     PageRankRequest,
-    CentralityRequest,
-    CommunityDetectionRequest
 )
-from ..repositories.graph_repository import GraphRepository, GraphAlgorithmProvider
-from .base import (
-    BaseOverlay,
-    OverlayContext,
-    OverlayResult,
-    OverlayError
-)
+from ..models.overlay import Capability
+from ..repositories.graph_repository import GraphRepository
+from .base import BaseOverlay, OverlayContext, OverlayError, OverlayResult
 
 logger = structlog.get_logger()
 
@@ -69,7 +61,7 @@ class AlgorithmConfig:
     pagerank_tolerance: float = 1e-6
 
     # Centrality
-    centrality_sample_size: Optional[int] = None  # None = use all nodes
+    centrality_sample_size: int | None = None  # None = use all nodes
 
     # Community detection
     community_algorithm: str = "louvain"  # or "label_propagation"
@@ -105,10 +97,13 @@ class GraphAlgorithmsOverlay(BaseOverlay):
         Capability.DATABASE_READ,
     }
 
+    # SECURITY FIX (Audit 4 - M): Add cache size limit to prevent memory exhaustion
+    MAX_CACHE_SIZE = 500  # Max cached algorithm results
+
     def __init__(
         self,
-        graph_repository: Optional[GraphRepository] = None,
-        config: Optional[AlgorithmConfig] = None
+        graph_repository: GraphRepository | None = None,
+        config: AlgorithmConfig | None = None
     ):
         """
         Initialize the graph algorithms overlay.
@@ -126,7 +121,7 @@ class GraphAlgorithmsOverlay(BaseOverlay):
         self._cache: dict[str, CachedResult] = {}
 
         # Backend detection
-        self._detected_backend: Optional[GraphBackend] = None
+        self._detected_backend: GraphBackend | None = None
 
         # Statistics
         self._stats = {
@@ -158,8 +153,8 @@ class GraphAlgorithmsOverlay(BaseOverlay):
     async def execute(
         self,
         context: OverlayContext,
-        event: Optional[Event] = None,
-        input_data: Optional[dict[str, Any]] = None
+        event: Event | None = None,
+        input_data: dict[str, Any] | None = None
     ) -> OverlayResult:
         """
         Execute graph algorithm operations.
@@ -429,7 +424,7 @@ class GraphAlgorithmsOverlay(BaseOverlay):
             "top_5_communities": communities.get("communities", [])
         }
 
-    def _get_cached(self, key: str) -> Optional[dict]:
+    def _get_cached(self, key: str) -> dict | None:
         """Get cached result if not expired."""
         if not self._config.enable_caching:
             self._stats["cache_misses"] += 1
@@ -447,6 +442,11 @@ class GraphAlgorithmsOverlay(BaseOverlay):
         """Cache a result."""
         if not self._config.enable_caching:
             return
+
+        # SECURITY FIX (Audit 4 - M): Evict oldest entry if cache is full
+        if len(self._cache) >= self.MAX_CACHE_SIZE:
+            oldest_key = next(iter(self._cache))
+            del self._cache[oldest_key]
 
         self._cache[key] = CachedResult(
             key=key,
@@ -472,7 +472,7 @@ class GraphAlgorithmsOverlay(BaseOverlay):
 
 # Convenience function
 def create_graph_algorithms_overlay(
-    graph_repository: Optional[GraphRepository] = None,
+    graph_repository: GraphRepository | None = None,
     cache_ttl: int = 300,
     **kwargs
 ) -> GraphAlgorithmsOverlay:

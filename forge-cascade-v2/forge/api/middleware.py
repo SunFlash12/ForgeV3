@@ -14,21 +14,19 @@ Provides:
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import hmac
 import re
 import threading
 import time
 import uuid
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Callable, Optional
 
 import structlog
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-from starlette.responses import Response, JSONResponse
+from starlette.responses import JSONResponse, Response
 
 logger = structlog.get_logger(__name__)
 
@@ -78,65 +76,65 @@ except ImportError:
 class CorrelationIdMiddleware(BaseHTTPMiddleware):
     """
     Add correlation ID to all requests for distributed tracing.
-    
+
     The correlation ID is:
     1. Extracted from X-Correlation-ID header if present
     2. Generated as UUID if not present
     3. Added to response headers
     4. Stored in request.state for access in handlers
     """
-    
+
     HEADER_NAME = "X-Correlation-ID"
-    
+
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         # Get or generate correlation ID
         correlation_id = request.headers.get(self.HEADER_NAME)
         if not correlation_id:
             correlation_id = str(uuid.uuid4())
-        
+
         # Store in request state
         request.state.correlation_id = correlation_id
-        
+
         # Bind to structlog context
         structlog.contextvars.bind_contextvars(correlation_id=correlation_id)
-        
+
         # Process request
         response = await call_next(request)
-        
+
         # Add to response headers
         response.headers[self.HEADER_NAME] = correlation_id
-        
+
         # Clear structlog context
         structlog.contextvars.unbind_contextvars("correlation_id")
-        
+
         return response
 
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
     """
     Log all requests and responses with timing information.
-    
+
     Logs:
     - Request method, path, and client IP
     - Response status code
     - Request duration in milliseconds
     """
-    
+
     # Paths to skip logging (health checks, etc.)
     SKIP_PATHS = {"/health", "/ready", "/favicon.ico"}
-    
+
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         # Skip certain paths
         if request.url.path in self.SKIP_PATHS:
             return await call_next(request)
-        
+
         # Record start time
         start_time = time.perf_counter()
-        
+
         # Get client info
         client_ip = self._get_client_ip(request)
         correlation_id = getattr(request.state, 'correlation_id', 'unknown')
-        
+
         # Log request with sanitized query params
         logger.info(
             "request_started",
@@ -146,7 +144,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             client_ip=client_ip,
             correlation_id=correlation_id,
         )
-        
+
         # Process request
         try:
             response = await call_next(request)
@@ -162,10 +160,10 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                 error=str(e),
             )
             raise
-        
+
         # Calculate duration
         duration_ms = (time.perf_counter() - start_time) * 1000
-        
+
         # Log response
         log_level = "info" if status_code < 400 else "warning" if status_code < 500 else "error"
         getattr(logger, log_level)(
@@ -175,12 +173,12 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             status_code=status_code,
             duration_ms=round(duration_ms, 2),
         )
-        
+
         # Add timing header
         response.headers["X-Response-Time"] = f"{duration_ms:.2f}ms"
-        
+
         return response
-    
+
     def _get_client_ip(self, request: Request) -> str:
         """Extract client IP, handling proxies."""
         # Check X-Forwarded-For header
@@ -188,16 +186,16 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         if forwarded_for:
             # First IP in the list is the client
             return forwarded_for.split(",")[0].strip()
-        
+
         # Check X-Real-IP header
         real_ip = request.headers.get("X-Real-IP")
         if real_ip:
             return real_ip
-        
+
         # Fall back to direct client
         if request.client:
             return request.client.host
-        
+
         return "unknown"
 
 
@@ -242,7 +240,7 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
 
             try:
                 from forge.config import get_settings
-                from forge.security.tokens import verify_token, TokenBlacklist
+                from forge.security.tokens import TokenBlacklist, verify_token
 
                 settings = get_settings()
                 payload = verify_token(token, settings.jwt_secret_key)
@@ -322,7 +320,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         burst_allowance: int = 30,
         auth_requests_per_minute: int = 30,  # More lenient for development
         auth_requests_per_hour: int = 200,
-        redis_url: Optional[str] = None,
+        redis_url: str | None = None,
     ):
         super().__init__(app)
         self.requests_per_minute = requests_per_minute
@@ -332,7 +330,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self.auth_requests_per_hour = auth_requests_per_hour
 
         # Redis client for distributed rate limiting
-        self._redis: Optional[redis.Redis] = None
+        self._redis: redis.Redis | None = None
         self._redis_url = redis_url
         self._use_redis = False
 
@@ -849,6 +847,8 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
 
     IDEMPOTENT_METHODS = {"POST", "PUT", "PATCH"}
     IDEMPOTENT_PATHS_PREFIX = {"/api/v1/capsules", "/api/v1/governance/proposals"}
+    # SECURITY FIX (Audit 4 - M): Add cache size limit to prevent memory exhaustion
+    MAX_CACHE_SIZE = 10000  # Max cached idempotency entries
 
     def __init__(self, app, ttl_seconds: int = 86400):  # 24 hour default
         super().__init__(app)
@@ -917,6 +917,17 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
 
             # Store in cache
             with self._lock:
+                # SECURITY FIX (Audit 4 - M): Evict oldest entries if cache is full
+                if len(self._cache) >= self.MAX_CACHE_SIZE:
+                    # Evict 10% of oldest entries
+                    evict_count = self.MAX_CACHE_SIZE // 10
+                    oldest_keys = sorted(
+                        self._cache.keys(),
+                        key=lambda k: self._cache[k].created_at
+                    )[:evict_count]
+                    for key in oldest_keys:
+                        del self._cache[key]
+
                 self._cache[cache_key] = IdempotencyEntry(
                     status_code=response.status_code,
                     body=body,
@@ -958,7 +969,7 @@ class CompressionMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         # Check if client accepts gzip
-        accept_encoding = request.headers.get("Accept-Encoding", "")
+        request.headers.get("Accept-Encoding", "")
 
         response = await call_next(request)
 
@@ -1007,7 +1018,7 @@ class RequestTimeoutMiddleware(BaseHTTPMiddleware):
                 timeout=timeout,
             )
             return response
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning(
                 "request_timeout",
                 path=request.url.path,
