@@ -256,7 +256,7 @@ def validate_llm_output(
                 continue
             if not isinstance(value, expected_type):
                 # Allow int for float
-                if expected_type == float and isinstance(value, int):
+                if expected_type is float and isinstance(value, int):
                     data[field] = float(value)
                 else:
                     errors.append(
