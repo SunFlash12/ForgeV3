@@ -444,8 +444,13 @@ class GhostCouncilService:
         return [member_map[mid] for mid in member_ids if mid in member_map]
 
     def _hash_proposal(self, proposal: Proposal) -> str:
-        """Create a cache key for a proposal based on its content."""
-        content = f"{proposal.title}:{proposal.description}:{proposal.type}"
+        """Create a cache key for a proposal based on its content and configuration.
+
+        SECURITY FIX (Audit 4): Include profile in cache key to prevent collision
+        between different configurations. Different profiles use different council
+        members, so cached opinions from one profile shouldn't be used for another.
+        """
+        content = f"{proposal.title}:{proposal.description}:{proposal.type}:{self._config.profile}"
         return hashlib.sha256(content.encode()).hexdigest()
 
     def _is_cache_valid(self, cached_at: datetime) -> bool:
