@@ -13,9 +13,10 @@ from __future__ import annotations
 import hashlib
 import json
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Any, Callable, Optional, TypeVar, Generic
+from typing import Any, Generic, TypeVar
 
 import structlog
 
@@ -81,9 +82,9 @@ class QueryCache:
     capsules change, using event subscriptions to detect modifications.
     """
 
-    def __init__(self, config: Optional[CacheConfig] = None):
+    def __init__(self, config: CacheConfig | None = None):
         self._config = config or get_resilience_config().cache
-        self._redis: Optional[aioredis.Redis] = None
+        self._redis: aioredis.Redis | None = None
         self._use_redis = False
         self._stats = CacheStats()
 
@@ -128,7 +129,7 @@ class QueryCache:
         if self._redis:
             await self._redis.close()
 
-    async def get(self, key: str) -> Optional[Any]:
+    async def get(self, key: str) -> Any | None:
         """
         Get a value from cache.
 
@@ -170,9 +171,9 @@ class QueryCache:
         self,
         key: str,
         value: Any,
-        ttl: Optional[int] = None,
+        ttl: int | None = None,
         query_type: str = "general",
-        related_capsule_ids: Optional[list[str]] = None
+        related_capsule_ids: list[str] | None = None
     ) -> bool:
         """
         Set a value in cache.
@@ -249,9 +250,9 @@ class QueryCache:
         self,
         key: str,
         compute_func: Callable[[], Any],
-        ttl: Optional[int] = None,
+        ttl: int | None = None,
         query_type: str = "general",
-        related_capsule_ids: Optional[list[str]] = None
+        related_capsule_ids: list[str] | None = None
     ) -> Any:
         """
         Get value from cache or compute and cache it.
@@ -546,7 +547,7 @@ class QueryCache:
 
 
 # Global cache instance
-_query_cache: Optional[QueryCache] = None
+_query_cache: QueryCache | None = None
 
 
 async def get_query_cache() -> QueryCache:

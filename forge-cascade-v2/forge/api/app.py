@@ -12,33 +12,31 @@ This creates and configures the FastAPI application with:
 
 from __future__ import annotations
 
-import asyncio
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
-from typing import Any, AsyncGenerator
+from datetime import UTC, datetime
+from typing import Any
 
 import structlog
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
-from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from forge.config import get_settings
 from forge.database.client import Neo4jClient
+from forge.immune import create_immune_system
 from forge.kernel.event_system import EventSystem
 from forge.kernel.overlay_manager import OverlayManager
 from forge.kernel.pipeline import CascadePipeline
-from forge.immune import create_immune_system, get_circuit_registry
+from forge.monitoring import (
+    add_metrics_middleware,
+    configure_logging,
+    create_metrics_endpoint,
+)
 from forge.resilience.integration import (
     ObservabilityMiddleware,
-    initialize_resilience,
-    shutdown_resilience,
-)
-from forge.monitoring import (
-    configure_logging,
-    add_metrics_middleware,
-    create_metrics_endpoint,
 )
 
 # Configure logging early - before any other logging occurs
@@ -57,19 +55,19 @@ logger = structlog.get_logger(__name__)
 class ForgeApp:
     """
     Forge application container.
-    
+
     Holds references to all core components for dependency injection.
     """
-    
+
     def __init__(self):
         self.settings = get_settings()
-        
+
         # Core components (initialized in lifespan)
         self.db_client: Neo4jClient | None = None
         self.event_system: EventSystem | None = None
         self.overlay_manager: OverlayManager | None = None
         self.pipeline: CascadePipeline | None = None
-        
+
         # Immune system components
         self.circuit_registry = None
         self.health_checker = None
@@ -82,7 +80,7 @@ class ForgeApp:
         # State
         self.started_at: datetime | None = None
         self.is_ready: bool = False
-    
+
     async def initialize(self) -> None:
         """Initialize all components."""
         logger.info("forge_initializing")
@@ -137,8 +135,8 @@ class ForgeApp:
 
         # Initialize services (embedding, LLM, search) - important but degradable
         try:
-            from forge.services.init import init_all_services
             from forge.repositories.capsule_repository import CapsuleRepository
+            from forge.services.init import init_all_services
 
             capsule_repo = CapsuleRepository(self.db_client)
             init_all_services(
@@ -198,7 +196,7 @@ class ForgeApp:
             logger.warning("scheduler_init_failed", error=str(e))
             self.scheduler = None
 
-        self.started_at = datetime.now(timezone.utc)
+        self.started_at = datetime.now(UTC)
         self.is_ready = True
 
         logger.info(
@@ -208,16 +206,16 @@ class ForgeApp:
             resilience=self.resilience_initialized,
             scheduler=self.scheduler is not None,
         )
-    
+
     async def _register_core_overlays(self) -> None:
         """Register the core overlay set."""
         from forge.overlays import (
-            create_security_validator,
-            create_ml_intelligence,
             create_governance_overlay,
-            create_lineage_tracker,
             create_graph_algorithms_overlay,
             create_knowledge_query_overlay,
+            create_lineage_tracker,
+            create_ml_intelligence,
+            create_security_validator,
             create_temporal_tracker_overlay,
         )
 
@@ -251,7 +249,7 @@ class ForgeApp:
             await self.overlay_manager.register_instance(graph_algorithms)
             await self.overlay_manager.register_instance(knowledge_query)
             await self.overlay_manager.register_instance(temporal_tracker)
-    
+
     async def shutdown(self) -> None:
         """Gracefully shutdown all components."""
         logger.info("forge_shutting_down")
@@ -296,14 +294,14 @@ class ForgeApp:
             await self.db_client.close()
 
         logger.info("forge_shutdown_complete")
-    
+
     def get_status(self) -> dict[str, Any]:
         """Get current application status."""
         return {
             "status": "ready" if self.is_ready else "starting",
             "started_at": self.started_at.isoformat() if self.started_at else None,
             "uptime_seconds": (
-                (datetime.now(timezone.utc) - self.started_at).total_seconds()
+                (datetime.now(UTC) - self.started_at).total_seconds()
                 if self.started_at else 0
             ),
             "database": "connected" if self.db_client and self.db_client._driver else "disconnected",
@@ -322,7 +320,7 @@ forge_app = ForgeApp()
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """
     Application lifespan handler.
-    
+
     Initializes and shuts down all components.
     """
     # Startup
@@ -344,7 +342,7 @@ def create_app(
 ) -> FastAPI:
     """
     Create and configure the FastAPI application.
-    
+
     Args:
         title: API title for documentation
         description: API description
@@ -352,12 +350,12 @@ def create_app(
         docs_url: Swagger UI URL (None to disable)
         redoc_url: ReDoc URL (None to disable)
         debug: Enable debug mode
-    
+
     Returns:
         Configured FastAPI application
     """
     settings = get_settings()
-    
+
     app = FastAPI(
         title=title,
         description=description,
@@ -413,10 +411,10 @@ def create_app(
             },
         ],
     )
-    
+
     # Store forge_app reference
     app.state.forge = forge_app
-    
+
     # CORS - Use explicit origins, never allow wildcard with credentials
     cors_origins = settings.CORS_ORIGINS
     if not cors_origins:
@@ -433,16 +431,16 @@ def create_app(
 
     # Add custom middleware
     from forge.api.middleware import (
-        CorrelationIdMiddleware,
-        RequestLoggingMiddleware,
-        AuthenticationMiddleware,
-        RateLimitMiddleware,
-        SecurityHeadersMiddleware,
-        RequestSizeLimitMiddleware,
-        IdempotencyMiddleware,
-        CSRFProtectionMiddleware,
-        RequestTimeoutMiddleware,
         APILimitsMiddleware,  # SECURITY FIX (Audit 3)
+        AuthenticationMiddleware,
+        CorrelationIdMiddleware,
+        CSRFProtectionMiddleware,
+        IdempotencyMiddleware,
+        RateLimitMiddleware,
+        RequestLoggingMiddleware,
+        RequestSizeLimitMiddleware,
+        RequestTimeoutMiddleware,
+        SecurityHeadersMiddleware,
     )
 
     # Order matters: outer middleware runs first
@@ -472,7 +470,7 @@ def create_app(
         auth_requests_per_minute=30 if is_dev else 10,  # Stricter in production
         auth_requests_per_hour=200 if is_dev else 50,   # Stricter in production
     )
-    
+
     # Exception handlers
     @app.exception_handler(StarletteHTTPException)
     async def http_exception_handler(request: Request, exc: StarletteHTTPException):
@@ -484,7 +482,7 @@ def create_app(
                 "path": str(request.url.path),
             },
         )
-    
+
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(request: Request, exc: RequestValidationError):
         # SECURITY FIX (Audit 2): Sanitize validation errors to not leak schema details
@@ -508,7 +506,7 @@ def create_app(
                 "path": str(request.url.path),
             },
         )
-    
+
     @app.exception_handler(Exception)
     async def general_exception_handler(request: Request, exc: Exception):
         logger.exception(
@@ -523,10 +521,21 @@ def create_app(
                 "path": str(request.url.path),
             },
         )
-    
+
     # Include routers
-    from forge.api.routes import auth, capsules, cascade, governance, overlays, system, graph
-    from forge.api.routes import federation, notifications, marketplace, agent_gateway
+    from forge.api.routes import (
+        agent_gateway,
+        auth,
+        capsules,
+        cascade,
+        federation,
+        governance,
+        graph,
+        marketplace,
+        notifications,
+        overlays,
+        system,
+    )
 
     app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
     app.include_router(capsules.router, prefix="/api/v1/capsules", tags=["capsules"])
@@ -542,9 +551,9 @@ def create_app(
 
     # WebSocket endpoints
     from forge.api.websocket import websocket_router
-    
+
     app.include_router(websocket_router)
-    
+
     # Root endpoint
     @app.get("/", include_in_schema=False)
     async def root():
@@ -553,14 +562,14 @@ def create_app(
             "version": version,
             "status": forge_app.get_status(),
         }
-    
+
     # Health check (lightweight)
     @app.get("/health", include_in_schema=False)
     async def health():
         return {
             "status": "healthy" if forge_app.is_ready else "starting",
         }
-    
+
     # Readiness check (full check)
     @app.get("/ready", include_in_schema=False)
     async def ready():
@@ -617,15 +626,15 @@ def run_server(
 ) -> None:
     """
     Run the Forge server.
-    
+
     For development use:
         python -m forge.api.app
-    
+
     For production use:
         uvicorn forge.api.app:app --host 0.0.0.0 --port 8000 --workers 4
     """
     import uvicorn
-    
+
     uvicorn.run(
         "forge.api.app:app",
         host=host,

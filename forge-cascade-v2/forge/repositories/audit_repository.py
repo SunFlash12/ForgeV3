@@ -6,44 +6,44 @@ changes, and events. Supports compliance, forensics, and
 the Immune System's anomaly detection.
 """
 
-from datetime import datetime, timedelta
-from typing import Any, Optional
+from datetime import datetime
+from typing import Any
 from uuid import uuid4
 
-from ..models.base import TrustLevel
-from ..models.events import AuditEvent, EventType, EventPriority
 from ..database.client import Neo4jClient
+from ..models.base import TrustLevel
+from ..models.events import AuditEvent, EventPriority, EventType
 
 
 class AuditRepository:
     """Repository for audit log operations."""
-    
+
     def __init__(self, db: Neo4jClient):
         self.db = db
-    
+
     # =========================================================================
     # Core Audit Operations
     # =========================================================================
-    
+
     async def log(
         self,
         event_type: EventType,
         actor_id: str,
         action: str,
         resource_type: str,
-        resource_id: Optional[str] = None,
-        details: Optional[dict[str, Any]] = None,
-        old_value: Optional[dict[str, Any]] = None,
-        new_value: Optional[dict[str, Any]] = None,
-        ip_address: Optional[str] = None,
-        user_agent: Optional[str] = None,
-        correlation_id: Optional[str] = None,
+        resource_id: str | None = None,
+        details: dict[str, Any] | None = None,
+        old_value: dict[str, Any] | None = None,
+        new_value: dict[str, Any] | None = None,
+        ip_address: str | None = None,
+        user_agent: str | None = None,
+        correlation_id: str | None = None,
         priority: EventPriority = EventPriority.LOW,
         trust_level_required: TrustLevel = TrustLevel.STANDARD
     ) -> AuditEvent:
         """
         Log an audit event.
-        
+
         Args:
             event_type: Type of event (from EventType enum)
             actor_id: ID of user/system performing action
@@ -58,13 +58,13 @@ class AuditRepository:
             correlation_id: For linking related events
             priority: Event priority level
             trust_level_required: Minimum trust to view this audit entry
-            
+
         Returns:
             Created AuditEvent
         """
         event_id = str(uuid4())
         now = datetime.utcnow()
-        
+
         query = """
         CREATE (a:AuditLog {
             id: $id,
@@ -86,13 +86,13 @@ class AuditRepository:
         })
         RETURN a
         """
-        
+
         # Serialize dicts to JSON strings for Neo4j storage
         import json
         details_json = json.dumps(details) if details else None
         old_value_json = json.dumps(old_value) if old_value else None
         new_value_json = json.dumps(new_value) if new_value else None
-        
+
         params = {
             "id": event_id,
             "event_type": event_type.value,
@@ -111,19 +111,19 @@ class AuditRepository:
             "timestamp": now.isoformat(),
             "created_at": now.isoformat()
         }
-        
+
         record = await self.db.execute_single(query, params)
         return self._to_audit_event(record["a"])
-    
+
     async def log_capsule_action(
         self,
         actor_id: str,
         capsule_id: str,
         action: str,
-        details: Optional[dict[str, Any]] = None,
-        old_value: Optional[dict[str, Any]] = None,
-        new_value: Optional[dict[str, Any]] = None,
-        correlation_id: Optional[str] = None
+        details: dict[str, Any] | None = None,
+        old_value: dict[str, Any] | None = None,
+        new_value: dict[str, Any] | None = None,
+        correlation_id: str | None = None
     ) -> AuditEvent:
         """Log a capsule-related action."""
         event_type_map = {
@@ -135,9 +135,9 @@ class AuditRepository:
             "view": EventType.CAPSULE_VIEWED,
             "search": EventType.CAPSULE_SEARCHED
         }
-        
+
         event_type = event_type_map.get(action.lower(), EventType.SYSTEM_EVENT)
-        
+
         return await self.log(
             event_type=event_type,
             actor_id=actor_id,
@@ -149,15 +149,15 @@ class AuditRepository:
             new_value=new_value,
             correlation_id=correlation_id
         )
-    
+
     async def log_user_action(
         self,
         actor_id: str,
         target_user_id: str,
         action: str,
-        details: Optional[dict[str, Any]] = None,
-        ip_address: Optional[str] = None,
-        user_agent: Optional[str] = None
+        details: dict[str, Any] | None = None,
+        ip_address: str | None = None,
+        user_agent: str | None = None
     ) -> AuditEvent:
         """Log a user-related action."""
         event_type_map = {
@@ -170,10 +170,10 @@ class AuditRepository:
             "locked": EventType.USER_LOCKED,
             "unlocked": EventType.USER_UNLOCKED
         }
-        
+
         event_type = event_type_map.get(action.lower(), EventType.SYSTEM_EVENT)
         priority = EventPriority.HIGH if "login_failed" in action.lower() else EventPriority.NORMAL
-        
+
         return await self.log(
             event_type=event_type,
             actor_id=actor_id,
@@ -185,13 +185,13 @@ class AuditRepository:
             user_agent=user_agent,
             priority=priority
         )
-    
+
     async def log_governance_action(
         self,
         actor_id: str,
         proposal_id: str,
         action: str,
-        details: Optional[dict[str, Any]] = None
+        details: dict[str, Any] | None = None
     ) -> AuditEvent:
         """Log a governance-related action."""
         event_type_map = {
@@ -202,9 +202,9 @@ class AuditRepository:
             "proposal_rejected": EventType.PROPOSAL_REJECTED,
             "proposal_executed": EventType.PROPOSAL_EXECUTED
         }
-        
+
         event_type = event_type_map.get(action.lower(), EventType.GOVERNANCE_EVENT)
-        
+
         return await self.log(
             event_type=event_type,
             actor_id=actor_id,
@@ -214,13 +214,13 @@ class AuditRepository:
             details=details,
             priority=EventPriority.HIGH
         )
-    
+
     async def log_overlay_action(
         self,
         actor_id: str,
         overlay_id: str,
         action: str,
-        details: Optional[dict[str, Any]] = None
+        details: dict[str, Any] | None = None
     ) -> AuditEvent:
         """Log an overlay-related action."""
         event_type_map = {
@@ -231,10 +231,10 @@ class AuditRepository:
             "error": EventType.OVERLAY_ERROR,
             "timeout": EventType.OVERLAY_TIMEOUT
         }
-        
+
         event_type = event_type_map.get(action.lower(), EventType.OVERLAY_EVENT)
         priority = EventPriority.HIGH if action.lower() in ("error", "timeout") else EventPriority.NORMAL
-        
+
         return await self.log(
             event_type=event_type,
             actor_id=actor_id,
@@ -244,15 +244,15 @@ class AuditRepository:
             details=details,
             priority=priority
         )
-    
+
     async def log_security_event(
         self,
         actor_id: str,
         event_name: str,
         details: dict[str, Any],
         resource_type: str = "security",
-        resource_id: Optional[str] = None,
-        ip_address: Optional[str] = None
+        resource_id: str | None = None,
+        ip_address: str | None = None
     ) -> AuditEvent:
         """Log a security-related event (high priority)."""
         return await self.log(
@@ -266,13 +266,13 @@ class AuditRepository:
             priority=EventPriority.CRITICAL,
             trust_level_required=TrustLevel.TRUSTED
         )
-    
+
     async def log_immune_event(
         self,
         event_name: str,
         details: dict[str, Any],
         resource_type: str = "system",
-        resource_id: Optional[str] = None
+        resource_id: str | None = None
     ) -> AuditEvent:
         """Log an immune system event."""
         return await self.log(
@@ -291,8 +291,8 @@ class AuditRepository:
         actor_id: str,
         cascade_id: str,
         action: str,
-        details: Optional[dict[str, Any]] = None,
-        correlation_id: Optional[str] = None
+        details: dict[str, Any] | None = None,
+        correlation_id: str | None = None
     ) -> AuditEvent:
         """Log a cascade-related action."""
         event_type_map = {
@@ -320,8 +320,8 @@ class AuditRepository:
         entity_type: str,
         entity_id: str,
         user_id: str,
-        details: Optional[dict[str, Any]] = None,
-        correlation_id: Optional[str] = None
+        details: dict[str, Any] | None = None,
+        correlation_id: str | None = None
     ) -> AuditEvent:
         """
         Generic action logging method.
@@ -377,12 +377,12 @@ class AuditRepository:
                 details=details,
                 correlation_id=correlation_id
             )
-    
+
     # =========================================================================
     # Query Operations
     # =========================================================================
-    
-    async def get_by_id(self, event_id: str) -> Optional[AuditEvent]:
+
+    async def get_by_id(self, event_id: str) -> AuditEvent | None:
         """Get audit event by ID."""
         query = """
         MATCH (a:AuditLog {id: $id})
@@ -390,7 +390,7 @@ class AuditRepository:
         """
         record = await self.db.execute_single(query, {"id": event_id})
         return self._to_audit_event(record["a"]) if record else None
-    
+
     async def get_by_correlation_id(self, correlation_id: str) -> list[AuditEvent]:
         """Get all events in a correlation chain."""
         query = """
@@ -400,26 +400,25 @@ class AuditRepository:
         """
         records = await self.db.execute(query, {"correlation_id": correlation_id})
         return [self._to_audit_event(r["a"]) for r in records]
-    
+
     async def get_by_actor(
         self,
         actor_id: str,
         limit: int = 100,
         offset: int = 0,
-        since: Optional[datetime] = None
+        since: datetime | None = None
     ) -> list[AuditEvent]:
         """Get audit events for a specific actor."""
-        since_clause = "AND a.timestamp >= datetime($since)" if since else ""
-        
+
         query = f"""
         MATCH (a:AuditLog {{actor_id: $actor_id}})
-        {f"WHERE a.timestamp >= datetime($since)" if since else ""}
+        {"WHERE a.timestamp >= datetime($since)" if since else ""}
         RETURN a
         ORDER BY a.timestamp DESC
         SKIP $offset
         LIMIT $limit
         """
-        
+
         params = {
             "actor_id": actor_id,
             "limit": limit,
@@ -427,10 +426,10 @@ class AuditRepository:
         }
         if since:
             params["since"] = since.isoformat()
-        
+
         records = await self.db.execute(query, params)
         return [self._to_audit_event(r["a"]) for r in records]
-    
+
     async def get_by_resource(
         self,
         resource_type: str,
@@ -446,7 +445,7 @@ class AuditRepository:
         SKIP $offset
         LIMIT $limit
         """
-        
+
         records = await self.db.execute(query, {
             "resource_type": resource_type,
             "resource_id": resource_id,
@@ -454,12 +453,12 @@ class AuditRepository:
             "offset": offset
         })
         return [self._to_audit_event(r["a"]) for r in records]
-    
+
     async def get_by_event_type(
         self,
         event_type: EventType,
-        since: Optional[datetime] = None,
-        until: Optional[datetime] = None,
+        since: datetime | None = None,
+        until: datetime | None = None,
         limit: int = 100
     ) -> list[AuditEvent]:
         """Get audit events of a specific type within time range."""
@@ -468,9 +467,9 @@ class AuditRepository:
             time_clauses.append("a.timestamp >= datetime($since)")
         if until:
             time_clauses.append("a.timestamp <= datetime($until)")
-        
+
         where_clause = f"WHERE {' AND '.join(time_clauses)}" if time_clauses else ""
-        
+
         query = f"""
         MATCH (a:AuditLog {{event_type: $event_type}})
         {where_clause}
@@ -478,7 +477,7 @@ class AuditRepository:
         ORDER BY a.timestamp DESC
         LIMIT $limit
         """
-        
+
         params = {
             "event_type": event_type.value,
             "limit": limit
@@ -487,29 +486,29 @@ class AuditRepository:
             params["since"] = since.isoformat()
         if until:
             params["until"] = until.isoformat()
-        
+
         records = await self.db.execute(query, params)
         return [self._to_audit_event(r["a"]) for r in records]
-    
+
     async def search(
         self,
         query_text: str,
-        event_types: Optional[list[EventType]] = None,
-        actor_ids: Optional[list[str]] = None,
-        resource_types: Optional[list[str]] = None,
-        since: Optional[datetime] = None,
-        until: Optional[datetime] = None,
-        priority: Optional[EventPriority] = None,
+        event_types: list[EventType] | None = None,
+        actor_ids: list[str] | None = None,
+        resource_types: list[str] | None = None,
+        since: datetime | None = None,
+        until: datetime | None = None,
+        priority: EventPriority | None = None,
         limit: int = 100,
         offset: int = 0
     ) -> list[AuditEvent]:
         """
         Search audit logs with multiple filters.
-        
+
         Full-text search on action field with optional filters.
         """
         conditions = ["a.action CONTAINS $query_text"]
-        
+
         if event_types:
             conditions.append("a.event_type IN $event_types")
         if actor_ids:
@@ -522,9 +521,9 @@ class AuditRepository:
             conditions.append("a.timestamp <= datetime($until)")
         if priority:
             conditions.append("a.priority >= $priority")
-        
+
         where_clause = " AND ".join(conditions)
-        
+
         query = f"""
         MATCH (a:AuditLog)
         WHERE {where_clause}
@@ -533,7 +532,7 @@ class AuditRepository:
         SKIP $offset
         LIMIT $limit
         """
-        
+
         params = {
             "query_text": query_text,
             "limit": limit,
@@ -551,38 +550,38 @@ class AuditRepository:
             params["until"] = until.isoformat()
         if priority:
             params["priority"] = priority.value
-        
+
         records = await self.db.execute(query, params)
         return [self._to_audit_event(r["a"]) for r in records]
-    
+
     # =========================================================================
     # Analytics & Reporting
     # =========================================================================
-    
+
     async def get_activity_summary(
         self,
         since: datetime,
-        until: Optional[datetime] = None
+        until: datetime | None = None
     ) -> dict[str, Any]:
         """Get summary statistics for audit activity."""
         until = until or datetime.utcnow()
-        
+
         query = """
         MATCH (a:AuditLog)
         WHERE a.timestamp >= datetime($since) AND a.timestamp <= datetime($until)
-        RETURN 
+        RETURN
             count(a) as total_events,
             count(DISTINCT a.actor_id) as unique_actors,
             count(DISTINCT a.resource_id) as unique_resources,
             collect(DISTINCT a.event_type) as event_types,
             collect(DISTINCT a.resource_type) as resource_types
         """
-        
+
         record = await self.db.execute_single(query, {
             "since": since.isoformat(),
             "until": until.isoformat()
         })
-        
+
         if not record:
             return {
                 "total_events": 0,
@@ -593,7 +592,7 @@ class AuditRepository:
                 "period_start": since.isoformat(),
                 "period_end": until.isoformat()
             }
-        
+
         return {
             "total_events": record["total_events"],
             "unique_actors": record["unique_actors"],
@@ -603,38 +602,38 @@ class AuditRepository:
             "period_start": since.isoformat(),
             "period_end": until.isoformat()
         }
-    
+
     async def get_event_counts_by_type(
         self,
         since: datetime,
-        until: Optional[datetime] = None
+        until: datetime | None = None
     ) -> dict[str, int]:
         """Get event counts grouped by type."""
         until = until or datetime.utcnow()
-        
+
         query = """
         MATCH (a:AuditLog)
         WHERE a.timestamp >= datetime($since) AND a.timestamp <= datetime($until)
         RETURN a.event_type as event_type, count(a) as count
         ORDER BY count DESC
         """
-        
+
         records = await self.db.execute(query, {
             "since": since.isoformat(),
             "until": until.isoformat()
         })
-        
+
         return {r["event_type"]: r["count"] for r in records}
-    
+
     async def get_actor_activity(
         self,
         since: datetime,
-        until: Optional[datetime] = None,
+        until: datetime | None = None,
         limit: int = 20
     ) -> list[dict[str, Any]]:
         """Get most active actors in time period."""
         until = until or datetime.utcnow()
-        
+
         query = """
         MATCH (a:AuditLog)
         WHERE a.timestamp >= datetime($since) AND a.timestamp <= datetime($until)
@@ -642,15 +641,15 @@ class AuditRepository:
         ORDER BY event_count DESC
         LIMIT $limit
         """
-        
+
         records = await self.db.execute(query, {
             "since": since.isoformat(),
             "until": until.isoformat(),
             "limit": limit
         })
-        
+
         return [{"actor_id": r["actor_id"], "event_count": r["event_count"]} for r in records]
-    
+
     async def get_failed_logins(
         self,
         since: datetime,
@@ -660,7 +659,7 @@ class AuditRepository:
         query = """
         MATCH (a:AuditLog {event_type: $event_type})
         WHERE a.timestamp >= datetime($since)
-        WITH a.actor_id as actor_id, 
+        WITH a.actor_id as actor_id,
              count(a) as attempt_count,
              collect(a.ip_address) as ip_addresses,
              max(a.timestamp) as last_attempt
@@ -668,47 +667,41 @@ class AuditRepository:
         RETURN actor_id, attempt_count, ip_addresses, last_attempt
         ORDER BY attempt_count DESC
         """
-        
+
         records = await self.db.execute(query, {
             "event_type": EventType.USER_LOGIN_FAILED.value,
             "since": since.isoformat(),
             "threshold": threshold
         })
-        
+
         return [
             {
                 "actor_id": r["actor_id"],
                 "attempt_count": r["attempt_count"],
-                "ip_addresses": list(set(ip for ip in r["ip_addresses"] if ip)),
+                "ip_addresses": list({ip for ip in r["ip_addresses"] if ip}),
                 "last_attempt": r["last_attempt"]
             }
             for r in records
         ]
-    
+
     async def get_security_events(
         self,
         since: datetime,
-        until: Optional[datetime] = None
+        until: datetime | None = None
     ) -> list[AuditEvent]:
         """Get all security-related events (for security review)."""
-        security_types = [
-            EventType.USER_LOGIN_FAILED,
-            EventType.USER_LOCKED,
-            EventType.SECURITY_EVENT,
-            EventType.USER_TRUST_CHANGED
-        ]
-        
+
         return await self.get_by_event_type(
             event_type=EventType.SECURITY_EVENT,
             since=since,
             until=until,
             limit=1000
         )
-    
+
     # =========================================================================
     # Maintenance Operations
     # =========================================================================
-    
+
     async def purge_old_events(
         self,
         older_than: datetime,
@@ -717,12 +710,12 @@ class AuditRepository:
     ) -> int:
         """
         Purge audit events older than specified date.
-        
+
         Args:
             older_than: Delete events before this date
             keep_security_events: If True, keep security events regardless of age
             keep_critical: If True, keep CRITICAL priority events
-            
+
         Returns:
             Number of deleted events
         """
@@ -731,9 +724,9 @@ class AuditRepository:
             exclusions.append("a.event_type <> $security_type")
         if keep_critical:
             exclusions.append("a.priority < $critical_priority")
-        
+
         exclusion_clause = f"AND ({' AND '.join(exclusions)})" if exclusions else ""
-        
+
         query = f"""
         MATCH (a:AuditLog)
         WHERE a.timestamp < datetime($older_than)
@@ -742,16 +735,16 @@ class AuditRepository:
         DETACH DELETE a
         RETURN count(*) as deleted_count
         """
-        
+
         params = {"older_than": older_than.isoformat()}
         if keep_security_events:
             params["security_type"] = EventType.SECURITY_EVENT.value
         if keep_critical:
             params["critical_priority"] = EventPriority.CRITICAL.value
-        
+
         record = await self.db.execute_single(query, params)
         return record["deleted_count"] if record else 0
-    
+
     async def archive_events(
         self,
         older_than: datetime,
@@ -786,11 +779,11 @@ class AuditRepository:
             "older_than": older_than.isoformat()
         })
         return record["archived_count"] if record else 0
-    
+
     async def count_events(
         self,
-        since: Optional[datetime] = None,
-        until: Optional[datetime] = None
+        since: datetime | None = None,
+        until: datetime | None = None
     ) -> int:
         """Count total audit events in time range."""
         conditions = []
@@ -798,32 +791,32 @@ class AuditRepository:
             conditions.append("a.timestamp >= datetime($since)")
         if until:
             conditions.append("a.timestamp <= datetime($until)")
-        
+
         where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
-        
+
         query = f"""
         MATCH (a:AuditLog)
         {where_clause}
         RETURN count(a) as total
         """
-        
+
         params = {}
         if since:
             params["since"] = since.isoformat()
         if until:
             params["until"] = until.isoformat()
-        
+
         record = await self.db.execute_single(query, params)
         return record["total"] if record else 0
-    
+
     # =========================================================================
     # Helper Methods
     # =========================================================================
-    
+
     def _to_audit_event(self, node: dict) -> AuditEvent:
         """Convert Neo4j node to AuditEvent model."""
         import json
-        
+
         # Parse JSON fields
         details = None
         if node.get("details"):
@@ -831,28 +824,28 @@ class AuditRepository:
                 details = json.loads(node["details"])
             except (json.JSONDecodeError, TypeError):
                 details = {"raw": node["details"]}
-        
+
         old_value = None
         if node.get("old_value"):
             try:
                 old_value = json.loads(node["old_value"])
             except (json.JSONDecodeError, TypeError):
                 old_value = {"raw": node["old_value"]}
-        
+
         new_value = None
         if node.get("new_value"):
             try:
                 new_value = json.loads(node["new_value"])
             except (json.JSONDecodeError, TypeError):
                 new_value = {"raw": node["new_value"]}
-        
+
         # Handle datetime conversion
         timestamp = node.get("timestamp")
         if hasattr(timestamp, 'to_native'):
             timestamp = timestamp.to_native()
         elif isinstance(timestamp, str):
             timestamp = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
-        
+
         return AuditEvent(
             id=node["id"],
             event_type=EventType(node["event_type"]),

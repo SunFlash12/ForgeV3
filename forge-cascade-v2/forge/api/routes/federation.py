@@ -16,9 +16,8 @@ import hashlib
 import logging
 import time
 import uuid
-from collections import defaultdict
-from datetime import datetime, timezone
-from typing import Any, Annotated
+from datetime import UTC, datetime
+from typing import Annotated, Any
 
 
 def _compute_content_hash(content: str | None) -> str | None:
@@ -40,29 +39,26 @@ def _compute_content_hash(content: str | None) -> str | None:
         return None
     return hashlib.sha256(content.encode('utf-8')).hexdigest()
 
-from fastapi import APIRouter, HTTPException, Depends, Query, Header, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
-from forge.api.dependencies import get_current_user, get_current_active_user
-from forge.models.user import User
+from forge.api.dependencies import get_current_active_user
+from forge.database.client import get_db_client
 from forge.federation.models import (
-    FederatedPeer,
-    FederatedCapsule,
-    SyncState,
-    SyncDirection,
-    PeerStatus,
     ConflictResolution,
+    FederatedPeer,
     PeerHandshake,
-    FederationStats,
+    PeerStatus,
+    SyncDirection,
     SyncOperationStatus,
-    SyncPhase,
     SyncPayload,
+    SyncPhase,
 )
 from forge.federation.protocol import FederationProtocol
 from forge.federation.sync import SyncService
 from forge.federation.trust import PeerTrustManager
+from forge.models.user import User
 from forge.repositories.capsule_repository import CapsuleRepository
-from forge.database.client import get_db_client
 
 logger = logging.getLogger(__name__)
 
@@ -500,7 +496,7 @@ async def register_peer(
 
     # Set to active after successful handshake
     peer.status = PeerStatus.ACTIVE
-    peer.last_seen_at = datetime.now(timezone.utc)
+    peer.last_seen_at = datetime.now(UTC)
 
     trust_tier = await trust_manager.get_trust_tier(peer)
 
@@ -943,7 +939,7 @@ async def federation_health():
     """Health check endpoint for peers."""
     return {
         "status": "healthy",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "api_version": FederationProtocol.API_VERSION,
     }
 
@@ -1099,8 +1095,8 @@ async def receive_capsules(
     rejected = 0
     conflicts = 0
 
-    from forge.models.capsule import CapsuleCreate
     from forge.models.base import CapsuleType
+    from forge.models.capsule import CapsuleCreate
 
     for remote_capsule in payload.capsules:
         try:
@@ -1199,7 +1195,7 @@ async def receive_capsules(
 
     # Update peer stats
     peer.capsules_received += accepted
-    peer.last_seen_at = datetime.now(timezone.utc)
+    peer.last_seen_at = datetime.now(UTC)
 
     logger.info(
         f"Federation receive_capsules from {peer.name}: "

@@ -9,20 +9,23 @@ Provides middleware, decorators, and helper functions.
 from __future__ import annotations
 
 import time
-from functools import wraps
-from typing import Any, Callable, Optional, TypeVar
-from datetime import datetime
+from collections.abc import Callable
+from typing import Any, TypeVar
 
 import structlog
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from forge.resilience.caching.cache_invalidation import CacheInvalidator, get_cache_invalidator
+from forge.resilience.caching.query_cache import QueryCache, get_query_cache
 from forge.resilience.config import get_resilience_config
-from forge.resilience.observability.tracing import get_tracer, OperationType
 from forge.resilience.observability.metrics import get_metrics
-from forge.resilience.caching.query_cache import get_query_cache, QueryCache
-from forge.resilience.caching.cache_invalidation import get_cache_invalidator, CacheInvalidator
-from forge.resilience.security.content_validator import get_content_validator, ValidationResult, ThreatLevel
+from forge.resilience.observability.tracing import get_tracer
+from forge.resilience.security.content_validator import (
+    ThreatLevel,
+    ValidationResult,
+    get_content_validator,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -74,7 +77,7 @@ class ObservabilityMiddleware(BaseHTTPMiddleware):
 
                 return response
 
-            except Exception as e:
+            except Exception:
                 # Record error
                 latency = time.perf_counter() - start_time
                 metrics.request_latency(
@@ -107,8 +110,8 @@ class ResilienceState:
     """
 
     def __init__(self):
-        self.cache: Optional[QueryCache] = None
-        self.invalidator: Optional[CacheInvalidator] = None
+        self.cache: QueryCache | None = None
+        self.invalidator: CacheInvalidator | None = None
         self.validator = None
         self.tracer = None
         self.metrics = None
@@ -152,7 +155,7 @@ class ResilienceState:
 
 
 # Global resilience state
-_resilience_state: Optional[ResilienceState] = None
+_resilience_state: ResilienceState | None = None
 
 
 async def get_resilience_state() -> ResilienceState:
@@ -182,7 +185,7 @@ async def shutdown_resilience(app) -> None:
 # Caching Helpers
 # =============================================================================
 
-async def get_cached_capsule(capsule_id: str) -> Optional[dict]:
+async def get_cached_capsule(capsule_id: str) -> dict | None:
     """Get a capsule from cache."""
     state = await get_resilience_state()
     if not state.cache:
@@ -220,7 +223,7 @@ async def invalidate_capsule_cache(capsule_id: str) -> int:
     return 1
 
 
-async def get_cached_search(query_hash: str) -> Optional[list]:
+async def get_cached_search(query_hash: str) -> list | None:
     """Get search results from cache."""
     state = await get_resilience_state()
     if not state.cache:
@@ -263,7 +266,7 @@ async def cache_search_results(
     )
 
 
-async def get_cached_lineage(capsule_id: str, depth: int) -> Optional[dict]:
+async def get_cached_lineage(capsule_id: str, depth: int) -> dict | None:
     """Get lineage from cache."""
     state = await get_resilience_state()
     if not state.cache:
@@ -400,7 +403,7 @@ def record_cache_miss(cache_type: str = "query") -> None:
 # Governance Caching Helpers
 # =============================================================================
 
-async def get_cached_proposal(proposal_id: str) -> Optional[dict]:
+async def get_cached_proposal(proposal_id: str) -> dict | None:
     """Get a proposal from cache."""
     state = await get_resilience_state()
     if not state.cache:
@@ -441,7 +444,7 @@ async def invalidate_proposal_cache(proposal_id: str) -> int:
     return 1
 
 
-async def get_cached_proposals_list(cache_key: str) -> Optional[dict]:
+async def get_cached_proposals_list(cache_key: str) -> dict | None:
     """Get proposals list from cache."""
     state = await get_resilience_state()
     if not state.cache:
@@ -464,7 +467,7 @@ async def cache_proposals_list(cache_key: str, data: dict, ttl: int = 120) -> bo
     )
 
 
-async def get_cached_governance_metrics() -> Optional[dict]:
+async def get_cached_governance_metrics() -> dict | None:
     """Get governance metrics from cache."""
     state = await get_resilience_state()
     if not state.cache:
@@ -599,7 +602,7 @@ def record_overlays_reloaded(count: int) -> None:
 # Overlay Caching Helpers
 # =============================================================================
 
-async def get_cached_overlay_list() -> Optional[list]:
+async def get_cached_overlay_list() -> list | None:
     """Get overlay list from cache."""
     state = await get_resilience_state()
     if not state.cache:
@@ -678,7 +681,7 @@ def record_cache_cleared(caches: list[str]) -> None:
 # System Caching Helpers
 # =============================================================================
 
-async def get_cached_system_metrics() -> Optional[dict]:
+async def get_cached_system_metrics() -> dict | None:
     """Get system metrics from cache."""
     state = await get_resilience_state()
     if not state.cache:
@@ -701,7 +704,7 @@ async def cache_system_metrics(metrics_data: dict, ttl: int = 30) -> bool:
     )
 
 
-async def get_cached_health_status() -> Optional[dict]:
+async def get_cached_health_status() -> dict | None:
     """Get health status from cache."""
     state = await get_resilience_state()
     if not state.cache:
@@ -757,7 +760,7 @@ def record_pipeline_executed(pipeline_id: str, status: str, duration_ms: float) 
 # Cascade Caching Helpers
 # =============================================================================
 
-async def get_cached_active_cascades() -> Optional[list]:
+async def get_cached_active_cascades() -> list | None:
     """Get active cascades from cache."""
     state = await get_resilience_state()
     if not state.cache:
@@ -780,7 +783,7 @@ async def cache_active_cascades(cascades: list, ttl: int = 30) -> bool:
     )
 
 
-async def get_cached_cascade_metrics() -> Optional[dict]:
+async def get_cached_cascade_metrics() -> dict | None:
     """Get cascade metrics from cache."""
     state = await get_resilience_state()
     if not state.cache:

@@ -12,19 +12,16 @@ This service:
 
 from __future__ import annotations
 
-import asyncio
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
-from typing import Any, Optional
 
 import structlog
 
 from forge.models.capsule import Capsule
-from forge.models.semantic_edges import SemanticRelationType, SemanticEdge
+from forge.models.semantic_edges import SemanticEdge, SemanticRelationType
 from forge.repositories.capsule_repository import CapsuleRepository
 from forge.services.embedding import EmbeddingService, get_embedding_service
-from forge.services.llm import get_llm_service, LLMMessage
+from forge.services.llm import LLMMessage, get_llm_service
 
 logger = structlog.get_logger(__name__)
 

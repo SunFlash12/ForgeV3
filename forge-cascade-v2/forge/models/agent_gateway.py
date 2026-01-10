@@ -4,10 +4,12 @@ Agent Knowledge Gateway Models
 Data structures for AI agent interactions with the knowledge graph.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
+
 from pydantic import Field
+
 from forge.models.base import ForgeModel, generate_id
 
 
@@ -82,7 +84,7 @@ class AgentSession(ForgeModel):
 
     # Session state
     is_active: bool = Field(default=True)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     expires_at: datetime | None = None
 
     # Metadata
@@ -119,7 +121,7 @@ class AgentQuery(ForgeModel):
     include_lineage: bool = Field(default=False)
 
     # Execution
-    submitted_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    submitted_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     timeout_seconds: int = Field(default=30, ge=1, le=300)
 
 
@@ -161,7 +163,7 @@ class QueryResult(ForgeModel):
     error: str | None = None
     error_code: str | None = None
 
-    completed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    completed_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class AccessType(str, Enum):
@@ -190,7 +192,7 @@ class CapsuleAccess(ForgeModel):
     access_granted: bool
     denial_reason: str | None = None
 
-    accessed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    accessed_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class AgentCapsuleCreation(ForgeModel):
@@ -258,7 +260,7 @@ class GatewayStats(ForgeModel):
     error_count: int = 0
     error_rate: float = 0.0
 
-    calculated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    calculated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class StreamChunk(ForgeModel):
@@ -277,4 +279,4 @@ class StreamChunk(ForgeModel):
     is_final: bool = Field(default=False)
     progress_percent: int | None = None
 
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))

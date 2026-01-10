@@ -15,28 +15,20 @@ Uses a hybrid versioning strategy:
 
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Any, Optional
+from typing import Any
+
 import structlog
 
+from ..models.base import TrustLevel
 from ..models.events import Event, EventType
 from ..models.overlay import Capability
-from ..models.base import TrustLevel
 from ..models.temporal import (
-    CapsuleVersion,
-    TrustSnapshot,
-    GraphSnapshot,
-    VersioningPolicy,
+    SnapshotType,
     TrustSnapshotCompressor,
-    TrustChangeType,
-    SnapshotType
+    VersioningPolicy,
 )
 from ..repositories.temporal_repository import TemporalRepository
-from .base import (
-    BaseOverlay,
-    OverlayContext,
-    OverlayResult,
-    OverlayError
-)
+from .base import BaseOverlay, OverlayContext, OverlayError, OverlayResult
 
 logger = structlog.get_logger()
 
@@ -114,8 +106,8 @@ class TemporalTrackerOverlay(BaseOverlay):
 
     def __init__(
         self,
-        temporal_repository: Optional[TemporalRepository] = None,
-        config: Optional[TemporalConfig] = None
+        temporal_repository: TemporalRepository | None = None,
+        config: TemporalConfig | None = None
     ):
         """
         Initialize the temporal tracker.
@@ -138,7 +130,7 @@ class TemporalTrackerOverlay(BaseOverlay):
         self._version_counts: dict[str, int] = {}
 
         # Last graph snapshot time
-        self._last_graph_snapshot: Optional[datetime] = None
+        self._last_graph_snapshot: datetime | None = None
 
         # Statistics
         self._stats = {
@@ -168,8 +160,8 @@ class TemporalTrackerOverlay(BaseOverlay):
     async def execute(
         self,
         context: OverlayContext,
-        event: Optional[Event] = None,
-        input_data: Optional[dict[str, Any]] = None
+        event: Event | None = None,
+        input_data: dict[str, Any] | None = None
     ) -> OverlayResult:
         """
         Execute temporal tracking operations.
@@ -631,7 +623,7 @@ class TemporalTrackerOverlay(BaseOverlay):
 
 # Convenience function
 def create_temporal_tracker_overlay(
-    temporal_repository: Optional[TemporalRepository] = None,
+    temporal_repository: TemporalRepository | None = None,
     **kwargs
 ) -> TemporalTrackerOverlay:
     """

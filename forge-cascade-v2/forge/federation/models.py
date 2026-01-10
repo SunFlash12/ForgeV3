@@ -4,11 +4,11 @@ Federation Data Models
 Defines the data structures for federated knowledge sharing between Forge instances.
 """
 
-from datetime import UTC, datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
-from pydantic import Field, HttpUrl
+from pydantic import Field
 
 from forge.models.base import ForgeModel, generate_id
 

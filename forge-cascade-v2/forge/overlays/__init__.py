@@ -20,124 +20,102 @@ Pipeline Phase Mapping:
 from .base import (
     # Base classes
     BaseOverlay,
-    OverlayContext,
-    OverlayResult,
-    
-    # Built-in overlays
-    PassthroughOverlay,
+    CapabilityError,
     CompositeOverlay,
-    
+    OverlayContext,
     # Exceptions
     OverlayError,
-    CapabilityError,
-    ResourceLimitError,
+    OverlayResult,
     OverlayTimeoutError,
+    # Built-in overlays
+    PassthroughOverlay,
+    ResourceLimitError,
 )
-
-from .security_validator import (
-    SecurityValidatorOverlay,
-    create_security_validator,
-    
-    # Rules
-    ValidationRule,
-    ContentPolicyRule,
-    TrustRule,
-    RateLimitRule,
-    InputSanitizationRule,
-    
-    # Results
-    ValidationResult,
-    
-    # Exceptions
-    SecurityValidationError,
-    ThreatDetectedError,
-    RateLimitExceededError,
-)
-
-from .ml_intelligence import (
-    MLIntelligenceOverlay,
-    create_ml_intelligence,
-    
-    # Results
-    EmbeddingResult,
-    ClassificationResult,
-    EntityExtractionResult,
-    PatternMatch,
-    AnalysisResult,
-    
-    # Exceptions
-    MLProcessingError,
-    EmbeddingError,
-)
-
-from .governance import (
-    GovernanceOverlay,
-    create_governance_overlay,
-    
-    # Configuration
-    ConsensusConfig,
-    PolicyRule,
-    
-    # Data classes
-    VoteRecord,
-    ConsensusResult,
-    GovernanceDecision,
-    VotingStatus,
-    
-    # Exceptions
-    GovernanceError,
-    InsufficientQuorumError,
-    PolicyViolationError,
-    ConsensusFailedError,
-)
-
-from .lineage_tracker import (
-    LineageTrackerOverlay,
-    create_lineage_tracker,
-    
-    # Data classes
-    LineageNode,
-    LineageChain,
-    LineageMetrics,
-    LineageAnomaly,
-    
-    # Exceptions
-    LineageError,
-    CircularLineageError,
-    BrokenChainError,
-)
-
-from .performance_optimizer import (
-    PerformanceOptimizerOverlay,
-)
-
 from .capsule_analyzer import (
     CapsuleAnalyzerOverlay,
 )
-
+from .governance import (
+    # Configuration
+    ConsensusConfig,
+    ConsensusFailedError,
+    ConsensusResult,
+    GovernanceDecision,
+    # Exceptions
+    GovernanceError,
+    GovernanceOverlay,
+    InsufficientQuorumError,
+    PolicyRule,
+    PolicyViolationError,
+    # Data classes
+    VoteRecord,
+    VotingStatus,
+    create_governance_overlay,
+)
 from .graph_algorithms import (
+    AlgorithmConfig,
+    GraphAlgorithmError,
     GraphAlgorithmsOverlay,
     create_graph_algorithms_overlay,
-    GraphAlgorithmError,
-    AlgorithmConfig,
 )
-
 from .knowledge_query import (
     KnowledgeQueryOverlay,
-    create_knowledge_query_overlay,
     QueryCompilationError,
-    QueryExecutionError,
     QueryConfig,
+    QueryExecutionError,
+    create_knowledge_query_overlay,
 )
-
+from .lineage_tracker import (
+    BrokenChainError,
+    CircularLineageError,
+    LineageAnomaly,
+    LineageChain,
+    # Exceptions
+    LineageError,
+    LineageMetrics,
+    # Data classes
+    LineageNode,
+    LineageTrackerOverlay,
+    create_lineage_tracker,
+)
+from .ml_intelligence import (
+    AnalysisResult,
+    ClassificationResult,
+    EmbeddingError,
+    # Results
+    EmbeddingResult,
+    EntityExtractionResult,
+    MLIntelligenceOverlay,
+    # Exceptions
+    MLProcessingError,
+    PatternMatch,
+    create_ml_intelligence,
+)
+from .performance_optimizer import (
+    PerformanceOptimizerOverlay,
+)
+from .security_validator import (
+    ContentPolicyRule,
+    InputSanitizationRule,
+    RateLimitExceededError,
+    RateLimitRule,
+    # Exceptions
+    SecurityValidationError,
+    SecurityValidatorOverlay,
+    ThreatDetectedError,
+    TrustRule,
+    # Results
+    ValidationResult,
+    # Rules
+    ValidationRule,
+    create_security_validator,
+)
 from .temporal_tracker import (
-    TemporalTrackerOverlay,
-    create_temporal_tracker_overlay,
-    TemporalError,
-    VersionNotFoundError,
     TemporalConfig,
+    TemporalError,
+    TemporalTrackerOverlay,
+    VersionNotFoundError,
+    create_temporal_tracker_overlay,
 )
-
 
 __all__ = [
     # Base
@@ -150,7 +128,7 @@ __all__ = [
     "CapabilityError",
     "ResourceLimitError",
     "OverlayTimeoutError",
-    
+
     # Security Validator
     "SecurityValidatorOverlay",
     "create_security_validator",
@@ -163,7 +141,7 @@ __all__ = [
     "SecurityValidationError",
     "ThreatDetectedError",
     "RateLimitExceededError",
-    
+
     # ML Intelligence
     "MLIntelligenceOverlay",
     "create_ml_intelligence",
@@ -174,7 +152,7 @@ __all__ = [
     "AnalysisResult",
     "MLProcessingError",
     "EmbeddingError",
-    
+
     # Governance
     "GovernanceOverlay",
     "create_governance_overlay",
@@ -188,7 +166,7 @@ __all__ = [
     "InsufficientQuorumError",
     "PolicyViolationError",
     "ConsensusFailedError",
-    
+
     # Lineage Tracker
     "LineageTrackerOverlay",
     "create_lineage_tracker",
@@ -199,7 +177,7 @@ __all__ = [
     "LineageError",
     "CircularLineageError",
     "BrokenChainError",
-    
+
     # Performance Optimizer
     "PerformanceOptimizerOverlay",
 

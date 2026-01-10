@@ -8,12 +8,13 @@ Tracks key performance indicators and system health metrics.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Any, Callable, Dict, Optional
-from enum import Enum
 import functools
 import time
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from datetime import datetime
+from enum import Enum
+from typing import Any
 
 import structlog
 
@@ -24,10 +25,10 @@ logger = structlog.get_logger(__name__)
 # Try to import OpenTelemetry metrics, but allow graceful degradation
 try:
     from opentelemetry import metrics
+    from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
     from opentelemetry.sdk.metrics import MeterProvider
     from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
-    from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
-    from opentelemetry.sdk.resources import Resource, SERVICE_NAME, SERVICE_VERSION
+    from opentelemetry.sdk.resources import SERVICE_NAME, SERVICE_VERSION, Resource
     OTEL_METRICS_AVAILABLE = True
 except ImportError:
     OTEL_METRICS_AVAILABLE = False
@@ -81,28 +82,28 @@ class MetricValue:
 
     name: str
     value: float
-    labels: Dict[str, str] = field(default_factory=dict)
+    labels: dict[str, str] = field(default_factory=dict)
     timestamp: datetime = field(default_factory=datetime.utcnow)
 
 
 class NoOpCounter:
     """No-op counter for when OpenTelemetry is not available."""
 
-    def add(self, value: int, attributes: Optional[Dict] = None) -> None:
+    def add(self, value: int, attributes: dict | None = None) -> None:
         pass
 
 
 class NoOpHistogram:
     """No-op histogram for when OpenTelemetry is not available."""
 
-    def record(self, value: float, attributes: Optional[Dict] = None) -> None:
+    def record(self, value: float, attributes: dict | None = None) -> None:
         pass
 
 
 class NoOpGauge:
     """No-op gauge for when OpenTelemetry is not available."""
 
-    def set(self, value: float, attributes: Optional[Dict] = None) -> None:
+    def set(self, value: float, attributes: dict | None = None) -> None:
         pass
 
 
@@ -132,13 +133,13 @@ class ForgeMetrics:
         self._initialized = False
 
         # Metric instruments
-        self._counters: Dict[str, Any] = {}
-        self._histograms: Dict[str, Any] = {}
-        self._gauges: Dict[str, Any] = {}
+        self._counters: dict[str, Any] = {}
+        self._histograms: dict[str, Any] = {}
+        self._gauges: dict[str, Any] = {}
 
         # In-memory stats for when OTEL is not available
-        self._local_counters: Dict[str, int] = {}
-        self._local_histograms: Dict[str, list] = {}
+        self._local_counters: dict[str, int] = {}
+        self._local_histograms: dict[str, list] = {}
 
     def initialize(self) -> None:
         """Initialize the metrics collector."""
@@ -289,7 +290,7 @@ class ForgeMetrics:
         self,
         metric_name: str,
         value: int = 1,
-        labels: Optional[Dict[str, str]] = None
+        labels: dict[str, str] | None = None
     ) -> None:
         """Increment a counter metric."""
         if not self._initialized:
@@ -307,7 +308,7 @@ class ForgeMetrics:
         self,
         metric_name: str,
         latency_seconds: float,
-        labels: Optional[Dict[str, str]] = None
+        labels: dict[str, str] | None = None
     ) -> None:
         """Record a latency measurement."""
         if not self._initialized:
@@ -428,7 +429,7 @@ class ForgeMetrics:
             labels={"depth": str(min(depth, 10))}
         )
 
-    def get_local_stats(self) -> Dict[str, Any]:
+    def get_local_stats(self) -> dict[str, Any]:
         """Get locally tracked statistics."""
         return {
             "counters": dict(self._local_counters),
@@ -446,7 +447,7 @@ class ForgeMetrics:
 
 
 # Global metrics instance
-_forge_metrics: Optional[ForgeMetrics] = None
+_forge_metrics: ForgeMetrics | None = None
 
 
 def get_metrics() -> ForgeMetrics:
@@ -458,7 +459,7 @@ def get_metrics() -> ForgeMetrics:
     return _forge_metrics
 
 
-def timed(metric_name: str, labels: Optional[Dict[str, str]] = None) -> Callable:
+def timed(metric_name: str, labels: dict[str, str] | None = None) -> Callable:
     """
     Decorator to time function execution.
 

@@ -10,7 +10,6 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional
 
 
 class DeploymentProfile(Enum):
@@ -166,7 +165,7 @@ class ForgeResilienceConfig:
     runbooks: RunbookConfig = field(default_factory=RunbookConfig)
 
     @classmethod
-    def from_environment(cls) -> 'ForgeResilienceConfig':
+    def from_environment(cls) -> ForgeResilienceConfig:
         """Load configuration from environment variables."""
         profile_str = os.getenv("FORGE_PROFILE", "standard").lower()
         profile = DeploymentProfile(profile_str)
@@ -200,7 +199,7 @@ class ForgeResilienceConfig:
 
 
 # Default global configuration
-_default_config: Optional[ForgeResilienceConfig] = None
+_default_config: ForgeResilienceConfig | None = None
 
 
 def get_resilience_config() -> ForgeResilienceConfig:

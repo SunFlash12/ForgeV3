@@ -5,7 +5,7 @@ Multi-level health monitoring system for Forge components.
 Health Hierarchy:
 - System (top-level aggregate)
   - Database Layer
-  - Kernel Layer  
+  - Kernel Layer
   - API Layer
   - External Services
 
@@ -18,10 +18,11 @@ import asyncio
 import os
 import time
 from abc import ABC, abstractmethod
+from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Callable, Coroutine
+from typing import Any
 
 import structlog
 
@@ -43,25 +44,25 @@ class HealthStatus(str, Enum):
 @dataclass
 class HealthCheckResult:
     """Result of a health check."""
-    
+
     name: str
     status: HealthStatus
     message: str = ""
     latency_ms: float | None = None
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     details: dict[str, Any] = field(default_factory=dict)
     children: list[HealthCheckResult] = field(default_factory=list)
-    
+
     @property
     def is_healthy(self) -> bool:
         """Check if status is healthy."""
         return self.status == HealthStatus.HEALTHY
-    
+
     @property
     def is_degraded(self) -> bool:
         """Check if status is degraded or worse."""
         return self.status in (HealthStatus.DEGRADED, HealthStatus.UNHEALTHY)
-    
+
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for API responses."""
         result = {
@@ -70,42 +71,42 @@ class HealthCheckResult:
             "message": self.message,
             "timestamp": self.timestamp.isoformat(),
         }
-        
+
         if self.latency_ms is not None:
             result["latency_ms"] = self.latency_ms
-        
+
         if self.details:
             result["details"] = self.details
-        
+
         if self.children:
             result["children"] = [c.to_dict() for c in self.children]
-        
+
         return result
 
 
 @dataclass
 class HealthCheckConfig:
     """Configuration for health checks."""
-    
+
     # Timing
     timeout_seconds: float = 5.0
     check_interval_seconds: float = 30.0
-    
+
     # Thresholds
     latency_warning_ms: float = 1000.0   # Degraded if slower
     latency_critical_ms: float = 5000.0   # Unhealthy if slower
-    
+
     # Retry
     retry_count: int = 2
     retry_delay_seconds: float = 1.0
-    
+
     # Caching
     cache_ttl_seconds: float = 10.0
 
 
 class HealthCheck(ABC):
     """Abstract base class for health checks."""
-    
+
     def __init__(
         self,
         name: str,
@@ -115,12 +116,12 @@ class HealthCheck(ABC):
         self.config = config or HealthCheckConfig()
         self._last_result: HealthCheckResult | None = None
         self._last_check_time: float = 0
-    
+
     @abstractmethod
     async def check(self) -> HealthCheckResult:
         """Perform the health check."""
         pass
-    
+
     async def execute(self, use_cache: bool = True) -> HealthCheckResult:
         """Execute health check with caching and timing."""
         # Check cache
@@ -128,12 +129,12 @@ class HealthCheck(ABC):
             elapsed = time.monotonic() - self._last_check_time
             if elapsed < self.config.cache_ttl_seconds:
                 return self._last_result
-        
+
         # Perform check with retry
         start_time = time.monotonic()
         result: HealthCheckResult | None = None
         last_error: Exception | None = None
-        
+
         for attempt in range(self.config.retry_count + 1):
             try:
                 result = await asyncio.wait_for(
@@ -141,17 +142,17 @@ class HealthCheck(ABC):
                     timeout=self.config.timeout_seconds,
                 )
                 break
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 last_error = TimeoutError(f"Health check timed out after {self.config.timeout_seconds}s")
             except Exception as e:
                 last_error = e
-            
+
             if attempt < self.config.retry_count:
                 await asyncio.sleep(self.config.retry_delay_seconds)
-        
+
         # Calculate latency
         latency_ms = (time.monotonic() - start_time) * 1000
-        
+
         # Build result
         if result is None:
             result = HealthCheckResult(
@@ -162,7 +163,7 @@ class HealthCheck(ABC):
             )
         else:
             result.latency_ms = latency_ms
-            
+
             # Apply latency thresholds
             if result.status == HealthStatus.HEALTHY:
                 if latency_ms > self.config.latency_critical_ms:
@@ -171,25 +172,25 @@ class HealthCheck(ABC):
                 elif latency_ms > self.config.latency_warning_ms:
                     result.status = HealthStatus.DEGRADED
                     result.message = f"Latency warning: {latency_ms:.0f}ms"
-        
+
         # Update cache
         self._last_result = result
         self._last_check_time = time.monotonic()
-        
+
         return result
 
 
 class CompositeHealthCheck(HealthCheck):
     """
     Health check that aggregates multiple child checks.
-    
+
     Aggregation rules:
     - All children HEALTHY → HEALTHY
     - Any child UNHEALTHY → UNHEALTHY
     - Any child DEGRADED (no UNHEALTHY) → DEGRADED
     - All children UNKNOWN → UNKNOWN
     """
-    
+
     def __init__(
         self,
         name: str,
@@ -198,11 +199,11 @@ class CompositeHealthCheck(HealthCheck):
     ):
         super().__init__(name, config)
         self.checks: list[HealthCheck] = checks or []
-    
+
     def add_check(self, check: HealthCheck) -> None:
         """Add a child health check."""
         self.checks.append(check)
-    
+
     def remove_check(self, name: str) -> bool:
         """Remove a child health check by name."""
         for i, check in enumerate(self.checks):
@@ -210,7 +211,7 @@ class CompositeHealthCheck(HealthCheck):
                 self.checks.pop(i)
                 return True
         return False
-    
+
     async def check(self) -> HealthCheckResult:
         """Perform all child checks and aggregate."""
         if not self.checks:
@@ -219,17 +220,17 @@ class CompositeHealthCheck(HealthCheck):
                 status=HealthStatus.UNKNOWN,
                 message="No health checks configured",
             )
-        
+
         # Run all checks concurrently
         child_results = await asyncio.gather(
             *[c.execute() for c in self.checks],
             return_exceptions=True,
         )
-        
+
         # Process results
         children: list[HealthCheckResult] = []
         statuses: list[HealthStatus] = []
-        
+
         for result in child_results:
             if isinstance(result, Exception):
                 children.append(HealthCheckResult(
@@ -241,7 +242,7 @@ class CompositeHealthCheck(HealthCheck):
             else:
                 children.append(result)
                 statuses.append(result.status)
-        
+
         # Aggregate status
         if all(s == HealthStatus.HEALTHY for s in statuses):
             aggregate_status = HealthStatus.HEALTHY
@@ -257,7 +258,7 @@ class CompositeHealthCheck(HealthCheck):
         else:
             aggregate_status = HealthStatus.UNKNOWN
             message = "Unable to determine status"
-        
+
         return HealthCheckResult(
             name=self.name,
             status=aggregate_status,
@@ -275,7 +276,7 @@ class CompositeHealthCheck(HealthCheck):
 
 class FunctionHealthCheck(HealthCheck):
     """Health check based on an async function."""
-    
+
     def __init__(
         self,
         name: str,
@@ -284,7 +285,7 @@ class FunctionHealthCheck(HealthCheck):
     ):
         super().__init__(name, config)
         self.check_fn = check_fn
-    
+
     async def check(self) -> HealthCheckResult:
         """Execute the check function."""
         try:
@@ -304,7 +305,7 @@ class FunctionHealthCheck(HealthCheck):
 
 class Neo4jHealthCheck(HealthCheck):
     """Health check for Neo4j database connection."""
-    
+
     def __init__(
         self,
         client: Any,  # Neo4jClient
@@ -312,7 +313,7 @@ class Neo4jHealthCheck(HealthCheck):
     ):
         super().__init__("neo4j", config)
         self.client = client
-    
+
     async def check(self) -> HealthCheckResult:
         """Check Neo4j connectivity."""
         try:
@@ -320,7 +321,7 @@ class Neo4jHealthCheck(HealthCheck):
             async with self.client.session() as session:
                 result = await session.run("RETURN 1 as n")
                 record = await result.single()
-                
+
                 if record and record["n"] == 1:
                     return HealthCheckResult(
                         name=self.name,
@@ -330,7 +331,7 @@ class Neo4jHealthCheck(HealthCheck):
                             "uri": self.client.uri[:30] + "...",
                         },
                     )
-                
+
                 return HealthCheckResult(
                     name=self.name,
                     status=HealthStatus.UNHEALTHY,
@@ -346,7 +347,7 @@ class Neo4jHealthCheck(HealthCheck):
 
 class OverlayHealthCheck(HealthCheck):
     """Health check for overlay system."""
-    
+
     def __init__(
         self,
         overlay_manager: Any,  # OverlayManager
@@ -354,16 +355,16 @@ class OverlayHealthCheck(HealthCheck):
     ):
         super().__init__("overlays", config)
         self.overlay_manager = overlay_manager
-    
+
     async def check(self) -> HealthCheckResult:
         """Check overlay system health."""
         try:
             status = await self.overlay_manager.get_system_status()
-            
+
             total = status.get("total_overlays", 0)
             active = status.get("active_overlays", 0)
             errored = status.get("errored_overlays", 0)
-            
+
             if errored > 0:
                 health_status = HealthStatus.DEGRADED
                 message = f"{errored} overlay(s) in error state"
@@ -373,7 +374,7 @@ class OverlayHealthCheck(HealthCheck):
             else:
                 health_status = HealthStatus.DEGRADED
                 message = f"{active}/{total} overlays active"
-            
+
             return HealthCheckResult(
                 name=self.name,
                 status=health_status,
@@ -390,7 +391,7 @@ class OverlayHealthCheck(HealthCheck):
 
 class EventSystemHealthCheck(HealthCheck):
     """Health check for event system."""
-    
+
     def __init__(
         self,
         event_system: Any,  # EventSystem
@@ -398,17 +399,17 @@ class EventSystemHealthCheck(HealthCheck):
     ):
         super().__init__("events", config)
         self.event_system = event_system
-    
+
     async def check(self) -> HealthCheckResult:
         """Check event system health."""
         try:
             # Get event system metrics
             metrics = self.event_system.get_metrics()
-            
+
             pending = metrics.get("pending_events", 0)
             dead_letter = metrics.get("dead_letter_count", 0)
             subscribers = metrics.get("subscriber_count", 0)
-            
+
             # Determine health (using configurable thresholds)
             if dead_letter > HEALTH_DEAD_LETTER_THRESHOLD:
                 health_status = HealthStatus.DEGRADED
@@ -422,7 +423,7 @@ class EventSystemHealthCheck(HealthCheck):
             else:
                 health_status = HealthStatus.HEALTHY
                 message = f"{subscribers} subscribers, {pending} pending"
-            
+
             return HealthCheckResult(
                 name=self.name,
                 status=health_status,
@@ -439,7 +440,7 @@ class EventSystemHealthCheck(HealthCheck):
 
 class CircuitBreakerHealthCheck(HealthCheck):
     """Health check for circuit breakers."""
-    
+
     def __init__(
         self,
         registry: Any,  # CircuitBreakerRegistry
@@ -447,16 +448,16 @@ class CircuitBreakerHealthCheck(HealthCheck):
     ):
         super().__init__("circuit_breakers", config)
         self.registry = registry
-    
+
     async def check(self) -> HealthCheckResult:
         """Check circuit breaker health."""
         try:
             summary = self.registry.get_health_summary()
-            
+
             open_circuits = summary.get("open", 0)
             total = summary.get("total_circuits", 0)
-            health_score = summary.get("health_score", 1.0)
-            
+            summary.get("health_score", 1.0)
+
             if open_circuits > 0:
                 health_status = HealthStatus.DEGRADED
                 open_names = summary.get("open_circuits", [])
@@ -467,7 +468,7 @@ class CircuitBreakerHealthCheck(HealthCheck):
             else:
                 health_status = HealthStatus.HEALTHY
                 message = f"All {total} circuits closed"
-            
+
             return HealthCheckResult(
                 name=self.name,
                 status=health_status,
@@ -484,7 +485,7 @@ class CircuitBreakerHealthCheck(HealthCheck):
 
 class MemoryHealthCheck(HealthCheck):
     """Health check for memory usage."""
-    
+
     def __init__(
         self,
         warning_percent: float = 80.0,
@@ -494,15 +495,15 @@ class MemoryHealthCheck(HealthCheck):
         super().__init__("memory", config)
         self.warning_percent = warning_percent
         self.critical_percent = critical_percent
-    
+
     async def check(self) -> HealthCheckResult:
         """Check memory usage."""
         try:
             import psutil
-            
+
             memory = psutil.virtual_memory()
             used_percent = memory.percent
-            
+
             if used_percent >= self.critical_percent:
                 health_status = HealthStatus.UNHEALTHY
                 message = f"Critical memory usage: {used_percent:.1f}%"
@@ -512,7 +513,7 @@ class MemoryHealthCheck(HealthCheck):
             else:
                 health_status = HealthStatus.HEALTHY
                 message = f"Memory usage: {used_percent:.1f}%"
-            
+
             return HealthCheckResult(
                 name=self.name,
                 status=health_status,
@@ -539,7 +540,7 @@ class MemoryHealthCheck(HealthCheck):
 
 class DiskHealthCheck(HealthCheck):
     """Health check for disk usage."""
-    
+
     def __init__(
         self,
         path: str = "/",
@@ -551,15 +552,15 @@ class DiskHealthCheck(HealthCheck):
         self.path = path
         self.warning_percent = warning_percent
         self.critical_percent = critical_percent
-    
+
     async def check(self) -> HealthCheckResult:
         """Check disk usage."""
         try:
             import psutil
-            
+
             disk = psutil.disk_usage(self.path)
             used_percent = disk.percent
-            
+
             if used_percent >= self.critical_percent:
                 health_status = HealthStatus.UNHEALTHY
                 message = f"Critical disk usage: {used_percent:.1f}%"
@@ -569,7 +570,7 @@ class DiskHealthCheck(HealthCheck):
             else:
                 health_status = HealthStatus.HEALTHY
                 message = f"Disk usage: {used_percent:.1f}%"
-            
+
             return HealthCheckResult(
                 name=self.name,
                 status=health_status,
@@ -598,20 +599,20 @@ class DiskHealthCheck(HealthCheck):
 class ForgeHealthChecker:
     """
     Main health checker for Forge system.
-    
+
     Provides hierarchical health monitoring:
     - System Health (aggregate)
       - Database Health
       - Kernel Health (events + overlays)
       - Infrastructure Health (memory, disk, circuits)
     """
-    
+
     def __init__(self):
         self.root = CompositeHealthCheck("forge_system")
         self._checks: dict[str, HealthCheck] = {}
         self._background_task: asyncio.Task | None = None
         self._running = False
-    
+
     def add_check(
         self,
         category: str,
@@ -622,12 +623,12 @@ class ForgeHealthChecker:
         if category not in self._checks:
             self._checks[category] = CompositeHealthCheck(category)
             self.root.add_check(self._checks[category])
-        
+
         # Add check to category
         category_check = self._checks[category]
         if isinstance(category_check, CompositeHealthCheck):
             category_check.add_check(check)
-    
+
     def add_simple_check(
         self,
         category: str,
@@ -636,18 +637,18 @@ class ForgeHealthChecker:
     ) -> None:
         """Add a simple function-based health check."""
         self.add_check(category, FunctionHealthCheck(name, check_fn))
-    
+
     async def check_health(self) -> HealthCheckResult:
         """Perform full system health check."""
         return await self.root.execute(use_cache=False)
-    
+
     async def check_category(self, category: str) -> HealthCheckResult | None:
         """Check health of a specific category."""
         check = self._checks.get(category)
         if check:
             return await check.execute()
         return None
-    
+
     async def get_quick_status(self) -> dict[str, Any]:
         """Get quick status (uses cache)."""
         result = await self.root.execute(use_cache=True)
@@ -656,7 +657,7 @@ class ForgeHealthChecker:
             "message": result.message,
             "timestamp": result.timestamp.isoformat(),
         }
-    
+
     async def start_background_monitoring(
         self,
         interval_seconds: float = 30.0,
@@ -665,39 +666,39 @@ class ForgeHealthChecker:
         """Start background health monitoring."""
         if self._running:
             return
-        
+
         self._running = True
-        
+
         async def monitor_loop():
             while self._running:
                 try:
                     result = await self.check_health()
-                    
+
                     if result.status != HealthStatus.HEALTHY:
                         logger.warning(
                             "health_check_issue",
                             status=result.status.value,
                             message=result.message,
                         )
-                    
+
                     if callback:
                         await callback(result)
-                
+
                 except Exception as e:
                     logger.error("health_monitor_error", error=str(e))
-                
+
                 await asyncio.sleep(interval_seconds)
-        
+
         self._background_task = asyncio.create_task(monitor_loop())
         logger.info(
             "health_monitoring_started",
             interval_seconds=interval_seconds,
         )
-    
+
     async def stop_background_monitoring(self) -> None:
         """Stop background health monitoring."""
         self._running = False
-        
+
         if self._background_task:
             self._background_task.cancel()
             try:
@@ -705,19 +706,19 @@ class ForgeHealthChecker:
             except asyncio.CancelledError:
                 pass
             self._background_task = None
-        
+
         logger.info("health_monitoring_stopped")
-    
+
     def get_check_names(self) -> dict[str, list[str]]:
         """Get all registered check names by category."""
         result: dict[str, list[str]] = {}
-        
+
         for category, check in self._checks.items():
             if isinstance(check, CompositeHealthCheck):
                 result[category] = [c.name for c in check.checks]
             else:
                 result[category] = [check.name]
-        
+
         return result
 
 
@@ -730,36 +731,36 @@ def create_forge_health_checker(
 ) -> ForgeHealthChecker:
     """
     Create a pre-configured Forge health checker.
-    
+
     Args:
         neo4j_client: Optional Neo4j client
         overlay_manager: Optional overlay manager
         event_system: Optional event system
         circuit_registry: Optional circuit breaker registry
-        
+
     Returns:
         Configured ForgeHealthChecker
     """
     checker = ForgeHealthChecker()
-    
+
     # Database checks
     if neo4j_client:
         checker.add_check("database", Neo4jHealthCheck(neo4j_client))
-    
+
     # Kernel checks
     if overlay_manager:
         checker.add_check("kernel", OverlayHealthCheck(overlay_manager))
-    
+
     if event_system:
         checker.add_check("kernel", EventSystemHealthCheck(event_system))
-    
+
     # Infrastructure checks
     checker.add_check("infrastructure", MemoryHealthCheck())
     checker.add_check("infrastructure", DiskHealthCheck())
-    
+
     if circuit_registry:
         checker.add_check("infrastructure", CircuitBreakerHealthCheck(circuit_registry))
-    
+
     return checker
 
 

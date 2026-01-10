@@ -9,18 +9,15 @@ import secrets
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, HttpUrl
 
+from forge.api.dependencies import ActiveUserDep
 from forge.models.notifications import (
-    Notification,
     NotificationEvent,
     NotificationPriority,
-    WebhookSubscription,
-    NotificationPreferences,
 )
-from forge.services.notifications import get_notification_service, NotificationService
-from forge.api.dependencies import ActiveUserDep
+from forge.services.notifications import NotificationService, get_notification_service
 
 logger = logging.getLogger(__name__)
 

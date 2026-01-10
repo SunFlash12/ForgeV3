@@ -31,9 +31,8 @@ import hmac
 import secrets
 import struct
 import time
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from urllib.parse import quote
 
 import structlog
@@ -61,8 +60,8 @@ class MFAStatus:
     """MFA status for a user."""
     enabled: bool = False
     verified: bool = False  # Whether setup is complete
-    created_at: Optional[datetime] = None
-    last_used: Optional[datetime] = None
+    created_at: datetime | None = None
+    last_used: datetime | None = None
     backup_codes_remaining: int = 0
 
 
@@ -78,7 +77,7 @@ class MFASetupResult:
 class VerificationAttempt:
     """Tracks verification attempts for rate limiting."""
     attempts: int = 0
-    locked_until: Optional[datetime] = None
+    locked_until: datetime | None = None
 
 
 class MFAService:
@@ -94,7 +93,7 @@ class MFAService:
     def __init__(
         self,
         db_client=None,
-        encryption_key: Optional[str] = None,
+        encryption_key: str | None = None,
         use_memory_storage: bool = False,
     ):
         """
@@ -153,8 +152,9 @@ class MFAService:
             return secret
         # Simple encryption using Fernet (production should use HSM)
         try:
-            from cryptography.fernet import Fernet
             import base64
+
+            from cryptography.fernet import Fernet
             # Derive a valid Fernet key from the encryption key
             key = base64.urlsafe_b64encode(
                 hashlib.sha256(self._encryption_key.encode()).digest()
@@ -170,8 +170,9 @@ class MFAService:
         if not self._encryption_key:
             return encrypted
         try:
-            from cryptography.fernet import Fernet
             import base64
+
+            from cryptography.fernet import Fernet
             key = base64.urlsafe_b64encode(
                 hashlib.sha256(self._encryption_key.encode()).digest()
             )
@@ -200,7 +201,7 @@ class MFAService:
             "secret_encrypted": encrypted_secret,
             "backup_codes_hashed": list(backup_codes_hashed),
             "verified": verified,
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
             "last_used": None,
         }
 
@@ -219,7 +220,7 @@ class MFAService:
             )
         logger.info("mfa_data_persisted", user_id=user_id)
 
-    async def _load_mfa_data(self, user_id: str) -> Optional[dict]:
+    async def _load_mfa_data(self, user_id: str) -> dict | None:
         """Load MFA data from database."""
         if not self._use_db:
             return None
@@ -366,7 +367,7 @@ class MFAService:
 
         if await self.verify_totp(user_id, code, skip_verified_check=True):
             self._verified[user_id] = True
-            self._last_used[user_id] = datetime.now(timezone.utc)
+            self._last_used[user_id] = datetime.now(UTC)
 
             logger.info("MFA setup verified", user_id=user_id)
             return True
@@ -377,7 +378,7 @@ class MFAService:
     # Verification
     # =========================================================================
 
-    def _generate_totp(self, secret: str, timestamp: Optional[int] = None) -> str:
+    def _generate_totp(self, secret: str, timestamp: int | None = None) -> str:
         """
         Generate TOTP code for a given timestamp.
 
@@ -415,7 +416,7 @@ class MFAService:
         code = truncated % (10 ** TOTP_DIGITS)
         return str(code).zfill(TOTP_DIGITS)
 
-    def _check_rate_limit(self, user_id: str) -> tuple[bool, Optional[str]]:
+    def _check_rate_limit(self, user_id: str) -> tuple[bool, str | None]:
         """
         Check if user is rate limited.
 
@@ -429,8 +430,8 @@ class MFAService:
 
         # Check if locked
         if attempt.locked_until:
-            if datetime.now(timezone.utc) < attempt.locked_until:
-                remaining = (attempt.locked_until - datetime.now(timezone.utc)).seconds
+            if datetime.now(UTC) < attempt.locked_until:
+                remaining = (attempt.locked_until - datetime.now(UTC)).seconds
                 return False, f"Too many failed attempts. Try again in {remaining} seconds."
             else:
                 # Lockout expired, reset
@@ -456,7 +457,7 @@ class MFAService:
             if attempt.attempts >= MAX_VERIFICATION_ATTEMPTS:
                 # SECURITY FIX (Audit 4 - M3): Correct lockout time calculation
                 # Previous code used .replace(second=...) which overflows incorrectly
-                attempt.locked_until = datetime.now(timezone.utc) + timedelta(
+                attempt.locked_until = datetime.now(UTC) + timedelta(
                     seconds=LOCKOUT_DURATION_SECONDS
                 )
                 logger.warning(
@@ -546,7 +547,7 @@ class MFAService:
             # Constant-time comparison to prevent timing attacks
             if hmac.compare_digest(code, expected_code):
                 self._record_attempt(user_id, True)
-                self._last_used[user_id] = datetime.now(timezone.utc)
+                self._last_used[user_id] = datetime.now(UTC)
 
                 logger.info("MFA TOTP verified", user_id=user_id)
                 return True
@@ -586,7 +587,7 @@ class MFAService:
             # Remove the used code (one-time use)
             codes.remove(code_hash)
             self._record_attempt(user_id, True)
-            self._last_used[user_id] = datetime.now(timezone.utc)
+            self._last_used[user_id] = datetime.now(UTC)
 
             logger.info(
                 "MFA backup code used",
@@ -681,7 +682,7 @@ class MFAService:
 
 
 # Singleton instance
-_mfa_service: Optional[MFAService] = None
+_mfa_service: MFAService | None = None
 
 
 def get_mfa_service() -> MFAService:

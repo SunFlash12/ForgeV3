@@ -8,13 +8,14 @@ Detects anomalies, malicious patterns, and policy violations.
 
 from __future__ import annotations
 
-import re
+import asyncio
 import hashlib
+import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Set
-import asyncio
+from typing import Any
 
 import structlog
 
@@ -50,9 +51,9 @@ class ValidationIssue:
     stage: ValidationStage
     severity: ThreatLevel
     message: str
-    pattern: Optional[str] = None
-    location: Optional[str] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    pattern: str | None = None
+    location: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -61,11 +62,11 @@ class ValidationResult:
 
     valid: bool
     threat_level: ThreatLevel
-    issues: List[ValidationIssue] = field(default_factory=list)
-    sanitized_content: Optional[str] = None
+    issues: list[ValidationIssue] = field(default_factory=list)
+    sanitized_content: str | None = None
     processing_time_ms: float = 0.0
-    content_hash: Optional[str] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    content_hash: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def add_issue(self, issue: ValidationIssue) -> None:
         """Add a validation issue."""
@@ -101,8 +102,8 @@ class ContentValidator:
 
     def __init__(self):
         self._config = get_resilience_config().content_validation
-        self._patterns: List[ContentPattern] = []
-        self._custom_validators: List[Callable] = []
+        self._patterns: list[ContentPattern] = []
+        self._custom_validators: list[Callable] = []
         self._initialized = False
 
         # Statistics
@@ -241,7 +242,7 @@ class ContentValidator:
         """Add a custom detection pattern."""
         self._patterns.append(pattern)
 
-    def add_validator(self, validator: Callable[[str], Optional[ValidationIssue]]) -> None:
+    def add_validator(self, validator: Callable[[str], ValidationIssue | None]) -> None:
         """Add a custom validation function."""
         self._custom_validators.append(validator)
 
@@ -249,7 +250,7 @@ class ContentValidator:
         self,
         content: str,
         content_type: str = "text",
-        context: Optional[Dict[str, Any]] = None
+        context: dict[str, Any] | None = None
     ) -> ValidationResult:
         """
         Validate content through the full pipeline.
@@ -401,7 +402,7 @@ class ContentValidator:
                             ),
                             timeout=self.REGEX_TIMEOUT_SECONDS
                         )
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         logger.warning(
                             "regex_timeout_redos_protection",
                             pattern=pattern.name,
@@ -516,13 +517,13 @@ class ContentValidator:
                         metadata={"function": func, "classifier": "heuristic"}
                     ))
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get validation statistics."""
         return dict(self._stats)
 
 
 # Global validator instance
-_content_validator: Optional[ContentValidator] = None
+_content_validator: ContentValidator | None = None
 
 
 def get_content_validator() -> ContentValidator:
@@ -537,7 +538,7 @@ def get_content_validator() -> ContentValidator:
 async def validate_content(
     content: str,
     content_type: str = "text",
-    context: Optional[Dict[str, Any]] = None
+    context: dict[str, Any] | None = None
 ) -> ValidationResult:
     """Convenience function to validate content."""
     validator = get_content_validator()

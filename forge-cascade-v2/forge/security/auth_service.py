@@ -8,33 +8,25 @@ SECURITY FIX (Audit 4 - M2): Added IP-based rate limiting to prevent
 credential stuffing attacks across multiple accounts.
 """
 
-import secrets
 import hashlib
+import secrets
 import threading
 from collections import OrderedDict
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from datetime import UTC, datetime, timedelta
 
 from ..config import get_settings
-from ..models.user import User, UserCreate, Token, TokenPayload, UserRole
-from ..models.base import TrustLevel
-from ..repositories.user_repository import UserRepository
+from ..models.user import Token, User, UserCreate
 from ..repositories.audit_repository import AuditRepository
-from .password import hash_password, verify_password, needs_rehash
+from ..repositories.user_repository import UserRepository
+from .authorization import AuthorizationContext, create_auth_context, get_trust_level_from_score
+from .password import hash_password, needs_rehash, verify_password
 from .tokens import (
+    TokenBlacklist,
+    TokenInvalidError,
     create_token_pair,
+    get_token_claims,
     verify_access_token,
     verify_refresh_token,
-    TokenError,
-    TokenExpiredError,
-    TokenInvalidError,
-    TokenBlacklist,
-    get_token_claims,
-)
-from .authorization import (
-    AuthorizationContext,
-    create_auth_context,
-    get_trust_level_from_score
 )
 
 settings = get_settings()
@@ -99,7 +91,7 @@ class IPRateLimiter:
 
     def _cleanup_old_entries(self) -> None:
         """Remove expired entries (must hold lock)."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         cutoff = now - timedelta(seconds=self.WINDOW_SECONDS)
 
         # Clean up old attempts
@@ -129,7 +121,7 @@ class IPRateLimiter:
             return (True, 0)  # No IP means we can't rate limit
 
         with self._lock:
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
 
             # Check if IP is in lockout
             lockout_until = self._lockouts.get(ip_address)
@@ -179,7 +171,7 @@ class IPRateLimiter:
 
                     self._attempts[ip_address] = []
 
-                self._attempts[ip_address].append(datetime.now(timezone.utc))
+                self._attempts[ip_address].append(datetime.now(UTC))
 
 
 # Global IP rate limiter instance
@@ -213,47 +205,47 @@ class AuthService:
         self.audit_repo = audit_repo
         # SECURITY FIX (Audit 4 - M2): IP-based rate limiting
         self._ip_rate_limiter = ip_rate_limiter or get_ip_rate_limiter()
-    
+
     # =========================================================================
     # Registration
     # =========================================================================
-    
+
     async def register(
         self,
         username: str,
         email: str,
         password: str,
-        display_name: Optional[str] = None,
-        ip_address: Optional[str] = None
+        display_name: str | None = None,
+        ip_address: str | None = None
     ) -> User:
         """
         Register a new user.
-        
+
         Args:
             username: Unique username
             email: Email address
             password: Plain text password (will be hashed)
             display_name: Optional display name
             ip_address: Client IP for audit logging
-            
+
         Returns:
             Created User
-            
+
         Raises:
             RegistrationError: If username or email already exists
         """
         # Check for existing username
         if await self.user_repo.username_exists(username):
             raise RegistrationError(f"Username '{username}' is already taken")
-        
+
         # Check for existing email
         if await self.user_repo.email_exists(email):
             raise RegistrationError(f"Email '{email}' is already registered")
-        
+
         # Hash password (with context-aware validation)
         # SECURITY FIX (Audit 3): Pass username/email for context-aware password validation
         password_hash = hash_password(password, username=username, email=email)
-        
+
         # Create user
         user_create = UserCreate(
             username=username,
@@ -261,9 +253,9 @@ class AuthService:
             password=password,  # Will be hashed in repository
             display_name=display_name or username
         )
-        
+
         user = await self.user_repo.create(user_create, password_hash)
-        
+
         # Log registration
         # SECURITY FIX (Audit 3): Hash email in audit logs to prevent PII exposure
         import hashlib
@@ -275,19 +267,19 @@ class AuthService:
             details={"username": username, "email_hash": email_hash},
             ip_address=ip_address
         )
-        
+
         return user
-    
+
     # =========================================================================
     # Login
     # =========================================================================
-    
+
     async def login(
         self,
         username_or_email: str,
         password: str,
-        ip_address: Optional[str] = None,
-        user_agent: Optional[str] = None
+        ip_address: str | None = None,
+        user_agent: str | None = None
     ) -> tuple[User, Token]:
         """
         Authenticate user and return tokens.
@@ -332,7 +324,7 @@ class AuthService:
 
         # Find user
         user = await self.user_repo.get_by_username_or_email(username_or_email)
-        
+
         if not user:
             # SECURITY FIX (Audit 4 - M2): Record failed attempt for IP rate limiting
             if ip_address:
@@ -350,7 +342,7 @@ class AuthService:
                 user_agent=user_agent
             )
             raise InvalidCredentialsError("Invalid username or password")
-        
+
         # Check if account is locked
         if user.lockout_until and user.lockout_until > datetime.utcnow():
             await self.audit_repo.log_user_action(
@@ -366,7 +358,7 @@ class AuthService:
                 "Account is temporarily locked due to too many failed login attempts. "
                 "Please try again later or contact support."
             )
-        
+
         # Check if account is active
         if not user.is_active:
             await self.audit_repo.log_user_action(
@@ -378,7 +370,7 @@ class AuthService:
                 user_agent=user_agent
             )
             raise AccountDeactivatedError("Account has been deactivated")
-        
+
         # Verify password
         if not verify_password(password, user.password_hash):
             # SECURITY FIX (Audit 4 - M2): Record failed attempt for IP rate limiting
@@ -416,13 +408,13 @@ class AuthService:
                 user_agent=user_agent
             )
             raise InvalidCredentialsError("Invalid username or password")
-        
+
         # Check if password needs rehashing (security upgrade)
         if needs_rehash(user.password_hash):
             # Skip validation - password was already validated when originally created
             new_hash = hash_password(password, validate=False)
             await self.user_repo.update_password(user.id, new_hash)
-        
+
         # Clear any lockout and record successful login
         await self.user_repo.clear_lockout(user.id)
         await self.user_repo.record_login(user.id)
@@ -439,10 +431,10 @@ class AuthService:
             role=role_value,
             trust_flame=user.trust_flame
         )
-        
+
         # Store refresh token for validation
         await self.user_repo.update_refresh_token(user.id, token.refresh_token)
-        
+
         # Log successful login
         await self.audit_repo.log_user_action(
             actor_id=user.id,
@@ -452,17 +444,17 @@ class AuthService:
             ip_address=ip_address,
             user_agent=user_agent
         )
-        
+
         return user, token
-    
+
     # =========================================================================
     # Token Operations
     # =========================================================================
-    
+
     async def refresh_tokens(
         self,
         refresh_token: str,
-        ip_address: Optional[str] = None
+        ip_address: str | None = None
     ) -> Token:
         """
         Refresh access token using refresh token.
@@ -523,7 +515,7 @@ class AuthService:
         await self.user_repo.update_refresh_token(user.id, new_token.refresh_token)
 
         return new_token
-    
+
     async def validate_access_token(
         self,
         access_token: str
@@ -560,12 +552,12 @@ class AuthService:
             role=payload.role,
             capabilities=None  # Will be auto-populated from trust level
         )
-    
+
     async def logout(
         self,
         user_id: str,
-        access_token: Optional[str] = None,
-        ip_address: Optional[str] = None
+        access_token: str | None = None,
+        ip_address: str | None = None
     ) -> None:
         """
         Logout user by revoking tokens.
@@ -596,54 +588,54 @@ class AuthService:
             action="logout",
             ip_address=ip_address
         )
-    
+
     async def logout_all_sessions(
         self,
         user_id: str,
-        ip_address: Optional[str] = None
+        ip_address: str | None = None
     ) -> None:
         """
         Logout user from all sessions by revoking all tokens.
-        
+
         This effectively forces re-authentication on all devices.
         """
         await self.user_repo.update_refresh_token(user_id, None)
-        
+
         await self.audit_repo.log_security_event(
             actor_id=user_id,
             event_name="all_sessions_revoked",
             details={"user_id": user_id},
             ip_address=ip_address
         )
-    
+
     # =========================================================================
     # Password Management
     # =========================================================================
-    
+
     async def change_password(
         self,
         user_id: str,
         current_password: str,
         new_password: str,
-        ip_address: Optional[str] = None
+        ip_address: str | None = None
     ) -> None:
         """
         Change user's password.
-        
+
         Args:
             user_id: User ID
             current_password: Current password for verification
             new_password: New password to set
             ip_address: Client IP for audit logging
-            
+
         Raises:
             InvalidCredentialsError: If current password is incorrect
         """
         user = await self.user_repo.get_by_id(user_id)
-        
+
         if not user:
             raise AuthenticationError("User not found")
-        
+
         if not verify_password(current_password, user.password_hash):
             await self.audit_repo.log_security_event(
                 actor_id=user_id,
@@ -652,27 +644,27 @@ class AuthService:
                 ip_address=ip_address
             )
             raise InvalidCredentialsError("Current password is incorrect")
-        
+
         # Hash and update new password (with context-aware validation)
         # SECURITY FIX (Audit 3): Pass username/email for context-aware password validation
         new_hash = hash_password(new_password, username=user.username, email=user.email)
         await self.user_repo.update_password(user_id, new_hash)
-        
+
         # Revoke all existing sessions for security
         await self.user_repo.update_refresh_token(user_id, None)
-        
+
         await self.audit_repo.log_security_event(
             actor_id=user_id,
             event_name="password_changed",
             details={"sessions_revoked": True},
             ip_address=ip_address
         )
-    
+
     async def request_password_reset(
         self,
         email: str,
-        ip_address: Optional[str] = None
-    ) -> Optional[str]:
+        ip_address: str | None = None
+    ) -> str | None:
         """
         Request a password reset token.
 
@@ -733,7 +725,7 @@ class AuthService:
         user_id: str,
         new_password: str,
         reset_token: str,
-        ip_address: Optional[str] = None
+        ip_address: str | None = None
     ) -> None:
         """
         Reset password using a valid reset token.
@@ -791,16 +783,16 @@ class AuthService:
             details={"method": "reset_token"},
             ip_address=ip_address
         )
-    
+
     # =========================================================================
     # Account Management
     # =========================================================================
-    
+
     async def verify_email(
         self,
         user_id: str,
         verification_token: str,
-        ip_address: Optional[str] = None
+        ip_address: str | None = None
     ) -> None:
         """
         Verify user's email address using a verification token.
@@ -853,8 +845,8 @@ class AuthService:
     async def request_email_verification(
         self,
         user_id: str,
-        ip_address: Optional[str] = None
-    ) -> Optional[str]:
+        ip_address: str | None = None
+    ) -> str | None:
         """
         Generate and store an email verification token.
 
@@ -881,8 +873,7 @@ class AuthService:
         token_hash = hashlib.sha256(plain_token.encode()).hexdigest()
 
         # Token expires in 24 hours
-        from datetime import timezone
-        expires_at = datetime.now(timezone.utc) + timedelta(hours=24)
+        expires_at = datetime.now(UTC) + timedelta(hours=24)
 
         await self.user_repo.store_email_verification_token(
             user_id=user_id,
@@ -898,17 +889,17 @@ class AuthService:
         )
 
         return plain_token
-    
+
     async def deactivate_account(
         self,
         user_id: str,
         deactivated_by: str,
         reason: str,
-        ip_address: Optional[str] = None
+        ip_address: str | None = None
     ) -> None:
         """
         Deactivate a user account.
-        
+
         Args:
             user_id: User to deactivate
             deactivated_by: ID of user performing deactivation
@@ -917,59 +908,59 @@ class AuthService:
         """
         await self.user_repo.deactivate(user_id)
         await self.user_repo.update_refresh_token(user_id, None)
-        
+
         await self.audit_repo.log_user_action(
             actor_id=deactivated_by,
             target_user_id=user_id,
             action="deactivated",
             details={"reason": reason}
         )
-    
+
     async def reactivate_account(
         self,
         user_id: str,
         reactivated_by: str,
-        ip_address: Optional[str] = None
+        ip_address: str | None = None
     ) -> None:
         """Reactivate a deactivated account."""
         await self.user_repo.activate(user_id)
-        
+
         await self.audit_repo.log_user_action(
             actor_id=reactivated_by,
             target_user_id=user_id,
             action="reactivated",
             ip_address=ip_address
         )
-    
+
     # =========================================================================
     # Trust Management
     # =========================================================================
-    
+
     async def adjust_user_trust(
         self,
         user_id: str,
         adjusted_by: str,
         adjustment: int,
         reason: str,
-        ip_address: Optional[str] = None
+        ip_address: str | None = None
     ) -> int:
         """
         Adjust a user's trust flame score.
-        
+
         Args:
             user_id: User to adjust
             adjusted_by: ID of user making adjustment
             adjustment: Amount to adjust (+/-)
             reason: Reason for adjustment
             ip_address: Client IP
-            
+
         Returns:
             New trust flame value
         """
         user = await self.user_repo.get_by_id(user_id)
         if not user:
             raise AuthenticationError("User not found")
-        
+
         old_trust = user.trust_flame
         new_trust = await self.user_repo.adjust_trust_flame(
             user_id=user_id,
@@ -977,10 +968,10 @@ class AuthService:
             reason=reason,
             adjusted_by=adjusted_by
         )
-        
+
         old_level = get_trust_level_from_score(old_trust)
         new_level = get_trust_level_from_score(new_trust)
-        
+
         await self.audit_repo.log_user_action(
             actor_id=adjusted_by,
             target_user_id=user_id,
@@ -995,24 +986,24 @@ class AuthService:
             },
             ip_address=ip_address
         )
-        
+
         return new_trust
-    
+
     # =========================================================================
     # Session Info
     # =========================================================================
-    
-    async def get_current_user(self, user_id: str) -> Optional[User]:
+
+    async def get_current_user(self, user_id: str) -> User | None:
         """Get current user by ID."""
         return await self.user_repo.get_by_id(user_id)
-    
-    async def get_user_auth_context(self, user_id: str) -> Optional[AuthorizationContext]:
+
+    async def get_user_auth_context(self, user_id: str) -> AuthorizationContext | None:
         """Get full authorization context for a user."""
         user = await self.user_repo.get_by_id(user_id)
-        
+
         if not user:
             return None
-        
+
         role_value = user.role.value if hasattr(user.role, 'value') else user.role
         return create_auth_context(
             user_id=user.id,

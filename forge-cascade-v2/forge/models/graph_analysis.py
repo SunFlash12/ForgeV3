@@ -5,14 +5,13 @@ Data structures for graph algorithm results including PageRank,
 centrality metrics, community detection, and trust analysis.
 """
 
-from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Any
 
 from pydantic import Field
 
-from forge.models.base import ForgeModel, TimestampMixin
+from forge.models.base import ForgeModel
 
 
 class GraphBackend(str, Enum):

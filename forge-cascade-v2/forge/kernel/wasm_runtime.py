@@ -25,11 +25,11 @@ import asyncio
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Optional, TypeVar
-import hashlib
+from typing import Any, TypeVar
+
 import structlog
 
 logger = structlog.get_logger(__name__)
@@ -49,7 +49,7 @@ class SecurityError(Exception):
 class Capability(str, Enum):
     """
     Overlay capabilities - explicit permissions required for operations.
-    
+
     Overlays must declare required capabilities in their manifest.
     Only declared capabilities are available at runtime.
     """
@@ -80,7 +80,7 @@ class ExecutionState(str, Enum):
 class FuelBudget:
     """
     Resource budget for overlay execution.
-    
+
     Fuel metering prevents runaway computations.
     Each operation consumes fuel; execution halts when fuel is exhausted.
     """
@@ -88,22 +88,22 @@ class FuelBudget:
     consumed_fuel: int = 0              # Fuel consumed so far
     memory_limit_mb: int = 256          # Memory limit in MB
     timeout_seconds: float = 30.0       # Maximum execution time
-    
+
     @property
     def remaining_fuel(self) -> int:
         return max(0, self.total_fuel - self.consumed_fuel)
-    
+
     @property
     def fuel_percentage(self) -> float:
         return (self.consumed_fuel / self.total_fuel) * 100 if self.total_fuel > 0 else 0
-    
+
     def consume(self, amount: int) -> bool:
         """Consume fuel. Returns False if insufficient fuel."""
         if self.remaining_fuel < amount:
             return False
         self.consumed_fuel += amount
         return True
-    
+
     def is_exhausted(self) -> bool:
         return self.remaining_fuel <= 0
 
@@ -142,9 +142,9 @@ class OverlayManifest:
     is_internal_trusted: bool = False
 
     # Wasm-specific (for future implementation)
-    wasm_path: Optional[Path] = None
-    source_hash: Optional[str] = None
-    
+    wasm_path: Path | None = None
+    source_hash: str | None = None
+
     # Fuel budgets per function
     fuel_budgets: dict[str, int] = field(default_factory=lambda: {
         "initialize": 10_000_000,
@@ -152,7 +152,7 @@ class OverlayManifest:
         "health_check": 100_000,
         "shutdown": 500_000,
     })
-    
+
     # Exported functions
     exports: list[str] = field(default_factory=lambda: [
         "initialize",
@@ -160,7 +160,7 @@ class OverlayManifest:
         "health_check",
         "shutdown",
     ])
-    
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.id,
@@ -182,11 +182,11 @@ class ExecutionMetrics:
     total_fuel_consumed: int = 0
     total_execution_time_ms: float = 0.0
     errors: int = 0
-    last_invocation: Optional[datetime] = None
-    
+    last_invocation: datetime | None = None
+
     # Per-function metrics
     function_metrics: dict[str, dict[str, Any]] = field(default_factory=dict)
-    
+
     def record_invocation(
         self,
         function: str,
@@ -198,11 +198,11 @@ class ExecutionMetrics:
         self.invocations += 1
         self.total_fuel_consumed += fuel_consumed
         self.total_execution_time_ms += execution_time_ms
-        self.last_invocation = datetime.now(timezone.utc)
-        
+        self.last_invocation = datetime.now(UTC)
+
         if not success:
             self.errors += 1
-        
+
         if function not in self.function_metrics:
             self.function_metrics[function] = {
                 "invocations": 0,
@@ -210,13 +210,13 @@ class ExecutionMetrics:
                 "total_time_ms": 0.0,
                 "errors": 0,
             }
-        
+
         self.function_metrics[function]["invocations"] += 1
         self.function_metrics[function]["total_fuel"] += fuel_consumed
         self.function_metrics[function]["total_time_ms"] += execution_time_ms
         if not success:
             self.function_metrics[function]["errors"] += 1
-    
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "invocations": self.invocations,
@@ -234,14 +234,14 @@ class ExecutionMetrics:
 class HostFunction(ABC):
     """
     Abstract base for host functions exposed to Wasm overlays.
-    
+
     Host functions are the bridge between Wasm sandbox and host system.
     They are capability-gated - only available if overlay has the capability.
     """
-    
+
     name: str
-    required_capability: Optional[Capability] = None
-    
+    required_capability: Capability | None = None
+
     @abstractmethod
     async def __call__(self, *args, **kwargs) -> Any:
         """Execute the host function."""
@@ -250,14 +250,14 @@ class HostFunction(ABC):
 
 class LogHostFunction(HostFunction):
     """Logging host function - always available."""
-    
+
     name = "log"
     required_capability = None
-    
+
     def __init__(self, overlay_id: str):
         self.overlay_id = overlay_id
         self._logger = structlog.get_logger(f"overlay.{overlay_id}")
-    
+
     async def __call__(self, level: int, message: str) -> None:
         """Log a message from the overlay."""
         log_levels = {
@@ -309,7 +309,7 @@ class DatabaseReadHostFunction(HostFunction):
     def __init__(self, db_client: Any):
         self.db = db_client
 
-    async def __call__(self, query: str, params: Optional[dict] = None) -> list[dict]:
+    async def __call__(self, query: str, params: dict | None = None) -> list[dict]:
         """Execute a read query."""
         # SECURITY FIX: Validate query for injection patterns
         _validate_cypher_query(query)
@@ -331,7 +331,7 @@ class DatabaseWriteHostFunction(HostFunction):
     def __init__(self, db_client: Any):
         self.db = db_client
 
-    async def __call__(self, query: str, params: Optional[dict] = None) -> list[dict]:
+    async def __call__(self, query: str, params: dict | None = None) -> list[dict]:
         """Execute a write query."""
         # SECURITY FIX: Validate query for injection patterns
         _validate_cypher_query(query)
@@ -340,26 +340,27 @@ class DatabaseWriteHostFunction(HostFunction):
 
 class EventPublishHostFunction(HostFunction):
     """Event publishing host function."""
-    
+
     name = "event_publish"
     required_capability = Capability.EVENT_PUBLISH
-    
+
     def __init__(self, event_bus: Any, overlay_id: str):
         self.event_bus = event_bus
         self.overlay_id = overlay_id
-    
+
     async def __call__(self, event_type: str, payload: dict) -> None:
         """Publish an event."""
-        from ..models.events import Event, EventType
         from uuid import uuid4
-        
+
+        from ..models.events import Event, EventType
+
         event = Event(
             id=str(uuid4()),
             event_type=EventType(event_type) if event_type in EventType.__members__ else EventType.SYSTEM_EVENT,
             source=f"overlay:{self.overlay_id}",
             payload=payload,
         )
-        
+
         await self.event_bus.publish(event)
 
 
@@ -367,7 +368,7 @@ class EventPublishHostFunction(HostFunction):
 class WasmInstance:
     """
     A WebAssembly overlay instance.
-    
+
     In full implementation, this would wrap wasmtime.Instance.
     Currently wraps Python overlay with Wasm-like interface.
     """
@@ -376,15 +377,15 @@ class WasmInstance:
     state: ExecutionState = ExecutionState.INITIALIZING
     fuel_budget: FuelBudget = field(default_factory=FuelBudget)
     metrics: ExecutionMetrics = field(default_factory=ExecutionMetrics)
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
     # Host functions available to this instance
     host_functions: dict[str, HostFunction] = field(default_factory=dict)
-    
+
     # Internal state
-    _python_overlay: Optional[Any] = None  # Wrapped Python overlay for now
+    _python_overlay: Any | None = None  # Wrapped Python overlay for now
     _terminated: bool = False
-    
+
     def is_active(self) -> bool:
         """Check if instance is active."""
         return (
@@ -392,7 +393,7 @@ class WasmInstance:
             not self._terminated and
             not self.fuel_budget.is_exhausted()
         )
-    
+
     def has_capability(self, capability: Capability) -> bool:
         """Check if instance has a capability."""
         return capability in self.manifest.capabilities
@@ -401,9 +402,9 @@ class WasmInstance:
 class WasmOverlayRuntime:
     """
     WebAssembly runtime for secure overlay execution.
-    
+
     This is the main entry point for overlay lifecycle management.
-    
+
     Full Wasm Flow (future):
     1. Load overlay manifest
     2. Compile .wasm binary
@@ -411,14 +412,14 @@ class WasmOverlayRuntime:
     4. Link host functions based on capabilities
     5. Instantiate module
     6. Execute exports
-    
+
     Current Flow (Python scaffolding):
     1. Load overlay manifest
     2. Import Python overlay class
     3. Create instance with capability enforcement
     4. Execute methods with fuel tracking
     """
-    
+
     def __init__(
         self,
         db_client: Any = None,
@@ -428,40 +429,40 @@ class WasmOverlayRuntime:
         self._events = event_bus
         self._instances: dict[str, WasmInstance] = {}
         self._manifests: dict[str, OverlayManifest] = {}
-        
+
         # Wasm engine (for future use)
         self._engine = None  # wasmtime.Engine()
-        
+
         logger.info("wasm_runtime_initialized", mode="python_scaffolding")
-    
+
     def _create_host_functions(
         self,
         instance: WasmInstance,
     ) -> dict[str, HostFunction]:
         """Create host functions based on overlay capabilities."""
         host_funcs: dict[str, HostFunction] = {}
-        
+
         # Always available: logging
         host_funcs["log"] = LogHostFunction(instance.id)
-        
+
         # Capability-gated functions
         if instance.has_capability(Capability.DATABASE_READ):
             host_funcs["db_read"] = DatabaseReadHostFunction(self._db)
-        
+
         if instance.has_capability(Capability.DATABASE_WRITE):
             host_funcs["db_write"] = DatabaseWriteHostFunction(self._db)
-        
+
         if instance.has_capability(Capability.EVENT_PUBLISH):
             host_funcs["event_publish"] = EventPublishHostFunction(
                 self._events, instance.id
             )
-        
+
         return host_funcs
-    
+
     async def load_overlay(
         self,
         manifest: OverlayManifest,
-        python_overlay: Optional[Any] = None,
+        python_overlay: Any | None = None,
     ) -> str:
         """
         Load and instantiate an overlay.
@@ -513,23 +514,23 @@ class WasmOverlayRuntime:
 
         # Store Python overlay reference (current mode)
         instance._python_overlay = python_overlay
-        
+
         # Store instance
         self._instances[instance_id] = instance
         self._manifests[manifest.id] = manifest
-        
+
         # Mark as ready
         instance.state = ExecutionState.READY
-        
+
         logger.info(
             "overlay_loaded",
             instance_id=instance_id,
             overlay_name=manifest.name,
             capabilities=[c.value for c in manifest.capabilities],
         )
-        
+
         return instance_id
-    
+
     async def execute(
         self,
         instance_id: str,
@@ -538,35 +539,35 @@ class WasmOverlayRuntime:
     ) -> dict[str, Any]:
         """
         Execute a function on an overlay instance.
-        
+
         Args:
             instance_id: Instance ID
             function: Function name to call
             payload: Input payload
-            
+
         Returns:
             Function result
         """
         instance = self._instances.get(instance_id)
         if not instance:
             raise ValueError(f"Instance {instance_id} not found")
-        
+
         if not instance.is_active():
             raise RuntimeError(f"Instance {instance_id} is not active")
-        
+
         if function not in instance.manifest.exports:
             raise ValueError(f"Function {function} not exported")
-        
+
         # Get fuel budget for this function
         function_fuel = instance.manifest.fuel_budgets.get(function, 1_000_000)
-        
+
         # Check fuel
         if instance.fuel_budget.remaining_fuel < function_fuel:
             raise RuntimeError("Insufficient fuel for execution")
-        
+
         instance.state = ExecutionState.RUNNING
         start_time = time.monotonic()
-        
+
         try:
             # SECURITY FIX (Audit 4): Enforce security mode to prevent sandbox escape
             # Python mode ONLY allowed for explicitly trusted internal overlays
@@ -621,14 +622,14 @@ class WasmOverlayRuntime:
                 # Wasm mode (future)
                 # result = instance.exports[function](store, payload_ptr)
                 result = {"error": "Wasm execution not implemented"}
-            
+
             # Calculate execution time and fuel
             execution_time_ms = (time.monotonic() - start_time) * 1000
             fuel_consumed = int(execution_time_ms * 1000)  # Rough approximation
-            
+
             # Consume fuel
             instance.fuel_budget.consume(fuel_consumed)
-            
+
             # Record metrics
             instance.metrics.record_invocation(
                 function=function,
@@ -636,12 +637,12 @@ class WasmOverlayRuntime:
                 execution_time_ms=execution_time_ms,
                 success=True,
             )
-            
+
             instance.state = ExecutionState.READY
-            
+
             return result if isinstance(result, dict) else {"result": result}
-            
-        except asyncio.TimeoutError:
+
+        except TimeoutError:
             instance.metrics.record_invocation(
                 function=function,
                 fuel_consumed=function_fuel,
@@ -650,8 +651,8 @@ class WasmOverlayRuntime:
             )
             instance.state = ExecutionState.FAILED
             raise RuntimeError(f"Execution timeout after {instance.fuel_budget.timeout_seconds}s")
-            
-        except Exception as e:
+
+        except Exception:
             execution_time_ms = (time.monotonic() - start_time) * 1000
             instance.metrics.record_invocation(
                 function=function,
@@ -661,61 +662,61 @@ class WasmOverlayRuntime:
             )
             instance.state = ExecutionState.FAILED
             raise
-    
+
     async def terminate(self, instance_id: str) -> bool:
         """
         Immediately terminate an overlay instance.
-        
+
         In Wasm mode, this drops the instance reference which
         immediately frees all memory. No cleanup needed.
-        
+
         Args:
             instance_id: Instance to terminate
-            
+
         Returns:
             True if terminated
         """
         instance = self._instances.get(instance_id)
         if not instance:
             return False
-        
+
         instance._terminated = True
         instance.state = ExecutionState.TERMINATED
-        
+
         # Clear references
         instance._python_overlay = None
         instance.host_functions.clear()
-        
+
         # Remove from active instances
         del self._instances[instance_id]
-        
+
         logger.info(
             "overlay_terminated",
             instance_id=instance_id,
             overlay_name=instance.manifest.name,
         )
-        
+
         return True
-    
-    def get_instance(self, instance_id: str) -> Optional[WasmInstance]:
+
+    def get_instance(self, instance_id: str) -> WasmInstance | None:
         """Get an instance by ID."""
         return self._instances.get(instance_id)
-    
+
     def get_active_instances(self) -> list[WasmInstance]:
         """Get all active instances."""
         return [i for i in self._instances.values() if i.is_active()]
-    
-    def get_metrics(self, instance_id: str) -> Optional[dict[str, Any]]:
+
+    def get_metrics(self, instance_id: str) -> dict[str, Any] | None:
         """Get metrics for an instance."""
         instance = self._instances.get(instance_id)
         if instance:
             return instance.metrics.to_dict()
         return None
-    
+
     def get_summary(self) -> dict[str, Any]:
         """Get runtime summary."""
         active = [i for i in self._instances.values() if i.is_active()]
-        
+
         return {
             "total_instances": len(self._instances),
             "active_instances": len(active),
@@ -736,7 +737,7 @@ class WasmOverlayRuntime:
 # Global Instance
 # =============================================================================
 
-_wasm_runtime: Optional[WasmOverlayRuntime] = None
+_wasm_runtime: WasmOverlayRuntime | None = None
 
 
 def get_wasm_runtime() -> WasmOverlayRuntime:

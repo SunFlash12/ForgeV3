@@ -9,10 +9,11 @@ Provides query routing and result aggregation.
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass, field
+from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 from enum import Enum
+from typing import Any
 
 import structlog
 
@@ -43,19 +44,19 @@ class PartitionQueryResult:
     """Result from querying a single partition."""
 
     partition_id: str
-    results: List[Dict[str, Any]]
+    results: list[dict[str, Any]]
     execution_time_ms: float
     capsule_count: int
     success: bool
-    error: Optional[str] = None
+    error: str | None = None
 
 
 @dataclass
 class CrossPartitionQueryResult:
     """Aggregated result from cross-partition query."""
 
-    partition_results: List[PartitionQueryResult]
-    aggregated_results: List[Dict[str, Any]]
+    partition_results: list[PartitionQueryResult]
+    aggregated_results: list[dict[str, Any]]
     total_execution_time_ms: float
     partitions_queried: int
     partitions_succeeded: int
@@ -78,8 +79,8 @@ class PartitionRouter:
     def route_query(
         self,
         query_type: str,
-        predicates: Dict[str, Any]
-    ) -> Tuple[QueryScope, List[str]]:
+        predicates: dict[str, Any]
+    ) -> tuple[QueryScope, list[str]]:
         """
         Determine query routing.
 
@@ -122,7 +123,7 @@ class PartitionRouter:
 
         return QueryScope.GLOBAL, all_partitions
 
-    def _find_partitions_by_tags(self, tags: Set[str]) -> List[str]:
+    def _find_partitions_by_tags(self, tags: set[str]) -> list[str]:
         """Find partitions that match domain tags."""
         matching = []
 
@@ -132,7 +133,7 @@ class PartitionRouter:
 
         return matching
 
-    def _find_partitions_by_user(self, user_id: str) -> List[str]:
+    def _find_partitions_by_user(self, user_id: str) -> list[str]:
         """Find partitions that contain user's capsules."""
         matching = []
 
@@ -160,7 +161,7 @@ class CrossPartitionQueryExecutor:
         self._config = get_resilience_config().partitioning
 
         # Query execution callback (set by integration code)
-        self._query_callback: Optional[Callable] = None
+        self._query_callback: Callable | None = None
 
         # Statistics
         self._stats = {
@@ -172,7 +173,7 @@ class CrossPartitionQueryExecutor:
 
     def set_query_callback(
         self,
-        callback: Callable[[str, str, Dict], List[Dict]]
+        callback: Callable[[str, str, dict], list[dict]]
     ) -> None:
         """
         Set callback for executing queries on a partition.
@@ -185,7 +186,7 @@ class CrossPartitionQueryExecutor:
     async def execute(
         self,
         query: str,
-        params: Dict[str, Any],
+        params: dict[str, Any],
         aggregation: AggregationType = AggregationType.UNION,
         timeout_ms: int = 30000,
         max_results_per_partition: int = 100
@@ -260,12 +261,12 @@ class CrossPartitionQueryExecutor:
 
     async def _execute_parallel(
         self,
-        partition_ids: List[str],
+        partition_ids: list[str],
         query: str,
-        params: Dict[str, Any],
+        params: dict[str, Any],
         timeout_ms: int,
         max_results: int
-    ) -> List[PartitionQueryResult]:
+    ) -> list[PartitionQueryResult]:
         """Execute query on multiple partitions in parallel."""
         tasks = [
             self._execute_on_partition(
@@ -283,7 +284,7 @@ class CrossPartitionQueryExecutor:
                 asyncio.gather(*tasks, return_exceptions=True),
                 timeout=timeout_ms / 1000
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning(
                 "cross_partition_query_timeout",
                 partitions=len(partition_ids)
@@ -318,7 +319,7 @@ class CrossPartitionQueryExecutor:
         self,
         partition_id: str,
         query: str,
-        params: Dict[str, Any],
+        params: dict[str, Any],
         max_results: int
     ) -> PartitionQueryResult:
         """Execute query on a single partition."""
@@ -359,9 +360,9 @@ class CrossPartitionQueryExecutor:
 
     def _aggregate_results(
         self,
-        partition_results: List[PartitionQueryResult],
+        partition_results: list[PartitionQueryResult],
         aggregation: AggregationType
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Aggregate results from multiple partitions."""
         all_results = []
         for pr in partition_results:
@@ -447,7 +448,7 @@ class CrossPartitionQueryExecutor:
             (current_avg * (total_queries - 1) + execution_time_ms) / total_queries
         )
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get query execution statistics."""
         return dict(self._stats)
 
@@ -456,10 +457,10 @@ class CrossPartitionQueryExecutor:
 
 async def execute_cross_partition_search(
     query: str,
-    filters: Dict[str, Any],
+    filters: dict[str, Any],
     partition_manager,
     max_results: int = 100
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """
     Convenience function for cross-partition search.
 

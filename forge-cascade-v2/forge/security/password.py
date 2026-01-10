@@ -10,6 +10,7 @@ Includes:
 
 import hmac
 import re
+
 import bcrypt
 
 from ..config import get_settings
@@ -77,13 +78,13 @@ COMMON_WEAK_PASSWORDS = frozenset({
     "qwertyui", "asdfghjk", "zxcvbnm!", "!qazxsw2",
     "1234abcd", "abcd!234", "aaaa1111", "1111aaaa",
     # Love/emotion patterns
-    "iloveyou!", "iloveu123", "loveyou12", "mylove123",
+    "iloveu123", "loveyou12", "mylove123",
     "babe1234", "honey1234", "sweetie1", "darling1",
     # Tech patterns
     "computer1", "internet1", "windows10", "apple123",
     "google123", "facebook1", "twitter1", "instagram1",
     # Animal patterns
-    "monkey123", "dragon123", "tiger1234", "lion12345",
+    "tiger1234", "lion12345",
     "bear12345", "wolf12345", "eagle1234", "shark1234",
 })
 

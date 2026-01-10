@@ -8,11 +8,11 @@ system recommendations and personalization over time.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Set
-from enum import Enum
 from collections import defaultdict
+from dataclasses import dataclass, field
+from datetime import datetime
+from enum import Enum
+from typing import Any
 
 import structlog
 
@@ -39,9 +39,9 @@ class UserInteraction:
     interaction_id: str
     user_id: str
     interaction_type: InteractionType
-    target_id: Optional[str]  # Capsule ID, proposal ID, etc.
+    target_id: str | None  # Capsule ID, proposal ID, etc.
     timestamp: datetime = field(default_factory=datetime.utcnow)
-    context: Dict[str, Any] = field(default_factory=dict)
+    context: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -51,7 +51,7 @@ class TopicAffinity:
     topic: str
     score: float  # 0.0 to 1.0
     interaction_count: int = 0
-    last_interaction: Optional[datetime] = None
+    last_interaction: datetime | None = None
 
     def decay(self, days_since: int, decay_rate: float = 0.05) -> float:
         """Apply time-based decay to affinity score."""
@@ -67,16 +67,16 @@ class UserProfile:
     last_updated: datetime = field(default_factory=datetime.utcnow)
 
     # Topic affinities
-    topic_affinities: Dict[str, TopicAffinity] = field(default_factory=dict)
+    topic_affinities: dict[str, TopicAffinity] = field(default_factory=dict)
 
     # Behavioral patterns
-    preferred_capsule_types: Dict[str, int] = field(default_factory=dict)
-    active_hours: Dict[int, int] = field(default_factory=dict)  # hour -> count
-    active_days: Dict[int, int] = field(default_factory=dict)    # weekday -> count
+    preferred_capsule_types: dict[str, int] = field(default_factory=dict)
+    active_hours: dict[int, int] = field(default_factory=dict)  # hour -> count
+    active_days: dict[int, int] = field(default_factory=dict)    # weekday -> count
 
     # Interaction history
     total_interactions: int = 0
-    interactions_by_type: Dict[str, int] = field(default_factory=dict)
+    interactions_by_type: dict[str, int] = field(default_factory=dict)
 
     # Engagement metrics
     avg_session_duration_minutes: float = 0.0
@@ -86,7 +86,7 @@ class UserProfile:
     # Profile completeness (0.0 to 1.0)
     completeness: float = 0.0
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "user_id": self.user_id,
@@ -102,7 +102,7 @@ class UserProfile:
             }
         }
 
-    def get_top_topics(self, n: int = 5) -> List[Dict[str, Any]]:
+    def get_top_topics(self, n: int = 5) -> list[dict[str, Any]]:
         """Get top N topics by affinity."""
         sorted_topics = sorted(
             self.topic_affinities.items(),
@@ -133,8 +133,8 @@ class ProgressiveProfiler:
     ):
         self._decay_rate = decay_rate
         self._min_interactions = min_interactions_for_recommendations
-        self._profiles: Dict[str, UserProfile] = {}
-        self._interactions: Dict[str, List[UserInteraction]] = defaultdict(list)
+        self._profiles: dict[str, UserProfile] = {}
+        self._interactions: dict[str, list[UserInteraction]] = defaultdict(list)
 
         # Topic extraction patterns
         self._stop_words = {
@@ -154,8 +154,8 @@ class ProgressiveProfiler:
         self,
         user_id: str,
         interaction_type: InteractionType,
-        target_id: Optional[str] = None,
-        context: Optional[Dict[str, Any]] = None
+        target_id: str | None = None,
+        context: dict[str, Any] | None = None
     ) -> None:
         """
         Record a user interaction.
@@ -224,7 +224,7 @@ class ProgressiveProfiler:
         # Recalculate profile completeness
         self._update_completeness(profile)
 
-    def _extract_topics(self, interaction: UserInteraction) -> Set[str]:
+    def _extract_topics(self, interaction: UserInteraction) -> set[str]:
         """Extract topics from interaction context."""
         topics = set()
 
@@ -330,7 +330,7 @@ class ProgressiveProfiler:
 
         now = datetime.utcnow()
 
-        for topic, affinity in profile.topic_affinities.items():
+        for _topic, affinity in profile.topic_affinities.items():
             if affinity.last_interaction:
                 days_since = (now - affinity.last_interaction).days
                 if days_since > 0:
@@ -347,7 +347,7 @@ class ProgressiveProfiler:
         self,
         user_id: str,
         n: int = 5
-    ) -> List[str]:
+    ) -> list[str]:
         """Get recommended topics for a user."""
         profile = self._profiles.get(user_id)
         if not profile:
@@ -362,7 +362,7 @@ class ProgressiveProfiler:
         self,
         user_id: str,
         n: int = 5
-    ) -> List[Tuple[str, float]]:
+    ) -> list[tuple[str, float]]:
         """Find users with similar profiles."""
         profile = self._profiles.get(user_id)
         if not profile:
@@ -408,7 +408,7 @@ class ProgressiveProfiler:
         # Weighted combination
         return jaccard * 0.7 + type_overlap * 0.3
 
-    def get_profile_summary(self, user_id: str) -> Dict[str, Any]:
+    def get_profile_summary(self, user_id: str) -> dict[str, Any]:
         """Get a summary of user profile."""
         profile = self._profiles.get(user_id)
         if not profile:
@@ -430,7 +430,7 @@ class ProgressiveProfiler:
 
 
 # Global instance
-_progressive_profiler: Optional[ProgressiveProfiler] = None
+_progressive_profiler: ProgressiveProfiler | None = None
 
 
 def get_progressive_profiler() -> ProgressiveProfiler:
@@ -442,4 +442,3 @@ def get_progressive_profiler() -> ProgressiveProfiler:
 
 
 # Type hint for get_similar_users return
-from typing import Tuple

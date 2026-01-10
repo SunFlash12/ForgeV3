@@ -8,9 +8,8 @@ Provides endpoints for:
 - Administrative operations
 """
 
-from datetime import datetime, timedelta, timezone
-from typing import Any, Optional
-from uuid import UUID
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
@@ -34,18 +33,13 @@ from forge.models.events import EventType
 
 # Resilience integration - metrics and caching
 from forge.resilience.integration import (
-    record_health_check_access,
-    record_circuit_breaker_reset,
     record_anomaly_acknowledged,
     record_anomaly_resolved,
-    record_maintenance_mode_changed,
     record_cache_cleared,
-    get_cached_system_metrics,
-    cache_system_metrics,
-    get_cached_health_status,
-    cache_health_status,
+    record_circuit_breaker_reset,
+    record_health_check_access,
+    record_maintenance_mode_changed,
 )
-
 
 router = APIRouter(tags=["system"])
 
@@ -84,7 +78,7 @@ def set_maintenance_mode(enabled: bool, user_id: str | None = None, message: str
     with _maintenance_lock:
         _maintenance_state["enabled"] = enabled
         if enabled:
-            _maintenance_state["enabled_at"] = datetime.now(timezone.utc)
+            _maintenance_state["enabled_at"] = datetime.now(UTC)
             _maintenance_state["enabled_by"] = user_id
             if message:
                 _maintenance_state["message"] = message
@@ -101,12 +95,12 @@ def set_maintenance_mode(enabled: bool, user_id: str | None = None, message: str
 
 class HealthStatus(BaseModel):
     """Overall health status response."""
-    
+
     status: str = Field(description="Overall status: healthy, degraded, unhealthy")
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     uptime_seconds: float = Field(description="Application uptime in seconds")
     version: str = Field(default="0.1.0")
-    
+
     components: dict[str, dict[str, Any]] = Field(
         default_factory=dict,
         description="Individual component health status"
@@ -119,13 +113,13 @@ class HealthStatus(BaseModel):
 
 class CircuitBreakerStatus(BaseModel):
     """Status of a single circuit breaker."""
-    
+
     name: str
     state: str = Field(description="CLOSED, OPEN, or HALF_OPEN")
     failure_count: int
     success_count: int
-    last_failure_time: Optional[datetime] = None
-    last_success_time: Optional[datetime] = None
+    last_failure_time: datetime | None = None
+    last_success_time: datetime | None = None
     reset_timeout: float = Field(description="Seconds until OPEN → HALF_OPEN")
     failure_threshold: int
     success_threshold: int
@@ -133,7 +127,7 @@ class CircuitBreakerStatus(BaseModel):
 
 class CircuitBreakerListResponse(BaseModel):
     """List of all circuit breakers."""
-    
+
     circuit_breakers: list[CircuitBreakerStatus]
     total: int
     open_count: int
@@ -142,27 +136,27 @@ class CircuitBreakerListResponse(BaseModel):
 
 class AnomalyResponse(BaseModel):
     """Single anomaly record."""
-    
+
     id: str
     metric_name: str
     anomaly_type: str
     severity: str
     anomaly_score: float
     value: float
-    expected_value: Optional[float] = None
+    expected_value: float | None = None
     detected_at: datetime
     acknowledged: bool
-    acknowledged_at: Optional[datetime] = None
-    acknowledged_by: Optional[str] = None
+    acknowledged_at: datetime | None = None
+    acknowledged_by: str | None = None
     resolved: bool
-    resolved_at: Optional[datetime] = None
-    resolved_by: Optional[str] = None
+    resolved_at: datetime | None = None
+    resolved_by: str | None = None
     context: dict[str, Any] = Field(default_factory=dict)
 
 
 class AnomalyListResponse(BaseModel):
     """List of anomalies."""
-    
+
     anomalies: list[AnomalyResponse]
     total: int
     unresolved_count: int
@@ -170,13 +164,13 @@ class AnomalyListResponse(BaseModel):
 
 class AnomalyAcknowledgeRequest(BaseModel):
     """Request to acknowledge an anomaly."""
-    
-    notes: Optional[str] = Field(default=None, max_length=500)
+
+    notes: str | None = Field(default=None, max_length=500)
 
 
 class RecordMetricRequest(BaseModel):
     """Request to record a metric value."""
-    
+
     metric_name: str = Field(min_length=1, max_length=100)
     value: float
     context: dict[str, Any] = Field(default_factory=dict)
@@ -184,55 +178,55 @@ class RecordMetricRequest(BaseModel):
 
 class SystemMetricsResponse(BaseModel):
     """Comprehensive system metrics."""
-    
+
     timestamp: datetime
-    
+
     # Kernel metrics
     events_emitted_total: int
     events_processed_total: int
     active_overlays: int
     pipeline_executions: int
     average_pipeline_duration_ms: float
-    
+
     # Immune system metrics
     open_circuit_breakers: int
     active_anomalies: int
     canary_deployments: int
-    
+
     # Database metrics
     db_connected: bool
-    
+
     # Resource metrics (if available)
-    memory_usage_mb: Optional[float] = None
-    cpu_usage_percent: Optional[float] = None
+    memory_usage_mb: float | None = None
+    cpu_usage_percent: float | None = None
 
 
 class EventLogResponse(BaseModel):
     """Recent event log entry."""
-    
+
     event_type: str
     timestamp: datetime
     data: dict[str, Any]
-    correlation_id: Optional[str] = None
+    correlation_id: str | None = None
 
 
 class EventListResponse(BaseModel):
     """List of recent events."""
-    
+
     events: list[EventLogResponse]
     total: int
 
 
 class CanaryDeploymentResponse(BaseModel):
     """Canary deployment status."""
-    
+
     overlay_id: str
     current_stage: int
     total_stages: int
     traffic_percentage: float
     started_at: datetime
     current_stage_started_at: datetime
-    last_advanced_at: Optional[datetime] = None
+    last_advanced_at: datetime | None = None
     success_count: int
     failure_count: int
     rollback_on_failure: bool
@@ -242,7 +236,7 @@ class CanaryDeploymentResponse(BaseModel):
 
 class CanaryListResponse(BaseModel):
     """List of active canary deployments."""
-    
+
     deployments: list[CanaryDeploymentResponse]
     total: int
 
@@ -273,13 +267,13 @@ async def get_health(
 
     # Calculate uptime from event system start
     uptime = (
-        datetime.now(timezone.utc) - event_system._start_time
+        datetime.now(UTC) - event_system._start_time
     ).total_seconds() if hasattr(event_system, "_start_time") else 0.0
-    
+
     # Component status
     components = {}
     checks = {}
-    
+
     # Database health
     try:
         db_healthy = await db_client.verify_connection()
@@ -294,7 +288,7 @@ async def get_health(
         structlog.get_logger(__name__).error("database_health_check_failed", error=str(e))
         components["database"] = {"status": "unhealthy", "error": "Database connection failed"}
         checks["database"] = False
-    
+
     # Event system health
     event_healthy = event_system._running if hasattr(event_system, "_running") else True
     components["event_system"] = {
@@ -302,7 +296,7 @@ async def get_health(
         "queue_size": event_system._queue.qsize() if hasattr(event_system, "_queue") else 0
     }
     checks["event_system"] = event_healthy
-    
+
     # Overlay manager health
     overlay_count = len(overlay_manager._overlays) if hasattr(overlay_manager, "_overlays") else 0
     active_count = len([o for o in overlay_manager._overlays.values() if o.enabled]) if hasattr(overlay_manager, "_overlays") else 0
@@ -312,54 +306,54 @@ async def get_health(
         "active_overlays": active_count
     }
     checks["overlay_manager"] = True
-    
+
     # Circuit breakers health
     open_breakers = sum(
         1 for cb in circuit_registry._breakers.values()
         if cb.state.name == "OPEN"
     ) if hasattr(circuit_registry, "_breakers") else 0
-    
+
     components["circuit_breakers"] = {
         "status": "degraded" if open_breakers > 0 else "healthy",
         "total": len(circuit_registry._breakers) if hasattr(circuit_registry, "_breakers") else 0,
         "open": open_breakers
     }
     checks["circuit_breakers"] = open_breakers == 0
-    
+
     # Anomaly system health
     unresolved = len(anomaly_system.get_unresolved_anomalies())
     critical_anomalies = len([
         a for a in anomaly_system.get_unresolved_anomalies()
         if a.severity == AnomalySeverity.CRITICAL
     ])
-    
+
     anomaly_status = "healthy"
     if critical_anomalies > 0:
         anomaly_status = "unhealthy"
     elif unresolved > 5:
         anomaly_status = "degraded"
-    
+
     components["anomaly_detection"] = {
         "status": anomaly_status,
         "unresolved": unresolved,
         "critical": critical_anomalies
     }
     checks["anomaly_detection"] = critical_anomalies == 0
-    
+
     # Determine overall status
     all_healthy = all(checks.values())
     any_unhealthy = any(
-        c.get("status") == "unhealthy" 
+        c.get("status") == "unhealthy"
         for c in components.values()
     )
-    
+
     if any_unhealthy:
         overall_status = "unhealthy"
     elif not all_healthy:
         overall_status = "degraded"
     else:
         overall_status = "healthy"
-    
+
     return HealthStatus(
         status=overall_status,
         uptime_seconds=uptime,
@@ -387,10 +381,10 @@ async def readiness_probe(
     db_client: DbClientDep,
 ) -> dict[str, Any]:
     """Readiness check - verifies critical dependencies are available."""
-    
+
     ready = True
     details = {}
-    
+
     # Check database
     try:
         db_ready = await db_client.verify_connection()
@@ -403,13 +397,13 @@ async def readiness_probe(
         structlog.get_logger(__name__).error("readiness_check_failed", error=str(e))
         details["database"] = "error: connection failed"
         ready = False
-    
+
     if not ready:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail={"status": "not_ready", "details": details}
         )
-    
+
     return {"status": "ready", "details": details}
 
 
@@ -429,18 +423,18 @@ async def list_circuit_breakers(
     circuit_registry: CircuitRegistryDep,
 ) -> CircuitBreakerListResponse:
     """List all circuit breakers and their current states."""
-    
+
     breakers = []
     open_count = 0
     half_open_count = 0
-    
+
     for name, cb in circuit_registry._breakers.items():
         state_name = cb.state.name
         if state_name == "OPEN":
             open_count += 1
         elif state_name == "HALF_OPEN":
             half_open_count += 1
-        
+
         breakers.append(CircuitBreakerStatus(
             name=name,
             state=state_name,
@@ -452,7 +446,7 @@ async def list_circuit_breakers(
             failure_threshold=cb._failure_threshold,
             success_threshold=cb._success_threshold
         ))
-    
+
     return CircuitBreakerListResponse(
         circuit_breakers=breakers,
         total=len(breakers),
@@ -473,13 +467,13 @@ async def reset_circuit_breaker(
     event_system: EventSystemDep,
 ) -> dict[str, str]:
     """Manually reset a circuit breaker."""
-    
+
     if name not in circuit_registry._breakers:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Circuit breaker '{name}' not found"
         )
-    
+
     cb = circuit_registry._breakers[name]
     cb.reset()
 
@@ -514,12 +508,12 @@ async def list_anomalies(
     _user: CurrentUserDep,
     anomaly_system: AnomalySystemDep,
     hours: int = Query(default=24, ge=1, le=168, description="Hours to look back"),
-    severity: Optional[str] = Query(default=None, description="Filter by severity"),
-    anomaly_type: Optional[str] = Query(default=None, description="Filter by type"),
+    severity: str | None = Query(default=None, description="Filter by severity"),
+    anomaly_type: str | None = Query(default=None, description="Filter by type"),
     unresolved_only: bool = Query(default=False, description="Only show unresolved"),
 ) -> AnomalyListResponse:
     """List detected anomalies with optional filtering."""
-    
+
     # Parse severity filter
     severity_filter = None
     if severity:
@@ -530,7 +524,7 @@ async def list_anomalies(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Invalid severity: {severity}"
             )
-    
+
     # Parse anomaly type filter
     type_filter = None
     if anomaly_type:
@@ -541,10 +535,10 @@ async def list_anomalies(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Invalid anomaly type: {anomaly_type}"
             )
-    
+
     # Get anomalies
-    since = datetime.now(timezone.utc) - timedelta(hours=hours)
-    
+    since = datetime.now(UTC) - timedelta(hours=hours)
+
     if unresolved_only:
         anomalies = anomaly_system.get_unresolved_anomalies()
         # Apply time filter
@@ -555,13 +549,13 @@ async def list_anomalies(
             severity=severity_filter,
             type_filter=type_filter
         )
-    
+
     # Apply additional filters
     if severity_filter and not unresolved_only:
         anomalies = [a for a in anomalies if a.severity == severity_filter]
     if type_filter:
         anomalies = [a for a in anomalies if a.anomaly_type == type_filter]
-    
+
     # Convert to response format
     response_anomalies = [
         AnomalyResponse(
@@ -583,9 +577,9 @@ async def list_anomalies(
         )
         for a in anomalies
     ]
-    
+
     unresolved = len([a for a in anomalies if not a.resolved])
-    
+
     return AnomalyListResponse(
         anomalies=response_anomalies,
         total=len(response_anomalies),
@@ -714,15 +708,15 @@ async def record_metric(
     anomaly_system: AnomalySystemDep,
 ) -> dict[str, Any]:
     """Record a metric value for anomaly detection."""
-    
+
     anomaly = anomaly_system.record_metric(
         metric_name=request.metric_name,
         value=request.value,
         context=request.context
     )
-    
+
     response = {"recorded": True, "metric_name": request.metric_name}
-    
+
     if anomaly:
         response["anomaly_detected"] = True
         response["anomaly"] = AnomalyResponse(
@@ -738,7 +732,7 @@ async def record_metric(
             resolved=anomaly.resolved,
             context=anomaly.context
         ).model_dump()
-    
+
     return response
 
 
@@ -758,9 +752,9 @@ async def list_canary_deployments(
     canary_manager: CanaryManagerDep,
 ) -> CanaryListResponse:
     """List all active canary deployments."""
-    
+
     deployments = []
-    
+
     for overlay_id, deployment in canary_manager._deployments.items():
         deployments.append(CanaryDeploymentResponse(
             overlay_id=overlay_id,
@@ -776,7 +770,7 @@ async def list_canary_deployments(
             is_complete=deployment.is_complete(),
             can_advance=deployment.can_advance()
         ))
-    
+
     return CanaryListResponse(
         deployments=deployments,
         total=len(deployments)
@@ -805,43 +799,43 @@ async def get_system_metrics(
     canary_manager: CanaryManagerDep,
 ) -> SystemMetricsResponse:
     """Get comprehensive system metrics."""
-    
+
     # Event system metrics
     events_emitted = getattr(event_system, "_events_emitted", 0)
     events_processed = getattr(event_system, "_events_processed", 0)
-    
+
     # Overlay metrics
     active_overlays = len([
         o for o in overlay_manager._overlays.values()
         if o.enabled
     ]) if hasattr(overlay_manager, "_overlays") else 0
-    
+
     # Pipeline metrics
     pipeline_executions = getattr(pipeline, "_execution_count", 0)
     total_duration = getattr(pipeline, "_total_duration_ms", 0)
     avg_duration = (
-        total_duration / pipeline_executions 
+        total_duration / pipeline_executions
         if pipeline_executions > 0 else 0.0
     )
-    
+
     # Circuit breaker metrics
     open_breakers = sum(
         1 for cb in circuit_registry._breakers.values()
         if cb.state.name == "OPEN"
     ) if hasattr(circuit_registry, "_breakers") else 0
-    
+
     # Anomaly metrics
     active_anomalies = len(anomaly_system.get_unresolved_anomalies())
-    
+
     # Canary metrics
     canary_count = len(canary_manager._deployments) if hasattr(canary_manager, "_deployments") else 0
-    
+
     # Database check
     try:
         db_connected = await db_client.verify_connection()
     except Exception:
         db_connected = False
-    
+
     # Try to get memory usage
     memory_mb = None
     try:
@@ -850,9 +844,9 @@ async def get_system_metrics(
         memory_mb = process.memory_info().rss / 1024 / 1024
     except ImportError:
         pass
-    
+
     return SystemMetricsResponse(
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
         events_emitted_total=events_emitted,
         events_processed_total=events_processed,
         active_overlays=active_overlays,
@@ -881,30 +875,30 @@ async def get_recent_events(
     _user: TrustedUserDep,
     event_system: EventSystemDep,
     limit: int = Query(default=50, ge=1, le=500),
-    event_type: Optional[str] = Query(default=None, description="Filter by event type"),
+    event_type: str | None = Query(default=None, description="Filter by event type"),
 ) -> EventListResponse:
     """Get recently emitted events."""
-    
+
     # Get event history from event system
     history = getattr(event_system, "_event_history", [])
-    
+
     # Filter by type if specified
     if event_type:
         history = [e for e in history if e.get("event_type") == event_type]
-    
+
     # Limit results
     history = history[-limit:]
-    
+
     events = [
         EventLogResponse(
             event_type=e.get("event_type", "UNKNOWN"),
-            timestamp=e.get("timestamp", datetime.now(timezone.utc)),
+            timestamp=e.get("timestamp", datetime.now(UTC)),
             data=e.get("data", {}),
             correlation_id=e.get("correlation_id")
         )
         for e in history
     ]
-    
+
     return EventListResponse(
         events=events,
         total=len(events)
@@ -918,7 +912,7 @@ async def get_recent_events(
 
 class MaintenanceModeRequest(BaseModel):
     """Request to enable/disable maintenance mode."""
-    message: Optional[str] = Field(
+    message: str | None = Field(
         default=None,
         max_length=500,
         description="Custom maintenance message to display"
@@ -928,8 +922,8 @@ class MaintenanceModeRequest(BaseModel):
 class MaintenanceModeResponse(BaseModel):
     """Maintenance mode status response."""
     enabled: bool
-    enabled_at: Optional[datetime] = None
-    enabled_by: Optional[str] = None
+    enabled_at: datetime | None = None
+    enabled_by: str | None = None
     message: str
 
 
@@ -942,7 +936,7 @@ class MaintenanceModeResponse(BaseModel):
 async def enable_maintenance_mode(
     user: AdminUserDep,
     event_system: EventSystemDep,
-    request: Optional[MaintenanceModeRequest] = None,
+    request: MaintenanceModeRequest | None = None,
 ) -> MaintenanceModeResponse:
     """
     Enable maintenance mode.
@@ -1029,7 +1023,7 @@ async def get_maintenance_status() -> MaintenanceModeResponse:
 
 class CacheClearRequest(BaseModel):
     """Request to clear specific caches."""
-    caches: Optional[list[str]] = Field(
+    caches: list[str] | None = Field(
         default=None,
         description="Specific caches to clear. If empty/null, clears all caches."
     )
@@ -1051,7 +1045,7 @@ class CacheClearResponse(BaseModel):
 async def clear_caches(
     user: CoreUserDep,
     event_system: EventSystemDep,
-    request: Optional[CacheClearRequest] = None,
+    request: CacheClearRequest | None = None,
 ) -> CacheClearResponse:
     """
     Clear system caches.
@@ -1168,7 +1162,7 @@ async def get_system_info() -> dict[str, Any]:
         "version": "0.1.0",
         "python_version": sys.version,
         "api_version": "v1",
-        "timestamp": datetime.now(timezone.utc).isoformat()
+        "timestamp": datetime.now(UTC).isoformat()
     }
 
 
@@ -1205,7 +1199,7 @@ async def get_system_status(
 
     # Calculate uptime
     uptime = (
-        datetime.now(timezone.utc) - event_system._start_time
+        datetime.now(UTC) - event_system._start_time
     ).total_seconds() if hasattr(event_system, "_start_time") else 0.0
 
     services = {}
@@ -1242,7 +1236,7 @@ async def get_system_status(
     return SystemStatusResponse(
         status=overall,
         uptime_seconds=uptime,
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
         services=services,
     )
 
@@ -1288,13 +1282,13 @@ async def get_audit_log(
 ) -> AuditLogResponse:
     """
     Get audit log entries.
-    
+
     Returns paginated audit trail of all system operations.
     """
     from forge.repositories.audit_repository import AuditRepository
-    
+
     audit_repo = AuditRepository(db)
-    
+
     # Build filters
     filters = {}
     if action:
@@ -1303,14 +1297,14 @@ async def get_audit_log(
         filters["entity_type"] = entity_type
     if user_id:
         filters["user_id"] = user_id
-    
+
     # Query audit logs
     entries, total = await audit_repo.list(
         offset=offset,
         limit=limit,
         filters=filters,
     )
-    
+
     return AuditLogResponse(
         items=[
             AuditLogEntry(
@@ -1343,14 +1337,14 @@ async def get_audit_trail(
 ) -> list[AuditLogEntry]:
     """
     Get all audit entries for a correlation ID.
-    
+
     Useful for tracing a complete operation across services.
     """
     from forge.repositories.audit_repository import AuditRepository
-    
+
     audit_repo = AuditRepository(db)
     entries = await audit_repo.get_by_correlation_id(correlation_id)
-    
+
     return [
         AuditLogEntry(
             id=e.id,
@@ -1408,7 +1402,7 @@ async def get_events_alias(
     _user: TrustedUserDep,
     event_system: EventSystemDep,
     limit: int = Query(default=50, ge=1, le=500),
-    event_type: Optional[str] = Query(default=None, description="Filter by event type"),
+    event_type: str | None = Query(default=None, description="Filter by event type"),
 ) -> EventListResponse:
     """Alias for /events/recent - Get recently emitted events."""
     return await get_recent_events(

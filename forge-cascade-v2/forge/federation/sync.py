@@ -7,21 +7,20 @@ Orchestrates synchronization of capsules and edges between federated Forge insta
 import asyncio
 import logging
 import uuid
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from forge.federation.models import (
-    FederatedPeer,
+    ConflictResolution,
     FederatedCapsule,
     FederatedEdge,
-    SyncState,
-    SyncDirection,
-    SyncPayload,
-    PeerStatus,
-    ConflictResolution,
+    FederatedPeer,
     FederatedSyncStatus,
+    PeerStatus,
+    SyncDirection,
     SyncOperationStatus,
     SyncPhase,
+    SyncState,
 )
 from forge.federation.protocol import FederationProtocol
 from forge.federation.trust import PeerTrustManager
@@ -129,7 +128,7 @@ class SyncService:
             # Check if sync is needed
             if not force and peer.last_sync_at:
                 next_sync = peer.last_sync_at + timedelta(minutes=peer.sync_interval_minutes)
-                if datetime.now(timezone.utc) < next_sync:
+                if datetime.now(UTC) < next_sync:
                     logger.info(f"Skipping sync with {peer.name} - not due yet")
                     return self._create_skipped_state(peer_id)
 
@@ -141,7 +140,7 @@ class SyncService:
                 id=sync_id,
                 peer_id=peer_id,
                 direction=sync_direction,
-                started_at=datetime.now(timezone.utc),
+                started_at=datetime.now(UTC),
                 status=SyncOperationStatus.RUNNING,
                 phase=SyncPhase.INIT,
             )
@@ -159,7 +158,7 @@ class SyncService:
 
                 # Update success
                 state.status = SyncOperationStatus.COMPLETED
-                state.completed_at = datetime.now(timezone.utc)
+                state.completed_at = datetime.now(UTC)
                 peer.last_sync_at = state.completed_at
                 peer.successful_syncs += 1
                 peer.total_syncs += 1
@@ -171,7 +170,7 @@ class SyncService:
                 logger.error(f"Sync failed with {peer.name}: {e}")
                 state.status = SyncOperationStatus.FAILED
                 state.error_message = str(e)
-                state.completed_at = datetime.now(timezone.utc)
+                state.completed_at = datetime.now(UTC)
                 peer.failed_syncs += 1
                 peer.total_syncs += 1
 
@@ -190,12 +189,11 @@ class SyncService:
 
         # Calculate sync window
         state.sync_from = peer.last_sync_at
-        state.sync_to = datetime.now(timezone.utc)
+        state.sync_to = datetime.now(UTC)
 
         # SECURITY FIX (Audit 4 - H6): Add iteration counter to prevent DoS
         # A malicious peer could claim has_more=True forever to exhaust resources
         iterations = 0
-        cursor: str | None = None
 
         while iterations < self.MAX_SYNC_ITERATIONS:
             iterations += 1
@@ -237,7 +235,6 @@ class SyncService:
             if not payload.has_more:
                 break
             # Note: cursor pagination not yet implemented in protocol
-            cursor = payload.next_cursor
 
         # SECURITY FIX (Audit 4 - H6): Log if we hit the iteration limit
         if iterations >= self.MAX_SYNC_ITERATIONS:
@@ -529,7 +526,7 @@ class SyncService:
             remote_type=remote_capsule.get("type"),
             remote_trust_level=remote_capsule.get("trust_level"),
             remote_owner_id=remote_capsule.get("owner_id"),
-            last_synced_at=datetime.now(timezone.utc),
+            last_synced_at=datetime.now(UTC),
         )
 
         # TODO: Actually create local capsule via repository
@@ -546,7 +543,7 @@ class SyncService:
     ) -> None:
         """Update local capsule with remote changes."""
         fed_capsule.remote_content_hash = remote_capsule.get("content_hash", "")
-        fed_capsule.last_synced_at = datetime.now(timezone.utc)
+        fed_capsule.last_synced_at = datetime.now(UTC)
 
         # TODO: Update local capsule via repository
 
@@ -593,7 +590,7 @@ class SyncService:
             source_is_local=True,
             target_is_local=True,
             sync_status=FederatedSyncStatus.SYNCED,
-            last_synced_at=datetime.now(timezone.utc),
+            last_synced_at=datetime.now(UTC),
         )
 
         self._federated_edges[fed_edge.id] = fed_edge
@@ -695,7 +692,7 @@ class SyncService:
                     "conflict_resolution": peer.conflict_resolution.value if hasattr(peer.conflict_resolution, 'value') else str(peer.conflict_resolution),
                     "last_sync_at": peer.last_sync_at.isoformat() if peer.last_sync_at else None,
                     "created_at": peer.created_at.isoformat() if peer.created_at else None,
-                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                    "updated_at": datetime.now(UTC).isoformat(),
                     "metadata": json.dumps(peer.metadata) if peer.metadata else None,
                 })
                 record = await result.single()
@@ -838,7 +835,7 @@ class SyncService:
                 result = await session.run(query, {
                     "id": peer_id,
                     "trust_score": trust_score,
-                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                    "updated_at": datetime.now(UTC).isoformat(),
                     "reason": reason,
                 })
                 record = await result.single()

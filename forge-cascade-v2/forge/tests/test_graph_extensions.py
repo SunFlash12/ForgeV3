@@ -9,15 +9,12 @@ Tests for:
 - Lineage tracking with semantic edges
 """
 
-import pytest
 from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from forge.models.base import TrustLevel, CapsuleType
-from forge.models.graph_analysis import NodeRanking, CommunityResult, GraphMetrics, TrustTransitivityResult
-from forge.models.semantic_edges import SemanticRelationType, SemanticEdge, SemanticEdgeCreate
-from forge.models.temporal import CapsuleVersion, TrustSnapshot, GraphSnapshot
+import pytest
 
+from forge.models.semantic_edges import SemanticEdgeCreate, SemanticRelationType
 
 # =============================================================================
 # Graph Repository Tests
@@ -413,8 +410,8 @@ class TestSemanticEdgeDetector:
     def detector(self, mock_capsule_repo, mock_embedding_service):
         """Create SemanticEdgeDetector with mocks."""
         from forge.services.semantic_edge_detector import (
-            SemanticEdgeDetector,
             DetectionConfig,
+            SemanticEdgeDetector,
         )
 
         config = DetectionConfig(
@@ -433,7 +430,6 @@ class TestSemanticEdgeDetector:
     @pytest.mark.asyncio
     async def test_analyze_capsule_finds_similar(self, detector, mock_capsule_repo):
         """Test that analyzer finds similar capsules."""
-        from forge.models.capsule import Capsule
 
         source_capsule = MagicMock()
         source_capsule.id = "cap1"
@@ -497,7 +493,6 @@ class TestLineageTrackerSemanticEdges:
     @pytest.mark.asyncio
     async def test_handle_semantic_edge_created(self, lineage_tracker, overlay_context):
         """Test handling semantic edge creation event."""
-        from forge.models.events import Event, EventType
 
         # First create the source and target nodes
         await lineage_tracker._handle_capsule_created(

@@ -13,9 +13,10 @@ Key techniques:
 
 from __future__ import annotations
 
-import re
 import json
-from typing import Any, Optional
+import re
+from typing import Any
+
 import structlog
 
 logger = structlog.get_logger(__name__)
@@ -206,7 +207,7 @@ def create_safe_user_message(
 def validate_llm_output(
     response: str,
     expected_schema: dict[str, type],
-    required_fields: Optional[list[str]] = None,
+    required_fields: list[str] | None = None,
 ) -> tuple[bool, dict[str, Any], list[str]]:
     """
     Validate LLM output against expected schema.

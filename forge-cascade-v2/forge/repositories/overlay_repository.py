@@ -5,7 +5,6 @@ Manages overlay lifecycle, state transitions, metrics, and capability tracking.
 Supports the WebAssembly isolation model with health monitoring.
 """
 
-from datetime import datetime
 from typing import Any
 
 import structlog
@@ -13,12 +12,12 @@ import structlog
 from forge.database.client import Neo4jClient
 from forge.models.base import OverlayState, TrustLevel
 from forge.models.overlay import (
+    Capability,
     Overlay,
-    OverlayManifest,
-    OverlayMetrics,
     OverlayExecution,
     OverlayHealthCheck,
-    Capability,
+    OverlayManifest,
+    OverlayMetrics,
 )
 from forge.repositories.base import BaseRepository
 
@@ -32,7 +31,7 @@ class OverlayCreate(OverlayManifest):
 
 class OverlayUpdate:
     """Schema for updating an overlay."""
-    
+
     def __init__(
         self,
         name: str | None = None,
@@ -51,7 +50,7 @@ class OverlayUpdate:
 class OverlayRepository(BaseRepository[Overlay, OverlayCreate, OverlayUpdate]):
     """
     Repository for overlay management.
-    
+
     Handles overlay lifecycle:
     - Registration (REGISTERED)
     - Loading/Validation (LOADING)
@@ -181,14 +180,14 @@ class OverlayRepository(BaseRepository[Overlay, OverlayCreate, OverlayUpdate]):
                 "updated_at": now,
             },
         )
-        
+
         self.logger.info(
             "Registered overlay",
             overlay_id=overlay_id,
             name=data.name,
             version=data.version,
         )
-        
+
         return self._to_model(result["entity"])
 
     async def update(
@@ -198,11 +197,11 @@ class OverlayRepository(BaseRepository[Overlay, OverlayCreate, OverlayUpdate]):
     ) -> Overlay | None:
         """
         Update overlay configuration.
-        
+
         Args:
             entity_id: Overlay ID
             data: Update fields
-            
+
         Returns:
             Updated overlay or None
         """
@@ -212,35 +211,35 @@ class OverlayRepository(BaseRepository[Overlay, OverlayCreate, OverlayUpdate]):
             "id": entity_id,
             "now": self._now().isoformat(),
         }
-        
+
         if data.name is not None:
             set_parts.append("o.name = $name")
             params["name"] = data.name
-            
+
         if data.description is not None:
             set_parts.append("o.description = $description")
             params["description"] = data.description
-            
+
         if data.version is not None:
             set_parts.append("o.version = $version")
             params["version"] = data.version
-            
+
         if data.capabilities is not None:
             set_parts.append("o.capabilities = $capabilities")
             params["capabilities"] = [c.value for c in data.capabilities]
-            
+
         if data.trust_level is not None:
             set_parts.append("o.trust_level = $trust_level")
             params["trust_level"] = data.trust_level.value
-        
+
         query = f"""
         MATCH (o:Overlay {{id: $id}})
         SET {', '.join(set_parts)}
         RETURN o {{.*}} AS entity
         """
-        
+
         result = await self.client.execute_single(query, params)
-        
+
         if result and result.get("entity"):
             return self._to_model(result["entity"])
         return None
@@ -257,39 +256,39 @@ class OverlayRepository(BaseRepository[Overlay, OverlayCreate, OverlayUpdate]):
     ) -> Overlay | None:
         """
         Transition overlay to a new state.
-        
+
         Args:
             overlay_id: Overlay ID
             new_state: Target state
             reason: Optional reason for transition
-            
+
         Returns:
             Updated overlay
         """
         now = self._now().isoformat()
-        
+
         # Build state-specific updates
         extra_sets = []
         if new_state == OverlayState.ACTIVE:
             extra_sets.append("o.activated_at = $now")
         elif new_state in (OverlayState.INACTIVE, OverlayState.QUARANTINED):
             extra_sets.append("o.deactivated_at = $now")
-        
-        set_clause = f"o.state = $state, o.updated_at = $now"
+
+        set_clause = "o.state = $state, o.updated_at = $now"
         if extra_sets:
             set_clause += ", " + ", ".join(extra_sets)
-        
+
         query = f"""
         MATCH (o:Overlay {{id: $id}})
         SET {set_clause}
         RETURN o {{.*}} AS entity
         """
-        
+
         result = await self.client.execute_single(
             query,
             {"id": overlay_id, "state": new_state.value, "now": now},
         )
-        
+
         if result and result.get("entity"):
             self.logger.info(
                 "Overlay state changed",
@@ -340,11 +339,11 @@ class OverlayRepository(BaseRepository[Overlay, OverlayCreate, OverlayUpdate]):
     ) -> bool:
         """
         Record an overlay execution and update metrics.
-        
+
         Args:
             overlay_id: Overlay ID
             execution: Execution details
-            
+
         Returns:
             True if recorded
         """
@@ -365,7 +364,7 @@ class OverlayRepository(BaseRepository[Overlay, OverlayCreate, OverlayUpdate]):
             o.updated_at = $timestamp
         RETURN o.consecutive_failures AS consecutive_failures
         """
-        
+
         result = await self.client.execute_single(
             query,
             {
@@ -378,7 +377,7 @@ class OverlayRepository(BaseRepository[Overlay, OverlayCreate, OverlayUpdate]):
                 "fuel": execution.fuel_used,
             },
         )
-        
+
         # Check for auto-quarantine threshold
         if result:
             consecutive_failures = result.get("consecutive_failures", 0)
@@ -387,7 +386,7 @@ class OverlayRepository(BaseRepository[Overlay, OverlayCreate, OverlayUpdate]):
                     overlay_id,
                     f"Auto-quarantine: {consecutive_failures} consecutive failures",
                 )
-        
+
         return result is not None
 
     async def record_health_check(
@@ -397,11 +396,11 @@ class OverlayRepository(BaseRepository[Overlay, OverlayCreate, OverlayUpdate]):
     ) -> bool:
         """
         Record a health check result.
-        
+
         Args:
             overlay_id: Overlay ID
             health_check: Health check result
-            
+
         Returns:
             True if recorded
         """
@@ -413,7 +412,7 @@ class OverlayRepository(BaseRepository[Overlay, OverlayCreate, OverlayUpdate]):
             o.updated_at = $timestamp
         RETURN o {.*} AS entity
         """
-        
+
         result = await self.client.execute_single(
             query,
             {
@@ -422,16 +421,16 @@ class OverlayRepository(BaseRepository[Overlay, OverlayCreate, OverlayUpdate]):
                 "timestamp": health_check.timestamp.isoformat(),
             },
         )
-        
+
         return result is not None
 
     async def get_metrics(self, overlay_id: str) -> OverlayMetrics | None:
         """
         Get current metrics for an overlay.
-        
+
         Args:
             overlay_id: Overlay ID
-            
+
         Returns:
             Metrics object
         """
@@ -453,9 +452,9 @@ class OverlayRepository(BaseRepository[Overlay, OverlayCreate, OverlayUpdate]):
             consecutive_failures: o.consecutive_failures
         } AS metrics
         """
-        
+
         result = await self.client.execute_single(query, {"id": overlay_id})
-        
+
         if result and result.get("metrics"):
             return OverlayMetrics.model_validate(result["metrics"])
         return None
@@ -487,27 +486,27 @@ class OverlayRepository(BaseRepository[Overlay, OverlayCreate, OverlayUpdate]):
     ) -> list[Overlay]:
         """
         Get overlays that have a specific capability.
-        
+
         Args:
             capability: Required capability
             active_only: Only return active overlays
-            
+
         Returns:
             List of overlays
         """
         state_filter = "AND o.state = 'ACTIVE'" if active_only else ""
-        
+
         query = f"""
         MATCH (o:Overlay)
         WHERE $capability IN o.capabilities {state_filter}
         RETURN o {{.*}} AS entity
         """
-        
+
         results = await self.client.execute(
             query,
             {"capability": capability.value},
         )
-        
+
         return self._to_models([r["entity"] for r in results if r.get("entity")])
 
     async def get_by_trust_level(
@@ -521,21 +520,21 @@ class OverlayRepository(BaseRepository[Overlay, OverlayCreate, OverlayUpdate]):
         RETURN o {.*} AS entity
         ORDER BY o.trust_level DESC
         """
-        
+
         results = await self.client.execute(
             query,
             {"trust": min_trust.value},
         )
-        
+
         return self._to_models([r["entity"] for r in results if r.get("entity")])
 
     async def get_dependencies(self, overlay_id: str) -> list[Overlay]:
         """
         Get overlays that this overlay depends on.
-        
+
         Args:
             overlay_id: Overlay ID
-            
+
         Returns:
             List of dependency overlays
         """
@@ -546,17 +545,17 @@ class OverlayRepository(BaseRepository[Overlay, OverlayCreate, OverlayUpdate]):
         MATCH (dep:Overlay {id: dep_id})
         RETURN dep {.*} AS entity
         """
-        
+
         results = await self.client.execute(query, {"id": overlay_id})
         return self._to_models([r["entity"] for r in results if r.get("entity")])
 
     async def get_dependents(self, overlay_id: str) -> list[Overlay]:
         """
         Get overlays that depend on this overlay.
-        
+
         Args:
             overlay_id: Overlay ID
-            
+
         Returns:
             List of dependent overlays
         """
@@ -565,7 +564,7 @@ class OverlayRepository(BaseRepository[Overlay, OverlayCreate, OverlayUpdate]):
         WHERE $id IN o.dependencies
         RETURN o {.*} AS entity
         """
-        
+
         results = await self.client.execute(query, {"id": overlay_id})
         return self._to_models([r["entity"] for r in results if r.get("entity")])
 
@@ -576,11 +575,11 @@ class OverlayRepository(BaseRepository[Overlay, OverlayCreate, OverlayUpdate]):
     ) -> list[Overlay]:
         """
         Get overlays that are unhealthy based on metrics.
-        
+
         Args:
             error_rate_threshold: Max acceptable error rate
             consecutive_failures_threshold: Max consecutive failures
-            
+
         Returns:
             List of unhealthy overlays
         """
@@ -593,7 +592,7 @@ class OverlayRepository(BaseRepository[Overlay, OverlayCreate, OverlayUpdate]):
         )
         RETURN o {.*} AS entity
         """
-        
+
         results = await self.client.execute(
             query,
             {
@@ -601,7 +600,7 @@ class OverlayRepository(BaseRepository[Overlay, OverlayCreate, OverlayUpdate]):
                 "error_threshold": error_rate_threshold,
             },
         )
-        
+
         return self._to_models([r["entity"] for r in results if r.get("entity")])
 
     async def get_by_name(self, name: str) -> Overlay | None:

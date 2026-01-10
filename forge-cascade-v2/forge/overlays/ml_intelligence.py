@@ -18,12 +18,10 @@ import re
 from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 import structlog
 
-from ..models.capsule import CapsuleType
 from ..models.events import Event, EventType
 from ..models.overlay import Capability
 from .base import BaseOverlay, OverlayContext, OverlayError, OverlayResult

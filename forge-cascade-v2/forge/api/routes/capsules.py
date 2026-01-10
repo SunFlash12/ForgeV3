@@ -12,58 +12,56 @@ Provides:
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+import hashlib
+import time
+from datetime import datetime
 from typing import Any
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, status, Query, BackgroundTasks
-from pydantic import BaseModel, Field, field_validator
 import structlog
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, status
+from pydantic import BaseModel, Field, field_validator
 
 from forge.api.dependencies import (
-    CapsuleRepoDep,
-    AuditRepoDep,
-    PipelineDep,
-    EventSystemDep,
     ActiveUserDep,
+    AuditRepoDep,
+    CapsuleRepoDep,
+    CorrelationIdDep,
+    EmbeddingServiceDep,
+    EventSystemDep,
+    PaginationDep,
+    PipelineDep,
     SandboxUserDep,
     StandardUserDep,
     TrustedUserDep,
-    PaginationDep,
-    CorrelationIdDep,
-    EmbeddingServiceDep,
 )
 from forge.models.capsule import (
     Capsule,
     CapsuleCreate,
-    CapsuleUpdate,
     CapsuleType,
-    ContentBlock,
+    CapsuleUpdate,
 )
-from forge.models.events import Event, EventType
+from forge.models.events import EventType
 
 # Resilience integration - caching, validation, metrics
 from forge.resilience.integration import (
-    get_cached_capsule,
     cache_capsule,
-    invalidate_capsule_cache,
-    get_cached_search,
-    cache_search_results,
-    get_cached_lineage,
     cache_lineage,
-    validate_capsule_content,
+    cache_search_results,
     check_content_validation,
-    record_capsule_created,
-    record_capsule_updated,
-    record_capsule_deleted,
-    record_search,
-    record_lineage_query,
+    get_cached_capsule,
+    get_cached_lineage,
+    get_cached_search,
+    invalidate_capsule_cache,
     record_cache_hit,
     record_cache_miss,
+    record_capsule_created,
+    record_capsule_deleted,
+    record_capsule_updated,
+    record_lineage_query,
+    record_search,
+    validate_capsule_content,
 )
-import hashlib
-import time
-
 
 router = APIRouter()
 logger = structlog.get_logger(__name__)
@@ -81,13 +79,13 @@ async def run_semantic_edge_detection(capsule_id: str, user_id: str):
     SUPPORTS, CONTRADICTS, ELABORATES relationships with existing capsules.
     """
     try:
+        from forge.config import get_settings
         from forge.database.client import Neo4jClient
         from forge.repositories.capsule_repository import CapsuleRepository
         from forge.services.semantic_edge_detector import (
-            SemanticEdgeDetector,
             DetectionConfig,
+            SemanticEdgeDetector,
         )
-        from forge.config import get_settings
 
         settings = get_settings()
 
@@ -228,9 +226,9 @@ class CapsuleResponse(BaseModel):
     is_archived: bool
     created_at: str
     updated_at: str
-    
+
     @classmethod
-    def from_capsule(cls, capsule: Capsule) -> "CapsuleResponse":
+    def from_capsule(cls, capsule: Capsule) -> CapsuleResponse:
         return cls(
             id=capsule.id,
             title=capsule.title,
@@ -336,7 +334,7 @@ async def create_capsule(
     check_content_validation(validation_result)
 
     # Build capsule create model
-    capsule_id = f"cap_{uuid4().hex[:12]}"
+    f"cap_{uuid4().hex[:12]}"
 
     capsule_data = CapsuleCreate(
         content=request.content,
@@ -418,13 +416,13 @@ async def list_capsules(
         filters["owner_id"] = owner_id
     if tag:
         filters["tag"] = tag
-    
+
     capsules, total = await capsule_repo.list(
         offset=pagination.offset,
         limit=pagination.per_page,
         filters=filters,
     )
-    
+
     return CapsuleListResponse(
         items=[CapsuleResponse.from_capsule(c) for c in capsules],
         total=total,
@@ -882,12 +880,12 @@ async def link_capsule(
     # Verify both exist
     capsule = await capsule_repo.get_by_id(capsule_id)
     parent = await capsule_repo.get_by_id(parent_id)
-    
+
     if not capsule:
         raise HTTPException(status_code=404, detail="Capsule not found")
     if not parent:
         raise HTTPException(status_code=404, detail="Parent not found")
-    
+
     # Check for cycles
     ancestors = await capsule_repo.get_ancestors(parent_id, max_depth=50)
     if any(a.id == capsule_id for a in ancestors):
@@ -895,10 +893,10 @@ async def link_capsule(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot create circular reference",
         )
-    
+
     # Create link
     updated = await capsule_repo.add_parent(capsule_id, parent_id)
-    
+
     # Emit event
     await event_system.emit(
         event_type=EventType.CAPSULE_LINKED,
@@ -909,7 +907,7 @@ async def link_capsule(
         },
         source="api",
     )
-    
+
     await audit_repo.log_capsule_action(
         actor_id=user.id,
         capsule_id=capsule_id,
@@ -917,7 +915,7 @@ async def link_capsule(
         details={"parent_id": parent_id},
         correlation_id=correlation_id,
     )
-    
+
     return CapsuleResponse.from_capsule(updated)
 
 
@@ -944,7 +942,7 @@ async def fork_capsule(
 ) -> CapsuleResponse:
     """
     Fork a capsule to create a derived child capsule.
-    
+
     This implements symbolic inheritance - the new capsule maintains
     an explicit lineage link to its parent.
     """
@@ -955,7 +953,7 @@ async def fork_capsule(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Parent capsule not found",
         )
-    
+
     # Create forked capsule
     fork_data = CapsuleCreate(
         title=request.title or f"Fork of: {parent.title}",
@@ -971,9 +969,9 @@ async def fork_capsule(
         parent_id=capsule_id,
         evolution_reason=request.evolution_reason,
     )
-    
+
     forked = await capsule_repo.create(fork_data, owner_id=user.id)
-    
+
     # Emit event
     await event_system.emit(
         event_type=EventType.CAPSULE_CREATED,
@@ -986,7 +984,7 @@ async def fork_capsule(
         },
         source="api",
     )
-    
+
     # Audit log
     await audit_repo.log_capsule_action(
         actor_id=user.id,
@@ -998,7 +996,7 @@ async def fork_capsule(
         },
         correlation_id=correlation_id,
     )
-    
+
     return CapsuleResponse.from_capsule(forked)
 
 
@@ -1012,7 +1010,7 @@ async def archive_capsule(
 ) -> CapsuleResponse:
     """
     Archive a capsule (soft delete).
-    
+
     Archived capsules are not deleted but marked as inactive.
     They can still be referenced by child capsules for lineage.
     """
@@ -1022,7 +1020,7 @@ async def archive_capsule(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Capsule not found",
         )
-    
+
     # Check ownership - use consistent is_admin() check
     from forge.security.authorization import is_admin
     if capsule.owner_id != user.id and not is_admin(user):
@@ -1030,11 +1028,11 @@ async def archive_capsule(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to archive this capsule",
         )
-    
+
     # Archive the capsule
     update_data = CapsuleUpdate(is_archived=True)
     archived = await capsule_repo.update(capsule_id, update_data)
-    
+
     # Audit log
     await audit_repo.log_capsule_action(
         actor_id=user.id,
@@ -1043,5 +1041,5 @@ async def archive_capsule(
         details={"archived": True},
         correlation_id=correlation_id,
     )
-    
+
     return CapsuleResponse.from_capsule(archived)

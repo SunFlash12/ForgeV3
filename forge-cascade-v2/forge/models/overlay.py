@@ -6,24 +6,23 @@ Designed for WebAssembly isolation with capability-based security.
 """
 
 from datetime import datetime
-from enum import Enum, auto
+from enum import Enum
 from typing import Any
 
 from pydantic import Field
 
 from forge.models.base import (
     ForgeModel,
+    OverlayState,
     TimestampMixin,
     TrustLevel,
-    OverlayState,
-    OverlayPhase,
 )
 
 
 class Capability(str, Enum):
     """
     Capabilities that overlays can request.
-    
+
     Each capability grants specific permissions to the overlay.
     Follows principle of least privilege.
     """
@@ -110,11 +109,11 @@ class OverlayMetrics(ForgeModel):
     last_execution: datetime | None = None
     last_error: str | None = None
     last_error_time: datetime | None = None
-    
+
     # Resource usage
     memory_used_bytes: int = 0
     cpu_cycles_used: int = 0
-    
+
     # Health
     health_checks_passed: int = 0
     health_checks_failed: int = 0
@@ -164,7 +163,7 @@ class OverlayManifest(ForgeModel):
         description="Semantic version",
     )
     description: str = Field(default="", max_length=1000)
-    
+
     # Security
     capabilities: set[Capability] = Field(
         default_factory=set,
@@ -176,25 +175,25 @@ class OverlayManifest(ForgeModel):
         le=100,
         description="Minimum trust level to use",
     )
-    
+
     # Dependencies
     dependencies: list[str] = Field(
         default_factory=list,
         description="Required overlay IDs",
     )
-    
+
     # Exports (functions provided)
     exports: list[str] = Field(
         default_factory=list,
         description="Exported function names",
     )
-    
+
     # Resource limits per function
     fuel_budgets: dict[str, FuelBudget] = Field(
         default_factory=dict,
         description="Fuel budget per function",
     )
-    
+
     # Wasm-specific
     wasm_path: str | None = Field(
         default=None,
@@ -223,14 +222,14 @@ class Overlay(OverlayBase, TimestampMixin):
     capabilities: set[Capability] = Field(default_factory=set)
     dependencies: list[str] = Field(default_factory=list)
     metrics: OverlayMetrics = Field(default_factory=OverlayMetrics)
-    
+
     # Activation
     activated_at: datetime | None = None
     deactivated_at: datetime | None = None
-    
+
     # Wasm
     wasm_hash: str | None = None
-    
+
     @property
     def is_active(self) -> bool:
         """Check if overlay is currently active."""

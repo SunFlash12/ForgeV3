@@ -11,56 +11,50 @@ Provides:
 
 from __future__ import annotations
 
-from datetime import datetime, timezone, timedelta
+import time
+from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, status, Query
+from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 from forge.api.dependencies import (
-    GovernanceRepoDep,
-    AuditRepoDep,
-    EventSystemDep,
     ActiveUserDep,
+    AuditRepoDep,
+    CoreUserDep,
+    CorrelationIdDep,
+    EventSystemDep,
+    GovernanceRepoDep,
+    PaginationDep,
     StandardUserDep,
     TrustedUserDep,
-    CoreUserDep,
-    PaginationDep,
-    CorrelationIdDep,
     UserRepoDep,
 )
+from forge.models.events import EventType
 from forge.models.governance import (
     Proposal,
     ProposalCreate,
-    ProposalType,
     ProposalStatus,
+    ProposalType,
     Vote,
     VoteChoice,
 )
-from forge.models.events import Event, EventType
 
 # Resilience integration - caching, validation, metrics
 from forge.resilience.integration import (
-    validate_capsule_content,
+    cache_proposal,
     check_content_validation,
     get_cached_proposal,
-    cache_proposal,
     invalidate_proposal_cache,
-    get_cached_proposals_list,
-    cache_proposals_list,
-    get_cached_governance_metrics,
-    cache_governance_metrics,
-    record_proposal_created,
-    record_vote_cast,
-    record_proposal_finalized,
-    record_ghost_council_query,
     record_cache_hit,
     record_cache_miss,
+    record_ghost_council_query,
+    record_proposal_created,
+    record_proposal_finalized,
+    record_vote_cast,
+    validate_capsule_content,
 )
-import time
-import hashlib
-
 
 router = APIRouter()
 
@@ -107,9 +101,9 @@ class ProposalResponse(BaseModel):
     created_at: str | None  # Can be None if not set
     voting_starts_at: str | None
     voting_ends_at: str | None
-    
+
     @classmethod
-    def from_proposal(cls, proposal: Proposal) -> "ProposalResponse":
+    def from_proposal(cls, proposal: Proposal) -> ProposalResponse:
         # Handle both string and enum types for proposal.type and proposal.status
         proposal_type = proposal.type.value if hasattr(proposal.type, 'value') else str(proposal.type)
         status = proposal.status.value if hasattr(proposal.status, 'value') else str(proposal.status)
@@ -147,7 +141,7 @@ class VoteResponse(BaseModel):
     created_at: str
 
     @classmethod
-    def from_vote(cls, vote: Vote) -> "VoteResponse":
+    def from_vote(cls, vote: Vote) -> VoteResponse:
         # Handle both string and enum choice
         choice_str = vote.choice.value if hasattr(vote.choice, 'value') else str(vote.choice)
         return cls(
@@ -268,13 +262,13 @@ async def list_proposals(
         filters["status"] = status_filter.value
     if proposal_type:
         filters["proposal_type"] = proposal_type.value
-    
+
     proposals, total = await governance_repo.list_proposals(
         offset=pagination.offset,
         limit=pagination.per_page,
         filters=filters,
     )
-    
+
     return ProposalListResponse(
         items=[ProposalResponse.from_proposal(p) for p in proposals],
         total=total,
@@ -407,16 +401,16 @@ async def withdraw_proposal(
     Withdraw a proposal (only by proposer, before voting ends).
     """
     proposal = await governance_repo.get_proposal(proposal_id)
-    
+
     if not proposal:
         raise HTTPException(status_code=404, detail="Proposal not found")
-    
+
     if proposal.proposer_id != user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only the proposer can withdraw",
         )
-    
+
     if proposal.status not in [ProposalStatus.PENDING, ProposalStatus.ACTIVE]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -473,8 +467,8 @@ async def cast_vote(
         ends_at = proposal.voting_ends_at
         # Handle naive datetime from database
         if ends_at.tzinfo is None:
-            ends_at = ends_at.replace(tzinfo=timezone.utc)
-        if datetime.now(timezone.utc) > ends_at:
+            ends_at = ends_at.replace(tzinfo=UTC)
+        if datetime.now(UTC) > ends_at:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Voting period has ended",
@@ -512,7 +506,7 @@ async def cast_vote(
         choice=request.choice,
         weight=weight,
         reason=request.rationale,
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
     )
 
     created = await governance_repo.record_vote(vote)
@@ -631,7 +625,7 @@ async def get_ghost_council_recommendation(
                 "weighted_against": against_weight,
                 "total_voters": total_votes,
                 "voting_period_remaining": (
-                    (proposal.voting_ends_at - datetime.now(timezone.utc)).total_seconds() / 3600
+                    (proposal.voting_ends_at - datetime.now(UTC)).total_seconds() / 3600
                     if proposal.voting_ends_at else None
                 ),
             },
@@ -814,13 +808,14 @@ async def report_serious_issue(
     validation_result = await validate_capsule_content(combined_content)
     check_content_validation(validation_result)
 
+    from uuid import uuid4
+
     from forge.services.ghost_council import (
-        get_ghost_council_service,
-        SeriousIssue,
         IssueCategory,
         IssueSeverity,
+        SeriousIssue,
+        get_ghost_council_service,
     )
-    from uuid import uuid4
 
     ghost_council = get_ghost_council_service()
 
@@ -850,7 +845,7 @@ async def report_serious_issue(
         title=request.title,
         description=request.description,
         affected_entities=request.affected_entities,
-        detected_at=datetime.now(timezone.utc),
+        detected_at=datetime.now(UTC),
         source=f"user_report:{user.id}",
         context={"reported_by": user.id, "reported_by_username": user.username},
     )
@@ -1015,7 +1010,7 @@ async def get_governance_metrics(
     avg_participation = len(unique_voters) / max(1, total) if total > 0 else 0.0
 
     return GovernanceMetricsResponse(
-        timestamp=datetime.now(timezone.utc).isoformat(),
+        timestamp=datetime.now(UTC).isoformat(),
         total_proposals=total,
         active_proposals=active,
         passed_proposals=passed,
@@ -1055,10 +1050,10 @@ async def get_policy(
     Get a specific policy.
     """
     policy = await governance_repo.get_policy(policy_id)
-    
+
     if not policy:
         raise HTTPException(status_code=404, detail="Policy not found")
-    
+
     return policy
 
 
@@ -1077,26 +1072,26 @@ async def finalize_proposal(
 ) -> ProposalResponse:
     """
     Manually finalize a proposal (admin action).
-    
+
     Normally proposals are finalized automatically, but this
     allows manual resolution if needed.
     """
     proposal = await governance_repo.get_proposal(proposal_id)
-    
+
     if not proposal:
         raise HTTPException(status_code=404, detail="Proposal not found")
-    
+
     if proposal.status in [ProposalStatus.PASSED, ProposalStatus.REJECTED]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Proposal already finalized",
         )
-    
+
     # Calculate result
     votes = await governance_repo.get_proposal_votes(proposal_id)
     for_weight = sum(v.weight for v in votes if v.choice == VoteChoice.APPROVE)
     against_weight = sum(v.weight for v in votes if v.choice == VoteChoice.REJECT)
-    
+
     if for_weight > against_weight:
         new_status = ProposalStatus.PASSED
     else:
@@ -1159,23 +1154,23 @@ async def get_constitutional_analysis(
 ) -> ConstitutionalAnalysisResponse:
     """
     Get Constitutional AI ethical analysis of a proposal.
-    
+
     The Constitutional AI system evaluates proposals against:
     - Ethical principles
     - Fairness and equity
     - Safety considerations
     - Transparency requirements
-    
+
     This helps ensure proposals align with system values before voting.
     """
     proposal = await governance_repo.get_proposal(proposal_id)
-    
+
     if not proposal:
         raise HTTPException(status_code=404, detail="Proposal not found")
-    
+
     # Perform constitutional analysis
     analysis = await _analyze_proposal_constitutionality(proposal)
-    
+
     return ConstitutionalAnalysisResponse(
         proposal_id=proposal_id,
         analyzed_at=analysis["analyzed_at"],
@@ -1194,24 +1189,24 @@ async def get_constitutional_analysis(
 async def _analyze_proposal_constitutionality(proposal) -> dict:
     """
     Analyze proposal against constitutional principles.
-    
+
     This is a simplified implementation. In production, this would
     integrate with actual Constitutional AI systems or LLM-based
     ethical review.
     """
-    from datetime import datetime, timezone
-    
+    from datetime import datetime
+
     # Base scores start at 75 (neutral-positive)
     ethical_score = 75
     fairness_score = 75
     safety_score = 75
     transparency_score = 75
     concerns = []
-    
+
     title = proposal.title.lower()
     description = proposal.description.lower()
     combined = f"{title} {description}"
-    
+
     # Check for ethical concerns
     ethical_red_flags = ["exclude", "discriminat", "unfair", "bias"]
     for flag in ethical_red_flags:
@@ -1222,7 +1217,7 @@ async def _analyze_proposal_constitutionality(proposal) -> dict:
                 "severity": "medium",
                 "description": f"Proposal may involve {flag} practices",
             })
-    
+
     # Check for safety concerns
     safety_red_flags = ["bypass security", "remove validation", "disable check"]
     for flag in safety_red_flags:
@@ -1231,9 +1226,9 @@ async def _analyze_proposal_constitutionality(proposal) -> dict:
             concerns.append({
                 "category": "safety",
                 "severity": "high",
-                "description": f"Proposal may compromise system safety",
+                "description": "Proposal may compromise system safety",
             })
-    
+
     # Check for transparency
     if len(description) < 100:
         transparency_score -= 10
@@ -1242,19 +1237,19 @@ async def _analyze_proposal_constitutionality(proposal) -> dict:
             "severity": "low",
             "description": "Proposal description lacks detail",
         })
-    
+
     # Positive signals
     positive_terms = ["improve", "enhance", "community", "transparent", "fair"]
     positive_count = sum(1 for term in positive_terms if term in combined)
     ethical_score += positive_count * 5
     fairness_score += positive_count * 3
-    
+
     # Cap scores
     ethical_score = max(0, min(100, ethical_score))
     fairness_score = max(0, min(100, fairness_score))
     safety_score = max(0, min(100, safety_score))
     transparency_score = max(0, min(100, transparency_score))
-    
+
     # Calculate overall score
     overall_score = (
         ethical_score * 0.3 +
@@ -1262,7 +1257,7 @@ async def _analyze_proposal_constitutionality(proposal) -> dict:
         safety_score * 0.3 +
         transparency_score * 0.15
     )
-    
+
     # Determine recommendation
     if overall_score >= 70 and not any(c["severity"] == "high" for c in concerns):
         recommendation = "approve"
@@ -1273,12 +1268,12 @@ async def _analyze_proposal_constitutionality(proposal) -> dict:
     else:
         recommendation = "reject"
         summary = "This proposal conflicts with core constitutional principles and should be reconsidered."
-    
+
     # Confidence based on analysis depth
     confidence = min(0.9, 0.5 + len(combined) / 1000)
-    
+
     return {
-        "analyzed_at": datetime.now(timezone.utc).isoformat(),
+        "analyzed_at": datetime.now(UTC).isoformat(),
         "ethical_score": ethical_score,
         "fairness_score": fairness_score,
         "safety_score": safety_score,
@@ -1331,7 +1326,7 @@ async def create_delegation(
     Delegation allows trusted users to vote on your behalf.
     You can limit delegation to specific proposal types.
     """
-    from datetime import datetime, timezone
+    from datetime import datetime
     from uuid import uuid4
 
     # Cannot delegate to self
@@ -1398,7 +1393,7 @@ async def create_delegation(
     delegation_id = f"del_{uuid4().hex[:12]}"
 
     # Create delegation
-    delegation = await governance_repo.create_delegation({
+    await governance_repo.create_delegation({
         "id": delegation_id,
         "delegator_id": user.id,
         "delegate_id": request.delegate_id,
@@ -1423,7 +1418,7 @@ async def create_delegation(
         delegate_id=request.delegate_id,
         proposal_types=request.proposal_types,
         is_active=True,
-        created_at=datetime.now(timezone.utc).isoformat(),
+        created_at=datetime.now(UTC).isoformat(),
         expires_at=request.expires_at,
     )
 
@@ -1435,7 +1430,7 @@ async def get_my_delegations(
 ) -> list[DelegationResponse]:
     """Get delegations where I am either delegator or delegate."""
     delegations = await governance_repo.get_user_delegations(user.id)
-    
+
     return [
         DelegationResponse(
             id=d.id,
@@ -1460,18 +1455,18 @@ async def revoke_delegation(
 ) -> dict:
     """Revoke a delegation."""
     delegation = await governance_repo.get_delegation(delegation_id)
-    
+
     if not delegation:
         raise HTTPException(status_code=404, detail="Delegation not found")
-    
+
     if delegation.delegator_id != user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Can only revoke your own delegations",
         )
-    
+
     await governance_repo.revoke_delegation_by_id(delegation_id)
-    
+
     await audit_repo.log_governance_action(
         actor_id=user.id,
         proposal_id=delegation_id,  # Using delegation_id as a stand-in

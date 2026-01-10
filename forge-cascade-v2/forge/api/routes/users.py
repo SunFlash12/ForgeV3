@@ -4,14 +4,11 @@ Users API Routes
 Endpoints for user management, activity tracking, and admin operations.
 """
 
-from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
-from forge.models.base import TrustLevel, UserRole
-from forge.models.user import User
 from forge.api.dependencies import (
     ActiveUserDep,
     AdminUserDep,
@@ -22,7 +19,7 @@ from forge.api.dependencies import (
     UserRepoDep,
 )
 from forge.api.routes.auth import UserResponse
-
+from forge.models.base import UserRole
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -102,19 +99,19 @@ async def list_users(
 ) -> UserListResponse:
     """
     List all users (admin only).
-    
+
     Supports filtering by role and active status.
     """
     offset = (page - 1) * per_page
-    
+
     filters = {}
     if role:
         filters["role"] = role.value
     if is_active is not None:
         filters["is_active"] = is_active
-    
+
     users, total = await user_repo.list(offset=offset, limit=per_page, filters=filters)
-    
+
     return UserListResponse(
         users=[UserResponse.from_user(u) for u in users],
         total=total,
@@ -143,14 +140,14 @@ async def get_user(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Can only view your own profile",
         )
-    
+
     user = await user_repo.get_by_id(user_id)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found",
         )
-    
+
     return UserResponse.from_user(user)
 
 
@@ -165,7 +162,7 @@ async def admin_update_user(
 ) -> UserResponse:
     """
     Update user (admin only).
-    
+
     Can update role, active status, and trust level.
     """
     user = await user_repo.get_by_id(user_id)
@@ -174,7 +171,7 @@ async def admin_update_user(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found",
         )
-    
+
     # Build updates
     updates = {}
     if request.role is not None:
@@ -183,15 +180,15 @@ async def admin_update_user(
         updates["is_active"] = request.is_active
     if request.trust_flame is not None:
         updates["trust_flame"] = request.trust_flame
-    
+
     if not updates:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No updates provided",
         )
-    
+
     updated = await user_repo.update(user_id, updates)
-    
+
     # Audit log
     await audit_repo.log_action(
         action="admin_update_user",
@@ -201,7 +198,7 @@ async def admin_update_user(
         details={"updates": updates},
         correlation_id=correlation_id,
     )
-    
+
     return UserResponse.from_user(updated)
 
 
@@ -235,14 +232,14 @@ async def get_user_capsules(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found",
         )
-    
+
     # Get capsules
     capsules, total = await capsule_repo.list(
         offset=0,
         limit=limit,
         filters={"owner_id": user_id},
     )
-    
+
     return UserCapsulesResponse(
         user_id=user_id,
         capsule_count=total,
@@ -279,7 +276,7 @@ async def get_user_activity(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Can only view your own activity",
         )
-    
+
     # Verify user exists
     user = await user_repo.get_by_id(user_id)
     if not user:
@@ -287,10 +284,10 @@ async def get_user_activity(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found",
         )
-    
+
     # Get activity from audit log
     activities = await audit_repo.get_user_activity(user_id, limit=limit)
-    
+
     return UserActivityResponse(
         user_id=user_id,
         activities=[
@@ -341,13 +338,13 @@ async def get_user_governance(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found",
         )
-    
+
     # Get proposals created by user
     proposals = await governance_repo.get_proposals_by_user(user_id, limit=limit)
-    
+
     # Get votes cast by user
     votes = await governance_repo.get_votes_by_user(user_id, limit=limit)
-    
+
     return UserGovernanceResponse(
         user_id=user_id,
         proposals_created=len(proposals),
@@ -383,7 +380,7 @@ async def update_user_trust(
 ) -> UserResponse:
     """
     Update user's trust level (admin only).
-    
+
     Requires a reason for the change.
     """
     user = await user_repo.get_by_id(user_id)
@@ -392,16 +389,16 @@ async def update_user_trust(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found",
         )
-    
+
     old_trust = user.trust_flame
-    
+
     # Update trust
     updated = await user_repo.adjust_trust_flame(
         user_id,
         request.trust_flame - old_trust,  # Adjustment amount
         reason=request.reason,
     )
-    
+
     # Audit log
     await audit_repo.log_action(
         action="update_trust",
@@ -415,5 +412,5 @@ async def update_user_trust(
         },
         correlation_id=correlation_id,
     )
-    
+
     return UserResponse.from_user(updated)

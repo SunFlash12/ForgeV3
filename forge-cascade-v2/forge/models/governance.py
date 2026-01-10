@@ -5,7 +5,7 @@ Democratic decision-making with trust-weighted voting,
 Constitutional AI ethical review, and Ghost Council.
 """
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
@@ -271,7 +271,6 @@ class Proposal(ProposalBase, TimestampMixin):
     @property
     def is_voting_open(self) -> bool:
         """Check if voting is currently open."""
-        from datetime import timezone
         if self.status != ProposalStatus.VOTING:
             return False
         now = datetime.now(UTC)
@@ -297,7 +296,6 @@ class Proposal(ProposalBase, TimestampMixin):
         - Status is PASSED
         - execution_allowed_after is set and has passed
         """
-        from datetime import timezone
         if self.status != ProposalStatus.PASSED:
             return False
         if self.execution_allowed_after is None:
@@ -315,7 +313,6 @@ class Proposal(ProposalBase, TimestampMixin):
 
         Returns None if not in PASSED status or timelock already passed.
         """
-        from datetime import timezone
         if self.status != ProposalStatus.PASSED:
             return None
         if self.execution_allowed_after is None:

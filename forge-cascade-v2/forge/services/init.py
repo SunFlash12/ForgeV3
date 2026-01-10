@@ -17,7 +17,6 @@ from forge.services.embedding import (
     shutdown_embedding_service,
 )
 from forge.services.ghost_council import (
-    get_ghost_council_service,
     init_ghost_council_service,
     shutdown_ghost_council_service,
 )

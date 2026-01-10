@@ -14,7 +14,7 @@ import os
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, status, Query
+from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 # SECURITY FIX (Audit 4): Make query limits configurable via environment
@@ -26,21 +26,18 @@ GRAPH_MAX_VERSIONS = int(os.getenv("GRAPH_MAX_VERSIONS", "200"))
 
 from forge.api.dependencies import (
     ActiveUserDep,
-    StandardUserDep,
-    TrustedUserDep,
-    PaginationDep,
-    CorrelationIdDep,
-    CapsuleRepoDep,
     AuditRepoDep,
-    GraphRepoDep,
-    TemporalRepoDep,
-    OverlayManagerDep,
+    CapsuleRepoDep,
+    CorrelationIdDep,
     EventSystemDep,
+    GraphRepoDep,
+    OverlayManagerDep,
+    StandardUserDep,
+    TemporalRepoDep,
+    TrustedUserDep,
 )
-from forge.models.base import TrustLevel, generate_id
-from forge.models.graph_analysis import NodeRanking, CommunityResult, GraphMetrics
-from forge.models.temporal import CapsuleVersion, TrustSnapshot
-from forge.models.events import Event, EventType, EventPriority
+from forge.models.base import generate_id
+from forge.models.events import Event, EventPriority, EventType
 
 router = APIRouter()
 
@@ -848,7 +845,8 @@ async def get_trust_timeline(
 
     entity_type: "User" or "Capsule"
     """
-    from datetime import datetime as dt, timedelta
+    from datetime import datetime as dt
+    from datetime import timedelta
 
     # Validate entity type
     if entity_type not in ["User", "Capsule"]:

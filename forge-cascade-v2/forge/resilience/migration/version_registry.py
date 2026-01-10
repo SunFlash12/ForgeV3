@@ -10,8 +10,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, List, Optional
 from enum import Enum
+from typing import Any
 
 import structlog
 
@@ -57,12 +57,12 @@ class EmbeddingVersion:
     cost_per_1k_tokens: float = 0.0001
 
     # Compatibility
-    compatible_versions: List[str] = field(default_factory=list)
-    migration_path_from: List[str] = field(default_factory=list)
+    compatible_versions: list[str] = field(default_factory=list)
+    migration_path_from: list[str] = field(default_factory=list)
 
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "version_id": self.version_id,
@@ -82,7 +82,7 @@ class EmbeddingVersion:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'EmbeddingVersion':
+    def from_dict(cls, data: dict[str, Any]) -> EmbeddingVersion:
         """Create from dictionary."""
         return cls(
             version_id=data["version_id"],
@@ -110,9 +110,9 @@ class EmbeddingVersionRegistry:
     """
 
     def __init__(self):
-        self._versions: Dict[str, EmbeddingVersion] = {}
-        self._active_version: Optional[str] = None
-        self._default_version: Optional[str] = None
+        self._versions: dict[str, EmbeddingVersion] = {}
+        self._active_version: str | None = None
+        self._default_version: str | None = None
         self._initialized = False
 
     def initialize(self) -> None:
@@ -192,17 +192,17 @@ class EmbeddingVersionRegistry:
             model=version.model_name
         )
 
-    def get(self, version_id: str) -> Optional[EmbeddingVersion]:
+    def get(self, version_id: str) -> EmbeddingVersion | None:
         """Get a specific version by ID."""
         return self._versions.get(version_id)
 
-    def get_active(self) -> Optional[EmbeddingVersion]:
+    def get_active(self) -> EmbeddingVersion | None:
         """Get the currently active version."""
         if self._active_version:
             return self._versions.get(self._active_version)
         return None
 
-    def get_default(self) -> Optional[EmbeddingVersion]:
+    def get_default(self) -> EmbeddingVersion | None:
         """Get the default version."""
         if self._default_version:
             return self._versions.get(self._default_version)
@@ -271,11 +271,11 @@ class EmbeddingVersionRegistry:
         )
         return True
 
-    def list_all(self) -> List[EmbeddingVersion]:
+    def list_all(self) -> list[EmbeddingVersion]:
         """List all registered versions."""
         return list(self._versions.values())
 
-    def list_active(self) -> List[EmbeddingVersion]:
+    def list_active(self) -> list[EmbeddingVersion]:
         """List all active versions."""
         return [
             v for v in self._versions.values()
@@ -286,7 +286,7 @@ class EmbeddingVersionRegistry:
         self,
         from_version: str,
         to_version: str
-    ) -> Optional[List[str]]:
+    ) -> list[str] | None:
         """
         Get the migration path between two versions.
 
@@ -345,7 +345,7 @@ class EmbeddingVersionRegistry:
 
 
 # Global registry instance
-_version_registry: Optional[EmbeddingVersionRegistry] = None
+_version_registry: EmbeddingVersionRegistry | None = None
 
 
 def get_version_registry() -> EmbeddingVersionRegistry:

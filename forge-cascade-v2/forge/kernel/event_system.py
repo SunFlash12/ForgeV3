@@ -10,12 +10,11 @@ from collections import defaultdict
 from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 from uuid import uuid4
 
 import structlog
 
-from ..models.base import TrustLevel
 from ..models.events import CascadeChain, CascadeEvent, Event, EventPriority, EventType
 
 logger = structlog.get_logger()

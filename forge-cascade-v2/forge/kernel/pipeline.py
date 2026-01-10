@@ -19,15 +19,14 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 from uuid import uuid4
 
 import structlog
 
-from ..models.base import TrustLevel
 from ..models.events import Event, EventType
 from ..models.overlay import Capability, FuelBudget, OverlayState
-from ..overlays.base import BaseOverlay, OverlayContext, OverlayError, OverlayResult
+from ..overlays.base import OverlayContext, OverlayError, OverlayResult
 from .event_system import EventBus, get_event_bus
 from .overlay_manager import OverlayManager, get_overlay_manager
 

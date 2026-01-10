@@ -6,15 +6,15 @@ hybrid snapshot/diff strategy and smart compression.
 """
 
 import hashlib
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import structlog
 
 from forge.database.client import Neo4jClient
+from forge.models.base import generate_id
 from forge.models.temporal import (
     CapsuleVersion,
-    CapsuleVersionCreate,
     ChangeType,
     GraphSnapshot,
     SnapshotType,
@@ -29,7 +29,6 @@ from forge.models.temporal import (
     VersionHistory,
     VersioningPolicy,
 )
-from forge.models.base import generate_id
 
 logger = structlog.get_logger(__name__)
 
@@ -54,8 +53,7 @@ class TemporalRepository:
 
     def _now(self) -> datetime:
         """Get current UTC timestamp."""
-        from datetime import timezone
-        return datetime.now(timezone.utc)
+        return datetime.now(UTC)
 
     # ═══════════════════════════════════════════════════════════════
     # CAPSULE VERSIONING

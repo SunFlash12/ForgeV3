@@ -11,9 +11,10 @@ Uses asyncio for lightweight scheduling without external dependencies.
 """
 
 import asyncio
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Callable, Coroutine, Optional
+from collections.abc import Callable, Coroutine
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from typing import Any
 
 import structlog
 
@@ -30,17 +31,17 @@ class ScheduledTask:
     func: Callable[[], Coroutine[Any, Any, Any]]
     interval_seconds: float
     enabled: bool = True
-    last_run: Optional[datetime] = None
+    last_run: datetime | None = None
     run_count: int = 0
     error_count: int = 0
-    last_error: Optional[str] = None
+    last_error: str | None = None
 
 
 @dataclass
 class SchedulerStats:
     """Statistics for the scheduler."""
 
-    started_at: Optional[datetime] = None
+    started_at: datetime | None = None
     tasks_registered: int = 0
     total_runs: int = 0
     total_errors: int = 0
@@ -116,7 +117,7 @@ class BackgroundScheduler:
             return
 
         self._stats.is_running = True
-        self._stats.started_at = datetime.now(timezone.utc)
+        self._stats.started_at = datetime.now(UTC)
         self._shutdown_event.clear()
 
         self._logger.info(
@@ -142,7 +143,7 @@ class BackgroundScheduler:
         self._shutdown_event.set()
 
         # Cancel all running task loops
-        for name, task in self._running_tasks.items():
+        for _name, task in self._running_tasks.items():
             task.cancel()
             try:
                 await task
@@ -173,7 +174,7 @@ class BackgroundScheduler:
             try:
                 # Execute the task
                 await task.func()
-                task.last_run = datetime.now(timezone.utc)
+                task.last_run = datetime.now(UTC)
                 task.run_count += 1
                 self._stats.total_runs += 1
 
@@ -205,7 +206,7 @@ class BackgroundScheduler:
                 )
                 # If we get here, shutdown was requested
                 break
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 # Normal timeout, continue loop
                 pass
 
@@ -238,7 +239,7 @@ class BackgroundScheduler:
         task = self._tasks[name]
         try:
             await task.func()
-            task.last_run = datetime.now(timezone.utc)
+            task.last_run = datetime.now(UTC)
             task.run_count += 1
             self._stats.total_runs += 1
             return True
@@ -251,7 +252,7 @@ class BackgroundScheduler:
 
 
 # Global scheduler instance
-_scheduler: Optional[BackgroundScheduler] = None
+_scheduler: BackgroundScheduler | None = None
 
 
 def get_scheduler() -> BackgroundScheduler:
