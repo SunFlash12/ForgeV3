@@ -4,11 +4,13 @@ Marketplace Models
 Data structures for the knowledge capsule marketplace.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from enum import Enum
 from typing import Any
+
 from pydantic import Field
+
 from forge.models.base import ForgeModel, generate_id
 
 
@@ -108,7 +110,7 @@ class CapsuleListing(ForgeModel):
     revenue_total: Decimal = Field(default=Decimal("0"))
 
     # Timestamps
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     published_at: datetime | None = None
     expires_at: datetime | None = None
     updated_at: datetime | None = None
@@ -146,7 +148,7 @@ class Purchase(ForgeModel):
     treasury_contribution: Decimal = Field(default=Decimal("0"))
 
     # Metadata
-    purchased_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    purchased_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     refunded_at: datetime | None = None
     notes: str | None = None
 
@@ -159,12 +161,38 @@ class Cart(ForgeModel):
     id: str = Field(default_factory=generate_id)
     user_id: str
     items: list["CartItem"] = Field(default_factory=list)
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     @property
     def total(self) -> Decimal:
-        """Calculate cart total."""
+        """
+        Calculate cart total.
+
+        SECURITY FIX (Audit 4 - M): Validate all items use same currency.
+        Returns 0 if cart is empty.
+        Raises ValueError if items have mixed currencies.
+        """
+        if not self.items:
+            return Decimal(0)
+
+        # Check all items have the same currency
+        currencies = {item.currency for item in self.items}
+        if len(currencies) > 1:
+            raise ValueError(
+                f"Cannot calculate total for mixed currencies: {currencies}. "
+                "Convert items to same currency first."
+            )
+
         return sum(item.price for item in self.items)
+
+    @property
+    def totals_by_currency(self) -> dict[Currency, Decimal]:
+        """Calculate cart totals grouped by currency."""
+        from collections import defaultdict
+        totals: dict[Currency, Decimal] = defaultdict(Decimal)
+        for item in self.items:
+            totals[item.currency] += item.price
+        return dict(totals)
 
     @property
     def item_count(self) -> int:
@@ -183,7 +211,7 @@ class CartItem(ForgeModel):
     price: Decimal
     currency: Currency
     title: str
-    added_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    added_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class License(ForgeModel):
@@ -198,7 +226,7 @@ class License(ForgeModel):
     grantor_id: str
 
     license_type: LicenseType
-    granted_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    granted_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     expires_at: datetime | None = None
     revoked_at: datetime | None = None
 
@@ -236,7 +264,7 @@ class PriceSuggestion(ForgeModel):
     citation_count: int = Field(default=0)
     view_count: int = Field(default=0)
 
-    calculated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    calculated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class RevenueDistribution(ForgeModel):
@@ -261,7 +289,7 @@ class RevenueDistribution(ForgeModel):
         description="[{user_id, amount, contribution_weight}]"
     )
 
-    distributed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    distributed_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class MarketplaceStats(ForgeModel):
@@ -291,4 +319,4 @@ class MarketplaceStats(ForgeModel):
     avg_price: Decimal = Decimal("0")
     avg_capsules_per_seller: float = 0.0
 
-    calculated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    calculated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
