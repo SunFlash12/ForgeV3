@@ -302,18 +302,29 @@ class DSARProcessor:
     ) -> bytes:
         """
         Generate data export in requested format.
-        
+
         Per GDPR Article 20 - Right to Data Portability.
+
+        FIX: Use asyncio.to_thread to prevent blocking event loop on large exports.
         """
+        # Run CPU-bound serialization in thread pool to avoid blocking
         if export_format == ExportFormat.JSON:
-            return self._export_json(dsar, discovered_data, include_metadata)
+            return await asyncio.to_thread(
+                self._export_json, dsar, discovered_data, include_metadata
+            )
         elif export_format == ExportFormat.CSV:
-            return self._export_csv(dsar, discovered_data, include_metadata)
+            return await asyncio.to_thread(
+                self._export_csv, dsar, discovered_data, include_metadata
+            )
         elif export_format == ExportFormat.MACHINE_READABLE:
-            return self._export_machine_readable(dsar, discovered_data)
+            return await asyncio.to_thread(
+                self._export_machine_readable, dsar, discovered_data
+            )
         else:
             # Default to JSON
-            return self._export_json(dsar, discovered_data, include_metadata)
+            return await asyncio.to_thread(
+                self._export_json, dsar, discovered_data, include_metadata
+            )
     
     def _export_json(
         self,
