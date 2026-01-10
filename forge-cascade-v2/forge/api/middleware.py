@@ -670,10 +670,11 @@ class CSRFProtectionMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         # Cookie auth is being used - require valid CSRF token
+        # SECURITY FIX (Audit 4 - M): Add code field for robust frontend detection
         if not csrf_cookie or not csrf_header:
             return JSONResponse(
                 status_code=403,
-                content={"error": "CSRF token missing"},
+                content={"error": "CSRF token missing", "code": "CSRF_MISSING"},
             )
 
         # Timing-safe comparison
@@ -685,7 +686,7 @@ class CSRFProtectionMiddleware(BaseHTTPMiddleware):
             )
             return JSONResponse(
                 status_code=403,
-                content={"error": "CSRF token invalid"},
+                content={"error": "CSRF token invalid", "code": "CSRF_INVALID"},
             )
 
         return await call_next(request)
