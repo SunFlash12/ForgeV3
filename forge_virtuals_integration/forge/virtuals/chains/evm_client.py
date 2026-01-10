@@ -534,32 +534,57 @@ class EVMChainClient(BaseChainClient):
         token_address: str,
         spender_address: str,
         amount: float,
+        allow_unlimited: bool = False,
     ) -> TransactionRecord:
         """
         Approve a spender to use tokens.
-        
+
         This is required before other contracts can transfer tokens on behalf
         of the wallet. Many DeFi operations require an approval step first.
+
+        SECURITY FIX (Audit 4 - M12): Unlimited approvals require explicit opt-in
+        via allow_unlimited=True and are logged as warnings.
+
+        Args:
+            token_address: Address of the ERC-20 token
+            spender_address: Address allowed to spend tokens
+            amount: Amount to approve (use float('inf') for unlimited)
+            allow_unlimited: Must be True to allow unlimited approvals
+
+        Raises:
+            ValueError: If unlimited approval requested without allow_unlimited=True
         """
         self._ensure_initialized()
-        
+
         token_address = self._w3.to_checksum_address(token_address)
         spender_address = self._w3.to_checksum_address(spender_address)
-        
-        # Handle unlimited approval
+
+        # SECURITY FIX (Audit 4 - M12): Handle unlimited approval with explicit opt-in
         if amount == float('inf'):
+            if not allow_unlimited:
+                raise ValueError(
+                    "Unlimited token approvals require explicit allow_unlimited=True. "
+                    "Unlimited approvals are a security risk as they allow the spender "
+                    "to transfer ALL tokens if the spender contract is compromised."
+                )
+            self._logger.warning(
+                "unlimited_token_approval",
+                token_address=token_address,
+                spender_address=spender_address,
+                warning="Unlimited approval granted - consider using exact amounts instead",
+            )
             amount_raw = 2**256 - 1  # Max uint256
         else:
             decimals = await self._get_token_decimals(token_address)
             amount_raw = int(amount * (10 ** decimals))
-        
+
         # Encode the approve function call
         contract = self._get_token_contract(token_address)
         data = contract.encodeABI(
             fn_name='approve',
             args=[spender_address, amount_raw]
         )
-        
+
         tx_record = await self.send_transaction(
             to_address=token_address,
             value=0,
