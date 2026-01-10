@@ -856,24 +856,51 @@ class LineageTrackerOverlay(BaseOverlay):
         return child_id in ancestors
     
     def _recalculate_depth(self, capsule_id: str) -> None:
-        """Recalculate depth for a node and its descendants."""
+        """
+        Recalculate depth for a node and its descendants.
+
+        SECURITY FIX (Audit 4 - M10): Use iterative BFS instead of recursion
+        to prevent stack overflow on deep hierarchies.
+        """
+        from collections import deque
+
         if capsule_id not in self._nodes:
             return
-        
-        node = self._nodes[capsule_id]
-        if node.parent_ids:
-            parent_depths = [
-                self._nodes[pid].depth 
-                for pid in node.parent_ids 
-                if pid in self._nodes
-            ]
-            node.depth = max(parent_depths, default=0) + 1
-        else:
-            node.depth = 0
-        
-        # Recursively update children
-        for child_id in node.child_ids:
-            self._recalculate_depth(child_id)
+
+        # Use BFS queue for iterative depth recalculation
+        queue: deque[str] = deque([capsule_id])
+        visited: set[str] = set()
+        max_iterations = len(self._nodes) + 1000  # Safety limit
+
+        iterations = 0
+        while queue and iterations < max_iterations:
+            iterations += 1
+            current_id = queue.popleft()
+
+            if current_id in visited:
+                continue
+            visited.add(current_id)
+
+            if current_id not in self._nodes:
+                continue
+
+            node = self._nodes[current_id]
+
+            # Calculate depth from parents
+            if node.parent_ids:
+                parent_depths = [
+                    self._nodes[pid].depth
+                    for pid in node.parent_ids
+                    if pid in self._nodes
+                ]
+                node.depth = max(parent_depths, default=0) + 1
+            else:
+                node.depth = 0
+
+            # Enqueue children for processing
+            for child_id in node.child_ids:
+                if child_id not in visited:
+                    queue.append(child_id)
     
     def _update_influence(self, capsule_id: str) -> None:
         """Update influence score for a node."""

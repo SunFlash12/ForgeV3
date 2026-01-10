@@ -991,10 +991,13 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
         Returns:
             List of semantic neighbors with relationship info
         """
+        # SECURITY FIX (Audit 4 - M4): Use parameterized query for type filter
+        # Don't format values directly into the query string
         type_filter = ""
+        type_values: list[str] = []
         if rel_types:
             type_values = [rt.value for rt in rel_types]
-            type_filter = f"AND r.relationship_type IN {type_values}"
+            type_filter = "AND r.relationship_type IN $type_values"
 
         # Build direction-specific query
         if direction == "out":
@@ -1029,6 +1032,7 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
                 "id": capsule_id,
                 "min_confidence": min_confidence,
                 "limit": limit,
+                "type_values": type_values,  # SECURITY FIX (M4): Parameterized
             },
         )
 
