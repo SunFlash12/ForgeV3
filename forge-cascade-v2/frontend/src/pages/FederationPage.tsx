@@ -110,7 +110,6 @@ const trustTierIcons: Record<string, React.ReactNode> = {
 export default function FederationPage() {
   const queryClient = useQueryClient();
   const [showAddModal, setShowAddModal] = useState(false);
-  const [_selectedPeer, _setSelectedPeer] = useState<FederatedPeer | null>(null);
   const [expandedPeerId, setExpandedPeerId] = useState<string | null>(null);
 
   // Fetch peers

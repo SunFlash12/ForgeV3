@@ -79,11 +79,13 @@ function ToastContainer({ toasts, onRemove }: { toasts: Toast[]; onRemove: (id: 
   );
 }
 
+let toastCounter = 0;
+
 function useToast() {
   const [toasts, setToasts] = useState<Toast[]>([]);
 
   const addToast = (toast: Omit<Toast, 'id'>) => {
-    const id = Math.random().toString(36).substr(2, 9);
+    const id = `toast-${++toastCounter}`;
     setToasts((prev) => [...prev, { ...toast, id }]);
     setTimeout(() => removeToast(id), 5000);
   };
@@ -797,8 +799,8 @@ interface CapsuleDetailModalProps {
 function CapsuleDetailModal({ capsule, onClose, onDelete, onUpdate, canEdit, canDelete }: CapsuleDetailModalProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState({
-    title: capsule.title,
-    content: capsule.content,
+    title: capsule.title || '',
+    content: capsule.content || '',
     tags: capsule.tags || [],
   });
   const [tagInput, setTagInput] = useState('');
@@ -846,8 +848,8 @@ function CapsuleDetailModal({ capsule, onClose, onDelete, onUpdate, canEdit, can
 
   const handleCancelEdit = () => {
     setEditData({
-      title: capsule.title,
-      content: capsule.content,
+      title: capsule.title || '',
+      content: capsule.content || '',
       tags: capsule.tags || [],
     });
     setIsEditing(false);
