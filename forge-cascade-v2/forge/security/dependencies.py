@@ -5,7 +5,7 @@ Provides dependency injection for authentication and authorization
 in FastAPI route handlers.
 """
 
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -308,7 +308,7 @@ class ResourceAccessChecker:
 
     async def __call__(
         self,
-        resource: any,
+        resource: Any,
         auth: Annotated[AuthorizationContext, Depends(get_auth_context)]
     ) -> bool:
         owner_id = self.get_owner_id(resource)
