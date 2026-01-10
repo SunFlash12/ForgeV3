@@ -15,6 +15,7 @@ from forge.models.base import (
     ForgeModel,
     TimestampMixin,
     ProposalStatus,
+    generate_id,
 )
 
 
@@ -361,7 +362,7 @@ class Vote(ForgeModel, TimestampMixin):
 class VoteDelegation(ForgeModel):
     """Vote delegation to another user."""
 
-    id: str = Field(default="", description="Delegation ID")
+    id: str = Field(default_factory=generate_id, description="Delegation ID")
     delegator_id: str
     delegate_id: str
     proposal_types: list[ProposalType] | None = Field(

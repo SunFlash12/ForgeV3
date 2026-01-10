@@ -589,13 +589,13 @@ class Pipeline:
         
         manager = self._get_overlay_manager()
         
-        # Get available overlays
+        # Get available overlays (filter to active state only)
         overlays = []
         for name in overlay_names:
             found = manager.get_by_name(name)
             overlays.extend([
-                o for o in found 
-                if o.state == OverlayState.ACTIVE
+                o for o in found
+                if o.state is not None and o.state == OverlayState.ACTIVE
             ])
         
         if not overlays:
