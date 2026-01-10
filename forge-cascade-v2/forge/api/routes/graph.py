@@ -10,11 +10,19 @@ Provides endpoints for:
 
 from __future__ import annotations
 
+import os
 from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, status, Query
 from pydantic import BaseModel, Field
+
+# SECURITY FIX (Audit 4): Make query limits configurable via environment
+# These can be adjusted based on server capacity and security requirements
+GRAPH_MAX_NODES = int(os.getenv("GRAPH_MAX_NODES", "1000"))
+GRAPH_MAX_NEIGHBORS = int(os.getenv("GRAPH_MAX_NEIGHBORS", "100"))
+GRAPH_MAX_PATHS = int(os.getenv("GRAPH_MAX_PATHS", "20"))
+GRAPH_MAX_VERSIONS = int(os.getenv("GRAPH_MAX_VERSIONS", "200"))
 
 from forge.api.dependencies import (
     ActiveUserDep,
