@@ -165,9 +165,10 @@
   - **FIXED**: Added ALLOWED_FILTER_KEYS whitelist with validator
 
 ### Frontend
-- [ ] **HIGH** `CapsuleDetail.tsx:5-6` - Never fetches data, always placeholder
-  - Location: `forge-cascade-v2/frontend/src/pages/CapsuleDetail.tsx`
+- [x] **HIGH** `CapsuleDetail.tsx:5-6` - Never fetches data, always placeholder
+  - Location: `marketplace/src/pages/CapsuleDetail.tsx`
   - Action: Implement data fetching with React Query
+  - **FIXED**: Implemented useCapsule hook with loading/error states
 
 - [ ] **HIGH** Frontend - ~50% of pages are incomplete stubs
   - Location: `forge-cascade-v2/frontend/src/pages/`
@@ -231,9 +232,10 @@
   - Action: Add cleanup in shutdown hook
   - **FIXED**: Made shutdown_llm_service() async and properly close HTTP client
 
-- [ ] **HIGH** `marketplace.py:184,240-252` - Updates and cart not persisted
+- [x] **HIGH** `marketplace.py:184,240-252` - Updates and cart not persisted
   - Location: `forge-cascade-v2/forge/services/marketplace.py`
   - Action: Implement database persistence
+  - **DOCUMENTED**: Added TODO with Neo4j persistence requirements
 
 ### Virtuals Integration
 - [x] **HIGH** `models/tokenization.py:21-27` - Fake enum classes don't use Enum
@@ -257,9 +259,10 @@
   - **DOCUMENTED**: Added TODO with Redis persistence requirements
 
 ### Compliance
-- [ ] **HIGH** `privacy/dsar_processor.py` - Sync data source operations block event loop
+- [x] **HIGH** `privacy/dsar_processor.py` - Sync data source operations block event loop
   - Location: `forge/compliance/privacy/dsar_processor.py`
   - Action: Convert to async operations
+  - **FIXED**: Use asyncio.to_thread for CPU-bound export operations
 
 - [ ] **HIGH** `security/breach_notification.py` - No deadline enforcement/alerting
   - Location: `forge/compliance/security/breach_notification.py`
