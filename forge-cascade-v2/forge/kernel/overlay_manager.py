@@ -370,6 +370,10 @@ class OverlayManager:
         """List all registered overlays."""
         return list(self._registry.instances.values())
 
+    def get_overlay_count(self) -> int:
+        """Get total number of registered overlay instances."""
+        return len(self._registry.instances)
+
     def list_active(self) -> list[BaseOverlay]:
         """List all active overlays."""
         return [

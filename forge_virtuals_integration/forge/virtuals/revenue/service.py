@@ -12,6 +12,14 @@ The revenue model encompasses three primary streams:
 Revenue flows through a multi-step distribution process that benefits
 creators, contributors, and the protocol treasury while implementing
 deflationary tokenomics through buyback-and-burn mechanisms.
+
+TODO: PERSISTENCE NEEDED - _pending_distributions is stored in-memory only.
+This means pending revenue distributions are lost on service restart.
+Future work needed:
+1. Store pending distributions in database (revenue_repository)
+2. Load pending distributions on initialize()
+3. Implement periodic persistence to prevent data loss
+4. Add recovery logic for interrupted distributions
 """
 
 import asyncio

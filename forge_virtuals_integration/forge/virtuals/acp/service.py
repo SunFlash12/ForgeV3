@@ -96,6 +96,12 @@ class ACPService:
         self._offering_repo = offering_repository
         self._chain_manager = None
         # SECURITY FIX (Audit 4 - M11): Track nonces per sender for replay prevention
+        # TODO: PERSISTENCE NEEDED - _sender_nonces is stored in-memory only.
+        # On service restart, all nonces are reset allowing replay attacks.
+        # Future work needed:
+        # 1. Store nonces in Redis with TTL (recommended) or database
+        # 2. Load known sender nonces on initialize()
+        # 3. Use atomic Redis INCR operations for thread-safety
         self._sender_nonces: dict[str, int] = {}
     
     async def initialize(self) -> None:

@@ -10,6 +10,7 @@ Protocol bonding curve mechanism.
 """
 
 from datetime import datetime
+from enum import Enum
 from typing import Any, Optional
 from uuid import uuid4
 
@@ -18,7 +19,8 @@ from pydantic import BaseModel, Field, field_validator
 from .base import VirtualsBaseModel, TokenizationStatus, TokenInfo
 
 
-class TokenizableEntityType(str):
+# FIX: Convert fake enum classes to proper Python Enum classes
+class TokenizableEntityType(str, Enum):
     """Types of Forge entities that can be tokenized."""
     CAPSULE = "capsule"
     OVERLAY = "overlay"
@@ -27,13 +29,13 @@ class TokenizableEntityType(str):
     GOVERNANCE_PROPOSAL = "governance_proposal"
 
 
-class TokenLaunchType(str):
+class TokenLaunchType(str, Enum):
     """Launch type for tokenization."""
     STANDARD = "standard"  # Bonding curve with 42K graduation
     GENESIS = "genesis"    # Presale with tiers
 
 
-class GenesisTier(str):
+class GenesisTier(str, Enum):
     """Tiers for Genesis launches."""
     TIER_1 = "tier_1"  # 21K VIRTUAL threshold
     TIER_2 = "tier_2"  # 42K VIRTUAL threshold
