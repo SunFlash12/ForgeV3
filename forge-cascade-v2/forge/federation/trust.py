@@ -99,7 +99,9 @@ class PeerTrustManager:
             if peer_id not in self._peer_locks:
                 # SECURITY FIX (Audit 4 - M15): Enforce limit on peer locks
                 if len(self._peer_locks) >= self.MAX_PEER_LOCKS:
-                    # Evict oldest locks (first 10%)
+                    # Evict oldest locks using FIFO (insertion order).
+                    # Note: True LRU would require tracking access times, but FIFO
+                    # is acceptable for locks since active peers create new locks anyway.
                     evict_count = self.MAX_PEER_LOCKS // 10
                     keys_to_evict = list(self._peer_locks.keys())[:evict_count]
                     for key in keys_to_evict:

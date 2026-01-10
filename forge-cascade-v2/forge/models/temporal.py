@@ -276,16 +276,22 @@ class TrustSnapshotCompressor:
 
     @classmethod
     def compress(cls, snapshot: TrustSnapshot) -> TrustSnapshot:
-        """Compress a snapshot based on its classification."""
-        snapshot.change_type = cls.classify(snapshot.reason)
+        """
+        Compress a snapshot based on its classification.
 
-        if snapshot.change_type == TrustChangeType.DERIVED:
+        Returns a new snapshot instance - does not mutate the input.
+        """
+        # Create a copy to avoid mutating the input
+        compressed = snapshot.model_copy()
+        compressed.change_type = cls.classify(compressed.reason)
+
+        if compressed.change_type == TrustChangeType.DERIVED:
             # Keep minimal info for derived changes
-            snapshot.evidence = None
-            if not snapshot.reconstruction_hint and snapshot.source_event_id:
-                snapshot.reconstruction_hint = f"event:{snapshot.source_event_id}"
+            compressed.evidence = None
+            if not compressed.reconstruction_hint and compressed.source_event_id:
+                compressed.reconstruction_hint = f"event:{compressed.source_event_id}"
 
-        return snapshot
+        return compressed
 
     @classmethod
     def estimate_storage(cls, snapshots: list[TrustSnapshot]) -> dict[str, int]:

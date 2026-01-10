@@ -44,16 +44,17 @@ class SemanticRelationType(str, Enum):
 
     @property
     def inverse(self) -> "SemanticRelationType | None":
-        """Get the inverse relationship type, if applicable."""
-        inverses = {
-            SemanticRelationType.SUPPORTS: SemanticRelationType.SUPPORTS,
-            SemanticRelationType.ELABORATES: SemanticRelationType.ELABORATES,
-            SemanticRelationType.SUPERSEDES: None,  # No natural inverse
-            SemanticRelationType.REFERENCES: None,
-            SemanticRelationType.IMPLEMENTS: None,
-            SemanticRelationType.EXTENDS: None,
-        }
-        return inverses.get(self)
+        """
+        Get the inverse relationship type, if applicable.
+
+        Bidirectional relationships (RELATED_TO, CONTRADICTS) are their own inverse.
+        Directed relationships have no natural inverse - they are asymmetric.
+        """
+        if self.is_bidirectional:
+            return self  # Symmetric relationships
+        # Directed relationships have no inverse
+        # (e.g., if A supports B, B doesn't necessarily support A)
+        return None
 
 
 class ContradictionSeverity(str, Enum):
