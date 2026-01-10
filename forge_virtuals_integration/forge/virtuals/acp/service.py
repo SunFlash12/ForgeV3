@@ -40,6 +40,7 @@ from ..models import (
     ACPRegistryEntry,
 )
 from ..chains import get_chain_manager
+from .nonce_store import NonceStore, init_nonce_store, get_nonce_store
 
 
 logger = logging.getLogger(__name__)
@@ -76,13 +77,11 @@ class ACPService:
     while ensuring all critical operations are verifiable on-chain.
     """
 
-    # SECURITY FIX (Audit 4 - M11): Maximum tracked nonces to prevent memory exhaustion
-    MAX_TRACKED_NONCES = 100000
-
     def __init__(
         self,
         job_repository: Any,  # Would be Forge's ACPJobRepository
         offering_repository: Any,  # Would be Forge's OfferingRepository
+        nonce_store: NonceStore | None = None,
     ):
         """
         Initialize the ACP service.
@@ -90,23 +89,39 @@ class ACPService:
         Args:
             job_repository: Repository for storing and retrieving ACP jobs
             offering_repository: Repository for service offerings
+            nonce_store: Optional nonce store for replay protection (initialized if not provided)
         """
         self.config = get_virtuals_config()
         self._job_repo = job_repository
         self._offering_repo = offering_repository
         self._chain_manager = None
-        # SECURITY FIX (Audit 4 - M11): Track nonces per sender for replay prevention
-        # TODO: PERSISTENCE NEEDED - _sender_nonces is stored in-memory only.
-        # On service restart, all nonces are reset allowing replay attacks.
-        # Future work needed:
-        # 1. Store nonces in Redis with TTL (recommended) or database
-        # 2. Load known sender nonces on initialize()
-        # 3. Use atomic Redis INCR operations for thread-safety
-        self._sender_nonces: dict[str, int] = {}
-    
+        # SECURITY FIX (Audit 4): Persistent nonce storage for replay attack prevention
+        # Nonces are now stored in Redis (with in-memory fallback) to survive restarts
+        self._nonce_store = nonce_store
+
     async def initialize(self) -> None:
         """Initialize the service and chain connections."""
         self._chain_manager = await get_chain_manager()
+
+        # Initialize nonce store with Redis if available
+        if self._nonce_store is None:
+            # Try to get Redis URL from main forge config if available
+            redis_url = None
+            redis_password = None
+            try:
+                from forge.config import get_settings
+                settings = get_settings()
+                redis_url = settings.redis_url
+                redis_password = settings.redis_password
+            except ImportError:
+                logger.warning("forge.config not available, using in-memory nonce store")
+
+            self._nonce_store = await init_nonce_store(
+                redis_url=redis_url,
+                redis_password=redis_password,
+                ttl_seconds=300,  # 5 minute TTL for nonces
+            )
+
         logger.info("ACP Service initialized")
     
     # ==================== Service Registry ====================
@@ -593,46 +608,47 @@ class ACPService:
     
     # ==================== Helper Methods ====================
     
-    def _get_next_nonce(self, sender_address: str) -> int:
+    async def _get_next_nonce(self, sender_address: str) -> int:
         """
         SECURITY FIX (Audit 4 - M11): Get and increment nonce for sender.
 
         Nonces prevent replay attacks by ensuring each memo has a unique,
         monotonically increasing sequence number per sender.
-        """
-        # Enforce memory limit on tracked nonces
-        if len(self._sender_nonces) >= self.MAX_TRACKED_NONCES:
-            # Evict oldest entries (simplified - in production use LRU)
-            oldest_keys = list(self._sender_nonces.keys())[:1000]
-            for key in oldest_keys:
-                del self._sender_nonces[key]
-            logger.warning(
-                "nonce_cache_eviction",
-                evicted_count=len(oldest_keys),
-                remaining=len(self._sender_nonces),
-            )
 
-        current = self._sender_nonces.get(sender_address, 0)
+        Uses persistent storage (Redis with memory fallback) to survive restarts.
+        """
+        if self._nonce_store is None:
+            raise ACPServiceError("Nonce store not initialized - call initialize() first")
+
+        current = await self._nonce_store.get_highest_nonce(sender_address)
         next_nonce = current + 1
-        self._sender_nonces[sender_address] = next_nonce
+        await self._nonce_store.update_nonce(sender_address, next_nonce)
         return next_nonce
 
-    def _verify_nonce(self, sender_address: str, nonce: int) -> bool:
+    async def _verify_nonce(self, sender_address: str, nonce: int) -> bool:
         """
         SECURITY FIX (Audit 4 - M11): Verify nonce is valid (greater than last seen).
 
         Returns True if nonce is valid, False if it's a replay attempt.
+
+        Uses persistent storage (Redis with memory fallback) to survive restarts.
         """
-        last_seen = self._sender_nonces.get(sender_address, 0)
-        if nonce <= last_seen:
+        if self._nonce_store is None:
+            raise ACPServiceError("Nonce store not initialized - call initialize() first")
+
+        is_valid, error = await self._nonce_store.verify_and_consume_nonce(
+            sender_address, nonce
+        )
+        if not is_valid:
             logger.warning(
                 "nonce_replay_detected",
-                sender=sender_address,
-                provided_nonce=nonce,
-                last_seen_nonce=last_seen,
+                extra={
+                    "sender": sender_address,
+                    "provided_nonce": nonce,
+                    "error": error,
+                },
             )
-            return False
-        return True
+        return is_valid
 
     async def _create_memo(
         self,
@@ -663,7 +679,7 @@ class ACPService:
             should not be trusted for authorization decisions.
         """
         # SECURITY FIX (Audit 4 - M11): Get unique nonce for replay prevention
-        nonce = self._get_next_nonce(sender_address)
+        nonce = await self._get_next_nonce(sender_address)
 
         # Include nonce in content hash to make it part of the signature
         content_with_nonce = {**content, "_nonce": nonce, "_job_id": job_id}

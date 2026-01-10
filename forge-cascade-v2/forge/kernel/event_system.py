@@ -3,6 +3,9 @@ Event System for Forge Cascade V2
 
 Async pub/sub event system for cascade effect propagation,
 overlay coordination, and real-time updates.
+
+PERSISTENCE: Cascade chains are now persisted to Neo4j via CascadeRepository
+to survive server restarts. Active chains are loaded on startup.
 """
 
 import asyncio
@@ -10,12 +13,15 @@ from collections import defaultdict
 from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 import structlog
 
 from ..models.events import CascadeChain, CascadeEvent, Event, EventPriority, EventType
+
+if TYPE_CHECKING:
+    from forge.repositories.cascade_repository import CascadeRepository
 
 logger = structlog.get_logger()
 
@@ -89,7 +95,8 @@ class EventBus:
         max_queue_size: int = 10000,
         max_retries: int = 3,
         retry_delay_seconds: float = 1.0,
-        max_dead_letter_size: int = 1000
+        max_dead_letter_size: int = 1000,
+        cascade_repository: "CascadeRepository | None" = None,
     ):
         self._subscriptions: dict[str, Subscription] = {}
         self._event_queue: asyncio.Queue[Event] = asyncio.Queue(maxsize=max_queue_size)
@@ -106,6 +113,9 @@ class EventBus:
 
         # Event type index for faster lookups
         self._type_index: dict[EventType, set[str]] = defaultdict(set)
+
+        # PERSISTENCE: Optional cascade repository for Neo4j persistence
+        self._cascade_repo = cascade_repository
 
     # =========================================================================
     # Subscription Management
@@ -296,7 +306,8 @@ class EventBus:
         cascade_id = cascade_id or str(uuid4())
 
         # Create or get existing chain
-        if cascade_id not in self._cascade_chains:
+        is_new_chain = cascade_id not in self._cascade_chains
+        if is_new_chain:
             self._cascade_chains[cascade_id] = CascadeChain(
                 cascade_id=cascade_id,
                 initiated_by=source_overlay,
@@ -309,6 +320,13 @@ class EventBus:
                 errors_encountered=0
             )
             self._metrics.cascade_chains += 1
+
+            # PERSISTENCE: Create chain in database
+            if self._cascade_repo:
+                try:
+                    await self._cascade_repo.create_chain(self._cascade_chains[cascade_id])
+                except Exception as e:
+                    logger.warning("cascade_chain_persist_failed", cascade_id=cascade_id, error=str(e))
 
         chain = self._cascade_chains[cascade_id]
 
@@ -336,6 +354,13 @@ class EventBus:
         chain.events.append(cascade_event)
         chain.total_hops = hop_count + 1
         chain.insights_generated += 1
+
+        # PERSISTENCE: Add event to database
+        if self._cascade_repo and not is_new_chain:
+            try:
+                await self._cascade_repo.add_event(cascade_id, cascade_event, hop_count)
+            except Exception as e:
+                logger.warning("cascade_event_persist_failed", cascade_id=cascade_id, error=str(e))
 
         # Check if cascade can continue propagating
         if cascade_event.can_propagate:
@@ -375,6 +400,13 @@ class EventBus:
 
         chain = self._cascade_chains.pop(cascade_id)
         chain.completed_at = datetime.utcnow()
+
+        # PERSISTENCE: Mark chain as complete in database
+        if self._cascade_repo:
+            try:
+                await self._cascade_repo.complete_chain(cascade_id)
+            except Exception as e:
+                logger.warning("cascade_complete_persist_failed", cascade_id=cascade_id, error=str(e))
 
         logger.info(
             "cascade_completed",
@@ -478,6 +510,14 @@ class EventBus:
         chain.events.append(cascade_event)
         chain.total_hops = hop_count + 1
         chain.actions_triggered += 1
+
+        # PERSISTENCE: Add propagation event to database
+        if self._cascade_repo:
+            try:
+                await self._cascade_repo.add_event(cascade_id, cascade_event, hop_count)
+                await self._cascade_repo.update_chain(chain)
+            except Exception as e:
+                logger.warning("cascade_propagate_persist_failed", cascade_id=cascade_id, error=str(e))
 
         # Publish propagation event if can continue
         if cascade_event.can_propagate:
@@ -632,6 +672,16 @@ class EventBus:
         """Start the event bus worker."""
         if self._running:
             return
+
+        # PERSISTENCE: Load active cascade chains from database on startup
+        if self._cascade_repo:
+            try:
+                active_chains = await self._cascade_repo.get_active_chains()
+                for chain in active_chains:
+                    self._cascade_chains[chain.cascade_id] = chain
+                logger.info("cascade_chains_loaded", count=len(active_chains))
+            except Exception as e:
+                logger.warning("cascade_chains_load_failed", error=str(e))
 
         self._running = True
         self._worker_task = asyncio.create_task(self._worker())
