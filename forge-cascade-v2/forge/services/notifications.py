@@ -252,13 +252,42 @@ class NotificationService:
         data: dict[str, Any] | None = None,
         priority: NotificationPriority = NotificationPriority.NORMAL,
         user_filter: callable | None = None,
+        caller_id: str | None = None,
+        caller_role: str | None = None,
     ) -> int:
         """
         Broadcast notification to all users.
 
+        SECURITY FIX (Audit 4 - M19): Requires admin-level permissions.
+        Broadcast can only be called by users with ADMIN role.
+
         Args:
             user_filter: Optional function to filter users
+            caller_id: ID of the user calling this function (required)
+            caller_role: Role of the caller (must be ADMIN)
+
+        Raises:
+            PermissionError: If caller is not an admin
         """
+        # SECURITY FIX (Audit 4 - M19): Require admin permissions for broadcast
+        if not caller_id or caller_role != "admin":
+            self._logger.warning(
+                "broadcast_unauthorized",
+                caller_id=caller_id,
+                caller_role=caller_role,
+            )
+            raise PermissionError(
+                "Broadcast notifications require admin-level permissions"
+            )
+
+        # Log the broadcast for audit
+        self._logger.info(
+            "broadcast_initiated",
+            caller_id=caller_id,
+            event_type=event_type.value,
+            title=title,
+        )
+
         # In production, get users from database
         # For now, send to all webhook subscribers
         sent = 0
@@ -277,6 +306,7 @@ class NotificationService:
             )
             sent += 1
 
+        self._logger.info("broadcast_completed", sent_count=sent, caller_id=caller_id)
         return sent
 
     # =========================================================================
