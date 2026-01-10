@@ -1,8 +1,50 @@
-import { useParams } from 'react-router-dom';
-import { ShoppingCart, Share2, Heart, GitBranch, Shield, Star } from 'lucide-react';
+import { useParams, Link } from 'react-router-dom';
+import { ShoppingCart, Share2, Heart, GitBranch, Shield, Star, AlertCircle, Loader2 } from 'lucide-react';
+import { useCapsule } from '../hooks/useCapsules';
 
+// FIX: Implement actual data fetching instead of placeholder content
 export default function CapsuleDetail() {
-  const { id } = useParams();
+  const { id } = useParams<{ id: string }>();
+  const { data: capsule, isLoading, error } = useCapsule(id || '');
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="flex items-center justify-center h-96">
+          <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+          <span className="ml-3 text-gray-600">Loading capsule...</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error || !capsule) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="flex flex-col items-center justify-center h-96 text-center">
+          <AlertCircle className="w-12 h-12 text-red-500 mb-4" />
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Capsule Not Found</h2>
+          <p className="text-gray-600 mb-4">
+            {error instanceof Error ? error.message : 'The requested capsule could not be loaded.'}
+          </p>
+          <Link to="/explore" className="text-indigo-600 hover:text-indigo-700 font-medium">
+            Browse Capsules
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // Trust level badge color
+  const trustColors: Record<string, string> = {
+    'verified': 'text-green-600',
+    'trusted': 'text-blue-600',
+    'community': 'text-yellow-600',
+    'sandbox': 'text-gray-600',
+  };
+  const trustColor = trustColors[capsule.trust_level?.toLowerCase()] || 'text-gray-600';
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -10,16 +52,15 @@ export default function CapsuleDetail() {
         {/* Main Content */}
         <div className="lg:col-span-2">
           {/* Preview */}
-          <div className="bg-gradient-to-br from-indigo-100 to-purple-100 rounded-xl h-96 mb-6" />
+          <div className="bg-gradient-to-br from-indigo-100 to-purple-100 rounded-xl h-96 mb-6 flex items-center justify-center">
+            <span className="text-indigo-400 text-lg">{capsule.type || 'Knowledge'} Capsule</span>
+          </div>
 
           {/* Description */}
           <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
-            <h2 className="text-xl font-semibold mb-4">Description</h2>
-            <p className="text-gray-600 leading-relaxed">
-              This is a detailed description of the capsule. It explains what knowledge
-              or content is contained within, how it was created, and what makes it
-              valuable. The description helps buyers understand exactly what they're
-              getting before making a purchase.
+            <h2 className="text-xl font-semibold mb-4">Content</h2>
+            <p className="text-gray-600 leading-relaxed whitespace-pre-wrap">
+              {capsule.content || 'No content available.'}
             </p>
           </div>
 
@@ -33,46 +74,53 @@ export default function CapsuleDetail() {
               <div className="relative">
                 <div className="absolute -left-6 w-3 h-3 bg-indigo-600 rounded-full" />
                 <p className="text-sm text-gray-500">Current Version</p>
-                <p className="font-medium">Capsule #{id}</p>
+                <p className="font-medium">{capsule.version || 'v1.0'}</p>
               </div>
-              <div className="relative">
-                <div className="absolute -left-6 w-3 h-3 bg-gray-300 rounded-full" />
-                <p className="text-sm text-gray-500">Derived from</p>
-                <p className="font-medium text-gray-600">Original Research v1.2</p>
-              </div>
+              {capsule.parent_id && (
+                <div className="relative">
+                  <div className="absolute -left-6 w-3 h-3 bg-gray-300 rounded-full" />
+                  <p className="text-sm text-gray-500">Derived from</p>
+                  <Link to={`/capsule/${capsule.parent_id}`} className="font-medium text-indigo-600 hover:text-indigo-700">
+                    Parent Capsule
+                  </Link>
+                </div>
+              )}
             </div>
           </div>
+
+          {/* Tags */}
+          {capsule.tags && capsule.tags.length > 0 && (
+            <div className="bg-white rounded-xl border border-gray-200 p-6 mt-6">
+              <h2 className="text-xl font-semibold mb-4">Tags</h2>
+              <div className="flex flex-wrap gap-2">
+                {capsule.tags.map((tag: string) => (
+                  <span key={tag} className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Sidebar */}
         <div className="lg:col-span-1">
           <div className="bg-white rounded-xl border border-gray-200 p-6 sticky top-8">
             <span className="text-xs font-medium text-indigo-600 bg-indigo-50 px-2 py-1 rounded">
-              Knowledge
+              {capsule.type || 'Knowledge'}
             </span>
-            <h1 className="text-2xl font-bold mt-3 mb-2">Sample Capsule Title</h1>
-
-            {/* Rating */}
-            <div className="flex items-center gap-1 mb-4">
-              {[1, 2, 3, 4, 5].map((star) => (
-                <Star
-                  key={star}
-                  className={`w-4 h-4 ${star <= 4 ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`}
-                />
-              ))}
-              <span className="text-sm text-gray-600 ml-2">(24 reviews)</span>
-            </div>
+            <h1 className="text-2xl font-bold mt-3 mb-2">{capsule.title || `Capsule ${id}`}</h1>
 
             {/* Trust Badge */}
-            <div className="flex items-center gap-2 mb-6 text-green-600">
+            <div className={`flex items-center gap-2 mb-6 ${trustColor}`}>
               <Shield className="w-5 h-5" />
-              <span className="text-sm font-medium">Verified Creator</span>
+              <span className="text-sm font-medium capitalize">{capsule.trust_level || 'Unknown'} Trust</span>
             </div>
 
-            {/* Price */}
-            <div className="mb-6">
-              <span className="text-3xl font-bold text-gray-900">$29.99</span>
-              <span className="text-gray-500 ml-2 line-through">$49.99</span>
+            {/* Stats */}
+            <div className="flex items-center gap-4 mb-6 text-sm text-gray-600">
+              <span>{capsule.view_count || 0} views</span>
+              <span>{capsule.fork_count || 0} forks</span>
             </div>
 
             {/* Actions */}
@@ -97,10 +145,16 @@ export default function CapsuleDetail() {
             <div className="mt-6 pt-6 border-t border-gray-200">
               <p className="text-sm text-gray-500 mb-2">Created by</p>
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-indigo-100 rounded-full" />
+                <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center">
+                  <span className="text-indigo-600 font-medium">
+                    {capsule.owner_id?.charAt(0)?.toUpperCase() || '?'}
+                  </span>
+                </div>
                 <div>
-                  <p className="font-medium">Creator Name</p>
-                  <p className="text-sm text-gray-500">42 capsules</p>
+                  <p className="font-medium">{capsule.owner_id || 'Unknown'}</p>
+                  <p className="text-sm text-gray-500">
+                    {capsule.created_at ? new Date(capsule.created_at).toLocaleDateString() : ''}
+                  </p>
                 </div>
               </div>
             </div>
