@@ -269,7 +269,13 @@ class BaseOverlay(ABC):
             duration_ms = (asyncio.get_running_loop().time() - start_time) * 1000
             result.duration_ms = duration_ms
 
+            # SECURITY FIX (Audit 4 - M): Fix error rate calculation
+            # Count successful executions separately from failed results
             self.execution_count += 1
+            if not result.success:
+                # Execute returned failure without raising - still an error
+                self.error_count += 1
+                self.last_error = result.error or "Execution returned failure"
             self.last_execution = datetime.utcnow()
 
             self._logger.info(
@@ -282,6 +288,8 @@ class BaseOverlay(ABC):
             return result
 
         except TimeoutError:
+            # SECURITY FIX (Audit 4 - M): Also count exceptions toward execution_count
+            self.execution_count += 1
             self.error_count += 1
             self.last_error = f"Timeout after {timeout_ms}ms"
             self._logger.error(
@@ -292,6 +300,7 @@ class BaseOverlay(ABC):
             return OverlayResult.fail(self.last_error)
 
         except CapabilityError as e:
+            self.execution_count += 1
             self.error_count += 1
             self.last_error = str(e)
             self._logger.error(
@@ -302,6 +311,7 @@ class BaseOverlay(ABC):
             return OverlayResult.fail(str(e))
 
         except Exception as e:
+            self.execution_count += 1
             self.error_count += 1
             self.last_error = str(e)
             self._logger.error(
@@ -327,9 +337,10 @@ class BaseOverlay(ABC):
         """
         healthy = self._initialized and self.state == OverlayState.ACTIVE
 
-        # Calculate error rate
-        total = self.execution_count + self.error_count
-        error_rate = self.error_count / total if total > 0 else 0.0
+        # SECURITY FIX (Audit 4 - M): Fix error rate calculation
+        # execution_count now tracks total executions (both success and error)
+        # error_count tracks all errors (returned failures + exceptions)
+        error_rate = self.error_count / self.execution_count if self.execution_count > 0 else 0.0
 
         return OverlayHealthCheck(
             overlay_id=self.id,
