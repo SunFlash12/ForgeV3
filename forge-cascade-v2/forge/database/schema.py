@@ -34,9 +34,30 @@ def _validate_identifier(name: str) -> bool:
 class SchemaManager:
     """
     Manages Neo4j schema setup and migrations.
-    
+
     Creates all necessary constraints, indexes, and vector indexes
     for the Forge system.
+
+    NOTE: Schema Migration Atomicity Limitations
+    =============================================
+    Neo4j schema operations (CREATE CONSTRAINT, CREATE INDEX) are DDL operations
+    that cannot be wrapped in transactions with DML operations. This means:
+
+    1. Each constraint/index is created in its own implicit transaction
+    2. If one fails, others may have succeeded - partial application is possible
+    3. Full rollback of schema changes is not supported by Neo4j
+
+    Mitigation Strategies Implemented:
+    - All operations use IF NOT EXISTS for idempotency
+    - Running setup_all() again will skip existing and retry failed operations
+    - Results dict tracks success/failure for each operation
+    - Operations are logged for audit purposes
+
+    Future Improvement Recommendations:
+    - Implement a migrations table to track applied migrations by version
+    - Add pre-flight validation before applying schema changes
+    - Create backup procedures before major schema updates
+    - Consider Neo4j schema evolution patterns for breaking changes
     """
 
     def __init__(self, client: Neo4jClient):
