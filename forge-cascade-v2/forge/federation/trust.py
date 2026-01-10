@@ -6,10 +6,13 @@ Trust is earned through successful interactions and can be adjusted by governanc
 
 SECURITY FIX (Audit 2): Added asyncio locks to prevent race conditions
 in trust score updates.
+SECURITY FIX (Audit 4 - M15): Added bounded collections to prevent memory exhaustion
+from unbounded trust history growth.
 """
 
 import asyncio
 import logging
+from collections import deque
 from datetime import datetime, timezone, timedelta
 from typing import Any
 
@@ -76,8 +79,14 @@ class PeerTrustManager:
     # Initial trust for new peers
     INITIAL_TRUST = 0.3
 
+    # SECURITY FIX (Audit 4 - M15): Memory limits to prevent unbounded growth
+    MAX_HISTORY_EVENTS = 5000
+    MAX_PEER_LOCKS = 10000
+    MAX_PEER_CACHE = 10000
+
     def __init__(self):
-        self._trust_history: list[TrustEvent] = []
+        # SECURITY FIX (Audit 4 - M15): Use deque with maxlen for bounded history
+        self._trust_history: deque[TrustEvent] = deque(maxlen=self.MAX_HISTORY_EVENTS)
         self._peer_trust_cache: dict[str, float] = {}
         # SECURITY FIX (Audit 2): Lock to prevent race conditions in trust updates
         self._trust_lock = asyncio.Lock()
@@ -88,8 +97,40 @@ class PeerTrustManager:
         # SECURITY FIX (Audit 2): Use global lock to protect peer_locks dict creation
         async with self._trust_lock:
             if peer_id not in self._peer_locks:
+                # SECURITY FIX (Audit 4 - M15): Enforce limit on peer locks
+                if len(self._peer_locks) >= self.MAX_PEER_LOCKS:
+                    # Evict oldest locks (first 10%)
+                    evict_count = self.MAX_PEER_LOCKS // 10
+                    keys_to_evict = list(self._peer_locks.keys())[:evict_count]
+                    for key in keys_to_evict:
+                        del self._peer_locks[key]
+                    logger.warning(
+                        "peer_locks_eviction",
+                        evicted_count=evict_count,
+                        remaining=len(self._peer_locks),
+                    )
                 self._peer_locks[peer_id] = asyncio.Lock()
             return self._peer_locks[peer_id]
+
+    def _update_trust_cache(self, peer_id: str, trust_score: float) -> None:
+        """
+        Update trust cache with limit enforcement.
+
+        SECURITY FIX (Audit 4 - M15): Enforce limit on peer trust cache.
+        """
+        if peer_id not in self._peer_trust_cache:
+            if len(self._peer_trust_cache) >= self.MAX_PEER_CACHE:
+                # Evict oldest entries (first 10%)
+                evict_count = self.MAX_PEER_CACHE // 10
+                keys_to_evict = list(self._peer_trust_cache.keys())[:evict_count]
+                for key in keys_to_evict:
+                    del self._peer_trust_cache[key]
+                logger.warning(
+                    "peer_cache_eviction",
+                    evicted_count=evict_count,
+                    remaining=len(self._peer_trust_cache),
+                )
+        self._peer_trust_cache[peer_id] = trust_score
 
     async def initialize_peer_trust(self, peer: FederatedPeer) -> None:
         """Set initial trust for a new peer."""
@@ -101,7 +142,8 @@ class PeerTrustManager:
                 if peer.trust_score == 0:
                     peer.trust_score = self.INITIAL_TRUST
 
-            self._peer_trust_cache[peer.id] = peer.trust_score
+            # SECURITY FIX (Audit 4 - M15): Use bounded cache update
+            self._update_trust_cache(peer.id, peer.trust_score)
             self._record_event(
                 peer.id,
                 "initialized",
@@ -119,7 +161,7 @@ class PeerTrustManager:
             new_trust = min(1.0, old_trust + self.SYNC_SUCCESS_BONUS)
 
             peer.trust_score = new_trust
-            self._peer_trust_cache[peer.id] = new_trust
+            self._update_trust_cache(peer.id, new_trust)
 
             self._record_event(
                 peer.id,
@@ -140,7 +182,7 @@ class PeerTrustManager:
             new_trust = max(0.0, old_trust - self.SYNC_FAILURE_PENALTY)
 
             peer.trust_score = new_trust
-            self._peer_trust_cache[peer.id] = new_trust
+            self._update_trust_cache(peer.id, new_trust)
 
             self._record_event(
                 peer.id,
@@ -174,7 +216,7 @@ class PeerTrustManager:
             new_trust = max(0.0, old_trust - penalty)
 
             peer.trust_score = new_trust
-            self._peer_trust_cache[peer.id] = new_trust
+            self._update_trust_cache(peer.id, new_trust)
 
             self._record_event(
                 peer.id,
@@ -200,7 +242,7 @@ class PeerTrustManager:
             new_trust = max(0.0, min(1.0, old_trust + delta))
 
             peer.trust_score = new_trust
-            self._peer_trust_cache[peer.id] = new_trust
+            self._update_trust_cache(peer.id, new_trust)
 
             self._record_event(
                 peer.id,
@@ -242,7 +284,7 @@ class PeerTrustManager:
 
             if new_trust != old_trust:
                 peer.trust_score = new_trust
-                self._peer_trust_cache[peer.id] = new_trust
+                self._update_trust_cache(peer.id, new_trust)
 
                 self._record_event(
                     peer.id,
@@ -374,7 +416,7 @@ class PeerTrustManager:
             # Set trust to 0 and mark as revoked
             peer.trust_score = 0.0
             peer.status = PeerStatus.REVOKED
-            self._peer_trust_cache[peer.id] = 0.0
+            self._update_trust_cache(peer.id, 0.0)
 
             # Store revocation metadata
             if not hasattr(peer, 'metadata') or peer.metadata is None:
@@ -462,7 +504,7 @@ class PeerTrustManager:
             new_trust = max(0.0, old_trust - decay)
 
             peer.trust_score = new_trust
-            self._peer_trust_cache[peer.id] = new_trust
+            self._update_trust_cache(peer.id, new_trust)
 
             self._record_event(
                 peer.id,
@@ -494,11 +536,8 @@ class PeerTrustManager:
             delta=delta,
             reason=reason,
         )
+        # SECURITY FIX (Audit 4 - M15): deque with maxlen auto-evicts oldest events
         self._trust_history.append(event)
-
-        # Keep history bounded
-        if len(self._trust_history) > 10000:
-            self._trust_history = self._trust_history[-5000:]
 
     async def get_trust_history(
         self,

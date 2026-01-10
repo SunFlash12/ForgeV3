@@ -63,19 +63,22 @@ class EscrowError(ACPServiceError):
 class ACPService:
     """
     Service for managing Agent Commerce Protocol transactions.
-    
+
     This service provides the complete ACP implementation including:
     - Service registry for discovering agent offerings
     - Job creation and lifecycle management
     - Cryptographic memo signing and verification
     - Escrow management with on-chain settlement
     - Dispute resolution
-    
+
     The service maintains both on-chain state (through smart contracts)
     and off-chain state (in the Forge database) for efficient querying
     while ensuring all critical operations are verifiable on-chain.
     """
-    
+
+    # SECURITY FIX (Audit 4 - M11): Maximum tracked nonces to prevent memory exhaustion
+    MAX_TRACKED_NONCES = 100000
+
     def __init__(
         self,
         job_repository: Any,  # Would be Forge's ACPJobRepository
@@ -83,7 +86,7 @@ class ACPService:
     ):
         """
         Initialize the ACP service.
-        
+
         Args:
             job_repository: Repository for storing and retrieving ACP jobs
             offering_repository: Repository for service offerings
@@ -92,6 +95,8 @@ class ACPService:
         self._job_repo = job_repository
         self._offering_repo = offering_repository
         self._chain_manager = None
+        # SECURITY FIX (Audit 4 - M11): Track nonces per sender for replay prevention
+        self._sender_nonces: dict[str, int] = {}
     
     async def initialize(self) -> None:
         """Initialize the service and chain connections."""
@@ -582,6 +587,47 @@ class ACPService:
     
     # ==================== Helper Methods ====================
     
+    def _get_next_nonce(self, sender_address: str) -> int:
+        """
+        SECURITY FIX (Audit 4 - M11): Get and increment nonce for sender.
+
+        Nonces prevent replay attacks by ensuring each memo has a unique,
+        monotonically increasing sequence number per sender.
+        """
+        # Enforce memory limit on tracked nonces
+        if len(self._sender_nonces) >= self.MAX_TRACKED_NONCES:
+            # Evict oldest entries (simplified - in production use LRU)
+            oldest_keys = list(self._sender_nonces.keys())[:1000]
+            for key in oldest_keys:
+                del self._sender_nonces[key]
+            logger.warning(
+                "nonce_cache_eviction",
+                evicted_count=len(oldest_keys),
+                remaining=len(self._sender_nonces),
+            )
+
+        current = self._sender_nonces.get(sender_address, 0)
+        next_nonce = current + 1
+        self._sender_nonces[sender_address] = next_nonce
+        return next_nonce
+
+    def _verify_nonce(self, sender_address: str, nonce: int) -> bool:
+        """
+        SECURITY FIX (Audit 4 - M11): Verify nonce is valid (greater than last seen).
+
+        Returns True if nonce is valid, False if it's a replay attempt.
+        """
+        last_seen = self._sender_nonces.get(sender_address, 0)
+        if nonce <= last_seen:
+            logger.warning(
+                "nonce_replay_detected",
+                sender=sender_address,
+                provided_nonce=nonce,
+                last_seen_nonce=last_seen,
+            )
+            return False
+        return True
+
     async def _create_memo(
         self,
         job_id: str,
@@ -610,7 +656,12 @@ class ACPService:
             Without a private key, memo will be marked as UNSIGNED and
             should not be trusted for authorization decisions.
         """
-        content_json = json.dumps(content, sort_keys=True)
+        # SECURITY FIX (Audit 4 - M11): Get unique nonce for replay prevention
+        nonce = self._get_next_nonce(sender_address)
+
+        # Include nonce in content hash to make it part of the signature
+        content_with_nonce = {**content, "_nonce": nonce, "_job_id": job_id}
+        content_json = json.dumps(content_with_nonce, sort_keys=True)
         content_hash = hashlib.sha256(content_json.encode()).hexdigest()
 
         # SECURITY FIX (Audit 4): Implement actual cryptographic signing
@@ -621,6 +672,7 @@ class ACPService:
             job_id=job_id,
             content=content,
             content_hash=content_hash,
+            nonce=nonce,
             sender_address=sender_address,
             sender_signature=signature,
         )

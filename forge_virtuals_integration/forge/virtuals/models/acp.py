@@ -111,7 +111,7 @@ class JobOffering(BaseModel):
 class ACPMemo(BaseModel):
     """
     A cryptographically signed memo in the ACP protocol.
-    
+
     Memos are the fundamental unit of communication in ACP,
     creating an immutable record of agreements and deliverables.
     """
@@ -120,7 +120,7 @@ class ACPMemo(BaseModel):
         description="Type: request, requirement, agreement, transaction, deliverable, evaluation"
     )
     job_id: str = Field(description="ID of the associated job")
-    
+
     # Content
     content: dict[str, Any] = Field(
         description="Memo content (structured based on memo_type)"
@@ -128,14 +128,19 @@ class ACPMemo(BaseModel):
     content_hash: str = Field(
         description="SHA-256 hash of content for verification"
     )
-    
+
+    # SECURITY FIX (Audit 4 - M11): Nonce for replay attack prevention
+    nonce: int = Field(
+        description="Monotonically increasing nonce per sender for replay prevention"
+    )
+
     # Signatures
     sender_address: str
     sender_signature: str = Field(description="ECDSA signature of content_hash")
-    
+
     # Timestamps
     created_at: datetime = Field(default_factory=datetime.utcnow)
-    
+
     # On-chain state
     tx_hash: Optional[str] = None
     block_number: Optional[int] = None
