@@ -191,7 +191,8 @@ services:
       - "4317"
       - "4318"
     ports:
-      - "16686:16686"  # Jaeger UI (local access only)
+      # SECURITY FIX (Audit 4): Bind to localhost only, not externally accessible
+      - "127.0.0.1:16686:16686"  # Jaeger UI (local access only)
     environment:
       - COLLECTOR_OTLP_ENABLED=true
     networks:

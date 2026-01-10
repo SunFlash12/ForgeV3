@@ -38,9 +38,10 @@ jobs:
           pip install ruff mypy
 
       - name: Run Ruff linter
+        # SECURITY FIX (Audit 4): Don't ignore lint failures
         run: |
           cd forge-cascade-v2
-          ruff check forge/ --ignore E501,F401 || true
+          ruff check forge/ --ignore E501,F401
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -55,9 +56,10 @@ jobs:
           npm ci
 
       - name: Run ESLint
+        # SECURITY FIX (Audit 4): Don't ignore lint failures
         run: |
           cd forge-cascade-v2/frontend
-          npm run lint || true
+          npm run lint
 
       - name: TypeScript type check
         run: |
@@ -135,11 +137,13 @@ jobs:
           curl -f http://localhost:8003/health || exit 1
 
       - name: Run API tests
+        # SECURITY FIX (Audit 4): Don't ignore test failures - make them visible
+        # If these tests are known to be flaky, use continue-on-error: true instead
         env:
           SEED_ADMIN_PASSWORD: TestAdminPassword123!
         run: |
           cd forge-cascade-v2
-          python test_ui_integration.py || true
+          python test_ui_integration.py
 
   # ===========================================================================
   # Frontend Tests & Build
