@@ -938,11 +938,9 @@ class FederationProtocol:
             with open(private_key_path, "wb") as f:
                 f.write(private_pem)
 
-            # Set restrictive permissions on private key (owner read only)
-            try:
-                os.chmod(private_key_path, 0o400)
-            except OSError:
-                pass  # May fail on Windows
+            # SECURITY FIX (Audit 4 - M6): Set restrictive permissions on private key
+            # os.chmod doesn't work properly on Windows, so we need platform-specific handling
+            await self._set_restrictive_permissions(private_key_path)
 
             # Save public key (PEM format)
             public_pem = self._public_key.public_bytes(
@@ -956,6 +954,75 @@ class FederationProtocol:
         except Exception as e:
             logger.error(f"Failed to save federation keys: {e}")
             # Don't raise - keys work in memory, just won't persist
+
+    async def _set_restrictive_permissions(self, file_path: Path) -> None:
+        """
+        SECURITY FIX (Audit 4 - M6): Set restrictive file permissions cross-platform.
+
+        On Unix: Uses chmod 0o400 (owner read-only)
+        On Windows: Uses icacls to restrict access to current user only
+
+        This replaces the silent-failure approach with proper cross-platform handling.
+        """
+        import platform
+        import subprocess
+
+        if platform.system() == "Windows":
+            # Windows: Use icacls to set restrictive permissions
+            # - /inheritance:r = Remove inherited permissions
+            # - /grant:r = Replace all permissions with just this user
+            try:
+                # Get current username
+                username = os.environ.get("USERNAME", os.environ.get("USER", ""))
+                if not username:
+                    logger.warning(
+                        f"Could not determine username for Windows ACL on {file_path}. "
+                        "Private key may have loose permissions."
+                    )
+                    return
+
+                # Remove all inherited permissions and grant only current user read access
+                # Using (R) for read-only access
+                result = subprocess.run(
+                    [
+                        "icacls",
+                        str(file_path),
+                        "/inheritance:r",  # Remove inherited permissions
+                        "/grant:r",
+                        f"{username}:(R)",  # Grant read-only to current user
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                )
+
+                if result.returncode != 0:
+                    logger.warning(
+                        f"Failed to set Windows ACL on private key: {result.stderr}. "
+                        "Private key may have loose permissions."
+                    )
+                else:
+                    logger.debug(f"Set restrictive Windows ACL on {file_path}")
+
+            except FileNotFoundError:
+                logger.warning(
+                    "icacls not found on Windows. Cannot set restrictive permissions on private key. "
+                    "Ensure the key file is protected manually."
+                )
+            except subprocess.TimeoutExpired:
+                logger.warning("Timeout setting Windows ACL on private key")
+            except Exception as e:
+                logger.warning(f"Error setting Windows ACL on private key: {e}")
+        else:
+            # Unix/Linux/macOS: Use standard chmod
+            try:
+                os.chmod(file_path, 0o400)
+                logger.debug(f"Set chmod 0o400 on {file_path}")
+            except OSError as e:
+                logger.warning(
+                    f"Failed to set restrictive permissions on private key: {e}. "
+                    "Ensure the key file is protected manually."
+                )
 
     def get_public_key(self) -> str:
         """Get our public key as base64 string."""
