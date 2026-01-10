@@ -551,34 +551,56 @@ class EventBus:
         event: Event,
         attempt: int = 1
     ) -> None:
-        """Deliver event to a single subscriber with retry logic."""
-        try:
-            await asyncio.wait_for(
-                subscription.handler(event),
-                timeout=30.0  # 30 second timeout per handler
-            )
-        except asyncio.TimeoutError:
-            logger.warning(
-                "event_handler_timeout",
-                subscription_id=subscription.id,
-                event_id=event.id
-            )
-            raise
-        except Exception as e:
-            if attempt < self._max_retries:
-                logger.warning(
-                    "event_delivery_retry",
-                    subscription_id=subscription.id,
-                    event_id=event.id,
-                    attempt=attempt,
-                    error=str(e)
+        """
+        Deliver event to a single subscriber with retry logic.
+
+        Uses iterative retry instead of recursion to prevent stack overflow
+        with high max_retries values.
+        """
+        last_error: Exception | None = None
+
+        for current_attempt in range(attempt, self._max_retries + 1):
+            try:
+                await asyncio.wait_for(
+                    subscription.handler(event),
+                    timeout=30.0  # 30 second timeout per handler
                 )
-                await asyncio.sleep(self._retry_delay * attempt)
-                await self._deliver_event(subscription, event, attempt + 1)
-            else:
-                # Send to dead letter queue
-                await self._dead_letter_queue.put((event, e))
+                return  # Success - exit
+            except asyncio.TimeoutError:
+                logger.warning(
+                    "event_handler_timeout",
+                    subscription_id=subscription.id,
+                    event_id=event.id
+                )
                 raise
+            except Exception as e:
+                last_error = e
+                if current_attempt < self._max_retries:
+                    logger.warning(
+                        "event_delivery_retry",
+                        subscription_id=subscription.id,
+                        event_id=event.id,
+                        attempt=current_attempt,
+                        error=str(e)
+                    )
+                    await asyncio.sleep(self._retry_delay * current_attempt)
+                    # Continue to next iteration (retry)
+                else:
+                    # All retries exhausted - send to dead letter queue
+                    # Use timeout to prevent blocking if queue is full
+                    try:
+                        await asyncio.wait_for(
+                            self._dead_letter_queue.put((event, e)),
+                            timeout=5.0  # 5 second timeout for dead letter queue
+                        )
+                    except asyncio.TimeoutError:
+                        logger.error(
+                            "dead_letter_queue_full",
+                            subscription_id=subscription.id,
+                            event_id=event.id,
+                            queue_size=self._dead_letter_queue.qsize(),
+                        )
+                    raise
     
     async def _worker(self) -> None:
         """Background worker that processes events from the queue."""
