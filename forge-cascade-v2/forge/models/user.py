@@ -15,7 +15,6 @@ from forge.models.base import (
     ForgeModel,
     TimestampMixin,
     TrustLevel,
-    generate_id,
 )
 
 
@@ -143,7 +142,8 @@ class UserPasswordChange(ForgeModel):
     """Schema for changing password."""
 
     current_password: str
-    new_password: str = Field(min_length=8, max_length=100)
+    # SECURITY FIX (Audit 4 - M): Bcrypt truncates at 72 bytes, so limit max_length
+    new_password: str = Field(min_length=8, max_length=72)
 
     @field_validator("new_password")
     @classmethod
