@@ -114,10 +114,48 @@ class KeyStore(ABC):
 class InMemoryKeyStore(KeyStore):
     """
     In-memory key store for development/testing.
-    
+
     WARNING: Not suitable for production. Use HSM-backed store.
+
+    TODO: CRITICAL - Implement persistent key storage for production
+    This in-memory store will lose ALL encryption keys on restart, making
+    previously encrypted data permanently unrecoverable.
+
+    Recommended implementation:
+    1. HSM Integration (Preferred for compliance):
+       - AWS CloudHSM: Use AWS CloudHSM client library
+       - Azure Dedicated HSM: Use PKCS#11 interface
+       - Google Cloud HSM: Use Cloud KMS with HSM protection level
+       - On-premise: Thales Luna HSM or similar
+
+    2. Cloud KMS (Alternative):
+       - AWS KMS: aws-encryption-sdk for envelope encryption
+       - Azure Key Vault: azure-keyvault-keys library
+       - GCP KMS: google-cloud-kms library
+       - Use Data Encryption Keys (DEKs) encrypted by Key Encryption Keys (KEKs)
+
+    3. Required for Compliance:
+       - PCI-DSS 3.5-3.6: Encryption keys must be stored securely, separate from data
+       - HIPAA: Encryption keys must be protected from unauthorized disclosure
+       - SOC 2 CC6.1: Access to cryptographic keys must be restricted
+
+    4. Key Backup Requirements:
+       - Maintain encrypted backups of keys in geographically separate location
+       - Implement key escrow for disaster recovery
+       - Document key custodians and access procedures
+
+    5. Implementation Pattern:
+       class HsmKeyStore(KeyStore):
+           def __init__(self, hsm_client):
+               self._hsm = hsm_client
+
+           async def store_key(self, key: EncryptionKey) -> None:
+               # Store key material in HSM, only keep metadata locally
+               hsm_handle = await self._hsm.import_key(key.key_material)
+               # Store handle + metadata in database
+               ...
     """
-    
+
     def __init__(self):
         self._keys: dict[str, EncryptionKey] = {}
         self._active_keys: dict[str, str] = {}  # purpose -> key_id
