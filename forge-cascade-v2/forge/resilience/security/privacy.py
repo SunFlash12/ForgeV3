@@ -12,7 +12,7 @@ import hashlib
 import re
 import secrets
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Any
 
@@ -63,7 +63,7 @@ class PrivacyRequest:
     request_id: str
     request_type: str  # erasure, export, access
     subject_id: str    # User/entity making the request
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     completed_at: datetime | None = None
     status: str = "pending"
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -383,7 +383,7 @@ class PrivacyManager:
             Datetime when data should expire
         """
         if created_at is None:
-            created_at = datetime.utcnow()
+            created_at = datetime.now(UTC)
 
         retention_map = {
             "capsule": self._retention.capsule_retention_days,
@@ -402,7 +402,7 @@ class PrivacyManager:
     ) -> bool:
         """Check if data has exceeded retention period."""
         expiry = self.calculate_expiry_date(data_type, created_at)
-        return datetime.utcnow() > expiry
+        return datetime.now(UTC) > expiry
 
 
 # Global privacy manager instance

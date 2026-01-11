@@ -11,7 +11,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
@@ -204,7 +204,7 @@ class CrossPartitionQueryExecutor:
         Returns:
             Aggregated query result
         """
-        start_time = datetime.utcnow()
+        start_time = datetime.now(UTC)
         self._stats["queries_executed"] += 1
 
         # Route query to partitions
@@ -236,7 +236,7 @@ class CrossPartitionQueryExecutor:
         # Aggregate results
         aggregated = self._aggregate_results(partition_results, aggregation)
 
-        execution_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+        execution_time = (datetime.now(UTC) - start_time).total_seconds() * 1000
 
         # Update stats
         self._update_stats(execution_time)
@@ -323,7 +323,7 @@ class CrossPartitionQueryExecutor:
         max_results: int
     ) -> PartitionQueryResult:
         """Execute query on a single partition."""
-        start_time = datetime.utcnow()
+        start_time = datetime.now(UTC)
 
         try:
             if self._query_callback:
@@ -336,7 +336,7 @@ class CrossPartitionQueryExecutor:
                 # No callback - return empty
                 results = []
 
-            execution_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+            execution_time = (datetime.now(UTC) - start_time).total_seconds() * 1000
 
             return PartitionQueryResult(
                 partition_id=partition_id,
@@ -347,7 +347,7 @@ class CrossPartitionQueryExecutor:
             )
 
         except Exception as e:
-            execution_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+            execution_time = (datetime.now(UTC) - start_time).total_seconds() * 1000
 
             return PartitionQueryResult(
                 partition_id=partition_id,

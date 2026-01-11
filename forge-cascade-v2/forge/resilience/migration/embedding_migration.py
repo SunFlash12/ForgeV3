@@ -12,7 +12,7 @@ import asyncio
 import secrets
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
@@ -73,7 +73,7 @@ class MigrationJob:
     job_id: str
     from_version: str
     to_version: str
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     started_at: datetime | None = None
     completed_at: datetime | None = None
     status: MigrationStatus = MigrationStatus.PENDING
@@ -260,7 +260,7 @@ class EmbeddingMigrationService:
 
         self._active_job = job_id
         job.status = MigrationStatus.RUNNING
-        job.started_at = datetime.utcnow()
+        job.started_at = datetime.now(UTC)
 
         # Start background task
         self._task = asyncio.create_task(self._run_migration(job))
@@ -295,7 +295,7 @@ class EmbeddingMigrationService:
             return False
 
         job.status = MigrationStatus.CANCELLED
-        job.completed_at = datetime.utcnow()
+        job.completed_at = datetime.now(UTC)
 
         if self._active_job == job_id:
             self._active_job = None
@@ -395,7 +395,7 @@ class EmbeddingMigrationService:
 
             if job.status == MigrationStatus.RUNNING:
                 job.status = MigrationStatus.COMPLETED
-                job.completed_at = datetime.utcnow()
+                job.completed_at = datetime.now(UTC)
                 self._stats["jobs_completed"] += 1
                 self._stats["capsules_migrated"] += job.progress.processed_capsules
 
@@ -412,7 +412,7 @@ class EmbeddingMigrationService:
         except Exception as e:
             job.status = MigrationStatus.FAILED
             job.error_message = str(e)
-            job.completed_at = datetime.utcnow()
+            job.completed_at = datetime.now(UTC)
             self._stats["jobs_failed"] += 1
 
             logger.error(
@@ -668,11 +668,11 @@ class EmbeddingMigrationService:
                 c.updated_at = $now
             """
 
-            from datetime import datetime
+            from datetime import UTC, datetime
             await db_client.execute(query, {
                 "capsule_id": capsule_id,
                 "version": version,
-                "now": datetime.utcnow().isoformat(),
+                "now": datetime.now(UTC).isoformat(),
             })
 
         except Exception as e:

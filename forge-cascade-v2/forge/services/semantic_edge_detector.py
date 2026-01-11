@@ -13,7 +13,7 @@ This service:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 
 import structlog
 
@@ -338,7 +338,7 @@ Only return the JSON object, no other text."""
         properties = {
             "similarity": similarity,
             "reasoning": classification.reasoning,
-            "detected_at": datetime.utcnow().isoformat(),
+            "detected_at": datetime.now(UTC).isoformat(),
         }
 
         try:

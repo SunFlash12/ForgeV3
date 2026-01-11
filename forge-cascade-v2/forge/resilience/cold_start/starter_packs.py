@@ -9,7 +9,7 @@ Provides domain-specific capsules, overlays, and configurations.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
@@ -81,8 +81,8 @@ class StarterPack:
     category: PackCategory
     version: str = "1.0.0"
     author: str = "Forge System"
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    updated_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     status: PackStatus = PackStatus.PUBLISHED
 
     # Pack contents
@@ -135,8 +135,8 @@ class StarterPack:
             category=PackCategory(data["category"]),
             version=data.get("version", "1.0.0"),
             author=data.get("author", "Unknown"),
-            created_at=datetime.fromisoformat(data["created_at"]) if "created_at" in data else datetime.utcnow(),
-            updated_at=datetime.fromisoformat(data["updated_at"]) if "updated_at" in data else datetime.utcnow(),
+            created_at=datetime.fromisoformat(data["created_at"]) if "created_at" in data else datetime.now(UTC),
+            updated_at=datetime.fromisoformat(data["updated_at"]) if "updated_at" in data else datetime.now(UTC),
             status=PackStatus(data.get("status", "published")),
             capsules=capsules,
             overlays=overlays,
@@ -155,7 +155,7 @@ class PackInstallation:
     installation_id: str
     pack_id: str
     pack_version: str
-    installed_at: datetime = field(default_factory=datetime.utcnow)
+    installed_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     installed_by: str = ""
     capsules_created: list[str] = field(default_factory=list)
     overlays_activated: list[str] = field(default_factory=list)
@@ -421,7 +421,7 @@ class StarterPackManager:
                         await self.install_pack(dep.pack_id, user_id)
 
         installation = PackInstallation(
-            installation_id=f"inst_{pack_id}_{user_id}_{datetime.utcnow().timestamp()}",
+            installation_id=f"inst_{pack_id}_{user_id}_{datetime.now(UTC).timestamp()}",
             pack_id=pack_id,
             pack_version=pack.version,
             installed_by=user_id,

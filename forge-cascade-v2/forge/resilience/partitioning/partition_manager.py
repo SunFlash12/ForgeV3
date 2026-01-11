@@ -11,7 +11,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
@@ -62,7 +62,7 @@ class Partition:
     partition_id: str
     name: str
     strategy: PartitionStrategy
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     state: PartitionState = PartitionState.ACTIVE
     stats: PartitionStats = field(default_factory=PartitionStats)
 
@@ -296,7 +296,7 @@ class PartitionManager:
         if not candidates:
             # All partitions full - create new one
             new_partition = self.create_partition(
-                name=f"Auto-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}",
+                name=f"Auto-{datetime.now(UTC).strftime('%Y%m%d-%H%M%S')}",
                 strategy=PartitionStrategy.HASH
             )
             return new_partition.partition_id
@@ -370,7 +370,7 @@ class PartitionManager:
 
         # Create rebalance job
         job = RebalanceJob(
-            job_id=f"rebal_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}",
+            job_id=f"rebal_{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}",
             source_partition=source.partition_id,
             target_partition=target.partition_id,
         )
@@ -406,7 +406,7 @@ class PartitionManager:
     async def _execute_rebalance(self, job: RebalanceJob) -> None:
         """Execute a rebalancing job."""
         job.status = "running"
-        job.started_at = datetime.utcnow()
+        job.started_at = datetime.now(UTC)
 
         source = self._partitions.get(job.source_partition)
         target = self._partitions.get(job.target_partition)
@@ -435,7 +435,7 @@ class PartitionManager:
                     job.moved_count += 1
 
             job.status = "completed"
-            job.completed_at = datetime.utcnow()
+            job.completed_at = datetime.now(UTC)
 
             logger.info(
                 "rebalance_completed",

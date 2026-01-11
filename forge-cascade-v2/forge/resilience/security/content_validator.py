@@ -13,7 +13,7 @@ import hashlib
 import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
@@ -266,7 +266,7 @@ class ContentValidator:
         if not self._initialized:
             self.initialize()
 
-        start_time = datetime.utcnow()
+        start_time = datetime.now(UTC)
         result = ValidationResult(
             valid=True,
             threat_level=ThreatLevel.NONE,
@@ -332,7 +332,7 @@ class ContentValidator:
                 )
 
         result.sanitized_content = sanitized
-        result.processing_time_ms = (datetime.utcnow() - start_time).total_seconds() * 1000
+        result.processing_time_ms = (datetime.now(UTC) - start_time).total_seconds() * 1000
 
         return result
 
