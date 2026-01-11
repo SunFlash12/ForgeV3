@@ -6,7 +6,7 @@ This server uses a simplified in-memory implementation for the Virtuals endpoint
 """
 
 import os
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Optional
 from uuid import uuid4
 
@@ -67,7 +67,7 @@ class APIResponse(BaseModel):
     success: bool = True
     data: Optional[Any] = None
     error: Optional[str] = None
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class PaginatedResponse(APIResponse):
@@ -141,7 +141,7 @@ async def create_agent(request: AgentCreateRequest):
         "personality": request.personality,
         "tokenization_enabled": request.tokenization_enabled,
         "status": "active",
-        "created_at": datetime.utcnow().isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
     }
     agents[agent_id] = agent
     return APIResponse(data=agent)
@@ -196,7 +196,7 @@ async def run_agent(
             {"action": "analyze", "output": "Analysis complete"},
             {"action": "respond", "output": "Response generated"},
         ],
-        "completed_at": datetime.utcnow().isoformat(),
+        "completed_at": datetime.now(UTC).isoformat(),
     })
 
 
@@ -216,7 +216,7 @@ async def request_tokenization(request: TokenizationRequest):
         "phase": "bonding_curve",
         "total_contributions": request.initial_stake,
         "token_supply": request.initial_stake * 1000,
-        "created_at": datetime.utcnow().isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
     }
     tokenized_entities[request.entity_id] = entity
     return APIResponse(data=entity)
@@ -245,7 +245,7 @@ async def contribute_to_bonding_curve(
         "entity_id": entity_id,
         "amount_virtual": amount_virtual,
         "tokens_received": amount_virtual * 1000,
-        "contributed_at": datetime.utcnow().isoformat(),
+        "contributed_at": datetime.now(UTC).isoformat(),
     }
 
     return APIResponse(data={
@@ -270,7 +270,7 @@ async def create_governance_proposal(entity_id: str, request: ProposalCreateRequ
         "status": "active",
         "votes_for": 0,
         "votes_against": 0,
-        "created_at": datetime.utcnow().isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
     }
     proposals[proposal_id] = proposal
     return APIResponse(data=proposal)
@@ -294,7 +294,7 @@ async def vote_on_proposal(
         "proposal_id": proposal_id,
         "vote": vote,
         "voting_power": 1.0,
-        "voted_at": datetime.utcnow().isoformat(),
+        "voted_at": datetime.now(UTC).isoformat(),
     }
     return APIResponse(data=vote_record)
 
@@ -316,7 +316,7 @@ async def register_offering(
         "description": request.description,
         "pricing": request.pricing or {"base_fee": 10.0},
         "status": "active",
-        "created_at": datetime.utcnow().isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
     }
     offerings[offering_id] = offering
     return APIResponse(data=offering)
@@ -355,7 +355,7 @@ async def create_job(request: JobCreateRequest):
         "max_fee": request.max_fee,
         "status": "requested",
         "phase": "request",
-        "created_at": datetime.utcnow().isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
     }
     jobs[job_id] = job
     return APIResponse(data=job)
@@ -386,7 +386,7 @@ async def accept_job_terms(job_id: str):
 
     jobs[job_id]["status"] = "in_progress"
     jobs[job_id]["phase"] = "transaction"
-    jobs[job_id]["accepted_at"] = datetime.utcnow().isoformat()
+    jobs[job_id]["accepted_at"] = datetime.now(UTC).isoformat()
     return APIResponse(data=jobs[job_id])
 
 
@@ -398,7 +398,7 @@ async def submit_deliverable(job_id: str, deliverable: dict = None):
     jobs[job_id]["status"] = "delivered"
     jobs[job_id]["phase"] = "evaluation"
     jobs[job_id]["deliverable"] = deliverable
-    jobs[job_id]["delivered_at"] = datetime.utcnow().isoformat()
+    jobs[job_id]["delivered_at"] = datetime.now(UTC).isoformat()
     return APIResponse(data=jobs[job_id])
 
 
@@ -410,7 +410,7 @@ async def evaluate_deliverable(job_id: str, evaluation: dict = None):
     jobs[job_id]["status"] = "completed"
     jobs[job_id]["phase"] = "settlement"
     jobs[job_id]["evaluation"] = evaluation
-    jobs[job_id]["completed_at"] = datetime.utcnow().isoformat()
+    jobs[job_id]["completed_at"] = datetime.now(UTC).isoformat()
     return APIResponse(data=jobs[job_id])
 
 
@@ -436,7 +436,7 @@ async def get_revenue_summary(
         },
         "entity_count": len(tokenized_entities),
         "active_agents": len(agents),
-        "generated_at": datetime.utcnow().isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
     })
 
 
@@ -475,7 +475,7 @@ async def get_entity_valuation(
         "growth_rate": growth_rate,
         "valuation_method": "dcf",
         "projected_revenue_5y": 7500.0,
-        "calculated_at": datetime.utcnow().isoformat(),
+        "calculated_at": datetime.now(UTC).isoformat(),
     })
 
 

@@ -9,7 +9,7 @@ Tests for:
 - Lineage tracking with semantic edges
 """
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -164,7 +164,7 @@ class TestTemporalRepository:
             "snapshot_type": "full",
             "change_type": "create",
             "content_hash": "abc123",
-            "created_at": datetime.utcnow().isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
         }
 
         result = await temporal_repo.create_version(
@@ -181,9 +181,9 @@ class TestTemporalRepository:
     async def test_get_version_history(self, temporal_repo, mock_db_client):
         """Test retrieving version history."""
         mock_db_client.execute.return_value = [
-            {"version_id": "v3", "version_number": "1.2.0", "created_at": datetime.utcnow().isoformat()},
-            {"version_id": "v2", "version_number": "1.1.0", "created_at": (datetime.utcnow() - timedelta(days=1)).isoformat()},
-            {"version_id": "v1", "version_number": "1.0.0", "created_at": (datetime.utcnow() - timedelta(days=2)).isoformat()},
+            {"version_id": "v3", "version_number": "1.2.0", "created_at": datetime.now(UTC).isoformat()},
+            {"version_id": "v2", "version_number": "1.1.0", "created_at": (datetime.now(UTC) - timedelta(days=1)).isoformat()},
+            {"version_id": "v1", "version_number": "1.0.0", "created_at": (datetime.now(UTC) - timedelta(days=2)).isoformat()},
         ]
 
         result = await temporal_repo.get_version_history(capsule_id="cap1", limit=10)
@@ -195,7 +195,7 @@ class TestTemporalRepository:
     @pytest.mark.asyncio
     async def test_get_capsule_at_time(self, temporal_repo, mock_db_client):
         """Test time-travel query for capsule."""
-        target_time = datetime.utcnow() - timedelta(days=5)
+        target_time = datetime.now(UTC) - timedelta(days=5)
         mock_db_client.execute_single.return_value = {
             "version_id": "v2",
             "capsule_id": "cap1",
@@ -215,16 +215,16 @@ class TestTemporalRepository:
     async def test_get_trust_timeline(self, temporal_repo, mock_db_client):
         """Test trust evolution timeline."""
         mock_db_client.execute.return_value = [
-            {"trust_value": 60, "timestamp": datetime.utcnow().isoformat(), "change_type": "derived"},
-            {"trust_value": 65, "timestamp": (datetime.utcnow() - timedelta(days=7)).isoformat(), "change_type": "essential"},
-            {"trust_value": 50, "timestamp": (datetime.utcnow() - timedelta(days=14)).isoformat(), "change_type": "essential"},
+            {"trust_value": 60, "timestamp": datetime.now(UTC).isoformat(), "change_type": "derived"},
+            {"trust_value": 65, "timestamp": (datetime.now(UTC) - timedelta(days=7)).isoformat(), "change_type": "essential"},
+            {"trust_value": 50, "timestamp": (datetime.now(UTC) - timedelta(days=14)).isoformat(), "change_type": "essential"},
         ]
 
         result = await temporal_repo.get_trust_timeline(
             entity_id="user1",
             entity_type="User",
-            start=datetime.utcnow() - timedelta(days=30),
-            end=datetime.utcnow(),
+            start=datetime.now(UTC) - timedelta(days=30),
+            end=datetime.now(UTC),
         )
 
         assert len(result) == 3
@@ -255,7 +255,7 @@ class TestSemanticEdges:
     @pytest.mark.asyncio
     async def test_create_semantic_edge_supports(self, capsule_repo, mock_db_client):
         """Test creating SUPPORTS relationship."""
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         mock_db_client.execute_single.return_value = {
             "edge": {
                 "id": "edge1",
@@ -291,7 +291,7 @@ class TestSemanticEdges:
     @pytest.mark.asyncio
     async def test_create_semantic_edge_contradicts_bidirectional(self, capsule_repo, mock_db_client):
         """Test creating CONTRADICTS relationship (bidirectional)."""
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         mock_db_client.execute_single.return_value = {
             "edge": {
                 "id": "edge2",
@@ -357,7 +357,7 @@ class TestSemanticEdges:
     @pytest.mark.asyncio
     async def test_find_contradictions(self, capsule_repo, mock_db_client):
         """Test finding contradiction relationships."""
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         mock_db_client.execute.return_value = [
             {
                 "capsule1": {"id": "cap1", "title": "Statement A", "type": "KNOWLEDGE"},

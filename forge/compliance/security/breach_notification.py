@@ -19,7 +19,7 @@ Implements requirements from:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Any
 from uuid import uuid4
@@ -88,7 +88,7 @@ class BreachIncident:
     incident_id: str = field(default_factory=lambda: str(uuid4()))
     
     # Discovery
-    discovered_at: datetime = field(default_factory=datetime.utcnow)
+    discovered_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     discovered_by: str = ""
     discovery_method: str = ""  # automated, employee_report, external_report, audit
     
@@ -177,7 +177,7 @@ class DeadlineAlert:
     deadline_type: str  # "dpa", "individual"
     alert_level: str  # "warning", "urgent", "critical", "overdue"
     hours_remaining: float
-    alert_sent_at: datetime = field(default_factory=datetime.utcnow)
+    alert_sent_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 # Alert thresholds in hours before deadline
@@ -269,7 +269,7 @@ class BreachNotificationService:
             jurisdictions=jurisdictions,
             record_count=record_count,
             affected_systems=affected_systems,
-            breach_occurred_at=breach_occurred_at or datetime.utcnow(),
+            breach_occurred_at=breach_occurred_at or datetime.now(UTC),
             encryption_in_place=encryption_in_place,
         )
         
@@ -429,14 +429,14 @@ class BreachNotificationService:
         
         # Update timestamps
         if status == BreachStatus.CONTAINED:
-            incident.contained_at = datetime.utcnow()
+            incident.contained_at = datetime.now(UTC)
         elif status == BreachStatus.REMEDIATED:
-            incident.remediated_at = datetime.utcnow()
+            incident.remediated_at = datetime.now(UTC)
         elif status == BreachStatus.CLOSED:
-            incident.closed_at = datetime.utcnow()
+            incident.closed_at = datetime.now(UTC)
         
         if notes:
-            incident.investigation_notes += f"\n[{datetime.utcnow().isoformat()}] {notes}"
+            incident.investigation_notes += f"\n[{datetime.now(UTC).isoformat()}] {notes}"
         
         logger.info(
             "breach_status_updated",
@@ -503,7 +503,7 @@ class BreachNotificationService:
         )
         
         # In production, actually send the notification
-        notification.sent_at = datetime.utcnow()
+        notification.sent_at = datetime.now(UTC)
         notification.status = NotificationStatus.SENT
         
         self._notifications[incident_id].append(notification)
@@ -594,7 +594,7 @@ We will provide supplementary information as our investigation progresses.
             )
             
             # In production, send via email service
-            notification.sent_at = datetime.utcnow()
+            notification.sent_at = datetime.now(UTC)
             notification.status = NotificationStatus.SENT
             
             notifications.append(notification)
@@ -658,7 +658,7 @@ Sincerely,
     def get_overdue_notifications(self) -> list[dict[str, Any]]:
         """Get list of overdue notifications."""
         overdue = []
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         
         for incident_id, incident in self._incidents.items():
             if incident.status in {BreachStatus.CLOSED, BreachStatus.REMEDIATED}:
@@ -756,7 +756,7 @@ Sincerely,
         Returns alerts at various thresholds (24h, 12h, 6h, 1h before deadline).
         """
         alerts = []
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
 
         for incident_id, incident in self._incidents.items():
             # Skip closed/remediated incidents

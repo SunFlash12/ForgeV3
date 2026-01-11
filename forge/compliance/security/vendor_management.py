@@ -18,7 +18,7 @@ Supports:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Any
 from uuid import uuid4
@@ -111,7 +111,7 @@ class VendorProfile:
     dpo_contact_email: str = ""  # Data Protection Officer
     
     # Dates
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     approved_at: datetime | None = None
     last_assessment_date: datetime | None = None
     next_assessment_due: datetime | None = None
@@ -134,7 +134,7 @@ class VendorContract:
     contract_reference: str = ""
     
     # Dates
-    effective_date: datetime = field(default_factory=datetime.utcnow)
+    effective_date: datetime = field(default_factory=lambda: datetime.now(UTC))
     expiration_date: datetime | None = None
     auto_renewal: bool = False
     renewal_notice_days: int = 30
@@ -173,7 +173,7 @@ class SecurityAssessment:
     
     # Status
     status: AssessmentStatus = AssessmentStatus.NOT_STARTED
-    initiated_at: datetime = field(default_factory=datetime.utcnow)
+    initiated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     completed_at: datetime | None = None
     expires_at: datetime | None = None
     
@@ -214,8 +214,8 @@ class VendorIncident:
     severity: VendorRiskLevel = VendorRiskLevel.MEDIUM
     
     # Timeline
-    occurred_at: datetime = field(default_factory=datetime.utcnow)
-    reported_at: datetime = field(default_factory=datetime.utcnow)
+    occurred_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    reported_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     resolved_at: datetime | None = None
     
     # Impact
@@ -284,7 +284,7 @@ class VendorRiskManagementService:
         
         # Set next assessment due date
         frequency = self._assessment_frequency[vendor.risk_level]
-        vendor.next_assessment_due = datetime.utcnow() + timedelta(days=frequency)
+        vendor.next_assessment_due = datetime.now(UTC) + timedelta(days=frequency)
         
         self._vendors[vendor.vendor_id] = vendor
         self._contracts[vendor.vendor_id] = []
@@ -346,10 +346,10 @@ class VendorRiskManagementService:
         vendor.status = status
         
         if status == VendorStatus.APPROVED:
-            vendor.approved_at = datetime.utcnow()
+            vendor.approved_at = datetime.now(UTC)
         
         if notes:
-            vendor.notes += f"\n[{datetime.utcnow().isoformat()}] Status: {status.value} - {notes}"
+            vendor.notes += f"\n[{datetime.now(UTC).isoformat()}] Status: {status.value} - {notes}"
         
         logger.info(
             "vendor_status_updated",
@@ -478,7 +478,7 @@ class VendorRiskManagementService:
     ) -> list[dict[str, Any]]:
         """Get contracts expiring within specified days."""
         expiring = []
-        cutoff = datetime.utcnow() + timedelta(days=days)
+        cutoff = datetime.now(UTC) + timedelta(days=days)
         
         for vendor_id, contracts in self._contracts.items():
             vendor = self._vendors.get(vendor_id)
@@ -491,7 +491,7 @@ class VendorRiskManagementService:
                             "contract_id": contract.contract_id,
                             "contract_type": contract.contract_type,
                             "expiration_date": contract.expiration_date.isoformat(),
-                            "days_remaining": (contract.expiration_date - datetime.utcnow()).days,
+                            "days_remaining": (contract.expiration_date - datetime.now(UTC)).days,
                         })
         
         return sorted(expiring, key=lambda x: x["days_remaining"])
@@ -555,7 +555,7 @@ class VendorRiskManagementService:
             raise ValueError(f"Assessment not found: {assessment_id}")
         
         assessment.status = AssessmentStatus.PENDING_REVIEW
-        assessment.completed_at = datetime.utcnow()
+        assessment.completed_at = datetime.now(UTC)
         assessment.overall_score = overall_score
         assessment.risk_rating = risk_rating
         assessment.findings_critical = findings.get("critical", 0)
@@ -566,18 +566,18 @@ class VendorRiskManagementService:
         assessment.report_reference = report_reference
         
         # Set expiration (assessments valid for 1 year typically)
-        assessment.expires_at = datetime.utcnow() + timedelta(days=365)
+        assessment.expires_at = datetime.now(UTC) + timedelta(days=365)
         
         # Update vendor
         if vendor_id:
             vendor = self._vendors.get(vendor_id)
             if vendor:
-                vendor.last_assessment_date = datetime.utcnow()
+                vendor.last_assessment_date = datetime.now(UTC)
                 vendor.risk_level = risk_rating
                 
                 # Schedule next assessment
                 frequency = self._assessment_frequency[risk_rating]
-                vendor.next_assessment_due = datetime.utcnow() + timedelta(days=frequency)
+                vendor.next_assessment_due = datetime.now(UTC) + timedelta(days=frequency)
         
         logger.info(
             "vendor_assessment_completed",
@@ -611,7 +611,7 @@ class VendorRiskManagementService:
         assessment.status = AssessmentStatus.APPROVED
         assessment.approval_status = "approved"
         assessment.approved_by = approved_by
-        assessment.approved_at = datetime.utcnow()
+        assessment.approved_at = datetime.now(UTC)
         assessment.review_notes = notes
         
         # Update vendor status if not already active
@@ -619,14 +619,14 @@ class VendorRiskManagementService:
             vendor = self._vendors.get(vendor_id)
             if vendor and vendor.status in {VendorStatus.PROSPECTIVE, VendorStatus.UNDER_REVIEW}:
                 vendor.status = VendorStatus.APPROVED
-                vendor.approved_at = datetime.utcnow()
+                vendor.approved_at = datetime.now(UTC)
         
         return assessment
     
     def get_overdue_assessments(self) -> list[dict[str, Any]]:
         """Get vendors with overdue security assessments."""
         overdue = []
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         
         for vendor_id, vendor in self._vendors.items():
             if vendor.status not in {VendorStatus.ACTIVE, VendorStatus.APPROVED}:

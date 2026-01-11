@@ -7,7 +7,7 @@ This server uses a simplified in-memory implementation for the compliance endpoi
 
 import asyncio
 import os
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
@@ -153,7 +153,7 @@ async def create_dsar(request: DSARCreateRequest):
         "subject_name": request.subject_name,
         "jurisdiction": request.jurisdiction,
         "status": "pending",
-        "created_at": datetime.utcnow().isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
     }
     dsars[dsar_id] = dsar
     return dsar
@@ -179,7 +179,7 @@ async def process_dsar(dsar_id: str):
     if dsar_id not in dsars:
         raise HTTPException(status_code=404, detail="DSAR not found")
     dsars[dsar_id]["status"] = "processing"
-    dsars[dsar_id]["processed_at"] = datetime.utcnow().isoformat()
+    dsars[dsar_id]["processed_at"] = datetime.now(UTC).isoformat()
     return dsars[dsar_id]
 
 
@@ -188,7 +188,7 @@ async def complete_dsar(dsar_id: str):
     if dsar_id not in dsars:
         raise HTTPException(status_code=404, detail="DSAR not found")
     dsars[dsar_id]["status"] = "completed"
-    dsars[dsar_id]["completed_at"] = datetime.utcnow().isoformat()
+    dsars[dsar_id]["completed_at"] = datetime.now(UTC).isoformat()
     return dsars[dsar_id]
 
 
@@ -207,7 +207,7 @@ async def record_consent(request: ConsentCreateRequest):
         "granted": request.granted,
         "collected_via": request.collected_via,
         "consent_text_version": request.consent_text_version,
-        "created_at": datetime.utcnow().isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
     }
     if request.user_id not in consents:
         consents[request.user_id] = []
@@ -243,7 +243,7 @@ async def withdraw_consent(request: ConsentWithdrawRequest):
         "user_id": request.user_id,
         "consent_type": request.consent_type,
         "granted": False,
-        "withdrawn_at": datetime.utcnow().isoformat(),
+        "withdrawn_at": datetime.now(UTC).isoformat(),
     }
     consents[request.user_id].append(consent)
     return consent
@@ -281,7 +281,7 @@ async def report_breach(request: BreachCreateRequest):
         "detection_method": request.detection_method or request.discovery_method,
         "status": "detected",
         "contained": False,
-        "created_at": datetime.utcnow().isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
     }
     breaches[breach_id] = breach
     return breach
@@ -310,7 +310,7 @@ async def contain_breach(breach_id: str):
         raise HTTPException(status_code=404, detail="Breach not found")
     breaches[breach_id]["status"] = "contained"
     breaches[breach_id]["contained"] = True
-    breaches[breach_id]["contained_at"] = datetime.utcnow().isoformat()
+    breaches[breach_id]["contained_at"] = datetime.now(UTC).isoformat()
     return breaches[breach_id]
 
 
@@ -319,7 +319,7 @@ async def notify_authority(breach_id: str):
     if breach_id not in breaches:
         raise HTTPException(status_code=404, detail="Breach not found")
     breaches[breach_id]["authority_notified"] = True
-    breaches[breach_id]["notified_at"] = datetime.utcnow().isoformat()
+    breaches[breach_id]["notified_at"] = datetime.now(UTC).isoformat()
     return breaches[breach_id]
 
 
@@ -345,7 +345,7 @@ async def register_ai_system(request: AISystemRequest):
         "model_type": request.model_type,
         "human_oversight_measures": request.human_oversight_measures,
         "status": "registered",
-        "created_at": datetime.utcnow().isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
     }
     ai_systems[system_id] = system
     return system
@@ -378,7 +378,7 @@ async def log_ai_decision(request: AIDecisionRequest):
         "confidence_score": request.confidence_score,
         "reasoning_chain": request.reasoning_chain,
         "key_factors": request.key_factors,
-        "created_at": datetime.utcnow().isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
     }
     ai_decisions[decision_id] = decision
     return decision
@@ -402,7 +402,7 @@ async def review_ai_decision(request: AIReviewRequest):
     if request.decision_id not in ai_decisions:
         raise HTTPException(status_code=404, detail="AI decision not found")
     ai_decisions[request.decision_id]["reviewed"] = True
-    ai_decisions[request.decision_id]["reviewed_at"] = datetime.utcnow().isoformat()
+    ai_decisions[request.decision_id]["reviewed_at"] = datetime.now(UTC).isoformat()
     ai_decisions[request.decision_id]["reviewer_id"] = request.reviewer_id
     return ai_decisions[request.decision_id]
 
@@ -441,7 +441,7 @@ async def get_audit_events(
 @app.post("/api/v1/compliance/audit-events")
 async def create_audit_event(event: dict):
     event["id"] = str(uuid4())
-    event["created_at"] = datetime.utcnow().isoformat()
+    event["created_at"] = datetime.now(UTC).isoformat()
     audit_events.append(event)
     return event
 
@@ -466,7 +466,7 @@ async def generate_report(request: ReportRequest):
         "id": report_id,
         "framework": request.framework,
         "status": "generated",
-        "created_at": datetime.utcnow().isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
         "controls_passed": 95,
         "controls_failed": 5,
         "controls_total": 100,
@@ -491,7 +491,7 @@ async def get_compliance_status():
             "CCPA": {"score": 94.0, "status": "compliant"},
             "SOC2": {"score": 95.0, "status": "compliant"},
         },
-        "last_assessment": datetime.utcnow().isoformat(),
+        "last_assessment": datetime.now(UTC).isoformat(),
     }
 
 
@@ -518,7 +518,7 @@ async def verify_all_controls():
         "controls_verified": 100,
         "controls_passed": 95,
         "controls_failed": 5,
-        "verified_at": datetime.utcnow().isoformat(),
+        "verified_at": datetime.now(UTC).isoformat(),
     }
 
 
@@ -529,7 +529,7 @@ async def verify_control_body(body: dict = None):
         "control_id": control_id,
         "verified": True,
         "status": "passed",
-        "verified_at": datetime.utcnow().isoformat(),
+        "verified_at": datetime.now(UTC).isoformat(),
     }
 
 
@@ -539,7 +539,7 @@ async def verify_control(control_id: str):
         "control_id": control_id,
         "verified": True,
         "status": "passed",
-        "verified_at": datetime.utcnow().isoformat(),
+        "verified_at": datetime.now(UTC).isoformat(),
     }
 
 

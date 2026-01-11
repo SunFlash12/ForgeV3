@@ -18,7 +18,7 @@ import csv
 import io
 import json
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Any, Callable, Awaitable
 from uuid import uuid4
@@ -180,13 +180,13 @@ class DSARProcessor:
             if method == VerificationMethod.EMAIL_CONFIRMATION:
                 # Check if email matches account
                 verification.verified = True
-                verification.verified_at = datetime.utcnow()
+                verification.verified_at = datetime.now(UTC)
                 verification.verification_reference = f"EMAIL-{uuid4().hex[:8]}"
             
             elif method == VerificationMethod.ACCOUNT_LOGIN:
                 # User authenticated via their account
                 verification.verified = True
-                verification.verified_at = datetime.utcnow()
+                verification.verified_at = datetime.now(UTC)
                 verification.verification_reference = f"AUTH-{uuid4().hex[:8]}"
         
         # Update DSAR
@@ -338,7 +338,7 @@ class DSARProcessor:
                 "dsar_id": dsar.id,
                 "request_type": dsar.request_type.value,
                 "subject_email": dsar.subject_email,
-                "generated_at": datetime.utcnow().isoformat(),
+                "generated_at": datetime.now(UTC).isoformat(),
                 "format": "JSON",
                 "version": "1.0",
             } if include_metadata else {},
@@ -369,7 +369,7 @@ class DSARProcessor:
         # Metadata header
         if include_metadata:
             output.write(f"# DSAR Export - {dsar.id}\n")
-            output.write(f"# Generated: {datetime.utcnow().isoformat()}\n")
+            output.write(f"# Generated: {datetime.now(UTC).isoformat()}\n")
             output.write(f"# Subject: {dsar.subject_email}\n\n")
         
         for data in discovered_data:
@@ -403,7 +403,7 @@ class DSARProcessor:
         export = {
             "@context": "https://schema.org",
             "@type": "DataDownload",
-            "dateCreated": datetime.utcnow().isoformat(),
+            "dateCreated": datetime.now(UTC).isoformat(),
             "encodingFormat": "application/json",
             "about": {
                 "@type": "Person",
