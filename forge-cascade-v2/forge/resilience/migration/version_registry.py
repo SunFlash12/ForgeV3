@@ -9,7 +9,7 @@ Enables seamless transitions between embedding model generations.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
@@ -44,7 +44,7 @@ class EmbeddingVersion:
     model_name: str
     provider: ModelProvider
     dimensions: int
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     status: VersionStatus = VersionStatus.ACTIVE
 
     # Model configuration

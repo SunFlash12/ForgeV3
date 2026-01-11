@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
@@ -40,7 +40,7 @@ class UserInteraction:
     user_id: str
     interaction_type: InteractionType
     target_id: str | None  # Capsule ID, proposal ID, etc.
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     context: dict[str, Any] = field(default_factory=dict)
 
 
@@ -63,8 +63,8 @@ class UserProfile:
     """User profile built from interactions."""
 
     user_id: str
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    last_updated: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    last_updated: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     # Topic affinities
     topic_affinities: dict[str, TopicAffinity] = field(default_factory=dict)
@@ -167,7 +167,7 @@ class ProgressiveProfiler:
             context: Additional context (content, tags, etc.)
         """
         interaction = UserInteraction(
-            interaction_id=f"{user_id}_{datetime.utcnow().timestamp()}",
+            interaction_id=f"{user_id}_{datetime.now(UTC).timestamp()}",
             user_id=user_id,
             interaction_type=interaction_type,
             target_id=target_id,
@@ -193,7 +193,7 @@ class ProgressiveProfiler:
     ) -> None:
         """Update profile based on interaction."""
         profile.total_interactions += 1
-        profile.last_updated = datetime.utcnow()
+        profile.last_updated = datetime.now(UTC)
 
         # Update interaction counts
         type_key = interaction.interaction_type.value
@@ -328,7 +328,7 @@ class ProgressiveProfiler:
         if not profile:
             return
 
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
 
         for _topic, affinity in profile.topic_affinities.items():
             if affinity.last_interaction:

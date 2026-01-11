@@ -12,7 +12,7 @@ import functools
 from collections.abc import Callable
 from contextvars import ContextVar
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any, TypeVar
 
@@ -340,7 +340,7 @@ class TenantIsolator:
     ) -> None:
         """Log a cross-tenant access attempt."""
         attempt = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "source_tenant": source_tenant,
             "target_tenant": target_tenant,
             "operation": operation,

@@ -12,7 +12,7 @@ import functools
 from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any, TypeVar
 
@@ -79,7 +79,7 @@ class SpanContext:
     span_id: str
     parent_span_id: str | None = None
     operation: str = ""
-    start_time: datetime = field(default_factory=datetime.utcnow)
+    start_time: datetime = field(default_factory=lambda: datetime.now(UTC))
     attributes: dict[str, Any] = field(default_factory=dict)
 
 
