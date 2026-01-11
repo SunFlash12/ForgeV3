@@ -21,7 +21,7 @@ import asyncio
 import hashlib
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any, Optional
 from uuid import uuid4
 
@@ -418,7 +418,7 @@ class ACPService:
         job.agreement_memo = agreement_memo
         job.agreed_fee_virtual = agreed_fee
         job.agreed_deadline = datetime.fromisoformat(
-            job.negotiated_terms.get("proposed_deadline", datetime.utcnow().isoformat())
+            job.negotiated_terms.get("proposed_deadline", datetime.now(UTC).isoformat())
         )
         job.escrow_amount_virtual = agreed_fee
         job.advance_to_phase(ACPPhase.TRANSACTION)
@@ -477,10 +477,10 @@ class ACPService:
         
         job.deliverable_memo = deliverable_memo
         job.deliverable_content = deliverable.content
-        job.delivered_at = datetime.utcnow()
+        job.delivered_at = datetime.now(UTC)
         job.status = ACPJobStatus.DELIVERED
         job.advance_to_phase(ACPPhase.EVALUATION)
-        job.evaluation_timeout = datetime.utcnow() + timedelta(
+        job.evaluation_timeout = datetime.now(UTC) + timedelta(
             hours=self.config.acp_evaluation_timeout_hours
         )
         
@@ -542,7 +542,7 @@ class ACPService:
         job.evaluation_result = evaluation.result
         job.evaluation_score = evaluation.score
         job.evaluation_feedback = evaluation.feedback
-        job.evaluated_at = datetime.utcnow()
+        job.evaluated_at = datetime.now(UTC)
         job.status = ACPJobStatus.EVALUATING
         
         # Handle evaluation result
@@ -562,7 +562,7 @@ class ACPService:
             
             job.escrow_released = True
             job.status = ACPJobStatus.COMPLETED
-            job.completed_at = datetime.utcnow()
+            job.completed_at = datetime.now(UTC)
             
             logger.info(f"Job {job_id} completed successfully, escrow released")
             
@@ -862,7 +862,7 @@ class ACPService:
             tx_hash=f"0x{'0' * 64}",
             chain=self.config.primary_chain.value,
             block_number=0,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
             from_address=payer_wallet,
             to_address="escrow_contract",
             value=amount_virtual,
@@ -887,7 +887,7 @@ class ACPService:
             tx_hash=f"0x{'1' * 64}",
             chain=self.config.primary_chain.value,
             block_number=0,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
             from_address="escrow_contract",
             to_address=recipient_wallet,
             value=amount_virtual,

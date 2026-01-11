@@ -31,7 +31,7 @@ Toggle config.enable_tokenization=True to enable real blockchain operations.
 import asyncio
 import hashlib
 import logging
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any, Optional
 from uuid import uuid4
@@ -233,7 +233,7 @@ class TokenizationService:
             remaining = graduation_threshold - entity.bonding_curve_virtual_accumulated
             # Assume average 1000 VIRTUAL per day accumulation for estimation
             days_remaining = max(1, remaining / 1000)
-            entity.estimated_graduation_date = datetime.utcnow() + timedelta(days=days_remaining)
+            entity.estimated_graduation_date = datetime.now(UTC) + timedelta(days=days_remaining)
         
         # Store in repository
         await self._entity_repo.create(entity)
@@ -291,7 +291,7 @@ class TokenizationService:
             amount_virtual=amount_virtual,
             tokens_received=tokens_received,
             price_at_contribution=avg_price,
-            contributed_at=datetime.utcnow(),
+            contributed_at=datetime.now(UTC),
             tx_hash="",  # Would be set from on-chain transaction
         )
         
@@ -327,7 +327,7 @@ class TokenizationService:
             # Update graduation estimate
             remaining = threshold - new_supply
             days_remaining = max(1, remaining / 1000)
-            entity.estimated_graduation_date = datetime.utcnow() + timedelta(days=days_remaining)
+            entity.estimated_graduation_date = datetime.now(UTC) + timedelta(days=days_remaining)
         
         await self._entity_repo.update(entity)
         
@@ -365,8 +365,8 @@ class TokenizationService:
                 raise TokenizationServiceError(f"Graduation failed: {e}")
         
         entity.status = TokenizationStatus.GRADUATED
-        entity.graduated_at = datetime.utcnow()
-        entity.liquidity_locked_until = datetime.utcnow() + timedelta(days=3650)  # 10 years
+        entity.graduated_at = datetime.now(UTC)
+        entity.liquidity_locked_until = datetime.now(UTC) + timedelta(days=3650)  # 10 years
         entity.token_info.is_graduated = True
         entity.token_info.circulating_supply = int(
             entity.token_info.total_supply * entity.distribution.public_circulation_percent / 100
@@ -502,7 +502,7 @@ class TokenizationService:
         # if proposer_balance <= 0:
         #     raise TokenizationServiceError("Proposer must hold tokens")
         
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         proposal = TokenHolderProposal(
             tokenized_entity_id=entity_id,
             proposer_wallet=proposer_wallet,
@@ -554,7 +554,7 @@ class TokenizationService:
         if proposal.status != "active":
             raise TokenizationServiceError(f"Proposal is not active (status: {proposal.status})")
         
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         if now < proposal.voting_starts or now > proposal.voting_ends:
             raise TokenizationServiceError("Voting period is not active")
         
@@ -675,7 +675,7 @@ class TokenizationService:
 
     def _generate_tx_hash(self, *args: Any) -> str:
         """Generate a deterministic transaction hash for simulation mode."""
-        data = ":".join(str(arg) for arg in args) + str(datetime.utcnow().timestamp())
+        data = ":".join(str(arg) for arg in args) + str(datetime.now(UTC).timestamp())
         return "0x" + hashlib.sha256(data.encode()).hexdigest()
 
     async def _deploy_token_contract(
@@ -739,7 +739,7 @@ class TokenizationService:
             tx_hash=tx_hash,
             chain=self.config.primary_chain.value,
             block_number=0,  # Would be populated from receipt
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
             from_address=owner_wallet,
             to_address=getattr(self.config, 'agent_factory_address', 'agent_factory'),
             value=initial_stake,
@@ -800,7 +800,7 @@ class TokenizationService:
             tx_hash=tx_hash,
             chain=self.config.primary_chain.value,
             block_number=0,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
             from_address=contributor_wallet,
             to_address=entity.token_info.token_address or "bonding_curve",
             value=amount_virtual,
@@ -857,7 +857,7 @@ class TokenizationService:
             tx_hash=tx_hash,
             chain=self.config.primary_chain.value,
             block_number=0,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
             from_address=getattr(self.config, 'system_wallet', 'system'),
             to_address=entity.token_info.token_address or "token_contract",
             value=0,
@@ -924,7 +924,7 @@ class TokenizationService:
                     tx_hash=tx_hash,
                     chain=self.config.primary_chain.value,
                     block_number=0,
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(UTC),
                     from_address="treasury",
                     to_address=recipient,
                     value=amount,
@@ -983,7 +983,7 @@ class TokenizationService:
                 #     amountOutMin=0,  # Could add slippage protection
                 #     path=[VIRTUAL_ADDRESS, token_address],
                 #     to=BURN_ADDRESS,  # Send directly to burn
-                #     deadline=int(datetime.utcnow().timestamp()) + 300
+                #     deadline=int(datetime.now(UTC).timestamp()) + 300
                 # ).build_transaction(...)
 
                 logger.info(
@@ -1001,7 +1001,7 @@ class TokenizationService:
             tx_hash=tx_hash,
             chain=self.config.primary_chain.value,
             block_number=0,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
             from_address="treasury",
             to_address="0x000000000000000000000000000000000000dEaD",  # Burn address
             value=amount,

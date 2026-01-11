@@ -6,7 +6,7 @@ changes, and events. Supports compliance, forensics, and
 the Immune System's anomaly detection.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
@@ -63,7 +63,7 @@ class AuditRepository:
             Created AuditEvent
         """
         event_id = str(uuid4())
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
 
         query = """
         CREATE (a:AuditLog {
@@ -564,7 +564,7 @@ class AuditRepository:
         until: datetime | None = None
     ) -> dict[str, Any]:
         """Get summary statistics for audit activity."""
-        until = until or datetime.utcnow()
+        until = until or datetime.now(UTC)
 
         query = """
         MATCH (a:AuditLog)
@@ -609,7 +609,7 @@ class AuditRepository:
         until: datetime | None = None
     ) -> dict[str, int]:
         """Get event counts grouped by type."""
-        until = until or datetime.utcnow()
+        until = until or datetime.now(UTC)
 
         query = """
         MATCH (a:AuditLog)
@@ -632,7 +632,7 @@ class AuditRepository:
         limit: int = 20
     ) -> list[dict[str, Any]]:
         """Get most active actors in time period."""
-        until = until or datetime.utcnow()
+        until = until or datetime.now(UTC)
 
         query = """
         MATCH (a:AuditLog)

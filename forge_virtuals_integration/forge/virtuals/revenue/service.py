@@ -20,7 +20,7 @@ are loaded back into the pending queue. This ensures no revenue is lost on resta
 
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any, Optional
 from uuid import uuid4
 from collections import defaultdict
@@ -405,7 +405,7 @@ class RevenueService:
             tx_hash=f"0x{'d' * 64}",
             chain=self.config.primary_chain.value,
             block_number=0,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
             from_address="treasury",
             to_address="multi_send",
             value=sum(distributions.values()),
@@ -441,7 +441,7 @@ class RevenueService:
         """
         # Set defaults for date range
         if end_date is None:
-            end_date = datetime.utcnow()
+            end_date = datetime.now(UTC)
         if start_date is None:
             start_date = end_date - timedelta(days=30)
         

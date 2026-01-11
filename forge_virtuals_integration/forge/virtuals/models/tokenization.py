@@ -9,7 +9,7 @@ blockchain tokens with built-in incentive alignment through the Virtuals
 Protocol bonding curve mechanism.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any, Optional
 from uuid import uuid4
@@ -340,7 +340,7 @@ class ContributionRecord(BaseModel):
     contribution_nft_tx_hash: Optional[str] = None
     
     # Timestamps
-    submitted_at: datetime = Field(default_factory=datetime.utcnow)
+    submitted_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     approved_at: Optional[datetime] = None
 
 
@@ -353,7 +353,7 @@ class TokenHolderGovernanceVote(BaseModel):
     voting_power: float = Field(
         description="Voting power based on token holdings"
     )
-    voted_at: datetime = Field(default_factory=datetime.utcnow)
+    voted_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     tx_hash: Optional[str] = None
 
 
@@ -399,7 +399,7 @@ class TokenHolderProposal(BaseModel):
     executed_at: Optional[datetime] = None
     
     # Timestamps
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class BondingCurveContribution(BaseModel):
@@ -413,5 +413,5 @@ class BondingCurveContribution(BaseModel):
     price_at_contribution: float = Field(
         description="Price per token at time of contribution"
     )
-    contributed_at: datetime = Field(default_factory=datetime.utcnow)
+    contributed_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     tx_hash: str
