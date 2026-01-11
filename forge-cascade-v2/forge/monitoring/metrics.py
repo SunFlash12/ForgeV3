@@ -37,10 +37,25 @@ class Counter:
     description: str
     labels: list[str] = field(default_factory=list)
     _values: dict[tuple, float] = field(default_factory=dict)
+    # SECURITY FIX: Limit label cardinality to prevent memory exhaustion
+    _max_cardinality: int = 1000
+    _cardinality_warned: bool = field(default=False, repr=False)
 
     def inc(self, value: float = 1.0, **labels) -> None:
-        """Increment the counter."""
+        """Increment the counter with cardinality protection."""
         key = self._label_key(labels)
+
+        # Check cardinality limit for new keys
+        if key not in self._values:
+            if len(self._values) >= self._max_cardinality:
+                if not self._cardinality_warned:
+                    logger.warning(
+                        f"Metric {self.name} hit cardinality limit ({self._max_cardinality}). "
+                        "New label combinations will be dropped."
+                    )
+                    self._cardinality_warned = True
+                return  # Drop new high-cardinality labels
+
         self._values[key] = self._values.get(key, 0) + value
 
     def _label_key(self, labels: dict) -> tuple:
@@ -66,20 +81,41 @@ class Gauge:
     description: str
     labels: list[str] = field(default_factory=list)
     _values: dict[tuple, float] = field(default_factory=dict)
+    # SECURITY FIX: Limit label cardinality to prevent memory exhaustion
+    _max_cardinality: int = 1000
+    _cardinality_warned: bool = field(default=False, repr=False)
+
+    def _check_cardinality(self, key: tuple) -> bool:
+        """Check if we can add a new key. Returns False if at limit."""
+        if key not in self._values and len(self._values) >= self._max_cardinality:
+            if not self._cardinality_warned:
+                logger.warning(
+                    f"Metric {self.name} hit cardinality limit ({self._max_cardinality}). "
+                    "New label combinations will be dropped."
+                )
+                self._cardinality_warned = True
+            return False
+        return True
 
     def set(self, value: float, **labels) -> None:
-        """Set the gauge value."""
+        """Set the gauge value with cardinality protection."""
         key = self._label_key(labels)
+        if not self._check_cardinality(key):
+            return
         self._values[key] = value
 
     def inc(self, value: float = 1.0, **labels) -> None:
-        """Increment the gauge."""
+        """Increment the gauge with cardinality protection."""
         key = self._label_key(labels)
+        if not self._check_cardinality(key):
+            return
         self._values[key] = self._values.get(key, 0) + value
 
     def dec(self, value: float = 1.0, **labels) -> None:
-        """Decrement the gauge."""
+        """Decrement the gauge with cardinality protection."""
         key = self._label_key(labels)
+        if not self._check_cardinality(key):
+            return
         self._values[key] = self._values.get(key, 0) - value
 
     def _label_key(self, labels: dict) -> tuple:
@@ -111,13 +147,25 @@ class Histogram:
     # Keep last N observations for percentile calculation (bounded)
     _recent_observations: dict[tuple, list[float]] = field(default_factory=dict)
     _max_observations: int = 10000  # Limit stored observations per label set
+    # SECURITY FIX: Limit label cardinality to prevent memory exhaustion
+    _max_cardinality: int = 1000
+    _cardinality_warned: bool = field(default=False, repr=False)
 
     def observe(self, value: float, **labels) -> None:
-        """Observe a value with bounded memory."""
+        """Observe a value with bounded memory and cardinality protection."""
         key = self._label_key(labels)
 
-        # Initialize stats if needed
+        # SECURITY FIX: Check cardinality limit for new keys
         if key not in self._stats:
+            if len(self._stats) >= self._max_cardinality:
+                if not self._cardinality_warned:
+                    logger.warning(
+                        f"Metric {self.name} hit cardinality limit ({self._max_cardinality}). "
+                        "New label combinations will be dropped."
+                    )
+                    self._cardinality_warned = True
+                return
+
             self._stats[key] = {"count": 0, "sum": 0.0, "bucket_counts": dict.fromkeys(self.buckets, 0)}
             self._stats[key]["bucket_counts"][float("inf")] = 0
             self._recent_observations[key] = []
@@ -170,11 +218,25 @@ class Summary:
     _observations: dict[tuple, list[float]] = field(default_factory=dict)
     _stats: dict[tuple, dict] = field(default_factory=dict)
     _max_observations: int = 10000  # Limit for quantile calculation
+    # SECURITY FIX: Limit label cardinality to prevent memory exhaustion
+    _max_cardinality: int = 1000
+    _cardinality_warned: bool = field(default=False, repr=False)
 
     def observe(self, value: float, **labels) -> None:
-        """Observe a value with bounded memory."""
+        """Observe a value with bounded memory and cardinality protection."""
         key = self._label_key(labels)
+
+        # SECURITY FIX: Check cardinality limit for new keys
         if key not in self._observations:
+            if len(self._observations) >= self._max_cardinality:
+                if not self._cardinality_warned:
+                    logger.warning(
+                        f"Metric {self.name} hit cardinality limit ({self._max_cardinality}). "
+                        "New label combinations will be dropped."
+                    )
+                    self._cardinality_warned = True
+                return
+
             self._observations[key] = []
             self._stats[key] = {"count": 0, "sum": 0.0}
 
