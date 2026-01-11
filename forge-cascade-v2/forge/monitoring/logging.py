@@ -70,15 +70,42 @@ def sanitize_sensitive_data(
     event_dict: EventDict,
 ) -> EventDict:
     """Remove or mask sensitive data from logs."""
+    # SECURITY FIX: Expanded sensitive key patterns for better coverage
     sensitive_keys = {
+        # Authentication credentials
         "password",
+        "passwd",
         "secret",
         "token",
         "api_key",
+        "apikey",
         "authorization",
+        "auth",
+        "bearer",
+        "access_token",
+        "refresh_token",
+        "id_token",
+        "session_id",
+        "session_key",
+        # Cryptographic keys
+        "private_key",
+        "privatekey",
+        "secret_key",
+        "secretkey",
+        "signing_key",
+        "encryption_key",
+        # Personal data (PII)
         "cookie",
         "credit_card",
+        "creditcard",
         "ssn",
+        "social_security",
+        # Database/service credentials
+        "connection_string",
+        "connectionstring",
+        "db_password",
+        "redis_password",
+        "neo4j_password",
     }
 
     def _sanitize(obj: Any, depth: int = 0) -> Any:
