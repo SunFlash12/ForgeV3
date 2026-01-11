@@ -48,6 +48,11 @@ from forge.compliance.core.engine import (
     ComplianceEngine,
     get_compliance_engine,
 )
+from forge.compliance.core.repository import (
+    ComplianceRepository,
+    get_compliance_repository,
+    initialize_compliance_repository,
+)
 
 __all__ = [
     # Config
@@ -87,4 +92,8 @@ __all__ = [
     # Engine
     "ComplianceEngine",
     "get_compliance_engine",
+    # Repository
+    "ComplianceRepository",
+    "get_compliance_repository",
+    "initialize_compliance_repository",
 ]
