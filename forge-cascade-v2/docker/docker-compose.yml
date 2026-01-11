@@ -66,8 +66,10 @@ services:
     image: redis:7.4.1-alpine
     container_name: forge-redis
     restart: unless-stopped
+    # SECURITY FIX: Only expose Redis to localhost for development debugging
+    # In production, remove ports entirely - use internal network only
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     # SECURITY FIX: REDIS_PASSWORD must be set, no default
     command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD required}
     healthcheck:

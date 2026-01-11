@@ -923,11 +923,53 @@ class MarketplaceService:
 
 # Global instance
 _marketplace_service: MarketplaceService | None = None
+_marketplace_initialized: bool = False
 
 
-async def get_marketplace_service() -> MarketplaceService:
-    """Get the global marketplace service instance."""
-    global _marketplace_service
+async def get_marketplace_service(
+    neo4j_client=None,
+    capsule_repo=None,
+) -> MarketplaceService:
+    """
+    Get the global marketplace service instance.
+
+    On first call, initializes with Neo4j client and loads data from database.
+    Subsequent calls return the cached instance.
+
+    Args:
+        neo4j_client: Optional Neo4j client (used on first initialization)
+        capsule_repo: Optional capsule repository (used on first initialization)
+    """
+    global _marketplace_service, _marketplace_initialized
+
     if _marketplace_service is None:
-        _marketplace_service = MarketplaceService()
+        # Try to get Neo4j client from ForgeApp if not provided
+        if neo4j_client is None:
+            try:
+                from forge.api.app import forge_app
+                neo4j_client = forge_app.db_client
+            except (ImportError, AttributeError):
+                logger.warning("Could not get Neo4j client from ForgeApp")
+
+        _marketplace_service = MarketplaceService(
+            capsule_repository=capsule_repo,
+            neo4j_client=neo4j_client,
+        )
+
+    # Load from database on first successful initialization with Neo4j
+    if not _marketplace_initialized and _marketplace_service.neo4j:
+        try:
+            loaded = await _marketplace_service.load_from_database()
+            _marketplace_initialized = True
+            logger.info(f"Marketplace service initialized with {loaded} listings from database")
+        except Exception as e:
+            logger.warning(f"Failed to load marketplace data on startup: {e}")
+
     return _marketplace_service
+
+
+async def close_marketplace_service() -> None:
+    """Reset the marketplace service (for testing or shutdown)."""
+    global _marketplace_service, _marketplace_initialized
+    _marketplace_service = None
+    _marketplace_initialized = False

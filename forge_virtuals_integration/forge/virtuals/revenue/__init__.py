@@ -38,8 +38,15 @@ from .service import (
     get_revenue_service,
 )
 
+from .repository import (
+    RevenueRepository,
+    get_revenue_repository,
+)
+
 __all__ = [
     "RevenueService",
     "RevenueServiceError",
     "get_revenue_service",
+    "RevenueRepository",
+    "get_revenue_repository",
 ]

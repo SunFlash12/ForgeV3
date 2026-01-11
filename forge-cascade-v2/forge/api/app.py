@@ -97,7 +97,14 @@ class ForgeApp:
 
         # Kernel - critical for core functionality
         try:
-            self.event_system = EventSystem()
+            # PERSISTENCE FIX: Initialize CascadeRepository and inject into EventSystem
+            # This enables cascade chains to survive server restarts
+            from forge.repositories.cascade_repository import CascadeRepository
+            cascade_repo = CascadeRepository(self.db_client)
+
+            self.event_system = EventSystem(cascade_repository=cascade_repo)
+            # Start event system worker and load active cascade chains from database
+            await self.event_system.start()
             self.overlay_manager = OverlayManager(self.event_system)
             await self.overlay_manager.start()
 
@@ -289,6 +296,14 @@ class ForgeApp:
 
         if self.overlay_manager:
             await self.overlay_manager.stop()
+
+        # Stop event system (drains queue, stops worker)
+        if self.event_system:
+            try:
+                await self.event_system.stop()
+                logger.info("event_system_shutdown")
+            except Exception as e:
+                logger.warning("event_system_shutdown_failed", error=str(e))
 
         if self.db_client:
             await self.db_client.close()
