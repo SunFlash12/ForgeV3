@@ -113,73 +113,36 @@ class KeyStore(ABC):
 
 class InMemoryKeyStore(KeyStore):
     """
-    In-memory key store for development/testing.
+    In-memory key store for development/testing ONLY.
 
-    WARNING: Not suitable for production. Use HSM-backed store.
-
-    TODO: CRITICAL - Implement persistent key storage for production
-    This in-memory store will lose ALL encryption keys on restart, making
-    previously encrypted data permanently unrecoverable.
-
-    Recommended implementation:
-    1. HSM Integration (Preferred for compliance):
-       - AWS CloudHSM: Use AWS CloudHSM client library
-       - Azure Dedicated HSM: Use PKCS#11 interface
-       - Google Cloud HSM: Use Cloud KMS with HSM protection level
-       - On-premise: Thales Luna HSM or similar
-
-    2. Cloud KMS (Alternative):
-       - AWS KMS: aws-encryption-sdk for envelope encryption
-       - Azure Key Vault: azure-keyvault-keys library
-       - GCP KMS: google-cloud-kms library
-       - Use Data Encryption Keys (DEKs) encrypted by Key Encryption Keys (KEKs)
-
-    3. Required for Compliance:
-       - PCI-DSS 3.5-3.6: Encryption keys must be stored securely, separate from data
-       - HIPAA: Encryption keys must be protected from unauthorized disclosure
-       - SOC 2 CC6.1: Access to cryptographic keys must be restricted
-
-    4. Key Backup Requirements:
-       - Maintain encrypted backups of keys in geographically separate location
-       - Implement key escrow for disaster recovery
-       - Document key custodians and access procedures
-
-    5. Implementation Pattern:
-       class HsmKeyStore(KeyStore):
-           def __init__(self, hsm_client):
-               self._hsm = hsm_client
-
-           async def store_key(self, key: EncryptionKey) -> None:
-               # Store key material in HSM, only keep metadata locally
-               hsm_handle = await self._hsm.import_key(key.key_material)
-               # Store handle + metadata in database
-               ...
+    WARNING: Not suitable for production. Use DatabaseKeyStore or HSM-backed store.
+    Keys will be lost on application restart.
     """
 
     def __init__(self):
         self._keys: dict[str, EncryptionKey] = {}
         self._active_keys: dict[str, str] = {}  # purpose -> key_id
-    
+
     async def store_key(self, key: EncryptionKey) -> None:
         self._keys[key.key_id] = key
         if key.is_active:
             self._active_keys[key.purpose] = key.key_id
-    
+
     async def get_key(self, key_id: str) -> EncryptionKey | None:
         return self._keys.get(key_id)
-    
+
     async def get_active_key(self, purpose: str) -> EncryptionKey | None:
         key_id = self._active_keys.get(purpose)
         if key_id:
             return self._keys.get(key_id)
         return None
-    
+
     async def rotate_key(self, purpose: str) -> EncryptionKey:
         # Deactivate old key
         old_key_id = self._active_keys.get(purpose)
         if old_key_id and old_key_id in self._keys:
             self._keys[old_key_id].is_active = False
-        
+
         # Generate new key
         config = get_compliance_config()
         rotation_days = {
@@ -189,14 +152,14 @@ class InMemoryKeyStore(KeyStore):
             KeyRotationPolicy.YEARS_1: 365,
             KeyRotationPolicy.YEARS_2: 730,
         }.get(config.key_rotation_policy, 90)
-        
+
         old_version = 0
         if old_key_id and old_key_id in self._keys:
             old_version = self._keys[old_key_id].version
-        
+
         new_key = EncryptionKey(
             key_id=str(uuid4()),
-            key_material=secrets.token_bytes(32),  # 256-bit key
+            key_material=secrets.token_bytes(32),
             algorithm=config.encryption_at_rest_standard,
             created_at=datetime.utcnow(),
             expires_at=datetime.utcnow() + timedelta(days=rotation_days),
@@ -204,20 +167,253 @@ class InMemoryKeyStore(KeyStore):
             version=old_version + 1,
             is_active=True,
         )
-        
+
         await self.store_key(new_key)
-        
+
         logger.info(
             "key_rotated",
             purpose=purpose,
             new_key_id=new_key.key_id,
             version=new_key.version,
         )
-        
+
         return new_key
-    
+
     async def list_keys(self, purpose: str | None = None) -> list[EncryptionKey]:
         keys = list(self._keys.values())
+        if purpose:
+            keys = [k for k in keys if k.purpose == purpose]
+        return keys
+
+
+class DatabaseKeyStore(KeyStore):
+    """
+    Neo4j-backed key store with encrypted key material persistence.
+
+    This store provides persistence for encryption keys across restarts.
+    Key material is encrypted before storage using a master key from environment.
+
+    IMPORTANT: For full compliance (PCI-DSS 3.5-3.6, HIPAA, SOC 2 CC6.1),
+    consider using HSM or Cloud KMS instead:
+    - AWS CloudHSM / AWS KMS
+    - Azure Dedicated HSM / Azure Key Vault
+    - Google Cloud HSM / GCP KMS
+    - On-premise: Thales Luna HSM
+
+    This implementation provides:
+    - Persistence across restarts
+    - Encrypted key material at rest
+    - Key rotation with version tracking
+    - Separation of key metadata and encrypted material
+    """
+
+    def __init__(self, neo4j_client, master_key: bytes | None = None):
+        """
+        Initialize database key store.
+
+        Args:
+            neo4j_client: Neo4j async client
+            master_key: Master key for encrypting stored key material.
+                       If None, uses ENCRYPTION_MASTER_KEY environment variable.
+        """
+        self._db = neo4j_client
+        self._initialized = False
+
+        # Get master key from parameter or environment
+        if master_key:
+            self._master_key = master_key
+        else:
+            import os
+            master_key_b64 = os.environ.get("ENCRYPTION_MASTER_KEY")
+            if master_key_b64:
+                self._master_key = base64.b64decode(master_key_b64)
+            else:
+                # Generate ephemeral master key if none provided
+                # WARNING: This defeats the purpose of persistence - keys will be unrecoverable after restart
+                logger.warning(
+                    "database_keystore_no_master_key",
+                    message="No ENCRYPTION_MASTER_KEY set - using ephemeral key (keys will be lost on restart)"
+                )
+                self._master_key = secrets.token_bytes(32)
+
+        # In-memory cache for performance
+        self._keys_cache: dict[str, EncryptionKey] = {}
+        self._active_keys_cache: dict[str, str] = {}
+
+    async def initialize(self) -> None:
+        """Create indexes and load existing keys."""
+        if self._initialized:
+            return
+
+        # Create indexes
+        try:
+            await self._db.execute(
+                "CREATE CONSTRAINT encryption_key_id IF NOT EXISTS FOR (k:EncryptionKey) REQUIRE k.key_id IS UNIQUE"
+            )
+            await self._db.execute(
+                "CREATE INDEX encryption_key_purpose IF NOT EXISTS FOR (k:EncryptionKey) ON (k.purpose)"
+            )
+        except Exception as e:
+            if "already exists" not in str(e).lower():
+                logger.warning("keystore_index_creation_warning", error=str(e))
+
+        # Load existing keys into cache
+        await self._load_keys()
+
+        self._initialized = True
+        logger.info("database_keystore_initialized", keys_loaded=len(self._keys_cache))
+
+    def _encrypt_key_material(self, key_material: bytes) -> bytes:
+        """Encrypt key material with master key for storage."""
+        nonce = secrets.token_bytes(12)
+        aesgcm = AESGCM(self._master_key)
+        ciphertext = aesgcm.encrypt(nonce, key_material, None)
+        # Prepend nonce to ciphertext
+        return nonce + ciphertext
+
+    def _decrypt_key_material(self, encrypted: bytes) -> bytes:
+        """Decrypt key material from storage."""
+        nonce = encrypted[:12]
+        ciphertext = encrypted[12:]
+        aesgcm = AESGCM(self._master_key)
+        return aesgcm.decrypt(nonce, ciphertext, None)
+
+    async def _load_keys(self) -> None:
+        """Load all keys from database into cache."""
+        query = """
+        MATCH (k:EncryptionKey)
+        RETURN k
+        ORDER BY k.version DESC
+        """
+        try:
+            results = await self._db.execute(query, {})
+            for record in results:
+                key_data = dict(record["k"])
+
+                # Decrypt key material
+                encrypted_material = base64.b64decode(key_data["encrypted_key_material"])
+                try:
+                    key_material = self._decrypt_key_material(encrypted_material)
+                except Exception as e:
+                    logger.error("key_decryption_failed", key_id=key_data["key_id"], error=str(e))
+                    continue
+
+                key = EncryptionKey(
+                    key_id=key_data["key_id"],
+                    key_material=key_material,
+                    algorithm=EncryptionStandard(key_data["algorithm"]),
+                    created_at=datetime.fromisoformat(key_data["created_at"]) if isinstance(key_data["created_at"], str) else key_data["created_at"],
+                    expires_at=datetime.fromisoformat(key_data["expires_at"]) if key_data.get("expires_at") and isinstance(key_data["expires_at"], str) else key_data.get("expires_at"),
+                    purpose=key_data["purpose"],
+                    version=key_data["version"],
+                    is_active=key_data["is_active"],
+                )
+
+                self._keys_cache[key.key_id] = key
+                if key.is_active:
+                    self._active_keys_cache[key.purpose] = key.key_id
+
+        except Exception as e:
+            logger.error("keystore_load_failed", error=str(e))
+
+    async def store_key(self, key: EncryptionKey) -> None:
+        """Store an encryption key in database."""
+        # Encrypt key material
+        encrypted_material = self._encrypt_key_material(key.key_material)
+
+        query = """
+        MERGE (k:EncryptionKey {key_id: $key_id})
+        SET k.encrypted_key_material = $encrypted_key_material,
+            k.algorithm = $algorithm,
+            k.created_at = $created_at,
+            k.expires_at = $expires_at,
+            k.purpose = $purpose,
+            k.version = $version,
+            k.is_active = $is_active
+        """
+
+        await self._db.execute(query, {
+            "key_id": key.key_id,
+            "encrypted_key_material": base64.b64encode(encrypted_material).decode(),
+            "algorithm": key.algorithm.value,
+            "created_at": key.created_at.isoformat(),
+            "expires_at": key.expires_at.isoformat() if key.expires_at else None,
+            "purpose": key.purpose,
+            "version": key.version,
+            "is_active": key.is_active,
+        })
+
+        # Update cache
+        self._keys_cache[key.key_id] = key
+        if key.is_active:
+            self._active_keys_cache[key.purpose] = key.key_id
+
+        logger.info("encryption_key_stored", key_id=key.key_id, purpose=key.purpose)
+
+    async def get_key(self, key_id: str) -> EncryptionKey | None:
+        """Get key from cache (loaded from database on init)."""
+        return self._keys_cache.get(key_id)
+
+    async def get_active_key(self, purpose: str) -> EncryptionKey | None:
+        """Get active key for purpose from cache."""
+        key_id = self._active_keys_cache.get(purpose)
+        if key_id:
+            return self._keys_cache.get(key_id)
+        return None
+
+    async def rotate_key(self, purpose: str) -> EncryptionKey:
+        """Create new key and deactivate old one."""
+        # Deactivate old key
+        old_key_id = self._active_keys_cache.get(purpose)
+        if old_key_id and old_key_id in self._keys_cache:
+            old_key = self._keys_cache[old_key_id]
+            old_key.is_active = False
+
+            # Update database
+            await self._db.execute(
+                "MATCH (k:EncryptionKey {key_id: $key_id}) SET k.is_active = false",
+                {"key_id": old_key_id}
+            )
+
+        # Generate new key
+        config = get_compliance_config()
+        rotation_days = {
+            KeyRotationPolicy.DAYS_30: 30,
+            KeyRotationPolicy.DAYS_90: 90,
+            KeyRotationPolicy.DAYS_180: 180,
+            KeyRotationPolicy.YEARS_1: 365,
+            KeyRotationPolicy.YEARS_2: 730,
+        }.get(config.key_rotation_policy, 90)
+
+        old_version = 0
+        if old_key_id and old_key_id in self._keys_cache:
+            old_version = self._keys_cache[old_key_id].version
+
+        new_key = EncryptionKey(
+            key_id=str(uuid4()),
+            key_material=secrets.token_bytes(32),
+            algorithm=config.encryption_at_rest_standard,
+            created_at=datetime.utcnow(),
+            expires_at=datetime.utcnow() + timedelta(days=rotation_days),
+            purpose=purpose,
+            version=old_version + 1,
+            is_active=True,
+        )
+
+        await self.store_key(new_key)
+
+        logger.info(
+            "key_rotated",
+            purpose=purpose,
+            new_key_id=new_key.key_id,
+            version=new_key.version,
+        )
+
+        return new_key
+
+    async def list_keys(self, purpose: str | None = None) -> list[EncryptionKey]:
+        """List all keys, optionally filtered by purpose."""
+        keys = list(self._keys_cache.values())
         if purpose:
             keys = [k for k in keys if k.purpose == purpose]
         return keys
