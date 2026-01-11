@@ -52,8 +52,8 @@ class ForgeModel(BaseModel):
 class TimestampMixin(BaseModel):
     """Mixin providing created_at and updated_at fields."""
 
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     @field_validator('created_at', 'updated_at', mode='before')
     @classmethod
@@ -183,7 +183,7 @@ class HealthCheck(ForgeModel):
     status: HealthStatus
     service: str
     version: str
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     details: dict[str, Any] = Field(default_factory=dict)
 
 

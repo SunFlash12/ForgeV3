@@ -368,7 +368,7 @@ class VoteDelegation(ForgeModel):
     )
     is_active: bool = Field(default=True, description="Whether delegation is active")
     expires_at: datetime | None = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -391,7 +391,7 @@ class ConstitutionalAnalysis(ForgeModel):
     """Constitutional AI ethical review of a proposal."""
 
     proposal_id: str
-    analyzed_at: datetime = Field(default_factory=datetime.utcnow)
+    analyzed_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     # Scores (0-100)
     ethical_score: int = Field(ge=0, le=100)
@@ -489,7 +489,7 @@ class GhostCouncilOpinion(ForgeModel):
     """Collective opinion from the Ghost Council with multi-perspective analysis."""
 
     proposal_id: str
-    deliberated_at: datetime = Field(default_factory=datetime.utcnow)
+    deliberated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     # Member votes with full perspective analysis
     member_votes: list[GhostCouncilVote] = Field(default_factory=list)

@@ -19,7 +19,7 @@ from __future__ import annotations
 import base64
 import os
 import secrets
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 import structlog
@@ -283,7 +283,7 @@ class KeyManagementService:
             "strategy": KeyStorageStrategy.SERVER_CUSTODY,
             "public_key_b64": base64.b64encode(public_key).decode("utf-8"),
             "encrypted_private_key": encrypted,
-            "created_at": datetime.utcnow(),
+            "created_at": datetime.now(UTC),
         }
 
     # ═══════════════════════════════════════════════════════════════════════════
@@ -322,7 +322,7 @@ class KeyManagementService:
         return {
             "strategy": KeyStorageStrategy.CLIENT_ONLY,
             "public_key_b64": public_key_b64,
-            "created_at": datetime.utcnow(),
+            "created_at": datetime.now(UTC),
         }
 
     # ═══════════════════════════════════════════════════════════════════════════
@@ -392,7 +392,7 @@ class KeyManagementService:
             "strategy": KeyStorageStrategy.PASSWORD_DERIVED,
             "public_key_b64": base64.b64encode(public_key).decode("utf-8"),
             "salt_b64": base64.b64encode(salt).decode("utf-8"),
-            "created_at": datetime.utcnow(),
+            "created_at": datetime.now(UTC),
         }
 
     @classmethod
@@ -442,7 +442,7 @@ class KeyManagementService:
         if strategy == KeyStorageStrategy.NONE:
             return {
                 "strategy": KeyStorageStrategy.NONE,
-                "created_at": datetime.utcnow(),
+                "created_at": datetime.now(UTC),
             }
 
         if strategy == KeyStorageStrategy.SERVER_CUSTODY:

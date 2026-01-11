@@ -5,7 +5,7 @@ Overlays are intelligent modules providing specialized functionality.
 Designed for WebAssembly isolation with capability-based security.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
@@ -257,7 +257,7 @@ class OverlayExecution(ForgeModel):
     execution_time_ms: float
     fuel_used: int = 0
     memory_used_bytes: int = 0
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     correlation_id: str | None = None
 
 
@@ -269,7 +269,7 @@ class OverlayHealthCheck(ForgeModel):
     healthy: bool
     message: str | None = None
     details: dict[str, Any] = Field(default_factory=dict)
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class OverlayEvent(ForgeModel):
@@ -278,7 +278,7 @@ class OverlayEvent(ForgeModel):
     source_overlay: str
     event_type: str
     payload: dict[str, Any]
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     correlation_id: str | None = None
     target_overlays: list[str] | None = Field(
         default=None,

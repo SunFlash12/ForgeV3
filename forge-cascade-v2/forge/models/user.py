@@ -5,7 +5,7 @@ User entities with authentication, trust scoring (Trust Flame),
 and role-based access control.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
@@ -323,7 +323,7 @@ class TrustFlameAdjustment(ForgeModel):
     new_value: int
     reason: str
     adjusted_by: str | None = None  # User or system ID
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class TrustFlameReason(str, Enum):

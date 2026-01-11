@@ -527,7 +527,7 @@ class GovernanceOverlay(BaseOverlay):
             self._active_proposals[proposal_id] = []
 
         # Calculate voting end time
-        voting_ends_at = datetime.utcnow() + timedelta(
+        voting_ends_at = datetime.now(UTC) + timedelta(
             hours=self._config.voting_period_hours
         )
 
@@ -585,7 +585,7 @@ class GovernanceOverlay(BaseOverlay):
             vote_type=vote_type,
             trust_level=trust_level,
             weight=weight,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
             comment=comment
         )
 
@@ -924,13 +924,13 @@ class GovernanceOverlay(BaseOverlay):
             try:
                 created = datetime.fromisoformat(proposal_created_at.replace('Z', '+00:00'))
                 result.voting_ends_at = created + timedelta(hours=self._config.voting_period_hours)
-                remaining = result.voting_ends_at - datetime.utcnow()
+                remaining = result.voting_ends_at - datetime.now(UTC)
                 result.time_remaining_hours = max(0, remaining.total_seconds() / 3600)
             except (ValueError, TypeError):
                 pass
 
         # Determine final status
-        if result.voting_ends_at and datetime.utcnow() > result.voting_ends_at:
+        if result.voting_ends_at and datetime.now(UTC) > result.voting_ends_at:
             if result.quorum_met:
                 if result.approval_threshold_met:
                     result.status = VotingStatus.CONSENSUS_REACHED
@@ -987,7 +987,7 @@ class GovernanceOverlay(BaseOverlay):
             decision=decision_str,
             consensus=consensus,
             policy_results=policy_results,
-            effective_at=datetime.utcnow() if decision_str == "approved" else None,
+            effective_at=datetime.now(UTC) if decision_str == "approved" else None,
             rationale=rationale
         )
         return decision, consensus_reached

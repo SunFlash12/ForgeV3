@@ -6,7 +6,7 @@ the Virtuals Protocol integration layer. These models serve as the
 foundation for agent management, tokenization, and commerce operations.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any, Optional
 from uuid import UUID, uuid4
@@ -91,11 +91,11 @@ class VirtualsBaseModel(BaseModel):
         description="Unique identifier for the entity"
     )
     created_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=lambda: datetime.now(UTC),
         description="Timestamp of entity creation"
     )
     updated_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=lambda: datetime.now(UTC),
         description="Timestamp of last update"
     )
     metadata: dict[str, Any] = Field(
@@ -224,7 +224,7 @@ class RevenueRecord(BaseModel):
     Tracks all revenue events for distribution and analytics.
     """
     id: str = Field(default_factory=lambda: str(uuid4()))
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     revenue_type: RevenueType
     amount_virtual: float = Field(description="Amount in VIRTUAL tokens")
     amount_usd: Optional[float] = Field(
@@ -269,7 +269,7 @@ class BridgeRequest(BaseModel):
     )
     source_tx_hash: Optional[str] = Field(default=None)
     destination_tx_hash: Optional[str] = Field(default=None)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     completed_at: Optional[datetime] = Field(default=None)
     estimated_completion_minutes: int = Field(
         default=30,

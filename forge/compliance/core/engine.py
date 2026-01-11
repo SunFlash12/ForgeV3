@@ -15,7 +15,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any, Callable
 from uuid import uuid4
 
@@ -403,7 +403,7 @@ class ComplianceEngine:
         
         dsar.status = "processing"
         dsar.assigned_to = actor_id
-        dsar.updated_at = datetime.utcnow()
+        dsar.updated_at = datetime.now(UTC)
         dsar.add_processing_note("Started processing", actor_id)
         
         await self.log_event(
@@ -431,8 +431,8 @@ class ComplianceEngine:
             raise ValueError(f"DSAR not found: {dsar_id}")
         
         dsar.status = "completed"
-        dsar.response_sent_at = datetime.utcnow()
-        dsar.updated_at = datetime.utcnow()
+        dsar.response_sent_at = datetime.now(UTC)
+        dsar.updated_at = datetime.now(UTC)
         
         if dsar.request_type == DSARType.ACCESS or dsar.request_type == DSARType.PORTABILITY:
             dsar.data_exported = True
@@ -458,7 +458,7 @@ class ComplianceEngine:
             "dsar_completed",
             dsar_id=dsar_id,
             request_type=dsar.request_type.value,
-            days_to_complete=(datetime.utcnow() - dsar.received_at).days,
+            days_to_complete=(datetime.now(UTC) - dsar.received_at).days,
         )
         
         return dsar
@@ -502,7 +502,7 @@ class ComplianceEngine:
             consent_type=consent_type,
             purpose=purpose,
             granted=granted,
-            granted_at=datetime.utcnow() if granted else None,
+            granted_at=datetime.now(UTC) if granted else None,
             collected_via=collected_via,
             ip_address=ip_address,
             user_agent=user_agent,
@@ -762,9 +762,9 @@ class ComplianceEngine:
             raise ValueError(f"Breach not found: {breach_id}")
         
         breach.contained = True
-        breach.contained_at = datetime.utcnow()
+        breach.contained_at = datetime.now(UTC)
         breach.containment_actions = containment_actions
-        breach.updated_at = datetime.utcnow()
+        breach.updated_at = datetime.now(UTC)
         
         await self.log_event(
             category=AuditEventCategory.SECURITY,
@@ -794,11 +794,11 @@ class ComplianceEngine:
         for notif in breach.authority_notifications:
             if notif.jurisdiction == jurisdiction:
                 notif.notified = True
-                notif.notified_at = datetime.utcnow()
+                notif.notified_at = datetime.now(UTC)
                 notif.reference_number = reference_number
                 break
         
-        breach.updated_at = datetime.utcnow()
+        breach.updated_at = datetime.now(UTC)
         
         await self.log_event(
             category=AuditEventCategory.COMPLIANCE,
@@ -1069,9 +1069,9 @@ class ComplianceEngine:
         Generate a compliance assessment report.
         """
         if not start_date:
-            start_date = datetime.utcnow() - timedelta(days=30)
+            start_date = datetime.now(UTC) - timedelta(days=30)
         if not end_date:
-            end_date = datetime.utcnow()
+            end_date = datetime.now(UTC)
         if not frameworks:
             frameworks = self.config.frameworks_list
         if not jurisdictions:

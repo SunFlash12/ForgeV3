@@ -7,7 +7,7 @@ consent records, breach notifications, and compliance reporting.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, ClassVar
 from uuid import uuid4
@@ -48,8 +48,8 @@ class ComplianceModel(BaseModel):
 
 class TimestampMixin(BaseModel):
     """Mixin for timestamp fields."""
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -237,7 +237,7 @@ class AuditEvent(ComplianceModel, TimestampMixin):
                 AuditEventCategory.SYSTEM: 1,
             }
             years = retention_years.get(self.category, 3)
-            self.retention_until = datetime.utcnow() + timedelta(days=years * 365)
+            self.retention_until = datetime.now(UTC) + timedelta(days=years * 365)
         return self
 
 
@@ -251,7 +251,7 @@ class AuditChain(ComplianceModel):
     start_hash: str
     end_hash: str
     event_count: int
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     verified_at: datetime | None = None
     is_valid: bool | None = None
 
@@ -304,7 +304,7 @@ class DataSubjectRequest(ComplianceModel, TimestampMixin):
     assigned_to: str | None = None
     
     # Deadlines
-    received_at: datetime = Field(default_factory=datetime.utcnow)
+    received_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     deadline: datetime | None = None
     extended: bool = False
     extension_reason: str | None = None
@@ -343,24 +343,24 @@ class DataSubjectRequest(ComplianceModel, TimestampMixin):
         """Check if request is past deadline."""
         if self.status == "completed":
             return False
-        return self.deadline and datetime.utcnow() > self.deadline
+        return self.deadline and datetime.now(UTC) > self.deadline
     
     @property
     def days_until_deadline(self) -> int:
         """Get days remaining until deadline."""
         if not self.deadline:
             return 0
-        delta = self.deadline - datetime.utcnow()
+        delta = self.deadline - datetime.now(UTC)
         return max(0, delta.days)
     
     def add_processing_note(self, note: str, actor: str) -> None:
         """Add a processing log entry."""
         self.processing_log.append({
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "actor": actor,
             "note": note,
         })
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(UTC)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -435,15 +435,15 @@ class ConsentRecord(ComplianceModel, TimestampMixin):
             return False
         if self.withdrawn_at:
             return False
-        if self.expires_at and datetime.utcnow() > self.expires_at:
+        if self.expires_at and datetime.now(UTC) > self.expires_at:
             return False
         return True
     
     def withdraw(self) -> None:
         """Withdraw consent."""
         self.granted = False
-        self.withdrawn_at = datetime.utcnow()
-        self.updated_at = datetime.utcnow()
+        self.withdrawn_at = datetime.now(UTC)
+        self.updated_at = datetime.now(UTC)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -485,7 +485,7 @@ class BreachNotification(ComplianceModel, TimestampMixin):
     id: str = Field(default_factory=generate_id)
     
     # Discovery
-    discovered_at: datetime = Field(default_factory=datetime.utcnow)
+    discovered_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     discovered_by: str
     discovery_method: str
     
@@ -560,7 +560,7 @@ class BreachNotification(ComplianceModel, TimestampMixin):
         if self.authority_notifications:
             for notif in self.authority_notifications:
                 if notif.required and not notif.notified and notif.deadline:
-                    if datetime.utcnow() > notif.deadline:
+                    if datetime.now(UTC) > notif.deadline:
                         return True
         return False
 
@@ -625,7 +625,7 @@ class AIDecisionLog(ComplianceModel):
     Per GDPR Article 22, EU AI Act transparency requirements.
     """
     id: str = Field(default_factory=generate_id)
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     
     # System
     ai_system_id: str
@@ -674,8 +674,8 @@ class ComplianceReport(ComplianceModel, TimestampMixin):
     
     # Report metadata
     report_type: str = Field(default="full", description="full, framework, jurisdiction, gap")
-    report_period_start: datetime = Field(default_factory=datetime.utcnow)
-    report_period_end: datetime = Field(default_factory=datetime.utcnow)
+    report_period_start: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    report_period_end: datetime = Field(default_factory=lambda: datetime.now(UTC))
     generated_by: str = Field(default="system")
     
     # Scope
