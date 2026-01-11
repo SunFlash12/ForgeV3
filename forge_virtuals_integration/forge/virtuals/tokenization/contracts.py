@@ -4,8 +4,10 @@ Virtuals Protocol Smart Contract ABIs and Addresses
 This module contains the contract ABIs and addresses needed for blockchain
 interactions with Virtuals Protocol.
 
-IMPORTANT: The ABIs and addresses must be obtained from the official
-Virtuals Protocol documentation or deployment records.
+Contract Sources:
+- Whitepaper: https://whitepaper.virtuals.io/info-hub/important-links-and-resources/contract-address
+- GitHub: https://github.com/Virtual-Protocol/protocol-contracts
+- BaseScan: https://basescan.org (Base L2 by Coinbase)
 
 Contract Documentation:
 - AgentFactory: Creates new agent tokens with bonding curves
@@ -13,10 +15,8 @@ Contract Documentation:
 - VIRTUAL Token: The native VIRTUAL token (ERC-20)
 - MultiSend: Batch transfer utility for gas-efficient distributions
 
-To complete integration:
-1. Obtain ABIs from https://docs.virtuals.io/developers/contracts
-2. Verify contract addresses on Base/Ethereum block explorers
-3. Run test transactions on Base Sepolia before mainnet
+PENDING: AgentFactoryV3 address not publicly listed in whitepaper.
+Contact Virtuals Protocol team or find via agent token creation events.
 """
 
 from typing import Any
@@ -33,15 +33,27 @@ class ContractAddresses:
     Check: https://basescan.org and https://etherscan.io
     """
 
-    # Base Mainnet
+    # Base Mainnet (verified from whitepaper.virtuals.io)
     BASE_MAINNET = {
+        # Core tokens
         "virtual_token": "0x0b3e328455c4059EEb9e3f84b5543F74E24e7E1b",
-        "agent_factory": None,  # TODO: Get from Virtuals Protocol docs
-        "agent_nft": None,  # TODO: Get from Virtuals Protocol docs
-        "acp_registry": None,  # TODO: Get from Virtuals Protocol docs
-        "vault": "0xdAd686299FB562f89e55DA05F1D96FaBEb2A2E32",
+        "ve_virtual": "0x14559863b6E695A8aa4B7e68541d240ac1BBeB2f",  # Voting token
+
+        # Factory contracts - PENDING: Contact Virtuals Protocol
+        "agent_factory": None,  # AgentFactoryV3 - not publicly listed
+        "agent_nft": None,  # AgentNFT contract
+        "acp_registry": None,  # ACP Registry
+
+        # Infrastructure from whitepaper
+        "vault": "0xdAd686299FB562f89e55DA05F1D96FaBEb2A2E32",  # Creator token locking
+        "sell_wall": "0xe2890629EF31b32132003C02B29a50A025dEeE8a",  # Sell wall wallet
+        "sell_executor": "0xF8DD39c71A278FE9F4377D009D7627EF140f809e",  # Sell order execution
+        "tax_swapper": "0x8e0253dA409Faf5918FE2A15979fd878F4495D0E",
+        "tax_manager": "0x7e26173192d72fd6d75a759f888d61c2cdbb64b1",
+
+        # Third-party
         "bridge": "0x3154Cf16ccdb4C6d922629664174b904d80F2C35",
-        "multisend": "0x40A2aCCbd92BCA938b02010E17A5b8929b49130D",  # Gnosis Safe MultiSend
+        "multisend": "0x40A2aCCbd92BCA938b02010E17A5b8929b49130D",  # Gnosis Safe
     }
 
     # Base Sepolia (Testnet)
@@ -359,9 +371,21 @@ def get_missing_contracts() -> list[str]:
     """
     missing = []
 
-    # Check Base mainnet addresses
-    for contract, address in ContractAddresses.BASE_MAINNET.items():
-        if address is None:
+    # Critical contracts needed for agent tokenization
+    critical = ["agent_factory", "agent_nft", "acp_registry"]
+
+    for contract in critical:
+        if ContractAddresses.BASE_MAINNET.get(contract) is None:
             missing.append(f"BASE_MAINNET.{contract}")
 
     return missing
+
+
+def get_configured_contracts() -> dict[str, str]:
+    """
+    Get all contracts that have addresses configured.
+
+    Returns:
+        Dict of contract name -> address for configured contracts
+    """
+    return {k: v for k, v in ContractAddresses.BASE_MAINNET.items() if v is not None}
