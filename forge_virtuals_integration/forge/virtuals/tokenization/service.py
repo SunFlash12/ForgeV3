@@ -19,13 +19,17 @@ Key Concepts:
 - Token-Bound Account: ERC-6551 wallet owned by the token
 - Contribution Vault: On-chain record of all improvements
 
-BLOCKCHAIN INTEGRATION: The helper methods (_deploy_token_contract, etc.)
-are implemented with Web3.py patterns but run in simulation mode until:
-1. Contract ABIs are provided from Virtuals Protocol documentation
-2. Wallet/signing integration is implemented (secure key management)
-3. Contract addresses are configured for each chain
+BLOCKCHAIN INTEGRATION STATUS:
+- Contract ABIs: Placeholder ABIs in contracts.py (need official Virtuals ABIs)
+- Wallet signing: Uses SecretsManager for secure key retrieval
+- Transaction building: Implemented but requires real ABIs to execute
+- Simulation mode: Active until is_abi_complete() returns True
 
-Toggle config.enable_tokenization=True to enable real blockchain operations.
+To enable real blockchain operations:
+1. Obtain contract ABIs from https://docs.virtuals.io/developers/contracts
+2. Update contracts.py with real ABIs
+3. Configure secrets manager with operator wallet private key
+4. Set VIRTUALS_ENVIRONMENT=production
 """
 
 import asyncio
@@ -33,10 +37,19 @@ import hashlib
 import logging
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any
 from uuid import uuid4
 
-from ..config import get_virtuals_config, ChainNetwork
+from ..config import ChainNetwork, get_virtuals_config
+from .contracts import (
+    AGENT_FACTORY_ABI,
+    AGENT_TOKEN_ABI,
+    BONDING_CURVE_ABI,
+    ERC20_ABI,
+    ContractAddresses,
+    get_contract_abi,
+    is_abi_complete,
+)
 from ..models import (
     TokenizationRequest,
     TokenizedEntity,
@@ -687,11 +700,10 @@ class TokenizationService:
         """
         Deploy the token contract on-chain via Virtuals Protocol AgentFactory.
 
-        In production mode (config.enable_tokenization=True), this will:
-        1. Build a transaction to AgentFactory.createAgent()
-        2. Sign with the configured system wallet
-        3. Submit and wait for confirmation
-        4. Parse events to extract token address
+        Production mode requires:
+        1. Complete contract ABIs in contracts.py
+        2. Valid AgentFactory address for the chain
+        3. Configured operator wallet with sufficient VIRTUAL
 
         Contract interaction pattern:
         ```solidity
@@ -703,48 +715,128 @@ class TokenizationService:
         ```
         """
         client = self._chain_manager.primary_client
+        chain = self.config.primary_chain.value
 
-        # Check if we have real blockchain integration
-        if hasattr(client, 'web3') and hasattr(self.config, 'agent_factory_address'):
+        # Get factory address for this chain
+        factory_address = ContractAddresses.get_address(chain, "agent_factory")
+
+        # Check if we can make real blockchain calls
+        can_deploy = (
+            hasattr(client, 'web3') and
+            factory_address is not None and
+            is_abi_complete("agent_factory") and
+            self.config.operator_private_key is not None
+        )
+
+        if can_deploy:
             try:
                 web3 = client.web3
-                factory_address = self.config.agent_factory_address
 
-                # Build transaction (requires ABI from Virtuals Protocol)
-                # contract = web3.eth.contract(address=factory_address, abi=AGENT_FACTORY_ABI)
-                # tx = contract.functions.createAgent(
-                #     entity.token_info.name,
-                #     entity.token_info.symbol,
-                #     web3.to_wei(initial_stake, 'ether')
-                # ).build_transaction({
-                #     'from': owner_wallet,
-                #     'nonce': await web3.eth.get_transaction_count(owner_wallet),
-                #     'gas': 500000,
-                #     'gasPrice': await web3.eth.gas_price
-                # })
+                # Build the contract instance
+                contract = web3.eth.contract(
+                    address=web3.to_checksum_address(factory_address),
+                    abi=AGENT_FACTORY_ABI
+                )
 
-                # For now, log that real deployment would occur
+                # Get operator account for signing
+                from eth_account import Account
+                operator = Account.from_key(self.config.operator_private_key)
+
+                # Build transaction
+                stake_wei = web3.to_wei(initial_stake, 'ether')
+                nonce = await asyncio.to_thread(
+                    web3.eth.get_transaction_count, operator.address
+                )
+                gas_price = await asyncio.to_thread(web3.eth.gas_price)
+
+                tx = contract.functions.createAgent(
+                    entity.token_info.name,
+                    entity.token_info.symbol,
+                    stake_wei
+                ).build_transaction({
+                    'from': operator.address,
+                    'nonce': nonce,
+                    'gas': 500000,
+                    'gasPrice': gas_price,
+                    'chainId': await asyncio.to_thread(lambda: web3.eth.chain_id),
+                })
+
+                # Sign and send transaction
+                signed_tx = web3.eth.account.sign_transaction(tx, self.config.operator_private_key)
+                tx_hash = await asyncio.to_thread(
+                    web3.eth.send_raw_transaction, signed_tx.raw_transaction
+                )
+
                 logger.info(
-                    f"[BLOCKCHAIN] Would deploy token via AgentFactory at {factory_address} "
-                    f"for {entity.token_info.name} with {initial_stake} VIRTUAL stake"
+                    f"[BLOCKCHAIN] Token deployment transaction sent: {tx_hash.hex()} "
+                    f"for {entity.token_info.name}"
+                )
+
+                # Wait for receipt (with timeout)
+                receipt = await asyncio.to_thread(
+                    web3.eth.wait_for_transaction_receipt, tx_hash, timeout=120
+                )
+
+                # Parse AgentCreated event to get token address
+                token_address = None
+                for log in receipt.logs:
+                    try:
+                        event = contract.events.AgentCreated().process_log(log)
+                        token_address = event.args.tokenAddress
+                        break
+                    except Exception:
+                        continue
+
+                if token_address:
+                    entity.token_info.token_address = token_address
+                    logger.info(f"[BLOCKCHAIN] Token deployed at: {token_address}")
+
+                return TransactionRecord(
+                    tx_hash=tx_hash.hex(),
+                    chain=chain,
+                    block_number=receipt.blockNumber,
+                    timestamp=datetime.now(UTC),
+                    from_address=operator.address,
+                    to_address=factory_address,
+                    value=initial_stake,
+                    gas_used=receipt.gasUsed,
+                    status="confirmed" if receipt.status == 1 else "failed",
+                    transaction_type="token_deploy",
+                    related_entity_id=entity.id,
                 )
 
             except Exception as e:
-                logger.error(f"Blockchain deployment preparation failed: {e}")
+                logger.error(f"Blockchain deployment failed: {e}")
+                # Fall through to simulation mode
 
         # Simulation mode - return deterministic tx hash
+        missing_reqs = []
+        if not hasattr(client, 'web3'):
+            missing_reqs.append("web3_client")
+        if factory_address is None:
+            missing_reqs.append("factory_address")
+        if not is_abi_complete("agent_factory"):
+            missing_reqs.append("contract_abi")
+        if self.config.operator_private_key is None:
+            missing_reqs.append("operator_key")
+
+        logger.info(
+            f"[SIMULATION] Token deployment simulated for {entity.token_info.name}. "
+            f"Missing for real deployment: {missing_reqs}"
+        )
+
         tx_hash = self._generate_tx_hash("deploy", entity.id, owner_wallet, initial_stake)
 
         return TransactionRecord(
             tx_hash=tx_hash,
-            chain=self.config.primary_chain.value,
-            block_number=0,  # Would be populated from receipt
+            chain=chain,
+            block_number=0,
             timestamp=datetime.now(UTC),
             from_address=owner_wallet,
-            to_address=getattr(self.config, 'agent_factory_address', 'agent_factory'),
+            to_address=factory_address or "agent_factory_pending",
             value=initial_stake,
-            gas_used=0,  # Would be populated from receipt
-            status="simulated",  # Mark as simulated until real deployment
+            gas_used=0,
+            status="simulated",
             transaction_type="token_deploy",
             related_entity_id=entity.id,
         )
@@ -758,10 +850,11 @@ class TokenizationService:
         """
         Execute bonding curve contribution on-chain.
 
-        In production mode, this will:
-        1. Approve VIRTUAL token spend to bonding curve contract
-        2. Call contribute() on the token's bonding curve
-        3. Parse events to get tokens received
+        Production mode requires:
+        1. Complete contract ABIs for bonding curve
+        2. Token contract address (from deployment)
+        3. Contributor wallet with VIRTUAL tokens
+        4. Approved VIRTUAL spend to bonding curve
 
         Contract interaction pattern:
         ```solidity
@@ -769,40 +862,148 @@ class TokenizationService:
         ```
         """
         client = self._chain_manager.primary_client
+        chain = self.config.primary_chain.value
+        token_address = entity.token_info.token_address
 
-        if hasattr(client, 'web3') and entity.token_info.token_address:
+        # Check if we can make real blockchain calls
+        can_contribute = (
+            hasattr(client, 'web3') and
+            token_address is not None and
+            is_abi_complete("bonding_curve") and
+            self.config.operator_private_key is not None
+        )
+
+        if can_contribute:
             try:
                 web3 = client.web3
-                token_address = entity.token_info.token_address
+                virtual_token_address = ContractAddresses.get_address(chain, "virtual_token")
 
-                # Build contribution transaction (requires ABI)
-                # contract = web3.eth.contract(address=token_address, abi=BONDING_CURVE_ABI)
-                # tx = contract.functions.contribute(
-                #     web3.to_wei(amount_virtual, 'ether')
-                # ).build_transaction({
-                #     'from': contributor_wallet,
-                #     'value': web3.to_wei(amount_virtual, 'ether'),  # If native token
-                #     ...
-                # })
+                # Get operator account
+                from eth_account import Account
+                operator = Account.from_key(self.config.operator_private_key)
+
+                amount_wei = web3.to_wei(amount_virtual, 'ether')
+
+                # Step 1: Approve VIRTUAL spend (if needed)
+                if virtual_token_address:
+                    virtual_contract = web3.eth.contract(
+                        address=web3.to_checksum_address(virtual_token_address),
+                        abi=ERC20_ABI
+                    )
+
+                    # Check current allowance
+                    allowance = await asyncio.to_thread(
+                        virtual_contract.functions.allowance(
+                            operator.address,
+                            web3.to_checksum_address(token_address)
+                        ).call
+                    )
+
+                    if allowance < amount_wei:
+                        # Approve spending
+                        approve_tx = virtual_contract.functions.approve(
+                            web3.to_checksum_address(token_address),
+                            amount_wei
+                        ).build_transaction({
+                            'from': operator.address,
+                            'nonce': await asyncio.to_thread(
+                                web3.eth.get_transaction_count, operator.address
+                            ),
+                            'gas': 100000,
+                            'gasPrice': await asyncio.to_thread(web3.eth.gas_price),
+                            'chainId': await asyncio.to_thread(lambda: web3.eth.chain_id),
+                        })
+
+                        signed_approve = web3.eth.account.sign_transaction(
+                            approve_tx, self.config.operator_private_key
+                        )
+                        approve_hash = await asyncio.to_thread(
+                            web3.eth.send_raw_transaction, signed_approve.raw_transaction
+                        )
+                        await asyncio.to_thread(
+                            web3.eth.wait_for_transaction_receipt, approve_hash, timeout=60
+                        )
+                        logger.info(f"[BLOCKCHAIN] VIRTUAL approval confirmed: {approve_hash.hex()}")
+
+                # Step 2: Execute contribution
+                bonding_contract = web3.eth.contract(
+                    address=web3.to_checksum_address(token_address),
+                    abi=BONDING_CURVE_ABI
+                )
+
+                nonce = await asyncio.to_thread(
+                    web3.eth.get_transaction_count, operator.address
+                )
+
+                contribute_tx = bonding_contract.functions.contribute(
+                    amount_wei
+                ).build_transaction({
+                    'from': operator.address,
+                    'nonce': nonce,
+                    'gas': 200000,
+                    'gasPrice': await asyncio.to_thread(web3.eth.gas_price),
+                    'chainId': await asyncio.to_thread(lambda: web3.eth.chain_id),
+                })
+
+                signed_tx = web3.eth.account.sign_transaction(
+                    contribute_tx, self.config.operator_private_key
+                )
+                tx_hash = await asyncio.to_thread(
+                    web3.eth.send_raw_transaction, signed_tx.raw_transaction
+                )
 
                 logger.info(
-                    f"[BLOCKCHAIN] Would contribute {amount_virtual} VIRTUAL "
-                    f"to bonding curve at {token_address}"
+                    f"[BLOCKCHAIN] Contribution transaction sent: {tx_hash.hex()} "
+                    f"for {amount_virtual} VIRTUAL to {token_address}"
+                )
+
+                receipt = await asyncio.to_thread(
+                    web3.eth.wait_for_transaction_receipt, tx_hash, timeout=120
+                )
+
+                return TransactionRecord(
+                    tx_hash=tx_hash.hex(),
+                    chain=chain,
+                    block_number=receipt.blockNumber,
+                    timestamp=datetime.now(UTC),
+                    from_address=operator.address,
+                    to_address=token_address,
+                    value=amount_virtual,
+                    gas_used=receipt.gasUsed,
+                    status="confirmed" if receipt.status == 1 else "failed",
+                    transaction_type="bonding_contribution",
+                    related_entity_id=entity.id,
                 )
 
             except Exception as e:
-                logger.error(f"Blockchain contribution preparation failed: {e}")
+                logger.error(f"Blockchain contribution failed: {e}")
+                # Fall through to simulation mode
 
         # Simulation mode
+        missing_reqs = []
+        if not hasattr(client, 'web3'):
+            missing_reqs.append("web3_client")
+        if token_address is None:
+            missing_reqs.append("token_address")
+        if not is_abi_complete("bonding_curve"):
+            missing_reqs.append("contract_abi")
+        if self.config.operator_private_key is None:
+            missing_reqs.append("operator_key")
+
+        logger.info(
+            f"[SIMULATION] Bonding curve contribution simulated for {amount_virtual} VIRTUAL. "
+            f"Missing for real contribution: {missing_reqs}"
+        )
+
         tx_hash = self._generate_tx_hash("contribute", entity.id, contributor_wallet, amount_virtual)
 
         return TransactionRecord(
             tx_hash=tx_hash,
-            chain=self.config.primary_chain.value,
+            chain=chain,
             block_number=0,
             timestamp=datetime.now(UTC),
             from_address=contributor_wallet,
-            to_address=entity.token_info.token_address or "bonding_curve",
+            to_address=token_address or "bonding_curve_pending",
             value=amount_virtual,
             gas_used=0,
             status="simulated",
