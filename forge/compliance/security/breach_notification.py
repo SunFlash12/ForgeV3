@@ -489,7 +489,7 @@ class BreachNotificationService:
             raise ValueError(f"Incident not found: {incident_id}")
         
         # Generate notification content
-        content = self._generate_dpa_notification(incident, jurisdiction)
+        self._generate_dpa_notification(incident, jurisdiction)
         
         notification = NotificationRecord(
             incident_id=incident_id,
@@ -578,7 +578,7 @@ We will provide supplementary information as our investigation progresses.
         notifications = []
         
         for individual in affected_individuals:
-            content = self._generate_individual_notification(
+            self._generate_individual_notification(
                 incident,
                 individual.get("name", ""),
             )

@@ -26,7 +26,6 @@ from uuid import uuid4
 import structlog
 
 from forge.compliance.core.enums import (
-    Jurisdiction,
     DataClassification,
     ComplianceFramework,
 )

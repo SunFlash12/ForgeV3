@@ -9,9 +9,9 @@ from __future__ import annotations
 
 import os
 from functools import lru_cache
-from typing import Literal, Any
+from typing import Any
 
-from pydantic import Field, field_validator, BaseModel
+from pydantic import Field, BaseModel
 
 # Try pydantic-settings first, fall back to pydantic BaseModel
 try:

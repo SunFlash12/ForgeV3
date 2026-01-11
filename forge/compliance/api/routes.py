@@ -32,20 +32,10 @@ from forge.compliance.core.enums import (
     AuditEventCategory,
 )
 from forge.compliance.core.engine import ComplianceEngine, get_compliance_engine
-from forge.compliance.core.models import (
-    DataSubjectRequest,
-    ConsentRecord,
-    BreachNotification,
-    AISystemRegistration,
-    AIDecisionLog,
-    ComplianceReport,
-    AuditEvent,
-)
 from forge.compliance.api.auth import (
     CurrentUserDep,
     ComplianceOfficerDep,
     AdminUserDep,
-    ComplianceUser,
 )
 
 router = APIRouter(prefix="/compliance", tags=["compliance"])

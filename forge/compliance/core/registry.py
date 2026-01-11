@@ -13,7 +13,6 @@ from datetime import UTC, datetime
 
 from forge.compliance.core.enums import (
     ComplianceFramework,
-    DataClassification,
     RiskLevel,
 )
 from forge.compliance.core.models import ControlStatus

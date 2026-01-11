@@ -10,12 +10,10 @@ Additional REST API endpoints for:
 - Accessibility
 """
 
-from datetime import datetime
 from typing import Any
-from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Query, Body
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 # Import services
 from forge.compliance.privacy import get_consent_service, ConsentPurpose
@@ -23,21 +21,13 @@ from forge.compliance.security import (
     get_access_control_service,
     get_authentication_service,
     get_breach_notification_service,
-    get_vendor_management_service,
     Permission,
     ResourceType,
     MFAMethod,
     BreachType,
     NotificationRecipient,
 )
-from forge.compliance.ai_governance import get_ai_governance_service, AIUseCase
-from forge.compliance.industry import (
-    get_hipaa_service,
-    get_pci_service,
-    get_coppa_service,
-    HIPAAAuthorizationPurpose,
-    ParentalConsentMethod,
-)
+from forge.compliance.ai_governance import get_ai_governance_service
 from forge.compliance.reporting import get_compliance_reporting_service, ReportType, ReportFormat
 from forge.compliance.accessibility import (
     get_accessibility_service,
@@ -50,7 +40,6 @@ from forge.compliance.core.enums import (
     ComplianceFramework,
     DataClassification,
     BreachSeverity,
-    AIRiskClassification,
 )
 
 extended_router = APIRouter()
@@ -133,7 +122,7 @@ async def process_gpc_signal(request: GPCSignalRequest):
     """Process Global Privacy Control signal."""
     service = get_consent_service()
     
-    record = await service.process_gpc_signal(
+    await service.process_gpc_signal(
         user_id=request.user_id,
         gpc_enabled=request.gpc_enabled,
     )

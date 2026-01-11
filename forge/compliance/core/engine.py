@@ -16,8 +16,11 @@ import asyncio
 import hashlib
 import json
 from datetime import UTC, datetime, timedelta
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
 from uuid import uuid4
+
+if TYPE_CHECKING:
+    from forge.compliance.repository import ComplianceRepository
 
 import structlog
 
@@ -44,7 +47,6 @@ from forge.compliance.core.models import (
     AISystemRegistration,
     AIDecisionLog,
     RegulatoryNotification,
-    AffectedIndividual,
 )
 from forge.compliance.core.registry import ComplianceRegistry, get_compliance_registry
 

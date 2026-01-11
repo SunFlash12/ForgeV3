@@ -25,9 +25,7 @@ import structlog
 from forge.compliance.core.enums import (
     ComplianceFramework,
     Jurisdiction,
-    RiskLevel,
 )
-from forge.compliance.core.models import ComplianceReport
 
 logger = structlog.get_logger(__name__)
 
