@@ -17,7 +17,6 @@ ACP Phases:
 4. Evaluation - Deliverables verified, funds released
 """
 
-import asyncio
 import hashlib
 import json
 import logging
@@ -40,7 +39,7 @@ from ..models import (
     ACPRegistryEntry,
 )
 from ..chains import get_chain_manager
-from .nonce_store import NonceStore, init_nonce_store, get_nonce_store
+from .nonce_store import NonceStore, init_nonce_store
 
 
 logger = logging.getLogger(__name__)
@@ -156,7 +155,6 @@ class ACPService:
         # Register on-chain for verifiability (if ACP contracts are available)
         if self.config.enable_acp:
             try:
-                client = self._chain_manager.primary_client
                 # This would call the ACP registry contract
                 # tx = await client.execute_contract(
                 #     contract_address=acp_registry_address,
@@ -853,7 +851,6 @@ class ACPService:
         amount_virtual: float,
     ):
         """Lock funds in escrow for a job."""
-        client = self._chain_manager.primary_client
         
         # This would interact with the ACP escrow contract
         # For now, return a mock transaction
@@ -879,7 +876,6 @@ class ACPService:
         amount_virtual: float,
     ):
         """Release escrowed funds to the provider."""
-        client = self._chain_manager.primary_client
         
         # This would interact with the ACP escrow contract
         from ..models import TransactionRecord

@@ -8,7 +8,6 @@ SECURITY: Nonces must persist across restarts to prevent replay attacks
 where attackers resubmit previously valid signed messages.
 """
 
-import asyncio
 import logging
 import time
 from typing import Any

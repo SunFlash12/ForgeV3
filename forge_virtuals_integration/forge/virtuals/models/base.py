@@ -9,7 +9,7 @@ foundation for agent management, tokenization, and commerce operations.
 from datetime import UTC, datetime
 from enum import Enum
 from typing import Any, Optional
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 from pydantic import BaseModel, Field, field_validator
 

@@ -22,7 +22,7 @@ Run with: python -m examples.full_integration
 
 import asyncio
 import os
-from datetime import datetime, timedelta
+from datetime import datetime
 
 # ============================================================================
 # SECTION 1: Configuration and Initialization
@@ -84,8 +84,8 @@ async def initialize_services():
     
     services = await initialize_virtuals()
     
-    print(f"  ✓ Chain manager initialized")
-    print(f"  ✓ GAME client initialized")
+    print("  ✓ Chain manager initialized")
+    print("  ✓ GAME client initialized")
     print(f"  ✓ Primary chain: {services['config'].primary_chain.value}")
     
     return services
@@ -422,12 +422,12 @@ async def tokenize_agent(agent):
     print("    2. Create ERC-6551 token-bound wallet")
     print("    3. Lock initial stake in bonding curve")
     print("    4. Issue FERC20 placeholder tokens to creator")
-    print(f"    5. Progress toward graduation (0% → 100% at 42,000 VIRTUAL)")
+    print("    5. Progress toward graduation (0% → 100% at 42,000 VIRTUAL)")
     
     # Simulated tokenized entity
-    print(f"\n  ✓ Token created (simulated)")
-    print(f"    Bonding curve progress: 0.24%")
-    print(f"    Estimated graduation: ~42 days")
+    print("\n  ✓ Token created (simulated)")
+    print("    Bonding curve progress: 0.24%")
+    print("    Estimated graduation: ~42 days")
     
     return request
 
@@ -601,7 +601,7 @@ async def main():
     print(f"\nTimestamp: {datetime.now().isoformat()}")
     
     # Step 1: Setup
-    config = await setup_environment()
+    await setup_environment()
     services = await initialize_services()
     
     # Step 2: Create agent
@@ -611,10 +611,10 @@ async def main():
     await demonstrate_agent_execution(services['game'], agent, workers)
     
     # Step 4: Tokenize
-    token_request = await tokenize_agent(agent)
+    await tokenize_agent(agent)
     
     # Step 5: Setup ACP
-    offering = await setup_acp_commerce(agent)
+    await setup_acp_commerce(agent)
     
     # Step 6: Revenue
     await demonstrate_revenue()

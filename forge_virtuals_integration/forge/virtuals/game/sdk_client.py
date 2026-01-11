@@ -16,13 +16,9 @@ governance advisors.
 """
 
 import asyncio
-import hashlib
-import hmac
-import json
 import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any, Callable, Optional
-from uuid import uuid4
 
 import httpx
 
@@ -437,7 +433,7 @@ class GAMESDKClient:
         from the GAME framework.
         """
         try:
-            response = await self._make_request("GET", f"/agents/{agent_id}")
+            await self._make_request("GET", f"/agents/{agent_id}")
             # Transform response to ForgeAgent model
             # This would need mapping from GAME API response format
             return None  # Placeholder - implement based on actual API response
@@ -462,7 +458,7 @@ class GAMESDKClient:
         if goals:
             update_data["goal"] = goals.primary_goal
         
-        response = await self._make_request(
+        await self._make_request(
             "PATCH",
             f"/agents/{agent_id}",
             json=update_data,

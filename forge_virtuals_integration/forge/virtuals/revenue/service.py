@@ -18,11 +18,9 @@ distribution_complete field. On startup, records with distribution_complete=Fals
 are loaded back into the pending queue. This ensures no revenue is lost on restart.
 """
 
-import asyncio
 import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any, Optional
-from uuid import uuid4
 from collections import defaultdict
 
 from ..config import get_virtuals_config
@@ -396,7 +394,6 @@ class RevenueService:
         to multiple recipients efficiently. The batch approach
         significantly reduces gas costs compared to individual transfers.
         """
-        client = self._chain_manager.primary_client
         
         # In production, this would use a multi-send contract or
         # aggregate into a merkle distributor for gas efficiency

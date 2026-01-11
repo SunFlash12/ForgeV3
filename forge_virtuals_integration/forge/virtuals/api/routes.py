@@ -16,21 +16,19 @@ Routes are organized by feature area:
 - /revenue: Revenue tracking and analytics
 """
 
+import os
 from datetime import UTC, datetime
 from typing import Any, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
+
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 
 # Import models (these would be the actual Forge/Virtuals models)
 from ..models import (
-    ForgeAgent,
     ForgeAgentCreate,
-    AgentUpdate,
-    AgentListResponse,
     TokenizationRequest,
-    TokenizedEntity,
     ACPJobCreate,
-    ACPJob,
     ACPNegotiationTerms,
     ACPDeliverable,
     ACPEvaluation,
@@ -58,11 +56,7 @@ class PaginatedResponse(APIResponse):
 
 # ==================== Dependency Injection ====================
 
-# SECURITY FIX (Audit 4): Import proper authentication
-from fastapi import Request, HTTPException
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-import os
-
+# SECURITY FIX (Audit 4): Proper authentication for Virtuals API
 _security = HTTPBearer(auto_error=False)
 
 
@@ -110,7 +104,6 @@ async def get_current_user_wallet(
         wallet = token_data.get("wallet_address")
         if not wallet:
             # Fall back to user lookup if wallet not in token
-            from forge.repositories.user_repository import UserRepository
             user_id = token_data.get("sub") or token_data.get("user_id")
             if user_id:
                 # This would need db injection in real implementation
@@ -157,7 +150,7 @@ async def create_agent(
     Returns the created agent with all assigned IDs.
     """
     try:
-        from ..game import get_game_client, create_knowledge_worker
+        from ..game import get_game_client
         
         client = await get_game_client()
         

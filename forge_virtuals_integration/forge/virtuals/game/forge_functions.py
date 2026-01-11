@@ -22,7 +22,7 @@ Usage:
 """
 
 import logging
-from typing import Any, Optional, Callable
+from typing import Any, Optional
 from datetime import UTC, datetime
 
 from .sdk_client import FunctionDefinition, GAMEWorker

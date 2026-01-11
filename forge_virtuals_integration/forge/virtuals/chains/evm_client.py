@@ -17,18 +17,16 @@ from typing import Any, Optional
 import logging
 
 from web3 import AsyncWeb3, AsyncHTTPProvider
-from web3.exceptions import ContractLogicError, TransactionNotFound
+from web3.exceptions import TransactionNotFound
 from eth_account import Account
 from eth_account.signers.local import LocalAccount
 
 from .base_client import (
     BaseChainClient,
     ChainClientError,
-    InsufficientFundsError,
     TransactionFailedError,
-    ContractNotFoundError,
 )
-from ..config import ChainNetwork, get_virtuals_config
+from ..config import ChainNetwork
 from ..models import WalletInfo, TransactionRecord, TokenInfo
 
 
