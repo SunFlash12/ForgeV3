@@ -20,7 +20,7 @@ import hashlib
 import hmac
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any, Callable, Optional
 from uuid import uuid4
 
@@ -277,7 +277,7 @@ class GAMESDKClient:
                 
                 self._access_token = data["data"]["accessToken"]
                 # Assume token expires in 1 hour (typical for such systems)
-                self._token_expires = datetime.utcnow() + timedelta(hours=1)
+                self._token_expires = datetime.now(UTC) + timedelta(hours=1)
                 
                 logger.debug("Authenticated with GAME API")
                 
@@ -290,7 +290,7 @@ class GAMESDKClient:
         """Ensure we have a valid access token, refreshing if necessary."""
         if not self._access_token:
             await self._authenticate()
-        elif self._token_expires and datetime.utcnow() >= self._token_expires:
+        elif self._token_expires and datetime.now(UTC) >= self._token_expires:
             await self._authenticate()
     
     def _get_auth_headers(self) -> dict[str, str]:
@@ -315,8 +315,8 @@ class GAMESDKClient:
         
         # Check rate limit
         if self._rate_limit_remaining <= 0:
-            if self._rate_limit_reset and datetime.utcnow() < self._rate_limit_reset:
-                wait_time = (self._rate_limit_reset - datetime.utcnow()).total_seconds()
+            if self._rate_limit_reset and datetime.now(UTC) < self._rate_limit_reset:
+                wait_time = (self._rate_limit_reset - datetime.now(UTC)).total_seconds()
                 raise RateLimitError(
                     f"Rate limit exceeded. Retry after {wait_time:.0f} seconds"
                 )

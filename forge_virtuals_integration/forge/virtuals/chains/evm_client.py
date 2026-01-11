@@ -12,7 +12,7 @@ The EVM client supports:
 """
 
 import asyncio
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Optional
 import logging
 
@@ -363,7 +363,7 @@ class EVMChainClient(BaseChainClient):
             tx_hash=tx_hash.hex(),
             chain=self.chain.value,
             block_number=0,  # Will be filled when confirmed
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
             from_address=self._operator_account.address,
             to_address=to_address,
             value=value,
@@ -452,7 +452,7 @@ class EVMChainClient(BaseChainClient):
                 timestamp = datetime.fromtimestamp(block['timestamp'])
             else:
                 status = "pending"
-                timestamp = datetime.utcnow()
+                timestamp = datetime.now(UTC)
             
             return TransactionRecord(
                 tx_hash=tx_hash,

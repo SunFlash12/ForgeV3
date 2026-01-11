@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import hashlib
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
@@ -1104,7 +1104,7 @@ async def verify_capsule_integrity(
         signature_valid=None,  # Phase 2
         merkle_chain_valid=None,  # Checked in lineage endpoint
         overall_status=overall_status,
-        checked_at=datetime.fromisoformat(result.get("verified_at", datetime.utcnow().isoformat())),
+        checked_at=datetime.fromisoformat(result.get("verified_at", datetime.now(UTC).isoformat())),
         details={
             "has_signature": result.get("has_signature", False),
             "has_merkle_root": result.get("has_merkle_root", False),
@@ -1145,7 +1145,7 @@ async def verify_lineage_integrity(
         broken_at=result.get("broken_at"),
         verified_capsules=result.get("verified_capsules", []),
         failed_capsules=result.get("failed_capsules", []),
-        checked_at=datetime.fromisoformat(result.get("verified_at", datetime.utcnow().isoformat())),
+        checked_at=datetime.fromisoformat(result.get("verified_at", datetime.now(UTC).isoformat())),
     )
 
 
@@ -1300,7 +1300,7 @@ async def sign_capsule(
     # Compute content hash and sign
     content_hash = CapsuleIntegrityService.compute_content_hash(capsule.content)
     signature = CapsuleIntegrityService.sign_capsule(content_hash, private_key)
-    signed_at = datetime.utcnow()
+    signed_at = datetime.now(UTC)
 
     # Update capsule with signature
     update_query = """
@@ -1419,7 +1419,7 @@ async def verify_capsule_signature(
                     hash_to_verify, signature, signer_public_key
                 )
 
-    verified_at = datetime.utcnow()
+    verified_at = datetime.now(UTC)
 
     return SignatureVerifyResponse(
         capsule_id=capsule_id,

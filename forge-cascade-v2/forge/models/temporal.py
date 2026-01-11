@@ -384,7 +384,7 @@ class VersioningPolicy(ForgeModel):
         """Determine if an old diff should be compacted."""
         if version.snapshot_type != SnapshotType.DIFF:
             return False
-        age = datetime.utcnow() - version.created_at
+        age = datetime.now(UTC) - version.created_at
         return age > timedelta(days=self.compact_after_days)
 
 

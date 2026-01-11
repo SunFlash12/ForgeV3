@@ -23,7 +23,7 @@ Usage:
 
 import logging
 from typing import Any, Optional, Callable
-from datetime import datetime
+from datetime import UTC, datetime
 
 from .sdk_client import FunctionDefinition, GAMEWorker
 
@@ -596,7 +596,7 @@ def create_knowledge_worker(
                     state["search_history"] = []
                 state["search_history"].append({
                     "query": function_result["state_update"]["last_search_query"],
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                 })
                 # Keep last 10 searches
                 state["search_history"] = state["search_history"][-10:]
