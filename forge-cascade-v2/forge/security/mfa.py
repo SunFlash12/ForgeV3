@@ -683,11 +683,53 @@ class MFAService:
 
 # Singleton instance
 _mfa_service: MFAService | None = None
+_mfa_db_client = None
 
 
-def get_mfa_service() -> MFAService:
-    """Get or create the MFA service singleton."""
-    global _mfa_service
+def get_mfa_service(db_client=None, encryption_key: str | None = None) -> MFAService:
+    """
+    Get or create the MFA service singleton.
+
+    Args:
+        db_client: Optional database client for persistence. If not provided,
+                   will try to get from ForgeApp or use in-memory storage.
+        encryption_key: Optional encryption key for encrypting secrets at rest.
+                        Can also be set via MFA_ENCRYPTION_KEY environment variable.
+
+    SECURITY FIX (Audit 4): Auto-inject database client for persistence.
+    """
+    global _mfa_service, _mfa_db_client
+
     if _mfa_service is None:
-        _mfa_service = MFAService()
+        # Try to get database client from various sources
+        final_db_client = db_client
+
+        if final_db_client is None:
+            # Try to get from ForgeApp
+            try:
+                from forge.api.app import forge_app
+                if forge_app and forge_app.db_client:
+                    final_db_client = forge_app.db_client
+                    logger.info("mfa_service_using_forge_db")
+            except (ImportError, AttributeError):
+                pass
+
+        # Try to get encryption key from environment
+        import os
+        final_encryption_key = encryption_key or os.environ.get("MFA_ENCRYPTION_KEY")
+
+        _mfa_db_client = final_db_client
+        _mfa_service = MFAService(
+            db_client=final_db_client,
+            encryption_key=final_encryption_key,
+            use_memory_storage=final_db_client is None,
+        )
+
     return _mfa_service
+
+
+def reset_mfa_service() -> None:
+    """Reset the MFA service singleton (for testing)."""
+    global _mfa_service, _mfa_db_client
+    _mfa_service = None
+    _mfa_db_client = None
