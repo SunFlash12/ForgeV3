@@ -11,7 +11,7 @@ Provides endpoints for:
 from __future__ import annotations
 
 import os
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, status
@@ -762,10 +762,8 @@ async def get_capsule_at_time(
     """
     Get capsule state at a specific point in time.
     """
-    from datetime import UTC, datetime as dt
-
     try:
-        target_time = dt.fromisoformat(timestamp.replace("Z", "+00:00"))
+        target_time = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid timestamp format. Use ISO format.")
 
@@ -845,17 +843,14 @@ async def get_trust_timeline(
 
     entity_type: "User" or "Capsule"
     """
-    from datetime import UTC, datetime as dt
-    from datetime import timedelta
-
     # Validate entity type
     if entity_type not in ["User", "Capsule"]:
         raise HTTPException(status_code=400, detail="entity_type must be 'User' or 'Capsule'")
 
     # Parse dates or use defaults
     try:
-        start_dt = dt.fromisoformat(start.replace("Z", "+00:00")) if start else (dt.utcnow() - timedelta(days=30))
-        end_dt = dt.fromisoformat(end.replace("Z", "+00:00")) if end else dt.utcnow()
+        start_dt = datetime.fromisoformat(start.replace("Z", "+00:00")) if start else (datetime.now(UTC) - timedelta(days=30))
+        end_dt = datetime.fromisoformat(end.replace("Z", "+00:00")) if end else datetime.now(UTC)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid date format. Use ISO format.")
 
