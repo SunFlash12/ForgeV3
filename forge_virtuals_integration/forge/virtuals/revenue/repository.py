@@ -10,7 +10,6 @@ import json
 import logging
 from datetime import datetime, UTC
 from typing import Any
-from uuid import uuid4
 
 from ..models import RevenueRecord, RevenueType
 
@@ -277,7 +276,7 @@ class RevenueRepository:
         """
 
         try:
-            results = await self.client.execute_write(
+            await self.client.execute_write(
                 query,
                 parameters={"id": record_id}
             )

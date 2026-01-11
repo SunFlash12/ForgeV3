@@ -19,7 +19,6 @@ To complete integration:
 3. Run test transactions on Base Sepolia before mainnet
 """
 
-from enum import Enum
 from typing import Any
 
 # ═══════════════════════════════════════════════════════════════════════════════

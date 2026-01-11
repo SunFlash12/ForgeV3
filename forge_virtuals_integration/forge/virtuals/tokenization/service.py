@@ -38,16 +38,13 @@ import logging
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
-from uuid import uuid4
 
-from ..config import ChainNetwork, get_virtuals_config
+from ..config import get_virtuals_config
 from .contracts import (
     AGENT_FACTORY_ABI,
-    AGENT_TOKEN_ABI,
     BONDING_CURVE_ABI,
     ERC20_ABI,
     ContractAddresses,
-    get_contract_abi,
     is_abi_complete,
 )
 from ..models import (
@@ -55,9 +52,6 @@ from ..models import (
     TokenizedEntity,
     TokenizationStatus,
     TokenInfo,
-    TokenDistribution,
-    RevenueShare,
-    ContributionRecord,
     TokenHolderProposal,
     TokenHolderGovernanceVote,
     BondingCurveContribution,
@@ -1033,7 +1027,6 @@ class TokenizationService:
 
         if hasattr(client, 'web3') and entity.token_info.token_address:
             try:
-                web3 = client.web3
                 token_address = entity.token_info.token_address
 
                 # Build graduation transaction (requires ABI)
@@ -1090,7 +1083,6 @@ class TokenizationService:
 
         if hasattr(client, 'web3'):
             try:
-                web3 = client.web3
                 total_amount = sum(distributions.values())
 
                 # Filter out special keys (creator, treasury, buyback_burn)
@@ -1168,8 +1160,6 @@ class TokenizationService:
 
         if hasattr(client, 'web3'):
             try:
-                web3 = client.web3
-                token_address = entity.token_info.token_address
                 pool_address = entity.liquidity_pool_address
 
                 # Uniswap router interaction pattern:
@@ -1229,7 +1219,6 @@ class TokenizationService:
 
         if hasattr(client, 'web3'):
             try:
-                web3 = client.web3
                 # contract = web3.eth.contract(
                 #     address=entity.token_info.token_address,
                 #     abi=ERC20_ABI
@@ -1247,7 +1236,7 @@ class TokenizationService:
 
 
 # Global service instance
-_tokenization_service: Optional[TokenizationService] = None
+_tokenization_service: TokenizationService | None = None
 
 
 async def get_tokenization_service(

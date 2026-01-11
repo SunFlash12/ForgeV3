@@ -13,7 +13,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, Optional
 from uuid import uuid4
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 
 from .base import VirtualsBaseModel, ACPPhase, ACPJobStatus
 

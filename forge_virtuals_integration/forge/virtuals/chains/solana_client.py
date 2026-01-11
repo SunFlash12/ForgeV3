@@ -20,10 +20,9 @@ import base58
 from .base_client import (
     BaseChainClient,
     ChainClientError,
-    InsufficientFundsError,
     TransactionFailedError,
 )
-from ..config import ChainNetwork, get_virtuals_config
+from ..config import ChainNetwork
 from ..models import WalletInfo, TransactionRecord, TokenInfo
 
 
@@ -853,7 +852,6 @@ class SolanaChainClient(BaseChainClient):
 
         # Add SOL transfer if value > 0
         if value > 0:
-            from solders.system_program import transfer, TransferParams
 
             # If this is a program call with value, we might need to transfer to the program
             # or a specific account. For now, we skip value transfer for program calls
@@ -918,7 +916,7 @@ class SolanaChainClient(BaseChainClient):
         data = response.value.data
         return data[44] if len(data) > 44 else 9
     
-    def _get_associated_token_address(self, owner, mint) -> 'Pubkey':
+    def _get_associated_token_address(self, owner, mint) -> Any:
         """
         Derive the associated token account address.
         
