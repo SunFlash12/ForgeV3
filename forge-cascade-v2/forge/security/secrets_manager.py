@@ -48,6 +48,12 @@ class SecretsBackendError(Exception):
     pass
 
 
+class SecurityWarning(UserWarning):
+    """Warning for security-related issues (insecure configurations, etc.)."""
+
+    pass
+
+
 class BaseSecretsManager(abc.ABC):
     """Abstract base class for secrets managers."""
 

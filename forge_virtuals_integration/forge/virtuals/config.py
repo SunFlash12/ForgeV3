@@ -23,6 +23,12 @@ from pydantic_settings import BaseSettings
 logger = logging.getLogger(__name__)
 
 
+class SecurityWarning(UserWarning):
+    """Warning for security-related issues (insecure configurations, etc.)."""
+
+    pass
+
+
 class ChainNetwork(str, Enum):
     """Supported blockchain networks for Virtuals Protocol integration."""
     BASE = "base"
