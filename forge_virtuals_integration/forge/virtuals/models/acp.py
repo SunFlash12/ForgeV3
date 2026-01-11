@@ -236,10 +236,10 @@ class ACPJob(VirtualsBaseModel):
     
     # Timeouts
     request_timeout: datetime = Field(
-        default_factory=lambda: datetime.utcnow() + timedelta(hours=24)
+        default_factory=lambda: datetime.now(UTC) + timedelta(hours=24)
     )
     negotiation_timeout: datetime = Field(
-        default_factory=lambda: datetime.utcnow() + timedelta(hours=48)
+        default_factory=lambda: datetime.now(UTC) + timedelta(hours=48)
     )
     execution_timeout: Optional[datetime] = None
     evaluation_timeout: Optional[datetime] = None
@@ -255,11 +255,11 @@ class ACPJob(VirtualsBaseModel):
             raise ValueError(f"Cannot advance from {self.current_phase} to {phase}")
         
         self.current_phase = phase
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(UTC)
     
     def is_timed_out(self) -> bool:
         """Check if current phase has timed out."""
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         if self.current_phase == ACPPhase.REQUEST:
             return now > self.request_timeout
         elif self.current_phase == ACPPhase.NEGOTIATION:

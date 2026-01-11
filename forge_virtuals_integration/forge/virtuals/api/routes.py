@@ -16,7 +16,7 @@ Routes are organized by feature area:
 - /revenue: Revenue tracking and analytics
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from pydantic import BaseModel, Field
@@ -45,7 +45,7 @@ class APIResponse(BaseModel):
     success: bool = True
     data: Optional[Any] = None
     error: Optional[str] = None
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class PaginatedResponse(APIResponse):

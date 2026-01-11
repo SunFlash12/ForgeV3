@@ -11,7 +11,7 @@ Provides endpoints for:
 from __future__ import annotations
 
 import os
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, status
@@ -762,7 +762,7 @@ async def get_capsule_at_time(
     """
     Get capsule state at a specific point in time.
     """
-    from datetime import datetime as dt
+    from datetime import UTC, datetime as dt
 
     try:
         target_time = dt.fromisoformat(timestamp.replace("Z", "+00:00"))
@@ -845,7 +845,7 @@ async def get_trust_timeline(
 
     entity_type: "User" or "Capsule"
     """
-    from datetime import datetime as dt
+    from datetime import UTC, datetime as dt
     from datetime import timedelta
 
     # Validate entity type
@@ -919,7 +919,7 @@ async def create_graph_snapshot(
 
     return {
         "snapshot_id": snapshot.id,
-        "created_at": snapshot.created_at.isoformat() if snapshot.created_at else datetime.utcnow().isoformat(),
+        "created_at": snapshot.created_at.isoformat() if snapshot.created_at else datetime.now(UTC).isoformat(),
         "metrics": {
             "total_nodes": snapshot.total_nodes,
             "total_edges": snapshot.total_edges,
@@ -1274,7 +1274,7 @@ async def refresh_graph_analysis(
 
     return {
         "refreshed": True,
-        "refreshed_at": datetime.utcnow().isoformat(),
+        "refreshed_at": datetime.now(UTC).isoformat(),
     }
 
 
@@ -1468,7 +1468,7 @@ async def resolve_contradiction(
         "edge_id": edge_id,
         "resolution_type": resolution.resolution_type,
         "resolved_by": user.id,
-        "resolved_at": datetime.utcnow().isoformat(),
+        "resolved_at": datetime.now(UTC).isoformat(),
     }
 
 

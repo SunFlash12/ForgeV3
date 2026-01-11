@@ -12,7 +12,7 @@ Solana support enables:
 """
 
 import asyncio
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Optional
 import logging
 import base58
@@ -283,7 +283,7 @@ class SolanaChainClient(BaseChainClient):
             tx_hash=tx_sig,
             chain=self.chain.value,
             block_number=0,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
             from_address=str(self._keypair.pubkey()),
             to_address=to_address,
             value=value,
@@ -336,7 +336,7 @@ class SolanaChainClient(BaseChainClient):
                         tx_hash=tx_hash,
                         chain=self.chain.value,
                         block_number=status.slot,
-                        timestamp=datetime.utcnow(),
+                        timestamp=datetime.now(UTC),
                         from_address="",  # Would need to parse from tx
                         to_address="",
                         value=0,
@@ -365,7 +365,7 @@ class SolanaChainClient(BaseChainClient):
                 tx_hash=tx_hash,
                 chain=self.chain.value,
                 block_number=tx.slot,
-                timestamp=datetime.fromtimestamp(tx.block_time) if tx.block_time else datetime.utcnow(),
+                timestamp=datetime.fromtimestamp(tx.block_time) if tx.block_time else datetime.now(UTC),
                 from_address="",
                 to_address="",
                 value=0,
@@ -462,7 +462,7 @@ class SolanaChainClient(BaseChainClient):
             tx_hash=str(response.value),
             chain=self.chain.value,
             block_number=0,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
             from_address=str(self._keypair.pubkey()),
             to_address=to_address,
             value=amount,
@@ -535,7 +535,7 @@ class SolanaChainClient(BaseChainClient):
             tx_hash=str(response.value),
             chain=self.chain.value,
             block_number=0,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
             from_address=str(self._keypair.pubkey()),
             to_address=spender_address,
             value=amount,
@@ -878,7 +878,7 @@ class SolanaChainClient(BaseChainClient):
             tx_hash=tx_sig,
             chain=self.chain.value,
             block_number=0,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
             from_address=str(self._keypair.pubkey()),
             to_address=contract_address,
             value=value,
@@ -901,7 +901,7 @@ class SolanaChainClient(BaseChainClient):
         response = await self._client.get_block_time(block_number)
         if response.value:
             return datetime.fromtimestamp(response.value)
-        return datetime.utcnow()
+        return datetime.now(UTC)
     
     # ==================== Helper Methods ====================
     
