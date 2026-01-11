@@ -128,6 +128,20 @@ from .safe_regex import (
     safe_sub,
     validate_pattern,
 )
+from .secrets_manager import (
+    AWSSecretsManager,
+    BaseSecretsManager,
+    EnvironmentSecretsManager,
+    SecretNotFoundError,
+    SecretsBackend,
+    SecretsBackendError,
+    VaultSecretsManager,
+    configure_secrets_manager,
+    create_secrets_manager,
+    get_required_secret,
+    get_secret,
+    get_secrets_manager,
+)
 from .tokens import (
     TokenError,
     TokenExpiredError,
@@ -273,5 +287,19 @@ __all__ = [
     "get_user_agent",
     "ClientIP",
     "UserAgent",
-    "AuthenticatedRequest"
+    "AuthenticatedRequest",
+
+    # Secrets Manager
+    "BaseSecretsManager",
+    "EnvironmentSecretsManager",
+    "VaultSecretsManager",
+    "AWSSecretsManager",
+    "SecretsBackend",
+    "SecretNotFoundError",
+    "SecretsBackendError",
+    "get_secrets_manager",
+    "create_secrets_manager",
+    "configure_secrets_manager",
+    "get_secret",
+    "get_required_secret",
 ]

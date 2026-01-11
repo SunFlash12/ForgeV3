@@ -102,6 +102,8 @@ credentials.json
 service_account.json
 *credentials*
 *secrets*
+# Exception: Allow secrets_manager.py module (not actual secrets)
+!**/secrets_manager.py
 
 # Docker
 docker-compose.override.yml
