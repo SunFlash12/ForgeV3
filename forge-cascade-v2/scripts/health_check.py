@@ -32,22 +32,23 @@ async def check_neo4j(settings) -> dict:
     
     try:
         await client.connect()
-        
-        # Test query
-        result = await client.execute_query("RETURN 1 as test")
-        
-        # Get node counts
-        counts = await client.execute_query("""
+
+        # Test query - using correct method name
+        result = await client.execute("RETURN 1 as test")
+
+        # Get node counts - using correct method name
+        counts = await client.execute("""
             MATCH (u:User) WITH count(u) as users
             MATCH (c:Capsule) WITH users, count(c) as capsules
             MATCH (p:Proposal) WITH users, capsules, count(p) as proposals
             MATCH (o:Overlay) WITH users, capsules, proposals, count(o) as overlays
             RETURN users, capsules, proposals, overlays
         """)
-        
+
         stats = counts[0] if counts else {}
-        
-        await client.disconnect()
+
+        # FIX: Use correct method name (close not disconnect)
+        await client.close()
         
         return {
             "status": "healthy",
