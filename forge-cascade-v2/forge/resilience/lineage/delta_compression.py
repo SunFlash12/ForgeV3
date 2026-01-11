@@ -12,7 +12,7 @@ import hashlib
 import json
 import zlib
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
@@ -48,7 +48,7 @@ class LineageDiff:
     diff_id: str
     base_hash: str                 # Hash of the base snapshot
     target_hash: str               # Hash of the resulting snapshot
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     entries: list[DiffEntry] = field(default_factory=list)
     compression_ratio: float = 1.0
 
@@ -153,10 +153,10 @@ class DeltaCompressor:
             Created snapshot
         """
         snapshot = LineageSnapshot(
-            snapshot_id=f"{capsule_id}_v{version}_{datetime.utcnow().timestamp()}",
+            snapshot_id=f"{capsule_id}_v{version}_{datetime.now(UTC).timestamp()}",
             capsule_id=capsule_id,
             version=version,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(UTC),
             data=data,
         )
 
@@ -336,7 +336,7 @@ class DeltaCompressor:
             snapshot_id=f"reconstructed_{diff.target_hash}",
             capsule_id=base_snapshot.capsule_id,
             version=base_snapshot.version + 1,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(UTC),
             data=result_data,
         )
 
@@ -476,7 +476,7 @@ class DeltaCompressor:
             snapshot_id=snapshot_id,
             capsule_id=capsule_id,
             version=1,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(UTC),
             data=data,
         )
 

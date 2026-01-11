@@ -14,7 +14,7 @@ Uses a layered backend approach:
 """
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import structlog
@@ -49,7 +49,7 @@ class CachedResult:
     @property
     def is_expired(self) -> bool:
         """Check if cache entry has expired."""
-        return datetime.utcnow() > self.computed_at + timedelta(seconds=self.ttl_seconds)
+        return datetime.now(UTC) > self.computed_at + timedelta(seconds=self.ttl_seconds)
 
 
 @dataclass
@@ -418,7 +418,7 @@ class GraphAlgorithmsOverlay(BaseOverlay):
 
         return {
             "operation": "refresh",
-            "refreshed_at": datetime.utcnow().isoformat(),
+            "refreshed_at": datetime.now(UTC).isoformat(),
             "metrics": metrics,
             "top_10_pagerank": pagerank.get("rankings", []),
             "top_5_communities": communities.get("communities", [])
@@ -451,7 +451,7 @@ class GraphAlgorithmsOverlay(BaseOverlay):
         self._cache[key] = CachedResult(
             key=key,
             data=data,
-            computed_at=datetime.utcnow(),
+            computed_at=datetime.now(UTC),
             ttl_seconds=self._config.cache_ttl_seconds
         )
 

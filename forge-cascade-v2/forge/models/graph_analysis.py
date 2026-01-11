@@ -5,7 +5,7 @@ Data structures for graph algorithm results including PageRank,
 centrality metrics, community detection, and trust analysis.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
@@ -67,7 +67,7 @@ class NodeRankingResult(ForgeModel):
     backend_used: GraphBackend
     rankings: list[NodeRanking] = Field(default_factory=list)
     total_nodes: int = Field(ge=0)
-    computed_at: datetime = Field(default_factory=datetime.utcnow)
+    computed_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     computation_time_ms: float = Field(ge=0.0)
     parameters: dict[str, Any] = Field(default_factory=dict)
 
@@ -144,7 +144,7 @@ class CommunityDetectionResult(ForgeModel):
         le=1.0,
         description="Fraction of nodes assigned to communities",
     )
-    computed_at: datetime = Field(default_factory=datetime.utcnow)
+    computed_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     computation_time_ms: float = Field(ge=0.0)
     parameters: dict[str, Any] = Field(default_factory=dict)
 
@@ -199,7 +199,7 @@ class TrustTransitivityResult(ForgeModel):
         description="All discovered paths",
     )
     max_hops_searched: int = Field(ge=1)
-    computed_at: datetime = Field(default_factory=datetime.utcnow)
+    computed_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class TrustInfluence(ForgeModel):
@@ -279,7 +279,7 @@ class GraphMetrics(ForgeModel):
     )
 
     # Temporal
-    computed_at: datetime = Field(default_factory=datetime.utcnow)
+    computed_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     computation_time_ms: float = Field(ge=0.0)
 
 

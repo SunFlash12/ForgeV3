@@ -14,7 +14,7 @@ Uses a hybrid versioning strategy:
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import structlog
@@ -508,8 +508,8 @@ class TemporalTrackerOverlay(BaseOverlay):
         if not entity_id:
             return {"error": "Missing entity_id"}
 
-        start = datetime.fromisoformat(start_str) if start_str else datetime.utcnow() - timedelta(days=30)
-        end = datetime.fromisoformat(end_str) if end_str else datetime.utcnow()
+        start = datetime.fromisoformat(start_str) if start_str else datetime.now(UTC) - timedelta(days=30)
+        end = datetime.fromisoformat(end_str) if end_str else datetime.now(UTC)
 
         snapshots = await self._temporal_repository.get_trust_timeline(
             entity_id=entity_id,
@@ -565,7 +565,7 @@ class TemporalTrackerOverlay(BaseOverlay):
     ) -> dict:
         """Create a graph snapshot."""
         snapshot = await self._temporal_repository.create_graph_snapshot()
-        self._last_graph_snapshot = datetime.utcnow()
+        self._last_graph_snapshot = datetime.now(UTC)
         self._stats["graph_snapshots_created"] += 1
 
         return {
@@ -587,7 +587,7 @@ class TemporalTrackerOverlay(BaseOverlay):
         if capsule_id:
             result = await self._temporal_repository.compact_versions(
                 capsule_id=capsule_id,
-                older_than=datetime.utcnow() - timedelta(days=older_than_days),
+                older_than=datetime.now(UTC) - timedelta(days=older_than_days),
                 keep_min=keep_min
             )
             self._stats["compactions_performed"] += 1
@@ -609,7 +609,7 @@ class TemporalTrackerOverlay(BaseOverlay):
             if recent:
                 self._last_graph_snapshot = recent.created_at
 
-        if self._last_graph_snapshot is None or datetime.utcnow() - self._last_graph_snapshot > interval:
+        if self._last_graph_snapshot is None or datetime.now(UTC) - self._last_graph_snapshot > interval:
             await self._create_graph_snapshot({}, context)
 
     def get_stats(self) -> dict:

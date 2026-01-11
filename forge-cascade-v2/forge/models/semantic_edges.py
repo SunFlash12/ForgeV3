@@ -5,7 +5,7 @@ Bidirectional semantic relationships between capsules that encode
 meaning beyond simple parent-child derivation.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
@@ -278,7 +278,7 @@ class ContradictionCluster(ForgeModel):
     edges: list[SemanticEdge] = Field(default_factory=list)
     overall_severity: ContradictionSeverity = ContradictionSeverity.MEDIUM
     resolution_status: ContradictionStatus = ContradictionStatus.UNRESOLVED
-    detected_at: datetime = Field(default_factory=datetime.utcnow)
+    detected_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     @property
     def size(self) -> int:

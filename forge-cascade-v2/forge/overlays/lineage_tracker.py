@@ -14,7 +14,7 @@ Responsibilities:
 
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import structlog
@@ -120,7 +120,7 @@ class LineageAnomaly:
     severity: str  # "low", "medium", "high"
     affected_nodes: list[str]
     description: str
-    detected_at: datetime = field(default_factory=datetime.utcnow)
+    detected_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 class LineageTrackerOverlay(BaseOverlay):
@@ -333,7 +333,7 @@ class LineageTrackerOverlay(BaseOverlay):
             capsule_type=capsule_type,
             title=data.get("title"),
             creator_id=context.user_id,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(UTC),
             trust_at_creation=context.trust_flame,
             parent_ids=parent_ids
         )
@@ -387,7 +387,7 @@ class LineageTrackerOverlay(BaseOverlay):
                     self._derivation_users_order = self._derivation_users_order[evict_count:]
                 self._derivation_users_order.append(context.user_id)
 
-            self._recent_derivations[context.user_id].append(datetime.utcnow())
+            self._recent_derivations[context.user_id].append(datetime.now(UTC))
             # Enforce per-user limit
             if len(self._recent_derivations[context.user_id]) > self._MAX_DERIVATIONS_PER_USER:
                 self._recent_derivations[context.user_id] = \
@@ -1008,7 +1008,7 @@ class LineageTrackerOverlay(BaseOverlay):
             recent = self._recent_derivations.get(node.creator_id, [])
             # Clean old entries (last 24h)
             # SECURITY FIX (Audit 2): Removed unsafe __import__() usage
-            cutoff = datetime.utcnow() - timedelta(hours=24)
+            cutoff = datetime.now(UTC) - timedelta(hours=24)
             recent = [t for t in recent if t > cutoff]
             self._recent_derivations[node.creator_id] = recent
 

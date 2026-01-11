@@ -14,7 +14,7 @@ Pipeline:
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
@@ -78,7 +78,7 @@ class QueryHistoryEntry:
     result_count: int
     execution_time_ms: float
     user_id: str | None
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 class KnowledgeQueryOverlay(BaseOverlay):
@@ -218,7 +218,7 @@ class KnowledgeQueryOverlay(BaseOverlay):
             )
 
             # Execute and get results
-            start_time = datetime.utcnow()
+            start_time = datetime.now(UTC)
             result = await self._query_service.execute_and_answer(
                 question=question,
                 context=context,
@@ -226,7 +226,7 @@ class KnowledgeQueryOverlay(BaseOverlay):
                 limit=limit,
                 synthesize=self._config.synthesize_answer
             )
-            execution_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+            execution_time = (datetime.now(UTC) - start_time).total_seconds() * 1000
 
             # Update stats
             self._stats["queries_successful"] += 1

@@ -6,7 +6,7 @@ snapshots, and reconstruction capabilities.
 """
 
 import hashlib
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Any
 

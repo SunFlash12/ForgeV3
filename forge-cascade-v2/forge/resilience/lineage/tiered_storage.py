@@ -14,7 +14,7 @@ import asyncio
 import gzip
 import json
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Any
 
@@ -49,7 +49,7 @@ class LineageEntry:
     tier: StorageTier = StorageTier.HOT
     compressed: bool = False
     archived_at: datetime | None = None
-    last_accessed: datetime = field(default_factory=datetime.utcnow)
+    last_accessed: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
@@ -81,7 +81,7 @@ class LineageEntry:
             tier=StorageTier(data.get("tier", "hot")),
             compressed=data.get("compressed", False),
             archived_at=datetime.fromisoformat(data["archived_at"]) if data.get("archived_at") else None,
-            last_accessed=datetime.fromisoformat(data.get("last_accessed", datetime.utcnow().isoformat())),
+            last_accessed=datetime.fromisoformat(data.get("last_accessed", datetime.now(UTC).isoformat())),
         )
 
 
@@ -185,7 +185,7 @@ class TieredLineageStorage:
                 # Tier 3: Archive to cold storage
                 s3_key = await self._archive_to_cold(entry)
                 self._tier3_storage[entry.entry_id] = s3_key
-                entry.archived_at = datetime.utcnow()
+                entry.archived_at = datetime.now(UTC)
 
             self._update_stats(tier, entry)
 
@@ -221,13 +221,13 @@ class TieredLineageStorage:
         # Check Tier 1 first (fastest)
         if entry_id in self._tier1_storage:
             entry = self._tier1_storage[entry_id]
-            entry.last_accessed = datetime.utcnow()
+            entry.last_accessed = datetime.now(UTC)
             return entry
 
         # Check Tier 2
         if entry_id in self._tier2_storage:
             entry = self._decompress_entry(self._tier2_storage[entry_id])
-            entry.last_accessed = datetime.utcnow()
+            entry.last_accessed = datetime.now(UTC)
             # Promote to Tier 1 on access (optional hot caching)
             return entry
 
@@ -235,7 +235,7 @@ class TieredLineageStorage:
         if entry_id in self._tier3_storage:
             entry = await self._retrieve_from_cold(self._tier3_storage[entry_id])
             if entry:
-                entry.last_accessed = datetime.utcnow()
+                entry.last_accessed = datetime.now(UTC)
             return entry
 
         return None
@@ -320,7 +320,7 @@ class TieredLineageStorage:
             else:
                 s3_key = await self._archive_to_cold(entry)
                 self._tier3_storage[entry_id] = s3_key
-                entry.archived_at = datetime.utcnow()
+                entry.archived_at = datetime.now(UTC)
 
             logger.info(
                 "lineage_entry_migrated",
@@ -442,7 +442,7 @@ class TieredLineageStorage:
 
     async def _perform_tier_migration(self) -> None:
         """Perform tier migration based on age and trust rules."""
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         tier1_cutoff = now - timedelta(days=self._config.tier1_max_age_days)
         tier2_cutoff = now - timedelta(days=self._config.tier2_max_age_days)
 

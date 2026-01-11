@@ -7,7 +7,7 @@ Acts as the central coordinator for all overlay instances.
 
 import asyncio
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
@@ -485,7 +485,7 @@ class OverlayManager:
         )
 
         # Execute
-        datetime.utcnow()
+        datetime.now(UTC)
         try:
             result = await overlay.run(context, request.event, request.input_data)
 
@@ -636,7 +636,7 @@ class OverlayManager:
                 return False
 
             open_time = self._circuit_open[overlay_id]
-            if (datetime.utcnow() - open_time).seconds >= self._circuit_timeout:
+            if (datetime.now(UTC) - open_time).seconds >= self._circuit_timeout:
                 # Half-open: allow one attempt - atomic delete under lock
                 del self._circuit_open[overlay_id]
                 return False
@@ -656,7 +656,7 @@ class OverlayManager:
                 self._failure_counts.get(overlay_id, 0) + 1
 
             if self._failure_counts[overlay_id] >= self._circuit_threshold:
-                self._circuit_open[overlay_id] = datetime.utcnow()
+                self._circuit_open[overlay_id] = datetime.now(UTC)
                 self._logger.warning(
                     "overlay_circuit_opened",
                     overlay_id=overlay_id,
@@ -701,7 +701,7 @@ class OverlayManager:
                     error_count=overlay.error_count,
                     error_rate=1.0,
                     last_error=str(e),
-                    checked_at=datetime.utcnow()
+                    checked_at=datetime.now(UTC)
                 )
 
         return results
@@ -730,7 +730,7 @@ class OverlayManager:
             "success": success,
             "duration_ms": duration_ms,
             "error": error,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(UTC).isoformat()
         })
 
         # Trim history

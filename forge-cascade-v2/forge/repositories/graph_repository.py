@@ -8,7 +8,7 @@ Provides graph algorithm computations with a layered backend approach:
 """
 
 import re
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
@@ -153,7 +153,7 @@ class GraphAlgorithmProvider:
 
         if cache_key in self._cache:
             value, cached_at = self._cache[cache_key]
-            age = (datetime.utcnow() - cached_at).total_seconds()
+            age = (datetime.now(UTC) - cached_at).total_seconds()
             if age < self.config.cache_ttl_seconds:
                 return value
             del self._cache[cache_key]
@@ -162,7 +162,7 @@ class GraphAlgorithmProvider:
     def _set_cached(self, cache_key: str, value: Any) -> None:
         """Cache a result."""
         if self.config.enable_caching:
-            self._cache[cache_key] = (value, datetime.utcnow())
+            self._cache[cache_key] = (value, datetime.now(UTC))
 
     # ═══════════════════════════════════════════════════════════════
     # PAGERANK
@@ -184,7 +184,7 @@ class GraphAlgorithmProvider:
         if cached:
             return cached
 
-        start_time = datetime.utcnow()
+        start_time = datetime.now(UTC)
         backend = await self.detect_backend()
 
         if backend == GraphBackend.GDS:
@@ -194,7 +194,7 @@ class GraphAlgorithmProvider:
 
         result.backend_used = backend
         result.computation_time_ms = (
-            datetime.utcnow() - start_time
+            datetime.now(UTC) - start_time
         ).total_seconds() * 1000
 
         self._set_cached(cache_key, result)
@@ -361,7 +361,7 @@ class GraphAlgorithmProvider:
         if cached:
             return cached
 
-        start_time = datetime.utcnow()
+        start_time = datetime.now(UTC)
         backend = await self.detect_backend()
 
         if request.algorithm == AlgorithmType.DEGREE_CENTRALITY:
@@ -373,7 +373,7 @@ class GraphAlgorithmProvider:
 
         result.backend_used = backend
         result.computation_time_ms = (
-            datetime.utcnow() - start_time
+            datetime.now(UTC) - start_time
         ).total_seconds() * 1000
 
         self._set_cached(cache_key, result)
@@ -534,7 +534,7 @@ class GraphAlgorithmProvider:
         if cached:
             return cached
 
-        start_time = datetime.utcnow()
+        start_time = datetime.now(UTC)
         backend = await self.detect_backend()
 
         if backend == GraphBackend.GDS:
@@ -544,7 +544,7 @@ class GraphAlgorithmProvider:
 
         result.backend_used = backend
         result.computation_time_ms = (
-            datetime.utcnow() - start_time
+            datetime.now(UTC) - start_time
         ).total_seconds() * 1000
 
         self._set_cached(cache_key, result)
@@ -724,7 +724,7 @@ class GraphAlgorithmProvider:
 
         Finds all paths and computes trust with decay.
         """
-        datetime.utcnow()
+        datetime.now(UTC)
 
         # SECURITY FIX: Validate all user-controlled identifiers to prevent Cypher injection
         rel_types = validate_relationship_pattern(request.relationship_types)
@@ -779,7 +779,7 @@ class GraphAlgorithmProvider:
             best_path=best_path,
             all_paths=paths if request.return_all_paths else [],
             max_hops_searched=request.max_hops,
-            computed_at=datetime.utcnow(),
+            computed_at=datetime.now(UTC),
         )
 
     # ═══════════════════════════════════════════════════════════════
@@ -788,7 +788,7 @@ class GraphAlgorithmProvider:
 
     async def get_graph_metrics(self) -> GraphMetrics:
         """Get comprehensive metrics about the knowledge graph."""
-        start_time = datetime.utcnow()
+        start_time = datetime.now(UTC)
 
         # Node counts by type
         node_results = await self.client.execute(
@@ -855,7 +855,7 @@ class GraphAlgorithmProvider:
         )
         avg_trust = avg_trust_result.get("avg_trust", 60) if avg_trust_result else 60
 
-        computation_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+        computation_time = (datetime.now(UTC) - start_time).total_seconds() * 1000
 
         return GraphMetrics(
             total_nodes=total_nodes,
@@ -872,7 +872,7 @@ class GraphAlgorithmProvider:
             avg_path_length=None,
             avg_trust_level=avg_trust or 60.0,
             trust_distribution=trust_distribution,
-            computed_at=datetime.utcnow(),
+            computed_at=datetime.now(UTC),
             computation_time_ms=computation_time,
         )
 
@@ -933,7 +933,7 @@ class GraphAlgorithmProvider:
         Finds similar nodes based on shared neighbors (Jaccard similarity).
         """
         request = request or NodeSimilarityRequest()
-        start_time = datetime.utcnow()
+        start_time = datetime.now(UTC)
         backend = await self.detect_backend()
 
         if backend == GraphBackend.GDS:
@@ -942,7 +942,7 @@ class GraphAlgorithmProvider:
             result = await self._cypher_node_similarity(request)
 
         result.computation_time_ms = (
-            datetime.utcnow() - start_time
+            datetime.now(UTC) - start_time
         ).total_seconds() * 1000
         return result
 
@@ -1138,7 +1138,7 @@ class GraphAlgorithmProvider:
 
         Uses GDS if available for weighted paths, otherwise Cypher.
         """
-        start_time = datetime.utcnow()
+        start_time = datetime.now(UTC)
         backend = await self.detect_backend()
 
         if request.weighted and backend == GraphBackend.GDS:
@@ -1147,7 +1147,7 @@ class GraphAlgorithmProvider:
             result = await self._cypher_shortest_path(request)
 
         result.computation_time_ms = (
-            datetime.utcnow() - start_time
+            datetime.now(UTC) - start_time
         ).total_seconds() * 1000
         return result
 
