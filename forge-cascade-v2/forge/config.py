@@ -3,13 +3,22 @@ Forge Cascade Configuration Management
 
 Centralized configuration using Pydantic Settings for type-safe environment
 variable loading with validation.
+
+SECURITY NOTE: Sensitive secrets (jwt_secret_key, passwords, API keys) should
+be loaded from a secure secrets manager in production. Set SECRETS_BACKEND
+environment variable to 'vault' or 'aws_secrets_manager'.
 """
 
+import logging
+import os
+import warnings
 from functools import lru_cache
 from typing import Literal
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
@@ -125,6 +134,23 @@ class Settings(BaseSettings):
         # Check it's not a simple pattern
         if v == v[0] * len(v):
             raise ValueError("JWT secret key cannot be a repeated character")
+
+        # Security warning for production
+        environment = os.environ.get("APP_ENV", os.environ.get("ENVIRONMENT", "development"))
+        secrets_backend = os.environ.get("SECRETS_BACKEND", "environment")
+
+        if environment == "production" and secrets_backend == "environment":
+            logger.critical(
+                "SECURITY CRITICAL: JWT secret loaded from environment variable in production! "
+                "Configure SECRETS_BACKEND=vault or SECRETS_BACKEND=aws_secrets_manager "
+                "for secure secrets management."
+            )
+            warnings.warn(
+                "JWT secret loaded from environment variable in production. "
+                "This is insecure! Use a secrets manager (set SECRETS_BACKEND).",
+                SecurityWarning,
+                stacklevel=2,
+            )
         return v
 
     # ═══════════════════════════════════════════════════════════════

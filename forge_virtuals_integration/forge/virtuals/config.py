@@ -6,12 +6,21 @@ Virtuals Protocol across multiple chains (Base, Ethereum, Solana).
 
 Configuration is loaded from environment variables with sensible defaults
 for development environments.
+
+SECURITY NOTE: Private keys should be loaded from a secure secrets manager
+in production. Set SECRETS_BACKEND=vault or SECRETS_BACKEND=aws_secrets_manager.
 """
 
-from pydantic_settings import BaseSettings
-from pydantic import Field, field_validator
-from typing import Optional
+import logging
+import os
+import warnings
 from enum import Enum
+from typing import Optional
+
+from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings
+
+logger = logging.getLogger(__name__)
 
 
 class ChainNetwork(str, Enum):
@@ -99,13 +108,23 @@ class VirtualsConfig(BaseSettings):
     )
     
     # Wallet Configuration
+    # SECURITY WARNING: In production, use SECRETS_BACKEND=vault or aws_secrets_manager
+    # instead of loading private keys from environment variables.
     operator_private_key: Optional[str] = Field(
         default=None,
-        description="Private key for the Forge operator wallet (EVM hex format)"
+        description="Private key for the Forge operator wallet (EVM hex format). "
+        "SECURITY: Use secrets manager in production!"
     )
     solana_private_key: Optional[str] = Field(
         default=None,
-        description="Private key for Solana operations (base58 format)"
+        description="Private key for Solana operations (base58 format). "
+        "SECURITY: Use secrets manager in production!"
+    )
+
+    # Secrets Backend Configuration
+    secrets_backend: Optional[str] = Field(
+        default=None,
+        description="Secrets backend: environment, vault, aws_secrets_manager"
     )
     
     # Agent Configuration
@@ -189,11 +208,44 @@ class VirtualsConfig(BaseSettings):
     def validate_api_key(cls, v: str) -> str:
         """Warn if API key is not set but don't fail."""
         if not v:
-            import warnings
             warnings.warn(
                 "VIRTUALS_API_KEY not set. Agent features will be disabled. "
                 "Get your API key from https://console.game.virtuals.io"
             )
+        return v
+
+    @field_validator('operator_private_key', 'solana_private_key')
+    @classmethod
+    def validate_private_key_security(cls, v: str | None, info) -> str | None:
+        """
+        Warn about insecure private key storage in production.
+
+        SECURITY: Private keys loaded from environment variables are a security
+        risk. In production, configure SECRETS_BACKEND to use Vault or AWS
+        Secrets Manager instead.
+        """
+        if v is not None:
+            environment = os.environ.get("VIRTUALS_ENVIRONMENT",
+                                         os.environ.get("ENVIRONMENT", "development"))
+            secrets_backend = os.environ.get("SECRETS_BACKEND", "environment")
+
+            if environment == "production" and secrets_backend == "environment":
+                logger.critical(
+                    f"SECURITY CRITICAL: {info.field_name} loaded from environment variable "
+                    "in production! Configure SECRETS_BACKEND=vault or "
+                    "SECRETS_BACKEND=aws_secrets_manager for secure secrets management."
+                )
+                warnings.warn(
+                    f"Private key '{info.field_name}' loaded from environment variable "
+                    "in production. This is insecure! Use a secrets manager.",
+                    SecurityWarning,
+                    stacklevel=2,
+                )
+            elif environment != "development":
+                logger.warning(
+                    f"Private key '{info.field_name}' loaded from environment variable. "
+                    "Consider using a secrets manager in non-development environments."
+                )
         return v
     
     def get_rpc_endpoint(self, chain: ChainNetwork) -> str:
