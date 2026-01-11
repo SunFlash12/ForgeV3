@@ -144,8 +144,8 @@ class RateLimitRule(ValidationRule):
     # These get populated by the overlay
     minute_counts: dict = field(default_factory=lambda: defaultdict(int))
     hour_counts: dict = field(default_factory=lambda: defaultdict(int))
-    minute_reset: datetime = field(default_factory=datetime.utcnow)
-    hour_reset: datetime = field(default_factory=datetime.utcnow)
+    minute_reset: datetime = field(default_factory=lambda: datetime.now(UTC))
+    hour_reset: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     # SECURITY FIX (Audit 4 - M8): Use asyncio.Lock instead of threading.Lock
     # threading.Lock blocks the entire thread including the event loop
@@ -159,7 +159,7 @@ class RateLimitRule(ValidationRule):
         For thread-safe rate limiting in async contexts, use validate_async().
         """
         user_id = data.get("user_id", "anonymous")
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
 
         # Reset counters if needed (non-atomic, use validate_async for safety)
         if now - self.minute_reset > timedelta(minutes=1):
@@ -195,7 +195,7 @@ class RateLimitRule(ValidationRule):
         rate limiting in async contexts.
         """
         user_id = data.get("user_id", "anonymous")
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
 
         # Use async lock for non-blocking atomic operations
         async with self._async_lock:
@@ -593,7 +593,7 @@ class SecurityValidatorOverlay(BaseOverlay):
         if not user_id:
             return
 
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
 
         # SECURITY FIX (Audit 3): Enforce bounded memory for threat cache
         # Check if we need to evict old users from threat cache
@@ -678,7 +678,7 @@ class SecurityValidatorOverlay(BaseOverlay):
 
     def get_threat_summary(self) -> dict:
         """Get threat summary statistics."""
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         cutoff_hour = now - timedelta(hours=1)
 
         total_threats = sum(

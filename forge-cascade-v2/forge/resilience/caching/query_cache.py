@@ -15,7 +15,7 @@ import json
 from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any, Generic, TypeVar
 
 import structlog
@@ -49,12 +49,12 @@ class CacheEntry(Generic[T]):
     @property
     def is_expired(self) -> bool:
         """Check if this cache entry has expired."""
-        return datetime.utcnow() > self.expires_at
+        return datetime.now(UTC) > self.expires_at
 
     @property
     def ttl_remaining(self) -> int:
         """Get remaining TTL in seconds."""
-        remaining = (self.expires_at - datetime.utcnow()).total_seconds()
+        remaining = (self.expires_at - datetime.now(UTC)).total_seconds()
         return max(0, int(remaining))
 
 
@@ -212,8 +212,8 @@ class QueryCache:
                 self._memory_cache[key] = CacheEntry(
                     key=key,
                     value=value,
-                    created_at=datetime.utcnow(),
-                    expires_at=datetime.utcnow() + timedelta(seconds=ttl),
+                    created_at=datetime.now(UTC),
+                    expires_at=datetime.now(UTC) + timedelta(seconds=ttl),
                     query_type=query_type
                 )
 
@@ -501,7 +501,7 @@ class QueryCache:
             if most_recent == datetime.min:
                 return self._config.lineage_ttl_seconds
 
-            age_hours = (datetime.utcnow() - most_recent).total_seconds() / 3600
+            age_hours = (datetime.now(UTC) - most_recent).total_seconds() / 3600
 
             if age_hours < 1:
                 return 60           # 1 minute for very recent changes

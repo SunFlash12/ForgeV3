@@ -12,7 +12,7 @@ import asyncio
 from collections import defaultdict
 from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
@@ -236,7 +236,7 @@ class EventBus:
             target_overlays=[target] if target else None,
             correlation_id=correlation_id or str(uuid4()),
             metadata=metadata or {},
-            timestamp=datetime.utcnow()
+            timestamp=datetime.now(UTC)
         )
 
         await self._event_queue.put(event)
@@ -311,7 +311,7 @@ class EventBus:
             self._cascade_chains[cascade_id] = CascadeChain(
                 cascade_id=cascade_id,
                 initiated_by=source_overlay,
-                initiated_at=datetime.utcnow(),
+                initiated_at=datetime.now(UTC),
                 events=[],
                 total_hops=0,
                 overlays_affected=[source_overlay],
@@ -346,7 +346,7 @@ class EventBus:
             max_hops=max_hops,
             visited_overlays=visited,
             impact_score=0.0,  # Will be calculated by overlays
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
             correlation_id=cascade_id
         )
 
@@ -399,7 +399,7 @@ class EventBus:
             return None
 
         chain = self._cascade_chains.pop(cascade_id)
-        chain.completed_at = datetime.utcnow()
+        chain.completed_at = datetime.now(UTC)
 
         # PERSISTENCE: Mark chain as complete in database
         if self._cascade_repo:
@@ -502,7 +502,7 @@ class EventBus:
             max_hops=max_hops,
             visited_overlays=list(chain.overlays_affected),
             impact_score=impact_score,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
             correlation_id=cascade_id
         )
 

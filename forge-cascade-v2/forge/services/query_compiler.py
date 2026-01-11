@@ -11,7 +11,7 @@ to prevent injection attacks.
 from __future__ import annotations
 
 import re
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
@@ -324,7 +324,7 @@ class QueryCompiler:
         Returns:
             CompiledQuery with Cypher and parameters
         """
-        datetime.utcnow()
+        datetime.now(UTC)
 
         # Extract intent using LLM
         intent = await self._extract_intent(question)
@@ -745,7 +745,7 @@ class KnowledgeQueryService:
         Returns:
             QueryResult with rows and optional synthesized answer
         """
-        datetime.utcnow()
+        datetime.now(UTC)
 
         # Compile question to Cypher
         compiled = await self.compiler.compile(question, user_trust)
@@ -779,7 +779,7 @@ class KnowledgeQueryService:
             )
 
         # Execute query
-        exec_start = datetime.utcnow()
+        exec_start = datetime.now(UTC)
         try:
             results = await self.db.execute(
                 compiled.cypher,
@@ -796,10 +796,10 @@ class KnowledgeQueryService:
                 truncated=False,
                 answer=f"Query failed: {str(e)}",
                 confidence=0.0,
-                execution_time_ms=(datetime.utcnow() - exec_start).total_seconds() * 1000,
+                execution_time_ms=(datetime.now(UTC) - exec_start).total_seconds() * 1000,
             )
 
-        exec_time = (datetime.utcnow() - exec_start).total_seconds() * 1000
+        exec_time = (datetime.now(UTC) - exec_start).total_seconds() * 1000
 
         # Convert results
         rows = [QueryResultRow(data=r) for r in results[:max_results]]
@@ -809,9 +809,9 @@ class KnowledgeQueryService:
         answer = None
         synthesis_time = 0.0
         if synthesize_answer and rows:
-            synth_start = datetime.utcnow()
+            synth_start = datetime.now(UTC)
             answer = await self._synthesize_answer(question, rows[:20])
-            synthesis_time = (datetime.utcnow() - synth_start).total_seconds() * 1000
+            synthesis_time = (datetime.now(UTC) - synth_start).total_seconds() * 1000
 
         return QueryResult(
             query=compiled,
