@@ -21,6 +21,12 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 logger = logging.getLogger(__name__)
 
 
+class SecurityWarning(UserWarning):
+    """Warning for security-related issues (insecure configurations, etc.)."""
+
+    pass
+
+
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
