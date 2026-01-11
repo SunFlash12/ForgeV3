@@ -5,7 +5,7 @@ Event system for pub/sub messaging and cascade propagation.
 Enables the Cascade Effect where insights propagate across overlays.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
@@ -121,7 +121,7 @@ class Event(ForgeModel):
     type: EventType
     source: str = Field(description="Source component/overlay")
     payload: dict[str, Any] = Field(default_factory=dict)
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     correlation_id: str | None = Field(
         default=None,
         description="For tracing related events",
@@ -158,7 +158,7 @@ class EventSubscription(ForgeModel):
         default=None,
         description="Function name to call",
     )
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -203,7 +203,7 @@ class CascadeEvent(ForgeModel):
         description="Estimated impact of cascade",
     )
 
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     correlation_id: str | None = None
 
     @property
@@ -247,7 +247,7 @@ class EventHandlerResult(ForgeModel):
     output: Any | None = None
     error: str | None = None
     processing_time_ms: float = 0.0
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     # Follow-up events
     triggered_events: list[str] = Field(
@@ -295,4 +295,4 @@ class AuditEvent(ForgeModel):
     user_agent: str | None = None
     correlation_id: str | None = None
     priority: EventPriority = Field(default=EventPriority.NORMAL)
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))

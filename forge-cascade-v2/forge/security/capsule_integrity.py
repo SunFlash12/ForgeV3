@@ -17,7 +17,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import secrets
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 import structlog
@@ -413,7 +413,7 @@ class CapsuleIntegrityService:
         Returns:
             Dictionary with verification results
         """
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         result = {
             "capsule_id": capsule.id,
             "checked_at": now,

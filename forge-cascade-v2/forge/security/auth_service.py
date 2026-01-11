@@ -344,7 +344,7 @@ class AuthService:
             raise InvalidCredentialsError("Invalid username or password")
 
         # Check if account is locked
-        if user.lockout_until and user.lockout_until > datetime.utcnow():
+        if user.lockout_until and user.lockout_until > datetime.now(UTC):
             await self.audit_repo.log_user_action(
                 actor_id=user.id,
                 target_user_id=user.id,
@@ -382,7 +382,7 @@ class AuthService:
 
             # Check if we should lock the account
             if user.failed_login_attempts >= self.MAX_FAILED_ATTEMPTS - 1:
-                lockout_until = datetime.utcnow() + timedelta(
+                lockout_until = datetime.now(UTC) + timedelta(
                     minutes=self.LOCKOUT_DURATION_MINUTES
                 )
                 await self.user_repo.set_lockout(user.id, lockout_until)
@@ -687,7 +687,7 @@ class AuthService:
 
         if user:
             # Token expires in 1 hour
-            expires_at = datetime.utcnow() + timedelta(hours=1)
+            expires_at = datetime.now(UTC) + timedelta(hours=1)
 
             await self.user_repo.store_password_reset_token(
                 user_id=user.id,

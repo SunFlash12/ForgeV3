@@ -21,7 +21,7 @@ import os
 import secrets
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Any, TypeVar
 from uuid import uuid4
@@ -67,7 +67,7 @@ class EncryptionKey:
         """Check if key is expired."""
         if not self.expires_at:
             return False
-        return datetime.utcnow() > self.expires_at
+        return datetime.now(UTC) > self.expires_at
     
     def to_dict(self) -> dict[str, Any]:
         """Serialize key metadata (without material)."""
@@ -161,8 +161,8 @@ class InMemoryKeyStore(KeyStore):
             key_id=str(uuid4()),
             key_material=secrets.token_bytes(32),
             algorithm=config.encryption_at_rest_standard,
-            created_at=datetime.utcnow(),
-            expires_at=datetime.utcnow() + timedelta(days=rotation_days),
+            created_at=datetime.now(UTC),
+            expires_at=datetime.now(UTC) + timedelta(days=rotation_days),
             purpose=purpose,
             version=old_version + 1,
             is_active=True,
@@ -393,8 +393,8 @@ class DatabaseKeyStore(KeyStore):
             key_id=str(uuid4()),
             key_material=secrets.token_bytes(32),
             algorithm=config.encryption_at_rest_standard,
-            created_at=datetime.utcnow(),
-            expires_at=datetime.utcnow() + timedelta(days=rotation_days),
+            created_at=datetime.now(UTC),
+            expires_at=datetime.now(UTC) + timedelta(days=rotation_days),
             purpose=purpose,
             version=old_version + 1,
             is_active=True,
@@ -431,7 +431,7 @@ class EncryptedData:
     nonce: bytes
     key_id: str
     algorithm: str
-    encrypted_at: datetime = field(default_factory=datetime.utcnow)
+    encrypted_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     
     def to_bytes(self) -> bytes:
         """Serialize to bytes for storage."""
@@ -619,7 +619,7 @@ class EncryptionService:
             "kek_nonce": base64.b64encode(kek_nonce).decode(),
             "kek_id": kek.key_id,
             "algorithm": "AES-256-GCM-ENVELOPE",
-            "encrypted_at": datetime.utcnow().isoformat(),
+            "encrypted_at": datetime.now(UTC).isoformat(),
         }
     
     async def envelope_decrypt(
@@ -877,7 +877,7 @@ class EncryptionService:
         
         for key in all_keys:
             if key.is_active and key.expires_at:
-                days_until_expiry = (key.expires_at - datetime.utcnow()).days
+                days_until_expiry = (key.expires_at - datetime.now(UTC)).days
                 if days_until_expiry < 7:  # Warning threshold
                     expiring.append(key)
                     logger.warning(
