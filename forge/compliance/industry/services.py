@@ -16,7 +16,7 @@ and audit requirements for the respective industry.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Any
 from uuid import uuid4
@@ -90,7 +90,7 @@ class HIPAAAuthorization:
     authorized_by: str = ""
     
     # Validity
-    effective_date: datetime = field(default_factory=datetime.utcnow)
+    effective_date: datetime = field(default_factory=lambda: datetime.now(UTC))
     expiration_date: datetime | None = None
     revoked: bool = False
     revoked_at: datetime | None = None
@@ -104,7 +104,7 @@ class HIPAAAuthorization:
     def is_valid(self) -> bool:
         if self.revoked:
             return False
-        if self.expiration_date and datetime.utcnow() > self.expiration_date:
+        if self.expiration_date and datetime.now(UTC) > self.expiration_date:
             return False
         return self.signature_obtained
 
@@ -115,7 +115,7 @@ class PHIAccessLog:
     log_id: str = field(default_factory=lambda: str(uuid4()))
     
     # Access details
-    accessed_at: datetime = field(default_factory=datetime.utcnow)
+    accessed_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     accessor_id: str = ""
     accessor_role: str = ""
     accessor_organization: str = ""
@@ -178,9 +178,9 @@ class HIPAAComplianceService:
         # Default expiration based on purpose
         if expiration_date is None:
             if purpose == HIPAAAuthorizationPurpose.RESEARCH:
-                expiration_date = datetime.utcnow() + timedelta(days=365)
+                expiration_date = datetime.now(UTC) + timedelta(days=365)
             else:
-                expiration_date = datetime.utcnow() + timedelta(days=90)
+                expiration_date = datetime.now(UTC) + timedelta(days=90)
         
         auth = HIPAAAuthorization(
             patient_id=patient_id,
@@ -416,7 +416,7 @@ class PCIScope:
 class PCIScanResult:
     """Vulnerability scan result for PCI compliance."""
     scan_id: str = field(default_factory=lambda: str(uuid4()))
-    scan_date: datetime = field(default_factory=datetime.utcnow)
+    scan_date: datetime = field(default_factory=lambda: datetime.now(UTC))
     scan_type: str = ""  # internal, external, asv
     scanner: str = ""
     
@@ -637,7 +637,7 @@ class PCIDSSComplianceService:
                 last_asv = scan
         
         # Determine if scans are current (within 90 days)
-        scan_threshold = datetime.utcnow() - timedelta(days=90)
+        scan_threshold = datetime.now(UTC) - timedelta(days=90)
         
         return {
             "internal_scan_current": (
@@ -692,7 +692,7 @@ class ChildProfile:
     third_party_sharing: bool = False
     
     # Account status
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     active: bool = True
 
 
@@ -771,8 +771,8 @@ class COPPAComplianceService:
             "parent_email": profile.parent_email,
             "data_requested": data_to_collect,
             "third_party_sharing": third_party_sharing,
-            "created_at": datetime.utcnow().isoformat(),
-            "expires_at": (datetime.utcnow() + timedelta(days=7)).isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
+            "expires_at": (datetime.now(UTC) + timedelta(days=7)).isoformat(),
             "notice_content": self._generate_coppa_notice(data_to_collect, third_party_sharing),
         }
         
@@ -831,7 +831,7 @@ To exercise these rights, contact us at [privacy contact].
         
         profile.consent_obtained = True
         profile.consent_method = consent_method
-        profile.consent_date = datetime.utcnow()
+        profile.consent_date = datetime.now(UTC)
         profile.consent_scope = data_scope
         profile.data_collected = data_scope
         profile.third_party_sharing = third_party_sharing
@@ -842,7 +842,7 @@ To exercise these rights, contact us at [privacy contact].
             "profile_id": profile_id,
             "method": consent_method.value,
             "scope": data_scope,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "verification_reference": verification_reference,
         })
         

@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Any, Callable, Awaitable
 from uuid import uuid4
@@ -110,7 +110,7 @@ class BiasAssessment:
     ai_system_id: str = ""
     
     # Assessment details
-    assessed_at: datetime = field(default_factory=datetime.utcnow)
+    assessed_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     assessed_by: str = ""
     assessment_type: str = "automated"  # automated, manual, third_party
     
@@ -157,7 +157,7 @@ class ConformityAssessment:
     ai_system_id: str = ""
     
     # Assessment metadata
-    initiated_at: datetime = field(default_factory=datetime.utcnow)
+    initiated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     completed_at: datetime | None = None
     assessor: str = ""  # Self, notified body, or third party
     notified_body_id: str | None = None
@@ -237,7 +237,7 @@ class ImpactAssessment:
     ai_system_id: str = ""
     
     # Assessment metadata
-    conducted_at: datetime = field(default_factory=datetime.utcnow)
+    conducted_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     conducted_by: str = ""
     review_frequency: str = "annual"  # annual, semi_annual, quarterly
     next_review: datetime | None = None
@@ -546,7 +546,7 @@ class AIGovernanceService:
         # Check if human review required
         if self._requires_human_review(decision, system):
             decision.human_review_requested = True
-            decision.human_review_requested_at = datetime.utcnow()
+            decision.human_review_requested_at = datetime.now(UTC)
             
             logger.info(
                 "ai_decision_review_required",
@@ -616,7 +616,7 @@ class AIGovernanceService:
         
         decision.human_reviewed = True
         decision.human_reviewer_id = reviewer_id
-        decision.human_review_completed_at = datetime.utcnow()
+        decision.human_review_completed_at = datetime.now(UTC)
         decision.human_override = override
         
         if override:
@@ -881,7 +881,7 @@ class AIGovernanceService:
             assessment.bias_detected = True
             assessment.affected_groups = list(set(f.split(":")[0] for f in failures))
             assessment.remediation_required = True
-            assessment.remediation_deadline = datetime.utcnow() + timedelta(days=30)
+            assessment.remediation_deadline = datetime.now(UTC) + timedelta(days=30)
             assessment.recommendations = self._generate_bias_recommendations(failures, assessment.metrics)
 
         self._bias_assessments[assessment.assessment_id] = assessment
@@ -997,7 +997,7 @@ class AIGovernanceService:
         
         # Check if complete
         if assessment.is_complete and not assessment.completed_at:
-            assessment.completed_at = datetime.utcnow()
+            assessment.completed_at = datetime.now(UTC)
             
             # Update system registration
             system = self._systems.get(assessment.ai_system_id)

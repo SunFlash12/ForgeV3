@@ -14,7 +14,7 @@ Per GDPR Article 44-49, PIPL Chapter III, Russia FZ-152
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 from uuid import uuid4
@@ -104,7 +104,7 @@ class TransferRequest:
     tia_reference: str | None = None
     
     # Metadata
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     entity_id: str | None = None
     entity_type: str | None = None
 
@@ -375,7 +375,7 @@ class DataResidencyService:
         if target_region in allowed:
             # Transfer within allowed regions - auto-approve
             request.approved = True
-            request.approved_at = datetime.utcnow()
+            request.approved_at = datetime.now(UTC)
             request.mechanism = TransferMechanism.ADEQUACY
             logger.info(
                 "transfer_auto_approved",
@@ -483,7 +483,7 @@ class DataResidencyService:
         
         request.approved = True
         request.approved_by = approver_id
-        request.approved_at = datetime.utcnow()
+        request.approved_at = datetime.now(UTC)
         request.mechanism_reference = mechanism_reference
         
         logger.info(
@@ -529,7 +529,7 @@ class DataResidencyService:
             transfer_permitted=transfer_permitted,
             conditions=conditions,
             assessed_by=assessor_id,
-            assessed_at=datetime.utcnow(),
+            assessed_at=datetime.now(UTC),
         )
         
         # Update transfer request

@@ -22,7 +22,7 @@ import base64
 import hashlib
 import json
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from enum import Enum
 from typing import Any
 from uuid import uuid4
@@ -166,7 +166,7 @@ class ConsentPreferences:
     tcf_version: int = 2
     
     # Metadata
-    last_updated: datetime = field(default_factory=datetime.utcnow)
+    last_updated: datetime = field(default_factory=lambda: datetime.now(UTC))
     update_count: int = 0
     
     # Version tracking
@@ -179,7 +179,7 @@ class ConsentTransaction:
     """Audit record of consent change."""
     transaction_id: str = field(default_factory=lambda: str(uuid4()))
     user_id: str = ""
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     
     # Change details
     action: str = ""  # grant, deny, withdraw, update
@@ -198,7 +198,7 @@ class ConsentPolicy:
     """Consent policy configuration."""
     policy_id: str = field(default_factory=lambda: str(uuid4()))
     version: str = "1.0"
-    effective_date: datetime = field(default_factory=datetime.utcnow)
+    effective_date: datetime = field(default_factory=lambda: datetime.now(UTC))
     
     # Required purposes (cannot be opted out)
     required_purposes: list[ConsentPurpose] = field(default_factory=list)
@@ -398,7 +398,7 @@ class ConsentManagementService:
             user_id=user_id,
             purpose=purpose,
             status=ConsentStatus.WITHDRAWN,
-            withdrawn_at=datetime.utcnow(),
+            withdrawn_at=datetime.now(UTC),
             source=source,
             ip_address=ip_address,
             user_agent=user_agent,
@@ -476,7 +476,7 @@ class ConsentManagementService:
                     user_agent=user_agent,
                 )
         
-        prefs.last_updated = datetime.utcnow()
+        prefs.last_updated = datetime.now(UTC)
         prefs.update_count += 1
         
         logger.info(
@@ -514,7 +514,7 @@ class ConsentManagementService:
                 user_agent=user_agent,
             )
         
-        prefs.last_updated = datetime.utcnow()
+        prefs.last_updated = datetime.now(UTC)
         
         logger.info(
             "do_not_sell_processed",
@@ -550,7 +550,7 @@ class ConsentManagementService:
                 user_agent=user_agent,
             )
         
-        prefs.last_updated = datetime.utcnow()
+        prefs.last_updated = datetime.now(UTC)
         
         logger.info(
             "limit_sensitive_processed",
@@ -653,7 +653,7 @@ class ConsentManagementService:
         """Update user preferences with new consent status."""
         prefs = await self.get_preferences(user_id)
         prefs.purposes[purpose.value] = status.value
-        prefs.last_updated = datetime.utcnow()
+        prefs.last_updated = datetime.now(UTC)
         prefs.update_count += 1
     
     async def get_consent_history(
@@ -685,8 +685,8 @@ class ConsentManagementService:
             # This is a simplified decoder
             decoded = {
                 "version": 2,
-                "created": datetime.utcnow().isoformat(),
-                "last_updated": datetime.utcnow().isoformat(),
+                "created": datetime.now(UTC).isoformat(),
+                "last_updated": datetime.now(UTC).isoformat(),
                 "cmp_id": 0,
                 "cmp_version": 0,
                 "consent_screen": 0,
@@ -728,7 +728,7 @@ class ConsentManagementService:
             "purposes": purpose_consents,
             "vendors": vendor_consents,
             "cmp": cmp_id,
-            "ts": int(datetime.utcnow().timestamp()),
+            "ts": int(datetime.now(UTC).timestamp()),
         }
         
         # Base64url encode
@@ -807,7 +807,7 @@ class ConsentManagementService:
         
         return {
             "user_id": user_id,
-            "exported_at": datetime.utcnow().isoformat(),
+            "exported_at": datetime.now(UTC).isoformat(),
             "current_preferences": {
                 "purposes": prefs.purposes,
                 "gpc_enabled": prefs.gpc_enabled,

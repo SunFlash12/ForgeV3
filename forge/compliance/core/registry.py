@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Callable, Any
-from datetime import datetime
+from datetime import UTC, datetime
 
 from forge.compliance.core.enums import (
     ComplianceFramework,
@@ -1103,7 +1103,7 @@ class ComplianceRegistry:
             evidence_provided=evidence or [],
             risk_if_missing=control.risk_if_missing,
             auditor_notes=notes,
-            last_audit_date=datetime.utcnow() if verified else None,
+            last_audit_date=datetime.now(UTC) if verified else None,
         )
         
         self._statuses[control_id] = status

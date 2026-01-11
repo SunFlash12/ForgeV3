@@ -18,7 +18,7 @@ Provides:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 from uuid import uuid4
@@ -94,7 +94,7 @@ class AccessibilityIssue:
     
     # Status
     status: str = "open"  # open, in_progress, resolved, wont_fix
-    found_at: datetime = field(default_factory=datetime.utcnow)
+    found_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     resolved_at: datetime | None = None
     
     # Testing
@@ -114,7 +114,7 @@ class AccessibilityAudit:
     target_level: WCAGLevel = WCAGLevel.AA
     
     # Metadata
-    audited_at: datetime = field(default_factory=datetime.utcnow)
+    audited_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     auditor: str = ""
     methodology: str = ""
     
@@ -153,7 +153,7 @@ class VPAT:
     vendor_name: str = ""
     
     # Document info
-    report_date: datetime = field(default_factory=datetime.utcnow)
+    report_date: datetime = field(default_factory=lambda: datetime.now(UTC))
     standard: AccessibilityStandard = AccessibilityStandard.WCAG_22
     target_level: WCAGLevel = WCAGLevel.AA
     
@@ -480,7 +480,7 @@ class AccessibilityComplianceService:
             raise ValueError(f"Issue not found: {issue_id}")
         
         issue.status = "resolved"
-        issue.resolved_at = datetime.utcnow()
+        issue.resolved_at = datetime.now(UTC)
         
         logger.info(
             "accessibility_issue_resolved",
@@ -619,7 +619,7 @@ class AccessibilityComplianceService:
 **Website:** {website_url}
 **Standard:** {standard.value.replace('_', ' ').upper()}
 **Conformance Level:** {conformance_level.value}
-**Statement Date:** {datetime.utcnow().strftime('%Y-%m-%d')}
+**Statement Date:** {datetime.now(UTC).strftime('%Y-%m-%d')}
 
 ## Our Commitment
 
@@ -672,7 +672,7 @@ Despite our best efforts to ensure accessibility, there may be some
 limitations. Please contact us if you encounter issues.
 
 ---
-*This statement was last updated on {datetime.utcnow().strftime('%Y-%m-%d')}.*
+*This statement was last updated on {datetime.now(UTC).strftime('%Y-%m-%d')}.*
 """
         
         return statement

@@ -22,7 +22,7 @@ import hashlib
 import hmac
 import secrets
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Any, Callable
 from uuid import uuid4
@@ -145,7 +145,7 @@ class AttributePolicy:
         for attr, value in self.environment_attributes.items():
             if attr == "time_of_day":
                 # Special handling for time-based policies
-                current_hour = datetime.utcnow().hour
+                current_hour = datetime.now(UTC).hour
                 if value == "business_hours" and not (9 <= current_hour <= 17):
                     return False
             elif environment.get(attr) != value:
@@ -492,13 +492,13 @@ class Session:
     
     @property
     def is_expired(self) -> bool:
-        return datetime.utcnow() > self.expires_at
+        return datetime.now(UTC) > self.expires_at
     
     @property
     def is_idle(self) -> bool:
         # 15-minute idle timeout per PCI-DSS
         idle_threshold = timedelta(minutes=15)
-        return datetime.utcnow() - self.last_activity > idle_threshold
+        return datetime.now(UTC) - self.last_activity > idle_threshold
 
 
 class AuthenticationService:
@@ -527,8 +527,8 @@ class AuthenticationService:
             challenge_id=str(uuid4()),
             user_id=user_id,
             method=method,
-            created_at=datetime.utcnow(),
-            expires_at=datetime.utcnow() + timedelta(minutes=5),
+            created_at=datetime.now(UTC),
+            expires_at=datetime.now(UTC) + timedelta(minutes=5),
             secret=secrets.token_hex(16) if method in {MFAMethod.TOTP, MFAMethod.SMS, MFAMethod.EMAIL} else None,
         )
         
@@ -560,7 +560,7 @@ class AuthenticationService:
         if challenge.verified:
             return False
         
-        if datetime.utcnow() > challenge.expires_at:
+        if datetime.now(UTC) > challenge.expires_at:
             logger.warning("mfa_challenge_expired", challenge_id=challenge_id)
             return False
         
@@ -605,9 +605,9 @@ class AuthenticationService:
         session = Session(
             session_id=secrets.token_urlsafe(32),
             user_id=user_id,
-            created_at=datetime.utcnow(),
-            expires_at=datetime.utcnow() + duration,
-            last_activity=datetime.utcnow(),
+            created_at=datetime.now(UTC),
+            expires_at=datetime.now(UTC) + duration,
+            last_activity=datetime.now(UTC),
             ip_address=ip_address,
             user_agent=user_agent,
             mfa_verified=mfa_verified,
@@ -650,7 +650,7 @@ class AuthenticationService:
             return None
         
         # Refresh activity
-        session.last_activity = datetime.utcnow()
+        session.last_activity = datetime.now(UTC)
         
         return session
     
@@ -667,13 +667,13 @@ class AuthenticationService:
     def check_account_lockout(self, user_id: str) -> bool:
         """Check if account is locked out."""
         lockout_until = self._lockouts.get(user_id)
-        if lockout_until and datetime.utcnow() < lockout_until:
+        if lockout_until and datetime.now(UTC) < lockout_until:
             return True
         return False
     
     def record_failed_attempt(self, user_id: str) -> None:
         """Record a failed authentication attempt."""
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         
         if user_id not in self._failed_attempts:
             self._failed_attempts[user_id] = []

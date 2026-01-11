@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Any
 from uuid import uuid4
@@ -86,7 +86,7 @@ class GeneratedReport:
     report_id: str = field(default_factory=lambda: str(uuid4()))
     report_type: ReportType = ReportType.FULL_ASSESSMENT
     title: str = ""
-    generated_at: datetime = field(default_factory=datetime.utcnow)
+    generated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     generated_by: str = ""
     
     # Scope
@@ -263,8 +263,8 @@ class ComplianceReportingService:
             generated_by=generated_by,
             frameworks=frameworks or [],
             jurisdictions=jurisdictions or [],
-            period_start=period_start or (datetime.utcnow() - timedelta(days=365)),
-            period_end=period_end or datetime.utcnow(),
+            period_start=period_start or (datetime.now(UTC) - timedelta(days=365)),
+            period_end=period_end or datetime.now(UTC),
         )
         
         # Set title based on type
