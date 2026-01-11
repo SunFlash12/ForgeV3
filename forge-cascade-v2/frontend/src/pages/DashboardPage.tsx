@@ -27,32 +27,32 @@ import { api } from '../api/client';
 import { Card, StatCard, StatusBadge, LoadingSpinner, SeverityBadge } from '../components/common';
 import type { HealthStatus } from '../types';
 
-// Mock data for charts (would come from API in production)
-const activityData = [
-  { time: '00:00', capsules: 12, votes: 5, events: 45 },
-  { time: '04:00', capsules: 8, votes: 2, events: 28 },
-  { time: '08:00', capsules: 24, votes: 15, events: 89 },
-  { time: '12:00', capsules: 45, votes: 28, events: 156 },
-  { time: '16:00', capsules: 38, votes: 22, events: 134 },
-  { time: '20:00', capsules: 29, votes: 12, events: 78 },
+// Fallback data for when API returns empty results (initial state)
+const fallbackActivityData = [
+  { time: '00:00', capsules: 0, votes: 0, events: 0 },
+  { time: '04:00', capsules: 0, votes: 0, events: 0 },
+  { time: '08:00', capsules: 0, votes: 0, events: 0 },
+  { time: '12:00', capsules: 0, votes: 0, events: 0 },
+  { time: '16:00', capsules: 0, votes: 0, events: 0 },
+  { time: '20:00', capsules: 0, votes: 0, events: 0 },
 ];
 
-const trustDistribution = [
-  { name: 'Core', value: 15, color: '#8b5cf6' },
-  { name: 'Trusted', value: 45, color: '#22c55e' },
-  { name: 'Standard', value: 120, color: '#3b82f6' },
-  { name: 'Sandbox', value: 280, color: '#f59e0b' },
-  { name: 'Untrusted', value: 40, color: '#ef4444' },
+const fallbackTrustDistribution = [
+  { name: 'Core', value: 0, color: '#8b5cf6' },
+  { name: 'Trusted', value: 0, color: '#22c55e' },
+  { name: 'Standard', value: 0, color: '#3b82f6' },
+  { name: 'Sandbox', value: 0, color: '#f59e0b' },
+  { name: 'Untrusted', value: 0, color: '#ef4444' },
 ];
 
-const pipelinePhases = [
-  { phase: 'Validation', duration: 12 },
-  { phase: 'Security', duration: 28 },
-  { phase: 'Intelligence', duration: 45 },
-  { phase: 'Governance', duration: 18 },
-  { phase: 'Lineage', duration: 15 },
-  { phase: 'Consensus', duration: 22 },
-  { phase: 'Commit', duration: 8 },
+const fallbackPipelinePhases = [
+  { phase: 'Validation', duration: 0 },
+  { phase: 'Security', duration: 0 },
+  { phase: 'Intelligence', duration: 0 },
+  { phase: 'Governance', duration: 0 },
+  { phase: 'Lineage', duration: 0 },
+  { phase: 'Consensus', duration: 0 },
+  { phase: 'Commit', duration: 0 },
 ];
 
 export default function DashboardPage() {
@@ -82,6 +82,30 @@ export default function DashboardPage() {
     queryKey: ['recent-capsules'],
     queryFn: () => api.getRecentCapsules(5),
   });
+
+  // Dashboard chart data from API
+  const { data: activityTimeline } = useQuery({
+    queryKey: ['activity-timeline'],
+    queryFn: () => api.getActivityTimeline(24),
+    refetchInterval: 60000, // Refresh every minute
+  });
+
+  const { data: trustDistributionData } = useQuery({
+    queryKey: ['trust-distribution'],
+    queryFn: () => api.getTrustDistribution(),
+    refetchInterval: 120000, // Refresh every 2 minutes
+  });
+
+  const { data: pipelinePerformance } = useQuery({
+    queryKey: ['pipeline-performance'],
+    queryFn: () => api.getPipelinePerformance(),
+    refetchInterval: 30000, // Refresh every 30 seconds
+  });
+
+  // Use API data or fallback to empty state
+  const activityData = activityTimeline?.data ?? fallbackActivityData;
+  const trustDistribution = trustDistributionData?.distribution ?? fallbackTrustDistribution;
+  const pipelinePhases = pipelinePerformance?.phases ?? fallbackPipelinePhases;
 
   if (metricsLoading) {
     return (

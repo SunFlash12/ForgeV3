@@ -526,6 +526,37 @@ class ForgeApiClient {
     return response.data;
   }
 
+  // Dashboard Metrics Endpoints
+  async getActivityTimeline(hours?: number): Promise<{
+    data: Array<{ time: string; capsules: number; votes: number; events: number }>;
+    total_capsules: number;
+    total_votes: number;
+    total_events: number;
+    period_hours: number;
+  }> {
+    const response = await this.client.get('/system/metrics/activity-timeline', {
+      params: hours ? { hours } : undefined,
+    });
+    return response.data;
+  }
+
+  async getTrustDistribution(): Promise<{
+    distribution: Array<{ name: string; value: number; color: string }>;
+    total_users: number;
+  }> {
+    const response = await this.client.get('/system/metrics/trust-distribution');
+    return response.data;
+  }
+
+  async getPipelinePerformance(): Promise<{
+    phases: Array<{ phase: string; duration: number; execution_count: number }>;
+    total_executions: number;
+    average_total_duration_ms: number;
+  }> {
+    const response = await this.client.get('/system/metrics/pipeline-performance');
+    return response.data;
+  }
+
   // ============================================================================
   // Generic HTTP Methods (for custom endpoints)
   // ============================================================================
