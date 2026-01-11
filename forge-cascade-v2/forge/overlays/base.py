@@ -9,7 +9,7 @@ loaded, configured, and executed within the Forge kernel.
 import asyncio
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
@@ -62,7 +62,7 @@ class OverlayContext:
 
     # Metadata
     metadata: dict[str, Any] = field(default_factory=dict)
-    started_at: datetime = field(default_factory=datetime.utcnow)
+    started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def has_capability(self, cap: Capability) -> bool:
         """Check if context has a capability."""
@@ -275,7 +275,7 @@ class BaseOverlay(ABC):
                 # Execute returned failure without raising - still an error
                 self.error_count += 1
                 self.last_error = result.error or "Execution returned failure"
-            self.last_execution = datetime.utcnow()
+            self.last_execution = datetime.now(UTC)
 
             self._logger.info(
                 "overlay_execution_complete",
@@ -351,7 +351,7 @@ class BaseOverlay(ABC):
             error_rate=error_rate,
             last_execution=self.last_execution,
             last_error=self.last_error,
-            checked_at=datetime.utcnow()
+            checked_at=datetime.now(UTC)
         )
 
     def get_manifest(self) -> OverlayManifest:

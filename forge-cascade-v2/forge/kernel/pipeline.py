@@ -17,7 +17,7 @@ Phases:
 import asyncio
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 from uuid import uuid4
@@ -119,7 +119,7 @@ class PipelineContext:
     fuel_budget: FuelBudget | None = None
 
     # Timing
-    started_at: datetime = field(default_factory=datetime.utcnow)
+    started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     current_phase: PipelinePhase | None = None
 
     # Metadata
@@ -498,7 +498,7 @@ class Pipeline:
             errors=errors,
             duration_ms=duration_ms,
             started_at=context.started_at,
-            completed_at=datetime.utcnow()
+            completed_at=datetime.now(UTC)
         )
 
         # Completion hooks
@@ -537,7 +537,7 @@ class Pipeline:
     ) -> PhaseResult:
         """Execute a single phase."""
         start_time = asyncio.get_running_loop().time()
-        started_at = datetime.utcnow()
+        started_at = datetime.now(UTC)
 
         self._logger.debug(
             "phase_started",
@@ -556,7 +556,7 @@ class Pipeline:
                     timeout=config.timeout_ms / 1000
                 )
                 result.started_at = started_at
-                result.completed_at = datetime.utcnow()
+                result.completed_at = datetime.now(UTC)
                 result.duration_ms = (asyncio.get_running_loop().time() - start_time) * 1000
                 return result
 
@@ -567,7 +567,7 @@ class Pipeline:
                     errors=[f"Phase timeout after {config.timeout_ms}ms"],
                     duration_ms=config.timeout_ms,
                     started_at=started_at,
-                    completed_at=datetime.utcnow()
+                    completed_at=datetime.now(UTC)
                 )
 
         # Default: execute registered overlays for this phase
@@ -580,7 +580,7 @@ class Pipeline:
                 data=context.data.copy(),
                 duration_ms=(asyncio.get_running_loop().time() - start_time) * 1000,
                 started_at=started_at,
-                completed_at=datetime.utcnow()
+                completed_at=datetime.now(UTC)
             )
 
         manager = self._get_overlay_manager()
@@ -602,7 +602,7 @@ class Pipeline:
                 data=context.data.copy(),
                 duration_ms=(asyncio.get_running_loop().time() - start_time) * 1000,
                 started_at=started_at,
-                completed_at=datetime.utcnow()
+                completed_at=datetime.now(UTC)
             )
 
         # Execute overlays
@@ -734,7 +734,7 @@ class Pipeline:
             errors=errors,
             duration_ms=duration_ms,
             started_at=started_at,
-            completed_at=datetime.utcnow()
+            completed_at=datetime.now(UTC)
         )
 
     async def _run_handler(

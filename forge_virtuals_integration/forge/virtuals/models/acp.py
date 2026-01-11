@@ -9,7 +9,7 @@ The protocol ensures trustless interactions with on-chain settlement,
 making it ideal for inter-overlay communication and knowledge monetization.
 """
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any, Optional
 from uuid import uuid4
 
@@ -97,8 +97,8 @@ class JobOffering(BaseModel):
     
     # Metadata
     tags: list[str] = Field(default_factory=list)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     
     # On-chain registration
     registry_id: Optional[str] = Field(
@@ -139,7 +139,7 @@ class ACPMemo(BaseModel):
     sender_signature: str = Field(description="ECDSA signature of content_hash")
 
     # Timestamps
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     # On-chain state
     tx_hash: Optional[str] = None
@@ -358,7 +358,7 @@ class ACPRegistryEntry(BaseModel):
     total_revenue_earned: float = Field(default=0.0)
     reputation_score: float = Field(default=0.5, ge=0.0, le=1.0)
     is_verified: bool = Field(default=False)
-    registered_at: datetime = Field(default_factory=datetime.utcnow)
+    registered_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     last_active_at: Optional[datetime] = None
 
 
