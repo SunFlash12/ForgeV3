@@ -1411,3 +1411,260 @@ async def get_events_alias(
         limit=limit,
         event_type=event_type,
     )
+
+
+# ============================================================================
+# Dashboard Metrics Endpoints
+# ============================================================================
+
+
+class ActivityDataPoint(BaseModel):
+    """Single activity data point for timeline charts."""
+    time: str = Field(description="Time label (e.g., '08:00')")
+    capsules: int = Field(description="Capsule count in this period")
+    votes: int = Field(description="Vote count in this period")
+    events: int = Field(description="Event count in this period")
+
+
+class ActivityTimelineResponse(BaseModel):
+    """Activity timeline data for dashboard charts."""
+    data: list[ActivityDataPoint]
+    total_capsules: int
+    total_votes: int
+    total_events: int
+    period_hours: int
+
+
+@router.get(
+    "/metrics/activity-timeline",
+    response_model=ActivityTimelineResponse,
+    summary="Get activity timeline",
+    description="Returns time-series activity data for dashboard charts"
+)
+async def get_activity_timeline(
+    _user: CurrentUserDep,
+    db_client: DbClientDep,
+    event_system: EventSystemDep,
+    hours: int = Query(default=24, ge=1, le=168, description="Hours to look back"),
+) -> ActivityTimelineResponse:
+    """
+    Get activity timeline data for dashboard charts.
+
+    Returns capsule, vote, and event counts bucketed by 4-hour periods.
+    """
+    # Calculate time buckets (every 4 hours for 24h period)
+    now = datetime.now(UTC)
+    bucket_size = max(1, hours // 6)  # 6 data points
+
+    data_points = []
+    total_capsules = 0
+    total_votes = 0
+    total_events = 0
+
+    # Get event history for event counts
+    event_history = getattr(event_system, "_event_history", [])
+
+    for i in range(6):
+        # Calculate time range for this bucket
+        bucket_end = now - timedelta(hours=i * bucket_size)
+        bucket_start = bucket_end - timedelta(hours=bucket_size)
+        time_label = bucket_end.strftime("%H:00")
+
+        # Query capsules created in this period
+        capsule_query = """
+        MATCH (c:Capsule)
+        WHERE c.created_at >= $start AND c.created_at < $end
+        RETURN count(c) as count
+        """
+        capsule_result = await db_client.execute_single(capsule_query, {
+            "start": bucket_start.isoformat(),
+            "end": bucket_end.isoformat()
+        })
+        capsule_count = capsule_result.get("count", 0) if capsule_result else 0
+
+        # Query votes cast in this period
+        vote_query = """
+        MATCH (v:Vote)
+        WHERE v.created_at >= $start AND v.created_at < $end
+        RETURN count(v) as count
+        """
+        vote_result = await db_client.execute_single(vote_query, {
+            "start": bucket_start.isoformat(),
+            "end": bucket_end.isoformat()
+        })
+        vote_count = vote_result.get("count", 0) if vote_result else 0
+
+        # Count events from history
+        event_count = len([
+            e for e in event_history
+            if bucket_start <= e.get("timestamp", now) < bucket_end
+        ])
+
+        data_points.append(ActivityDataPoint(
+            time=time_label,
+            capsules=capsule_count,
+            votes=vote_count,
+            events=event_count
+        ))
+
+        total_capsules += capsule_count
+        total_votes += vote_count
+        total_events += event_count
+
+    # Reverse to show chronological order (oldest first)
+    data_points.reverse()
+
+    return ActivityTimelineResponse(
+        data=data_points,
+        total_capsules=total_capsules,
+        total_votes=total_votes,
+        total_events=total_events,
+        period_hours=hours
+    )
+
+
+class TrustDistributionEntry(BaseModel):
+    """Trust level distribution entry."""
+    name: str = Field(description="Trust level name")
+    value: int = Field(description="Number of users at this level")
+    color: str = Field(description="Suggested color for charting")
+
+
+class TrustDistributionResponse(BaseModel):
+    """Trust distribution data for dashboard charts."""
+    distribution: list[TrustDistributionEntry]
+    total_users: int
+
+
+@router.get(
+    "/metrics/trust-distribution",
+    response_model=TrustDistributionResponse,
+    summary="Get trust distribution",
+    description="Returns user distribution by trust level for dashboard charts"
+)
+async def get_trust_distribution(
+    _user: CurrentUserDep,
+    db_client: DbClientDep,
+) -> TrustDistributionResponse:
+    """
+    Get trust distribution data for dashboard charts.
+
+    Returns count of users at each trust level.
+    """
+    # Trust level colors (consistent with frontend)
+    trust_colors = {
+        "Core": "#8b5cf6",      # Purple
+        "Trusted": "#22c55e",   # Green
+        "Standard": "#3b82f6",  # Blue
+        "Sandbox": "#f59e0b",   # Amber
+        "Untrusted": "#ef4444", # Red
+    }
+
+    # Trust level boundaries (based on TrustLevel enum values)
+    # Core: 80-100, Trusted: 60-79, Standard: 40-59, Sandbox: 20-39, Untrusted: 0-19
+    trust_ranges = [
+        ("Core", 80, 101),
+        ("Trusted", 60, 80),
+        ("Standard", 40, 60),
+        ("Sandbox", 20, 40),
+        ("Untrusted", 0, 20),
+    ]
+
+    distribution = []
+    total = 0
+
+    for name, min_val, max_val in trust_ranges:
+        query = """
+        MATCH (u:User)
+        WHERE u.trust_flame >= $min AND u.trust_flame < $max
+        RETURN count(u) as count
+        """
+        result = await db_client.execute_single(query, {"min": min_val, "max": max_val})
+        count = result.get("count", 0) if result else 0
+
+        distribution.append(TrustDistributionEntry(
+            name=name,
+            value=count,
+            color=trust_colors.get(name, "#94a3b8")
+        ))
+        total += count
+
+    return TrustDistributionResponse(
+        distribution=distribution,
+        total_users=total
+    )
+
+
+class PipelinePhaseMetric(BaseModel):
+    """Pipeline phase performance metric."""
+    phase: str = Field(description="Pipeline phase name")
+    duration: float = Field(description="Average duration in milliseconds")
+    execution_count: int = Field(description="Number of executions")
+
+
+class PipelinePerformanceResponse(BaseModel):
+    """Pipeline performance data for dashboard charts."""
+    phases: list[PipelinePhaseMetric]
+    total_executions: int
+    average_total_duration_ms: float
+
+
+@router.get(
+    "/metrics/pipeline-performance",
+    response_model=PipelinePerformanceResponse,
+    summary="Get pipeline performance",
+    description="Returns pipeline phase performance data for dashboard charts"
+)
+async def get_pipeline_performance(
+    _user: CurrentUserDep,
+    pipeline: PipelineDep,
+) -> PipelinePerformanceResponse:
+    """
+    Get pipeline phase performance data for dashboard charts.
+
+    Returns average duration for each pipeline phase.
+    """
+    # Standard pipeline phases with default metrics
+    default_phases = [
+        "Validation",
+        "Security",
+        "Intelligence",
+        "Governance",
+        "Lineage",
+        "Consensus",
+        "Commit"
+    ]
+
+    phases = []
+    total_executions = getattr(pipeline, "_execution_count", 0)
+    total_duration = getattr(pipeline, "_total_duration_ms", 0)
+
+    # Try to get per-phase metrics from pipeline
+    phase_metrics = getattr(pipeline, "_phase_metrics", {})
+
+    for phase_name in default_phases:
+        if phase_name in phase_metrics:
+            # Real metrics available
+            metrics = phase_metrics[phase_name]
+            phases.append(PipelinePhaseMetric(
+                phase=phase_name,
+                duration=metrics.get("avg_duration_ms", 0),
+                execution_count=metrics.get("count", 0)
+            ))
+        else:
+            # Estimate based on typical distribution
+            # Each phase typically takes ~14% of total time
+            estimated_duration = (total_duration / total_executions / 7) if total_executions > 0 else 0
+            phases.append(PipelinePhaseMetric(
+                phase=phase_name,
+                duration=estimated_duration,
+                execution_count=total_executions
+            ))
+
+    avg_total = total_duration / total_executions if total_executions > 0 else 0
+
+    return PipelinePerformanceResponse(
+        phases=phases,
+        total_executions=total_executions,
+        average_total_duration_ms=avg_total
+    )
