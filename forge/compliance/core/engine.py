@@ -63,50 +63,71 @@ class ComplianceEngine:
         self,
         config: ComplianceConfig | None = None,
         registry: ComplianceRegistry | None = None,
+        repository: "ComplianceRepository | None" = None,
     ):
         self.config = config or get_compliance_config()
         self.registry = registry or get_compliance_registry()
-        
-        # TODO: CRITICAL - Implement persistent storage
-        # Current in-memory stores will lose ALL compliance data on restart.
-        # This includes legally required records (DSARs, consent, breach reports).
-        #
-        # Recommended implementation:
-        # 1. Use PostgreSQL with separate tables for each entity type
-        # 2. Add repository layer (ComplianceRepository) following existing patterns
-        # 3. Required tables:
-        #    - dsars (id, request_type, subject_email, status, deadline, created_at, etc.)
-        #    - consent_records (id, user_id, consent_type, granted, granted_at, etc.)
-        #    - breach_notifications (id, severity, discovered_at, contained, etc.)
-        #    - audit_events (id, category, event_type, action, actor_id, created_at, hash)
-        #    - ai_systems (id, system_name, risk_classification, registered_at)
-        #    - ai_decisions (id, ai_system_id, decision_type, confidence, reviewed, etc.)
-        # 4. Audit log should use append-only storage with hash chain for tamper detection
-        # 5. Consider regulatory data retention requirements:
-        #    - GDPR: Consent records must be kept for duration of processing + 7 years
-        #    - SOX: Audit logs must be retained for 7 years minimum
-        #    - HIPAA: 6 years for audit trails
-        #
-        # In-memory stores (would be database-backed in production)
+
+        # PERSISTENCE FIX: Use ComplianceRepository for Neo4j persistence
+        # The repository provides persistence for all compliance data required
+        # by regulatory retention requirements:
+        #   - GDPR: Consent records for duration of processing + 7 years
+        #   - SOX: Audit logs for 7 years minimum
+        #   - HIPAA: 6 years for audit trails
+        self._repository = repository
+        self._persistence_enabled = repository is not None
+
+        # In-memory caches (backed by database when repository is available)
         self._dsars: dict[str, DataSubjectRequest] = {}
         self._consents: dict[str, list[ConsentRecord]] = {}  # user_id -> consents
         self._breaches: dict[str, BreachNotification] = {}
         self._audit_events: list[AuditEvent] = []
         self._ai_systems: dict[str, AISystemRegistration] = {}
         self._ai_decisions: list[AIDecisionLog] = []
-        
+
         # Last event hash for chain integrity
         self._last_audit_hash: str | None = None
-        
+
         # Event handlers
         self._event_handlers: dict[str, list[Callable]] = {}
-        
+
         logger.info(
             "compliance_engine_initialized",
             jurisdictions=len(self.config.jurisdictions_list),
             frameworks=len(self.config.frameworks_list),
             controls=self.registry.get_control_count(),
+            persistence_enabled=self._persistence_enabled,
         )
+
+    async def initialize_persistence(self) -> None:
+        """
+        Initialize persistence layer and load existing data.
+
+        Call this after engine creation when repository is available.
+        """
+        if not self._repository:
+            logger.warning("compliance_persistence_disabled", reason="No repository provided")
+            return
+
+        try:
+            await self._repository.initialize()
+
+            # Load last audit hash for chain integrity
+            self._last_audit_hash = await self._repository.get_last_audit_hash()
+
+            logger.info(
+                "compliance_persistence_initialized",
+                last_audit_hash=self._last_audit_hash[:16] if self._last_audit_hash else None,
+            )
+        except Exception as e:
+            logger.error("compliance_persistence_init_failed", error=str(e))
+            raise
+
+    def set_repository(self, repository: "ComplianceRepository") -> None:
+        """Set the repository for persistence (for dependency injection)."""
+        self._repository = repository
+        self._persistence_enabled = True
+        logger.info("compliance_repository_set")
     
     # ═══════════════════════════════════════════════════════════════
     # AUDIT LOGGING
@@ -167,9 +188,34 @@ class ComplianceEngine:
             event.hash = hashlib.sha256(event_data.encode()).hexdigest()
             self._last_audit_hash = event.hash
         
-        # Store event
+        # Store event in memory cache
         self._audit_events.append(event)
-        
+
+        # PERSISTENCE FIX: Persist to database (append-only)
+        if self._persistence_enabled and self._repository:
+            try:
+                await self._repository.create_audit_event({
+                    "id": event.id,
+                    "category": event.category,
+                    "event_type": event.event_type,
+                    "action": event.action,
+                    "actor_id": event.actor_id,
+                    "actor_type": event.actor_type,
+                    "entity_type": event.entity_type,
+                    "entity_id": event.entity_id,
+                    "old_value": event.old_value,
+                    "new_value": event.new_value,
+                    "success": event.success,
+                    "error_message": event.error_message,
+                    "risk_level": event.risk_level,
+                    "data_classification": event.data_classification,
+                    "correlation_id": event.correlation_id,
+                    "previous_hash": event.previous_hash,
+                    "hash": event.hash,
+                })
+            except Exception as e:
+                logger.error("audit_event_persistence_failed", event_id=event.id, error=str(e))
+
         # Log to structlog
         log_method = getattr(logger, risk_level.value if hasattr(risk_level, 'value') else risk_level)
         log_method(
@@ -183,10 +229,10 @@ class ComplianceEngine:
             entity_id=entity_id,
             success=success,
         )
-        
+
         # Notify handlers
         await self._notify_handlers("audit_event", event)
-        
+
         return event
     
     async def get_audit_events(
@@ -298,10 +344,32 @@ class ComplianceEngine:
         if subject_id and self.config.dsar_auto_verify_internal:
             dsar.verified = True
             dsar.status = "verified"
-        
-        # Store
+
+        # Store in memory cache
         self._dsars[dsar.id] = dsar
-        
+
+        # PERSISTENCE FIX: Persist to database
+        if self._persistence_enabled and self._repository:
+            try:
+                await self._repository.create_dsar({
+                    "id": dsar.id,
+                    "request_type": request_type.value,
+                    "jurisdiction": jurisdiction.value,
+                    "applicable_frameworks": [f.value for f in applicable_frameworks],
+                    "subject_id": subject_id,
+                    "subject_email": subject_email,
+                    "subject_name": subject_name,
+                    "request_text": request_text,
+                    "specific_data_categories": specific_data_categories or [],
+                    "status": dsar.status,
+                    "verified": dsar.verified,
+                    "deadline": dsar.deadline,
+                    "assigned_to": dsar.assigned_to,
+                    "processing_notes": [],
+                })
+            except Exception as e:
+                logger.error("dsar_persistence_failed", dsar_id=dsar.id, error=str(e))
+
         # Log
         await self.log_event(
             category=AuditEventCategory.PRIVACY,
@@ -449,11 +517,37 @@ class ComplianceEngine:
             expires_at=expires_at,
         )
         
-        # Store
+        # Store in memory cache
         if user_id not in self._consents:
             self._consents[user_id] = []
         self._consents[user_id].append(consent)
-        
+
+        # PERSISTENCE FIX: Persist to database
+        if self._persistence_enabled and self._repository:
+            try:
+                await self._repository.create_consent({
+                    "id": consent.id,
+                    "user_id": user_id,
+                    "consent_type": consent_type.value,
+                    "purpose": purpose,
+                    "granted": granted,
+                    "granted_at": consent.granted_at,
+                    "withdrawn_at": None,
+                    "collected_via": collected_via,
+                    "ip_address": ip_address,
+                    "user_agent": user_agent,
+                    "consent_text_version": consent_text_version,
+                    "consent_text_hash": consent.consent_text_hash,
+                    "third_parties": third_parties or [],
+                    "cross_border_transfer": cross_border_transfer,
+                    "transfer_safeguards": transfer_safeguards or [],
+                    "tcf_string": tcf_string,
+                    "gpp_string": gpp_string,
+                    "expires_at": expires_at,
+                })
+            except Exception as e:
+                logger.error("consent_persistence_failed", consent_id=consent.id, error=str(e))
+
         # Log
         await self.log_event(
             category=AuditEventCategory.PRIVACY,
@@ -593,9 +687,39 @@ class ComplianceEngine:
                 )
                 breach.authority_notifications.append(notif)
         
-        # Store
+        # Store in memory cache
         self._breaches[breach.id] = breach
-        
+
+        # PERSISTENCE FIX: Persist to database
+        if self._persistence_enabled and self._repository:
+            try:
+                await self._repository.create_breach({
+                    "id": breach.id,
+                    "discovered_by": discovered_by,
+                    "discovery_method": discovery_method,
+                    "severity": severity.value,
+                    "breach_type": breach_type,
+                    "status": "reported",
+                    "data_categories": data_categories,
+                    "data_elements": data_elements,
+                    "jurisdictions": jurisdictions,
+                    "record_count": record_count,
+                    "affected_count": record_count,
+                    "root_cause": root_cause,
+                    "attack_vector": attack_vector,
+                    "contained": False,
+                    "contained_at": None,
+                    "containment_actions": [],
+                    "individual_notification_required": breach.individual_notification_required,
+                    "authority_notifications": [
+                        {"authority": n.authority, "jurisdiction": n.jurisdiction.value, "deadline": n.deadline.isoformat() if n.deadline else None}
+                        for n in breach.authority_notifications
+                    ],
+                    "notification_deadlines": breach.notification_deadlines,
+                })
+            except Exception as e:
+                logger.error("breach_persistence_failed", breach_id=breach.id, error=str(e))
+
         # Log as critical event
         await self.log_event(
             category=AuditEventCategory.SECURITY,
@@ -738,8 +862,28 @@ class ComplianceEngine:
             override_capability=True,
         )
         
+        # Store in memory cache
         self._ai_systems[registration.id] = registration
-        
+
+        # PERSISTENCE FIX: Persist to database
+        if self._persistence_enabled and self._repository:
+            try:
+                await self._repository.create_ai_system({
+                    "id": registration.id,
+                    "system_name": system_name,
+                    "system_version": system_version,
+                    "provider": provider,
+                    "risk_classification": risk_classification,
+                    "intended_purpose": intended_purpose,
+                    "use_cases": use_cases,
+                    "model_type": model_type,
+                    "human_oversight_measures": human_oversight_measures,
+                    "training_data_description": training_data_description,
+                    "override_capability": True,
+                })
+            except Exception as e:
+                logger.error("ai_system_persistence_failed", system_id=registration.id, error=str(e))
+
         await self.log_event(
             category=AuditEventCategory.AI_DECISION,
             event_type="ai_system_registered",
@@ -752,7 +896,7 @@ class ComplianceEngine:
             },
             risk_level=RiskLevel.INFO,
         )
-        
+
         logger.info(
             "ai_system_registered",
             system_id=registration.id,
@@ -760,7 +904,7 @@ class ComplianceEngine:
             risk_classification=risk_classification.value,
             requires_conformity=risk_classification.requires_conformity_assessment,
         )
-        
+
         return registration
     
     async def log_ai_decision(
@@ -796,8 +940,35 @@ class ComplianceEngine:
             has_significant_effect=has_significant_effect,
         )
         
+        # Store in memory cache
         self._ai_decisions.append(decision)
-        
+
+        # PERSISTENCE FIX: Persist to database
+        if self._persistence_enabled and self._repository:
+            try:
+                await self._repository.create_ai_decision({
+                    "id": decision.id,
+                    "ai_system_id": ai_system_id,
+                    "model_version": model_version,
+                    "decision_type": decision_type,
+                    "decision_outcome": decision_outcome,
+                    "confidence_score": confidence_score,
+                    "input_summary": input_summary,
+                    "reasoning_chain": reasoning_chain,
+                    "key_factors": key_factors,
+                    "alternative_outcomes": [],
+                    "subject_id": subject_id,
+                    "has_legal_effect": has_legal_effect,
+                    "has_significant_effect": has_significant_effect,
+                    "human_reviewed": False,
+                    "human_reviewer": None,
+                    "human_override": False,
+                    "override_reason": None,
+                    "contested": False,
+                })
+            except Exception as e:
+                logger.error("ai_decision_persistence_failed", decision_id=decision.id, error=str(e))
+
         # Log to audit trail
         await self.log_event(
             category=AuditEventCategory.AI_DECISION,
@@ -815,7 +986,7 @@ class ComplianceEngine:
             },
             risk_level=RiskLevel.INFO if not has_legal_effect else RiskLevel.MEDIUM,
         )
-        
+
         return decision
     
     async def request_human_review(
