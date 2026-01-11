@@ -8,11 +8,10 @@ consent records, breach notifications, and compliance reporting.
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta, timezone
-from enum import Enum
-from typing import Any, ClassVar
+from typing import Any
 from uuid import uuid4
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, model_validator
 
 from forge.compliance.core.enums import (
     Jurisdiction,
@@ -24,7 +23,6 @@ from forge.compliance.core.enums import (
     BreachSeverity,
     AIRiskClassification,
     AuditEventCategory,
-    EncryptionStandard,
 )
 
 

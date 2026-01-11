@@ -19,7 +19,6 @@ Key capabilities:
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from enum import Enum
@@ -28,7 +27,7 @@ from uuid import uuid4
 
 import structlog
 
-from forge.compliance.core.enums import AIRiskClassification, Jurisdiction
+from forge.compliance.core.enums import AIRiskClassification
 from forge.compliance.core.models import AISystemRegistration, AIDecisionLog
 
 logger = structlog.get_logger(__name__)

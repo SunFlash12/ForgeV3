@@ -5,8 +5,7 @@ Comprehensive enums for all compliance jurisdictions, frameworks,
 data classifications, and risk levels.
 """
 
-from enum import Enum, auto
-from typing import ClassVar
+from enum import Enum
 
 
 class Jurisdiction(str, Enum):

@@ -4,7 +4,8 @@ Forge Compliance Framework - Standalone Server
 Runs the compliance API as a standalone service on port 8002.
 """
 
-import asyncio
+import os
+
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,7 +21,6 @@ app = FastAPI(
 
 # CORS middleware - SECURITY FIX: Restrict origins instead of allowing all
 # Configure allowed origins via environment variable in production
-import os
 ALLOWED_ORIGINS = os.getenv("COMPLIANCE_CORS_ORIGINS", "http://localhost:3000,http://localhost:5173").split(",")
 
 app.add_middleware(

@@ -18,13 +18,11 @@ Controls include:
 
 from __future__ import annotations
 
-import hashlib
-import hmac
 import secrets
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from enum import Enum
-from typing import Any, Callable
+from typing import Any
 from uuid import uuid4
 
 import structlog
@@ -32,7 +30,6 @@ import structlog
 from forge.compliance.core.config import get_compliance_config
 from forge.compliance.core.enums import (
     AccessControlModel,
-    AuditEventCategory,
     DataClassification,
 )
 

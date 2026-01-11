@@ -18,7 +18,7 @@ import csv
 import io
 import json
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any, Callable, Awaitable
 from uuid import uuid4
@@ -26,10 +26,7 @@ from uuid import uuid4
 import structlog
 
 from forge.compliance.core.enums import (
-    Jurisdiction,
-    DSARType,
     DataClassification,
-    AuditEventCategory,
 )
 from forge.compliance.core.models import (
     DataSubjectRequest,
