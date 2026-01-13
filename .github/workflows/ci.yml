@@ -284,7 +284,7 @@ jobs:
 
       # SECURITY FIX (Audit 3): Pin to specific version instead of @master
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.33.1
         with:
           scan-type: 'fs'
           scan-ref: '.'
