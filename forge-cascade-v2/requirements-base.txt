@@ -40,7 +40,7 @@ opentelemetry-api==1.29.0
 opentelemetry-sdk==1.29.0
 opentelemetry-exporter-otlp==1.29.0
 opentelemetry-instrumentation-fastapi==0.50b0
-sentry-sdk[fastapi]==2.19.2
+sentry-sdk[fastapi]==2.49.0
 
 # MFA Support
 pyotp==2.9.0
