@@ -67,6 +67,17 @@ jobs:
           cd forge-cascade-v2/frontend
           npx tsc --noEmit
 
+      # Marketplace frontend lint (if package.json exists)
+      - name: Install marketplace dependencies
+        run: |
+          cd marketplace
+          npm ci --legacy-peer-deps
+
+      - name: TypeScript check marketplace
+        run: |
+          cd marketplace
+          npx tsc --noEmit
+
   # ===========================================================================
   # Backend Tests
   # ===========================================================================
@@ -227,6 +238,9 @@ jobs:
           - name: frontend
             context: ./forge-cascade-v2/frontend
             dockerfile: ./forge-cascade-v2/frontend/Dockerfile
+          - name: marketplace
+            context: ./marketplace
+            dockerfile: ./marketplace/Dockerfile
 
     steps:
       - name: Checkout code

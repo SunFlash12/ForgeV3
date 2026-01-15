@@ -58,6 +58,10 @@ RUN chown -R nginx:nginx /usr/share/nginx/html && \
 # Expose port
 EXPOSE 80
 
+# Add Docker HEALTHCHECK
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD wget -q --spider http://127.0.0.1:80/health || exit 1
+
 # SECURITY FIX (Audit 3): Run as non-root user
 USER nginx
 
