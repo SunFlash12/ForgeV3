@@ -64,6 +64,12 @@ jobs:
       - name: TypeScript type check
         run: |
           cd forge-cascade-v2/frontend
+          echo "Node version: $(node --version)"
+          echo "TypeScript version: $(npx tsc --version)"
+          echo "Files in src/types:"
+          ls -la src/types/
+          echo "Running TypeScript check..."
+          npx tsc --noEmit --listFiles 2>&1 | head -50 || true
           npx tsc --noEmit
 
       # Marketplace frontend lint (if package.json exists)
