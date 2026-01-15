@@ -209,7 +209,11 @@ jobs:
         run: |
           cd forge-cascade-v2/frontend
           rm -rf dist
-          npm run build
+          echo "Node version: $(node --version)"
+          echo "Build script from package.json:"
+          cat package.json | grep build
+          echo "Running build..."
+          npm run build 2>&1 || { echo "Build failed!"; cat package.json; exit 1; }
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v6
