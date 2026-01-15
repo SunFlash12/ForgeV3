@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route } from 'react-router-dom';
 import { useEffect } from 'react';
 import { useAuthStore } from './stores/authStore';
 import Layout from './components/layout/Layout';
@@ -14,6 +14,7 @@ import ContradictionsPage from './pages/ContradictionsPage';
 import VersionHistoryPage from './pages/VersionHistoryPage';
 import FederationPage from './pages/FederationPage';
 import GraphExplorerPage from './pages/GraphExplorerPage';
+import NotFoundPage from './pages/NotFoundPage';
 
 function App() {
   const { isAuthenticated, fetchCurrentUser, isLoading } = useAuthStore();
@@ -51,7 +52,7 @@ function App() {
         <Route path="system" element={<SystemPage />} />
         <Route path="settings" element={<SettingsPage />} />
       </Route>
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="*" element={<NotFoundPage />} />
     </Routes>
   );
 }
