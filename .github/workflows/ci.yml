@@ -199,8 +199,10 @@ jobs:
       - name: Build frontend
         env:
           VITE_API_URL: http://localhost:8001/api/v1
+          CI: false
         run: |
           cd forge-cascade-v2/frontend
+          rm -rf dist
           npm run build
 
       - name: Upload build artifacts
