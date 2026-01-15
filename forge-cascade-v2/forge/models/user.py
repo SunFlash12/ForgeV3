@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
-from pydantic import EmailStr, Field, field_validator
+from pydantic import EmailStr, Field, field_validator, model_validator
 
 from forge.models.base import (
     ForgeModel,
@@ -302,6 +302,18 @@ class TokenPayload(ForgeModel):
     iat: datetime | None = Field(default=None, description="Issued at timestamp")
     jti: str | None = Field(default=None, description="JWT ID for token blacklisting")
     type: str = Field(default="access", description="Token type: access or refresh")
+
+    @model_validator(mode="after")
+    def validate_access_token_claims(self) -> "TokenPayload":
+        """Ensure access tokens have required claims (role, trust_flame)."""
+        if self.type == "access":
+            if self.role is None:
+                raise ValueError("Access token must have role claim")
+            if self.trust_flame is None:
+                raise ValueError("Access token must have trust_flame claim")
+            if not (0 <= self.trust_flame <= 100):
+                raise ValueError("trust_flame must be between 0 and 100")
+        return self
 
 
 class RefreshTokenRequest(ForgeModel):
