@@ -78,6 +78,8 @@ class ForgeApiClient {
       },
       // CRITICAL: Enable credentials for cookie-based auth
       withCredentials: true,
+      // Request timeout - prevents hanging requests
+      timeout: 30000, // 30 seconds
     });
 
     this.setupInterceptors();
