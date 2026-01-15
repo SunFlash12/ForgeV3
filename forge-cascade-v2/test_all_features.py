@@ -938,7 +938,7 @@ def test_immune_system(session):
         def make_health_request():
             try:
                 return requests.get(f"{BASE_URL}/health", timeout=5).status_code
-            except:
+            except Exception:
                 return 0
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
