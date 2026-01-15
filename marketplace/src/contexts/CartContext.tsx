@@ -59,17 +59,41 @@ function validateCartItem(item: unknown): CartItem | null {
     return null;
   }
 
+  // Validate trust_level is a valid TrustLevel string
+  const validTrustLevels = ['QUARANTINE', 'SANDBOX', 'STANDARD', 'TRUSTED', 'CORE'] as const;
+  const trustLevel = typeof capsule.trust_level === 'string' && validTrustLevels.includes(capsule.trust_level as typeof validTrustLevels[number])
+    ? capsule.trust_level as typeof validTrustLevels[number]
+    : 'SANDBOX';
+
+  // Validate type is a valid CapsuleType string
+  const validTypes = ['INSIGHT', 'DECISION', 'LESSON', 'WARNING', 'PRINCIPLE', 'MEMORY', 'KNOWLEDGE', 'CODE', 'CONFIG', 'TEMPLATE', 'DOCUMENT'] as const;
+  const capsuleType = typeof capsule.type === 'string' && validTypes.includes(capsule.type as typeof validTypes[number])
+    ? capsule.type as typeof validTypes[number]
+    : 'KNOWLEDGE';
+
   // Sanitize all string fields to prevent XSS
   const sanitizedCapsule: Capsule = {
     id: capsule.id,
     title: sanitizeString(capsule.title),
+    content: sanitizeString(capsule.content) || '',
     description: sanitizeString(capsule.description),
     category: sanitizeString(capsule.category),
-    author_id: typeof capsule.author_id === 'string' ? capsule.author_id.slice(0, 100) : '',
+    type: capsuleType,
+    owner_id: typeof capsule.owner_id === 'string' ? capsule.owner_id.slice(0, 100) : (typeof capsule.author_id === 'string' ? capsule.author_id.slice(0, 100) : ''),
+    author_id: typeof capsule.author_id === 'string' ? capsule.author_id.slice(0, 100) : undefined,
     author_name: sanitizeString(capsule.author_name),
+    trust_level: trustLevel,
+    trust_score: typeof capsule.trust_score === 'number' ? capsule.trust_score : undefined,
+    version: typeof capsule.version === 'string' ? capsule.version.slice(0, 50) : '1.0.0',
+    parent_id: typeof capsule.parent_id === 'string' ? capsule.parent_id : null,
+    view_count: typeof capsule.view_count === 'number' ? capsule.view_count : 0,
+    fork_count: typeof capsule.fork_count === 'number' ? capsule.fork_count : 0,
+    access_count: typeof capsule.access_count === 'number' ? capsule.access_count : undefined,
+    is_archived: typeof capsule.is_archived === 'boolean' ? capsule.is_archived : false,
+    is_public: typeof capsule.is_public === 'boolean' ? capsule.is_public : undefined,
     price: typeof capsule.price === 'number' && capsule.price >= 0 ? capsule.price : 0,
-    trust_level: typeof capsule.trust_level === 'number' ? capsule.trust_level : 0,
     created_at: typeof capsule.created_at === 'string' ? capsule.created_at : new Date().toISOString(),
+    updated_at: typeof capsule.updated_at === 'string' ? capsule.updated_at : new Date().toISOString(),
     tags: Array.isArray(capsule.tags)
       ? capsule.tags.filter((t): t is string => typeof t === 'string').map(sanitizeString).slice(0, 20)
       : [],

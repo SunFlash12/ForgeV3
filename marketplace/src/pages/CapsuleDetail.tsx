@@ -1,5 +1,5 @@
 import { useParams, Link } from 'react-router-dom';
-import { ShoppingCart, Share2, Heart, GitBranch, Shield, Star, AlertCircle, Loader2 } from 'lucide-react';
+import { ShoppingCart, Share2, Heart, GitBranch, Shield, AlertCircle, Loader2 } from 'lucide-react';
 import { useCapsule } from '../hooks/useCapsules';
 
 // FIX: Implement actual data fetching instead of placeholder content
