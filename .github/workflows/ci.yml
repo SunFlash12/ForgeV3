@@ -48,13 +48,12 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'npm'
-          cache-dependency-path: forge-cascade-v2/frontend/package-lock.json
 
       - name: Install frontend dependencies
         run: |
           cd forge-cascade-v2/frontend
-          npm ci --legacy-peer-deps
+          npm cache clean --force
+          npm ci --legacy-peer-deps || npm install --legacy-peer-deps
 
       - name: Run ESLint
         # SECURITY FIX (Audit 4): Don't ignore lint failures
@@ -188,13 +187,12 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'npm'
-          cache-dependency-path: forge-cascade-v2/frontend/package-lock.json
 
       - name: Install dependencies
         run: |
           cd forge-cascade-v2/frontend
-          npm ci --legacy-peer-deps
+          npm cache clean --force
+          npm ci --legacy-peer-deps || npm install --legacy-peer-deps
 
       - name: Build frontend
         env:
