@@ -122,7 +122,10 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
             )
             return UserInDB.model_validate(result["user"])
 
-        raise RuntimeError("Failed to create user")
+        raise RuntimeError(
+            f"Failed to create user: database did not return created user record "
+            f"for user_id={user_id}, username={data.username}"
+        )
 
     async def get_by_id(self, entity_id: str) -> User | None:
         """
