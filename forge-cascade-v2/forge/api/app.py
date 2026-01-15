@@ -22,6 +22,7 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
+from neo4j.exceptions import ServiceUnavailable, SessionExpired, TransientError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from forge.config import get_settings
@@ -520,6 +521,57 @@ def create_app(
                 "details": sanitized_errors,
                 "path": str(request.url.path),
             },
+        )
+
+    @app.exception_handler(ServiceUnavailable)
+    async def database_unavailable_handler(request: Request, exc: ServiceUnavailable):
+        logger.error(
+            "database_unavailable",
+            path=str(request.url.path),
+            error=str(exc),
+        )
+        return JSONResponse(
+            status_code=503,
+            content={
+                "error": "Database temporarily unavailable",
+                "path": str(request.url.path),
+                "retry_after": 5,
+            },
+            headers={"Retry-After": "5"},
+        )
+
+    @app.exception_handler(SessionExpired)
+    async def database_session_expired_handler(request: Request, exc: SessionExpired):
+        logger.warning(
+            "database_session_expired",
+            path=str(request.url.path),
+            error=str(exc),
+        )
+        return JSONResponse(
+            status_code=503,
+            content={
+                "error": "Database session expired, please retry",
+                "path": str(request.url.path),
+                "retry_after": 1,
+            },
+            headers={"Retry-After": "1"},
+        )
+
+    @app.exception_handler(TransientError)
+    async def database_transient_error_handler(request: Request, exc: TransientError):
+        logger.warning(
+            "database_transient_error",
+            path=str(request.url.path),
+            error=str(exc),
+        )
+        return JSONResponse(
+            status_code=503,
+            content={
+                "error": "Database temporarily unavailable, please retry",
+                "path": str(request.url.path),
+                "retry_after": 2,
+            },
+            headers={"Retry-After": "2"},
         )
 
     @app.exception_handler(Exception)
