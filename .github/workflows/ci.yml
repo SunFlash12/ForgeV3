@@ -64,12 +64,6 @@ jobs:
       - name: TypeScript type check
         run: |
           cd forge-cascade-v2/frontend
-          echo "Node version: $(node --version)"
-          echo "TypeScript version: $(npx tsc --version)"
-          echo "Files in src/types:"
-          ls -la src/types/
-          echo "Running TypeScript check..."
-          npx tsc --noEmit --listFiles 2>&1 | head -50 || true
           npx tsc --noEmit
 
       # Marketplace frontend lint (if package.json exists)
@@ -208,12 +202,7 @@ jobs:
           CI: false
         run: |
           cd forge-cascade-v2/frontend
-          rm -rf dist
-          echo "Node version: $(node --version)"
-          echo "Build script from package.json:"
-          cat package.json | grep build
-          echo "Running build..."
-          npm run build 2>&1 || { echo "Build failed!"; cat package.json; exit 1; }
+          npm run build
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v6
