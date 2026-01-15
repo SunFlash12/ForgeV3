@@ -679,7 +679,7 @@ if __name__ == "__main__":
             resp = requests.get(f"{BASE_URL}/health", timeout=2)
             if resp.status_code == 200:
                 break
-        except:
+        except Exception:
             pass
         time.sleep(1)
 
