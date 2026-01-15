@@ -12,6 +12,7 @@ import {
   Diff,
   Eye,
   RefreshCw,
+  AlertTriangle,
 } from 'lucide-react';
 import { api } from '../api/client';
 import {
@@ -117,6 +118,24 @@ export default function VersionHistoryPage() {
       minute: '2-digit',
     });
   };
+
+  // Validate capsuleId parameter
+  if (!capsuleId) {
+    return (
+      <div className="p-6">
+        <EmptyState
+          icon={<AlertTriangle className="w-10 h-10 text-amber-500" />}
+          title="Invalid Capsule"
+          description="No capsule ID was provided. Please select a valid capsule."
+          action={
+            <Link to="/capsules">
+              <Button variant="primary">Back to Capsules</Button>
+            </Link>
+          }
+        />
+      </div>
+    );
+  }
 
   if (capsuleLoading || versionsLoading) {
     return (
