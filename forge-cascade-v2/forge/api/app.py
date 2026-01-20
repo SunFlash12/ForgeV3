@@ -204,6 +204,15 @@ class ForgeApp:
             logger.warning("scheduler_init_failed", error=str(e))
             self.scheduler = None
 
+        # Initialize diagnosis services (differential diagnosis engine)
+        try:
+            await self._initialize_diagnosis_services()
+            logger.info("diagnosis_services_initialized")
+        except Exception as e:
+            logger.warning("diagnosis_services_init_failed", error=str(e))
+            self.session_controller = None
+            self.diagnostic_coordinator = None
+
         self.started_at = datetime.now(UTC)
         self.is_ready = True
 
@@ -223,6 +232,7 @@ class ForgeApp:
             create_knowledge_query_overlay,
             create_lineage_tracker,
             create_ml_intelligence,
+            create_primekg_overlay,
             create_security_validator,
             create_temporal_tracker_overlay,
         )
@@ -248,6 +258,10 @@ class ForgeApp:
         knowledge_query = create_knowledge_query_overlay()
         temporal_tracker = create_temporal_tracker_overlay()
 
+        # PrimeKG biomedical knowledge graph overlay
+        # Provides differential diagnosis, phenotype search, drug-disease interactions
+        primekg = create_primekg_overlay(neo4j_client=self.db_client)
+
         # Register with manager (auto-initializes by default)
         if self.overlay_manager:
             await self.overlay_manager.register_instance(security)
@@ -257,12 +271,78 @@ class ForgeApp:
             await self.overlay_manager.register_instance(graph_algorithms)
             await self.overlay_manager.register_instance(knowledge_query)
             await self.overlay_manager.register_instance(temporal_tracker)
+            await self.overlay_manager.register_instance(primekg)
+
+    async def _initialize_diagnosis_services(self) -> None:
+        """Initialize the differential diagnosis services."""
+        from forge.services.diagnosis import (
+            create_session_controller,
+            SessionConfig,
+        )
+        from forge.services.diagnosis.agents import (
+            create_diagnostic_coordinator,
+            CoordinatorConfig,
+        )
+        from forge.api.routes.diagnosis import initialize_diagnosis_services
+
+        # Get PrimeKG overlay for disease/phenotype queries
+        primekg_overlay = None
+        if self.overlay_manager:
+            primekg_overlay = self.overlay_manager.get_instance("primekg")
+
+        # Create session controller for autonomous diagnosis
+        session_config = SessionConfig(
+            max_iterations=10,
+            auto_advance=True,
+            pause_for_questions=True,
+        )
+        self.session_controller = create_session_controller(
+            config=session_config,
+            primekg_overlay=primekg_overlay,
+            neo4j_client=self.db_client,
+        )
+        await self.session_controller.start()
+
+        # Create multi-agent diagnostic coordinator
+        coordinator_config = CoordinatorConfig(
+            enable_phenotype_agent=True,
+            enable_genetic_agent=True,
+            enable_differential_agent=True,
+            parallel_analysis=True,
+        )
+        self.diagnostic_coordinator = create_diagnostic_coordinator(
+            config=coordinator_config,
+            primekg_overlay=primekg_overlay,
+            neo4j_client=self.db_client,
+        )
+        await self.diagnostic_coordinator.start()
+
+        # Wire up the API routes
+        initialize_diagnosis_services(
+            session_controller=self.session_controller,
+            diagnostic_coordinator=self.diagnostic_coordinator,
+        )
 
     async def shutdown(self) -> None:
         """Gracefully shutdown all components."""
         logger.info("forge_shutting_down")
 
         self.is_ready = False
+
+        # Stop diagnosis services
+        if hasattr(self, 'session_controller') and self.session_controller:
+            try:
+                await self.session_controller.stop()
+                logger.info("session_controller_shutdown")
+            except Exception as e:
+                logger.warning("session_controller_shutdown_failed", error=str(e))
+
+        if hasattr(self, 'diagnostic_coordinator') and self.diagnostic_coordinator:
+            try:
+                await self.diagnostic_coordinator.stop()
+                logger.info("diagnostic_coordinator_shutdown")
+            except Exception as e:
+                logger.warning("diagnostic_coordinator_shutdown_failed", error=str(e))
 
         # Stop scheduler first (prevents new background tasks)
         if hasattr(self, 'scheduler') and self.scheduler:
@@ -410,6 +490,10 @@ def create_app(
                 "description": "Graph analysis, queries, and temporal operations",
             },
             {
+                "name": "primekg",
+                "description": "PrimeKG biomedical knowledge graph - differential diagnosis, phenotype search, drug-disease interactions",
+            },
+            {
                 "name": "Federation",
                 "description": "Federated knowledge sharing between Forge instances",
             },
@@ -424,6 +508,10 @@ def create_app(
             {
                 "name": "Agent Gateway",
                 "description": "AI agent access to the knowledge graph",
+            },
+            {
+                "name": "diagnosis",
+                "description": "Differential diagnosis hypothesis engine - autonomous multi-agent diagnosis with Bayesian scoring",
             },
         ],
     )
@@ -595,22 +683,26 @@ def create_app(
         auth,
         capsules,
         cascade,
+        diagnosis,
         federation,
         governance,
         graph,
         marketplace,
         notifications,
         overlays,
+        primekg,
         system,
     )
 
     app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
     app.include_router(capsules.router, prefix="/api/v1/capsules", tags=["capsules"])
     app.include_router(cascade.router, prefix="/api/v1/cascade", tags=["cascade"])
+    app.include_router(diagnosis.router, prefix="/api/v1/diagnosis", tags=["diagnosis"])
     app.include_router(governance.router, prefix="/api/v1/governance", tags=["governance"])
     app.include_router(overlays.router, prefix="/api/v1/overlays", tags=["overlays"])
     app.include_router(system.router, prefix="/api/v1/system", tags=["system"])
     app.include_router(graph.router, prefix="/api/v1/graph", tags=["graph"])
+    app.include_router(primekg.router, prefix="/api/v1/primekg", tags=["primekg"])
     app.include_router(federation.router, prefix="/api/v1", tags=["Federation"])
     app.include_router(notifications.router, prefix="/api/v1", tags=["Notifications"])
     app.include_router(marketplace.router, prefix="/api/v1", tags=["Marketplace"])

@@ -116,6 +116,11 @@ from .temporal_tracker import (
     VersionNotFoundError,
     create_temporal_tracker_overlay,
 )
+from .primekg_overlay import (
+    PrimeKGError,
+    PrimeKGOverlay,
+    create_primekg_overlay,
+)
 
 __all__ = [
     # Base
@@ -203,4 +208,9 @@ __all__ = [
     "TemporalError",
     "VersionNotFoundError",
     "TemporalConfig",
+
+    # PrimeKG Biomedical Knowledge Graph
+    "PrimeKGOverlay",
+    "create_primekg_overlay",
+    "PrimeKGError",
 ]

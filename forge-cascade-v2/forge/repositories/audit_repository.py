@@ -6,6 +6,8 @@ changes, and events. Supports compliance, forensics, and
 the Immune System's anomaly detection.
 """
 
+from __future__ import annotations
+
 from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4

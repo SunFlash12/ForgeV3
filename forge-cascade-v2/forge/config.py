@@ -41,7 +41,7 @@ class Settings(BaseSettings):
     # APPLICATION
     # ═══════════════════════════════════════════════════════════════
     app_name: str = Field(default="forge-cascade", description="Application name")
-    app_env: Literal["development", "staging", "production"] = Field(
+    app_env: Literal["development", "staging", "production", "testing"] = Field(
         default="development", description="Environment"
     )
     debug: bool = Field(default=False, description="Debug mode")
