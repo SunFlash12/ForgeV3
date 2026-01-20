@@ -231,6 +231,23 @@ class Neo4jClient:
                 "properties_set": summary.counters.properties_set,
             }
 
+    async def run(
+        self,
+        query: str,
+        parameters: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
+        """
+        Alias for execute() - provided for compatibility with agent code.
+
+        Args:
+            query: Cypher query string
+            parameters: Query parameters
+
+        Returns:
+            List of result records as dictionaries
+        """
+        return await self.execute(query, parameters)
+
     async def health_check(self) -> dict[str, Any]:
         """
         Perform a health check on the database connection.

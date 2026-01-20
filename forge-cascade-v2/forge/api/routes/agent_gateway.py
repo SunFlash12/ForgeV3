@@ -28,6 +28,15 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/agent-gateway", tags=["Agent Gateway"])
 
 
+def _handle_gateway_error(e: Exception, context: str) -> HTTPException:
+    """Log internal error and return sanitized HTTPException."""
+    logger.error(f"agent_gateway_error: {context}", exc_info=True)
+    return HTTPException(
+        status_code=500,
+        detail=f"Internal error during {context}. Please try again or contact support."
+    )
+
+
 # ============================================================================
 # Request/Response Models
 # ============================================================================
@@ -370,7 +379,8 @@ async def get_capsule(
     result = await gateway.execute_query(session, query)
 
     if not result.success:
-        raise HTTPException(status_code=500, detail=result.error)
+        logger.error("capsule_query_failed", extra={"error": result.error})
+        raise HTTPException(status_code=500, detail="Failed to retrieve capsule. Please try again.")
 
     if not result.results:
         raise HTTPException(status_code=404, detail="Capsule not found or access denied")

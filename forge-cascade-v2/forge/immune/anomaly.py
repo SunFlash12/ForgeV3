@@ -792,7 +792,7 @@ class CompositeAnomalyDetector(AnomalyDetector):
             return None
 
         # Aggregate scores
-        sum(a.anomaly_score for a in anomalies) / len(anomalies)
+        avg_score = sum(a.anomaly_score for a in anomalies) / len(anomalies)
         max_score = max(a.anomaly_score for a in anomalies)
         avg_confidence = sum(a.confidence for a in anomalies) / len(anomalies)
 

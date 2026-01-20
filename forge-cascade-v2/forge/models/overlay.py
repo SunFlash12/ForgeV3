@@ -95,6 +95,12 @@ CORE_OVERLAY_CAPABILITIES = {
         Capability.EVENT_PUBLISH,
         Capability.EVENT_SUBSCRIBE,
     },
+    "primekg": {
+        Capability.DATABASE_READ,
+        Capability.DATABASE_WRITE,
+        Capability.EVENT_PUBLISH,
+        Capability.LLM_ACCESS,
+    },
 }
 
 
