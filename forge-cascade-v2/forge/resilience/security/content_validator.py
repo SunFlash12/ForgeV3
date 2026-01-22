@@ -503,7 +503,7 @@ class ContentValidator:
         - Social engineering
         """
         try:
-            from forge.services.llm import LLMMessage, get_llm_service, LLMConfigurationError
+            from forge.services.llm import LLMConfigurationError, LLMMessage, get_llm_service
 
             llm = get_llm_service()
 

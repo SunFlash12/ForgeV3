@@ -367,7 +367,10 @@ class MLIntelligenceOverlay(BaseOverlay):
         # Use Forge embedding service as default
         if embedding is None:
             try:
-                from forge.services.embedding import get_embedding_service, EmbeddingConfigurationError
+                from forge.services.embedding import (
+                    EmbeddingConfigurationError,
+                    get_embedding_service,
+                )
 
                 embedding_service = get_embedding_service()
                 result = await embedding_service.embed(content)
