@@ -1,0 +1,17 @@
+# Forge Cascade V2 - Blockchain Dependencies
+# Optional dependencies for Virtuals Protocol blockchain integration
+#
+# Install with: pip install -r requirements-blockchain.txt
+#
+# NOTE: These packages require Rust compiler for building native extensions.
+# On Ubuntu: apt-get install -y build-essential pkg-config libssl-dev
+# On macOS: xcode-select --install && brew install openssl
+
+# EVM (Base L2, Ethereum)
+eth-account>=0.13.0
+web3>=7.0.0
+
+# Solana
+solders>=0.21.0
+solana>=0.34.0
+anchorpy>=0.20.0
