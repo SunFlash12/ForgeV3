@@ -51,30 +51,71 @@ def init_all_services(
     """
     logger.info("initializing_services")
 
-    # Initialize embedding service
+    # Initialize embedding service with smart provider selection
     embedding_provider_map = {
         "openai": EmbeddingProvider.OPENAI,
         "sentence_transformers": EmbeddingProvider.SENTENCE_TRANSFORMERS,
         "mock": EmbeddingProvider.MOCK,
     }
 
-    # SECURITY FIX (Audit 4 - M): Warn when falling back to mock provider
+    # Smart provider selection: Use configured provider if API key available,
+    # otherwise auto-detect based on available keys, or fall back to mock
     configured_embedding = settings.embedding_provider
-    embedding_provider = embedding_provider_map.get(configured_embedding)
-    if embedding_provider is None:
-        logger.warning(
-            "embedding_provider_not_recognized",
-            configured=configured_embedding,
-            valid_providers=list(embedding_provider_map.keys()),
-            fallback="mock",
-        )
-        embedding_provider = EmbeddingProvider.MOCK
+    embedding_api_key = settings.embedding_api_key
+    selected_embedding_provider = None
+    selected_embedding_model = settings.embedding_model
+
+    if configured_embedding != "mock" and (
+        embedding_api_key or configured_embedding == "sentence_transformers"
+    ):
+        # User configured a specific provider - use it
+        selected_embedding_provider = embedding_provider_map.get(configured_embedding)
+        if selected_embedding_provider is None:
+            logger.warning(
+                "embedding_provider_not_recognized",
+                configured=configured_embedding,
+                valid_providers=list(embedding_provider_map.keys()),
+            )
+    elif configured_embedding == "mock":
+        # Explicitly configured mock
+        selected_embedding_provider = EmbeddingProvider.MOCK
+
+    # Auto-detect if no explicit config or missing API key
+    if selected_embedding_provider is None:
+        import os
+        openai_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("EMBEDDING_API_KEY")
+
+        if openai_key:
+            # Prefer OpenAI embeddings when API key is available
+            selected_embedding_provider = EmbeddingProvider.OPENAI
+            embedding_api_key = openai_key
+            selected_embedding_model = "text-embedding-3-small"
+            logger.info("embedding_auto_detected_openai", hint="Found OPENAI_API_KEY")
+        else:
+            # Fall back to local sentence-transformers (no API needed)
+            try:
+                import sentence_transformers  # noqa: F401
+                selected_embedding_provider = EmbeddingProvider.SENTENCE_TRANSFORMERS
+                selected_embedding_model = "all-MiniLM-L6-v2"
+                logger.info(
+                    "embedding_using_sentence_transformers",
+                    hint="No OPENAI_API_KEY found, using local model",
+                )
+            except ImportError:
+                # No sentence-transformers available - fall back to mock
+                selected_embedding_provider = EmbeddingProvider.MOCK
+                if settings.app_env != "testing":
+                    logger.warning(
+                        "embedding_using_mock_provider",
+                        reason="No embedding API key or sentence-transformers available",
+                        hint="Set OPENAI_API_KEY or install sentence-transformers",
+                    )
 
     embedding_config = EmbeddingConfig(
-        provider=embedding_provider,
-        model=settings.embedding_model,
+        provider=selected_embedding_provider,
+        model=selected_embedding_model,
         dimensions=settings.embedding_dimensions,
-        api_key=settings.embedding_api_key,
+        api_key=embedding_api_key,
         cache_enabled=settings.embedding_cache_enabled,
         batch_size=settings.embedding_batch_size,
     )
@@ -82,11 +123,13 @@ def init_all_services(
     embedding_service = init_embedding_service(embedding_config)
     logger.info(
         "embedding_service_ready",
-        provider=settings.embedding_provider,
+        provider=selected_embedding_provider.value,
+        model=selected_embedding_model,
         dimensions=settings.embedding_dimensions,
+        auto_detected=selected_embedding_provider != embedding_provider_map.get(settings.embedding_provider),
     )
 
-    # Initialize LLM service
+    # Initialize LLM service with smart provider selection
     llm_provider_map = {
         "anthropic": LLMProvider.ANTHROPIC,
         "openai": LLMProvider.OPENAI,
@@ -94,22 +137,57 @@ def init_all_services(
         "mock": LLMProvider.MOCK,
     }
 
-    # SECURITY FIX (Audit 4 - M): Warn when falling back to mock provider
+    # Smart provider selection: Use configured provider if API key available,
+    # otherwise auto-detect based on available keys, or fall back to mock
     configured_llm = settings.llm_provider
-    llm_provider = llm_provider_map.get(configured_llm)
-    if llm_provider is None:
-        logger.warning(
-            "llm_provider_not_recognized",
-            configured=configured_llm,
-            valid_providers=list(llm_provider_map.keys()),
-            fallback="mock",
-        )
-        llm_provider = LLMProvider.MOCK
+    llm_api_key = settings.llm_api_key
+    selected_provider = None
+    selected_model = settings.llm_model
+
+    if configured_llm != "mock" and llm_api_key:
+        # User configured a specific provider with API key - use it
+        selected_provider = llm_provider_map.get(configured_llm)
+        if selected_provider is None:
+            logger.warning(
+                "llm_provider_not_recognized",
+                configured=configured_llm,
+                valid_providers=list(llm_provider_map.keys()),
+            )
+    elif configured_llm == "mock":
+        # Explicitly configured mock
+        selected_provider = LLMProvider.MOCK
+
+    # Auto-detect if no explicit config or missing API key
+    if selected_provider is None:
+        import os
+        openai_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("LLM_API_KEY")
+        anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
+
+        if openai_key:
+            # Prefer OpenAI as default when API key is available
+            selected_provider = LLMProvider.OPENAI
+            llm_api_key = openai_key
+            selected_model = "gpt-4-turbo-preview"
+            logger.info("llm_auto_detected_openai", hint="Found OPENAI_API_KEY")
+        elif anthropic_key:
+            selected_provider = LLMProvider.ANTHROPIC
+            llm_api_key = anthropic_key
+            selected_model = "claude-sonnet-4-20250514"
+            logger.info("llm_auto_detected_anthropic", hint="Found ANTHROPIC_API_KEY")
+        else:
+            # No API keys available - fall back to mock
+            selected_provider = LLMProvider.MOCK
+            if settings.app_env != "testing":
+                logger.warning(
+                    "llm_using_mock_provider",
+                    reason="No LLM API key configured",
+                    hint="Set OPENAI_API_KEY, ANTHROPIC_API_KEY, or LLM_API_KEY",
+                )
 
     llm_config = LLMConfig(
-        provider=llm_provider,
-        model=settings.llm_model,
-        api_key=settings.llm_api_key,
+        provider=selected_provider,
+        model=selected_model,
+        api_key=llm_api_key,
         max_tokens=settings.llm_max_tokens,
         temperature=settings.llm_temperature,
     )
@@ -117,8 +195,9 @@ def init_all_services(
     init_llm_service(llm_config)
     logger.info(
         "llm_service_ready",
-        provider=settings.llm_provider,
-        model=settings.llm_model,
+        provider=selected_provider.value,
+        model=selected_model,
+        auto_detected=selected_provider != llm_provider_map.get(settings.llm_provider),
     )
 
     # Initialize search service

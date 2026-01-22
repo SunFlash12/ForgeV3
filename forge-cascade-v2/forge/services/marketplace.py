@@ -4,15 +4,15 @@ Marketplace Service
 Handles capsule listings, purchases, and revenue distribution.
 
 PERSISTENCE: All marketplace data (listings, purchases, carts, licenses) is now
-persisted to Neo4j. Data is loaded from the database on service initialization
-and synchronized on every modification.
+persisted to Neo4j via MarketplaceRepository. Data is loaded from the database
+on service initialization and synchronized on every modification.
 """
 
 import logging
 import math
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from forge.models.marketplace import (
     CapsuleListing,
@@ -29,6 +29,9 @@ from forge.models.marketplace import (
     Purchase,
     RevenueDistribution,
 )
+
+if TYPE_CHECKING:
+    from forge.repositories.marketplace_repository import MarketplaceRepository
 
 logger = logging.getLogger(__name__)
 
@@ -47,11 +50,17 @@ class MarketplaceService:
     # Base price for suggestions
     BASE_PRICE = Decimal("10.00")
 
-    def __init__(self, capsule_repository=None, neo4j_client=None):
+    def __init__(
+        self,
+        capsule_repository=None,
+        neo4j_client=None,
+        marketplace_repository: "MarketplaceRepository | None" = None,
+    ):
         self.capsule_repo = capsule_repository
         self.neo4j = neo4j_client
+        self._repository = marketplace_repository
 
-        # In-memory storage (would use database in production)
+        # In-memory cache for fast reads (synced with database)
         self._listings: dict[str, CapsuleListing] = {}
         self._purchases: dict[str, Purchase] = {}
         self._carts: dict[str, Cart] = {}
@@ -523,6 +532,33 @@ class MarketplaceService:
 
     async def get_marketplace_stats(self) -> MarketplaceStats:
         """Get overall marketplace statistics."""
+        # Try repository first for database-level aggregation
+        if self._repository:
+            try:
+                stats = await self._repository.get_stats()
+                # Enrich with time-based stats from cache
+                now = datetime.now(UTC)
+                today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+                week_start = today_start - timedelta(days=7)
+                month_start = today_start - timedelta(days=30)
+
+                all_purchases = list(self._purchases.values())
+                sales_today = [p for p in all_purchases if p.purchased_at >= today_start]
+                sales_week = [p for p in all_purchases if p.purchased_at >= week_start]
+                sales_month = [p for p in all_purchases if p.purchased_at >= month_start]
+
+                stats.sales_today = len(sales_today)
+                stats.sales_this_week = len(sales_week)
+                stats.sales_this_month = len(sales_month)
+                stats.revenue_today = sum(p.price for p in sales_today)
+                stats.revenue_this_week = sum(p.price for p in sales_week)
+                stats.revenue_this_month = sum(p.price for p in sales_month)
+
+                return stats
+            except Exception as e:
+                logger.warning(f"Repository stats failed, using in-memory: {e}")
+
+        # Fallback to in-memory calculation
         now = datetime.now(UTC)
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         week_start = today_start - timedelta(days=7)
@@ -589,12 +625,28 @@ class MarketplaceService:
 
     async def _persist_listing(self, listing: CapsuleListing) -> bool:
         """
-        Persist a listing to Neo4j database.
+        Persist a listing to Neo4j database via repository.
 
-        AUDIT 3 FIX (A1-D03): Add persistent storage to marketplace service.
+        Uses MarketplaceRepository for clean data access layer separation.
+        Falls back to direct Neo4j if repository unavailable.
         """
+        # Prefer repository if available
+        if self._repository:
+            try:
+                existing = await self._repository.listings.get_by_id(listing.id)
+                if existing:
+                    await self._repository.listings.update(listing.id, listing)
+                else:
+                    await self._repository.listings.create(listing)
+                logger.debug(f"Persisted listing {listing.id} via repository")
+                return True
+            except Exception as e:
+                logger.error(f"Repository failed for listing {listing.id}: {e}")
+                return False
+
+        # Fallback to direct Neo4j (for backwards compatibility)
         if not self.neo4j:
-            logger.debug("No Neo4j client, skipping listing persistence")
+            logger.debug("No persistence layer available, skipping listing persistence")
             return False
 
         try:
@@ -638,7 +690,18 @@ class MarketplaceService:
             return False
 
     async def _persist_purchase(self, purchase: Purchase) -> bool:
-        """Persist a purchase to Neo4j database."""
+        """Persist a purchase to Neo4j database via repository."""
+        # Prefer repository if available
+        if self._repository:
+            try:
+                await self._repository.purchases.create(purchase)
+                logger.debug(f"Persisted purchase {purchase.id} via repository")
+                return True
+            except Exception as e:
+                logger.error(f"Repository failed for purchase {purchase.id}: {e}")
+                return False
+
+        # Fallback to direct Neo4j
         if not self.neo4j:
             return False
 
@@ -677,7 +740,9 @@ class MarketplaceService:
             return False
 
     async def _persist_cart(self, cart: Cart) -> bool:
-        """Persist a cart to Neo4j database."""
+        """Persist a cart to Neo4j database via repository."""
+        # Note: Cart persistence handled differently - repository uses proper relationships
+        # For now, keep the simpler JSON approach via direct Neo4j for cart items
         if not self.neo4j:
             return False
 
@@ -752,7 +817,18 @@ class MarketplaceService:
             return None
 
     async def _persist_license(self, license: License) -> bool:
-        """Persist a license to Neo4j database."""
+        """Persist a license to Neo4j database via repository."""
+        # Prefer repository if available
+        if self._repository:
+            try:
+                await self._repository.licenses.create(license)
+                logger.debug(f"Persisted license {license.id} via repository")
+                return True
+            except Exception as e:
+                logger.error(f"Repository failed for license {license.id}: {e}")
+                return False
+
+        # Fallback to direct Neo4j
         if not self.neo4j:
             return False
 
@@ -923,6 +999,7 @@ class MarketplaceService:
 
 # Global instance
 _marketplace_service: MarketplaceService | None = None
+_marketplace_repository: "MarketplaceRepository | None" = None
 _marketplace_initialized: bool = False
 
 
@@ -933,14 +1010,14 @@ async def get_marketplace_service(
     """
     Get the global marketplace service instance.
 
-    On first call, initializes with Neo4j client and loads data from database.
-    Subsequent calls return the cached instance.
+    On first call, initializes with Neo4j client, MarketplaceRepository,
+    and loads data from database. Subsequent calls return the cached instance.
 
     Args:
         neo4j_client: Optional Neo4j client (used on first initialization)
         capsule_repo: Optional capsule repository (used on first initialization)
     """
-    global _marketplace_service, _marketplace_initialized
+    global _marketplace_service, _marketplace_repository, _marketplace_initialized
 
     if _marketplace_service is None:
         # Try to get Neo4j client from ForgeApp if not provided
@@ -951,9 +1028,21 @@ async def get_marketplace_service(
             except (ImportError, AttributeError):
                 logger.warning("Could not get Neo4j client from ForgeApp")
 
+        # Create repository if we have a Neo4j client
+        if neo4j_client and _marketplace_repository is None:
+            try:
+                from forge.repositories.marketplace_repository import MarketplaceRepository
+                _marketplace_repository = MarketplaceRepository(neo4j_client)
+                await _marketplace_repository.initialize()
+                logger.info("MarketplaceRepository initialized")
+            except Exception as e:
+                logger.warning(f"Failed to initialize MarketplaceRepository: {e}")
+                _marketplace_repository = None
+
         _marketplace_service = MarketplaceService(
             capsule_repository=capsule_repo,
             neo4j_client=neo4j_client,
+            marketplace_repository=_marketplace_repository,
         )
 
     # Load from database on first successful initialization with Neo4j
@@ -970,6 +1059,7 @@ async def get_marketplace_service(
 
 async def close_marketplace_service() -> None:
     """Reset the marketplace service (for testing or shutdown)."""
-    global _marketplace_service, _marketplace_initialized
+    global _marketplace_service, _marketplace_repository, _marketplace_initialized
     _marketplace_service = None
+    _marketplace_repository = None
     _marketplace_initialized = False
