@@ -8,13 +8,11 @@ Data source: https://doi.org/10.7910/DVN/IXA7BM
 """
 
 import asyncio
-import hashlib
-import os
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from enum import Enum
 from pathlib import Path
-from typing import Callable
 
 import httpx
 import structlog
@@ -221,7 +219,7 @@ class PrimeKGDownloader:
             disease_features_csv=results.get("disease_features.csv"),
             drug_features_csv=results.get("drug_features.csv"),
             download_dir=self.download_dir,
-            downloaded_at=datetime.now(timezone.utc),
+            downloaded_at=datetime.now(UTC),
         )
 
     async def download_kg_csv(self, force: bool = False) -> Path | None:
@@ -262,7 +260,7 @@ class PrimeKGDownloader:
         progress = DownloadProgress(
             file_name=file_name,
             status=DownloadStatus.DOWNLOADING,
-            started_at=datetime.now(timezone.utc),
+            started_at=datetime.now(UTC),
         )
         self._progress[file_name] = progress
 
@@ -345,7 +343,7 @@ class PrimeKGDownloader:
                 temp_path.rename(file_path)
 
                 progress.status = DownloadStatus.COMPLETED
-                progress.completed_at = datetime.now(timezone.utc)
+                progress.completed_at = datetime.now(UTC)
                 self._notify_progress(progress)
 
                 logger.info(
@@ -430,7 +428,7 @@ class PrimeKGDownloader:
 
             # Check file structure (first line should be header)
             try:
-                with open(path, "r", encoding="utf-8") as f:
+                with open(path, encoding="utf-8") as f:
                     header = f.readline().strip()
 
                     if name == "nodes.csv":

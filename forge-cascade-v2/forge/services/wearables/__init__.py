@@ -10,23 +10,23 @@ Provides wearable device data processing:
 - Phenotype conversion for diagnosis
 """
 
-from .models import (
-    WearableDataType,
-    WearableReading,
-    HeartRateData,
-    SleepData,
-    ActivityData,
-    OxygenData,
-    ECGData,
-    WearableSession,
+from .analyzer import (
+    WearableAnalyzer,
+    create_wearable_analyzer,
 )
 from .converter import (
     WearableConverter,
     create_wearable_converter,
 )
-from .analyzer import (
-    WearableAnalyzer,
-    create_wearable_analyzer,
+from .models import (
+    ActivityData,
+    ECGData,
+    HeartRateData,
+    OxygenData,
+    SleepData,
+    WearableDataType,
+    WearableReading,
+    WearableSession,
 )
 
 __all__ = [

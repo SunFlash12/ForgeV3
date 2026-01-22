@@ -9,7 +9,6 @@ Normalizes and maps phenotypes to standardized HPO terms:
 """
 
 from dataclasses import dataclass
-from typing import Any
 
 import structlog
 
@@ -244,7 +243,7 @@ class PhenotypeNormalizer:
 
         try:
             # Get embedding for input text
-            text_embedding = await self.embedding_service.embed_text(text)
+            await self.embedding_service.embed_text(text)
 
             # Search similar HPO terms
             results = await self.embedding_service.semantic_search(

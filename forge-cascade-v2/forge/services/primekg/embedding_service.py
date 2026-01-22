@@ -14,7 +14,7 @@ Supports:
 import asyncio
 import hashlib
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -210,7 +210,7 @@ class PrimeKGEmbeddingService:
 
     async def _wait_for_rate_limit(self) -> None:
         """Wait if rate limit would be exceeded."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         minute_ago = now.timestamp() - 60
 
         # Remove old request times
@@ -268,7 +268,7 @@ class PrimeKGEmbeddingService:
         """
         progress = EmbeddingProgress(
             total_items=len(texts),
-            started_at=datetime.now(timezone.utc),
+            started_at=datetime.now(UTC),
         )
 
         results: list[list[float] | None] = [None] * len(texts)
@@ -300,7 +300,7 @@ class PrimeKGEmbeddingService:
             try:
                 embeddings = await self.provider.embed_batch(batch_texts)
 
-                for (idx, text), embedding in zip(batch, embeddings):
+                for (idx, text), embedding in zip(batch, embeddings, strict=False):
                     results[idx] = embedding
                     self._add_to_cache(self._cache_key(text), embedding)
                     progress.processed_items += 1
@@ -312,7 +312,7 @@ class PrimeKGEmbeddingService:
             if progress_callback:
                 progress_callback(progress)
 
-        progress.completed_at = datetime.now(timezone.utc)
+        progress.completed_at = datetime.now(UTC)
 
         # Filter out None values (should not happen if no errors)
         return [e if e is not None else [] for e in results]
@@ -367,7 +367,7 @@ class PrimeKGEmbeddingService:
 
         progress = EmbeddingProgress(
             total_items=total_nodes,
-            started_at=datetime.now(timezone.utc),
+            started_at=datetime.now(UTC),
         )
 
         embedded_count = 0
@@ -418,7 +418,7 @@ class PrimeKGEmbeddingService:
                 """
                 updates = [
                     {"node_index": idx, "embedding": emb}
-                    for idx, emb in zip(node_indices, embeddings)
+                    for idx, emb in zip(node_indices, embeddings, strict=False)
                 ]
                 await self.neo4j.run(update_query, {"updates": updates})
 
@@ -434,7 +434,7 @@ class PrimeKGEmbeddingService:
             if progress_callback:
                 progress_callback(progress)
 
-        progress.completed_at = datetime.now(timezone.utc)
+        progress.completed_at = datetime.now(UTC)
         logger.info(
             "primekg_nodes_embedded",
             count=embedded_count,

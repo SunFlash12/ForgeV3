@@ -6,7 +6,7 @@ Abstract base class for all diagnostic agents with common functionality.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 from uuid import uuid4
@@ -39,7 +39,7 @@ class MessageType(str, Enum):
 
 def _utc_now() -> datetime:
     """Get current UTC time (Python 3.12+ compatible)."""
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 @dataclass

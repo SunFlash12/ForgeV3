@@ -5,18 +5,17 @@ Parses and manages the Human Phenotype Ontology hierarchy.
 Supports loading from OBO files, JSON, or database.
 """
 
-import asyncio
 import json
 import re
+from collections.abc import Iterator
 from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 import httpx
 import structlog
 
-from .models import HPOTerm, HPOHierarchy, HPOAnnotation, PhenotypeOccurrence
+from .models import HPOHierarchy, HPOTerm
 
 logger = structlog.get_logger(__name__)
 
@@ -411,7 +410,7 @@ class HPOOntologyService:
                 results.append((term, 0.95))
 
         # Partial matches
-        for hpo_id, term in self._term_index.items():
+        for _hpo_id, term in self._term_index.items():
             if not include_obsolete and term.is_obsolete:
                 continue
 

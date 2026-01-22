@@ -93,6 +93,11 @@ from .ml_intelligence import (
 from .performance_optimizer import (
     PerformanceOptimizerOverlay,
 )
+from .primekg_overlay import (
+    PrimeKGError,
+    PrimeKGOverlay,
+    create_primekg_overlay,
+)
 from .security_validator import (
     ContentPolicyRule,
     InputSanitizationRule,
@@ -115,11 +120,6 @@ from .temporal_tracker import (
     TemporalTrackerOverlay,
     VersionNotFoundError,
     create_temporal_tracker_overlay,
-)
-from .primekg_overlay import (
-    PrimeKGError,
-    PrimeKGOverlay,
-    create_primekg_overlay,
 )
 
 __all__ = [

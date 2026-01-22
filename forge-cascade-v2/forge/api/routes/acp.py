@@ -7,9 +7,8 @@ Enables agent-to-agent commerce through the Virtuals Protocol.
 
 import logging
 from datetime import datetime
-from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from forge.api.dependencies import ActiveUserDep
@@ -33,7 +32,7 @@ class CreateOfferingRequest(BaseModel):
     description: str = Field(max_length=2000, description="Detailed description")
     base_fee_virtual: float = Field(ge=0, description="Base fee in VIRTUAL tokens")
     fee_per_unit: float = Field(default=0.0, ge=0, description="Fee per unit (tokens, queries)")
-    unit_type: Optional[str] = Field(default=None, description="Unit type for per-unit fees")
+    unit_type: str | None = Field(default=None, description="Unit type for per-unit fees")
     max_execution_time_seconds: int = Field(default=300, ge=1, description="Max execution time")
     tags: list[str] = Field(default_factory=list, description="Tags for discovery")
     input_schema: dict = Field(default_factory=dict, description="Expected input JSON schema")
@@ -50,12 +49,12 @@ class OfferingResponse(BaseModel):
     description: str
     base_fee_virtual: float
     fee_per_unit: float
-    unit_type: Optional[str]
+    unit_type: str | None
     max_execution_time_seconds: int
     is_active: bool
     available_capacity: int
     tags: list[str]
-    registry_id: Optional[str]
+    registry_id: str | None
     created_at: datetime
 
 
@@ -65,7 +64,7 @@ class CreateJobRequest(BaseModel):
     buyer_agent_id: str = Field(description="ID of the buying agent")
     requirements: str = Field(max_length=5000, description="Detailed requirements")
     max_fee_virtual: float = Field(ge=0, description="Maximum fee willing to pay")
-    preferred_deadline: Optional[datetime] = None
+    preferred_deadline: datetime | None = None
     additional_context: dict = Field(default_factory=dict)
 
 
@@ -77,7 +76,7 @@ class NegotiationTermsRequest(BaseModel):
     deliverable_description: str
     special_conditions: list[str] = Field(default_factory=list)
     requires_evaluator: bool = False
-    suggested_evaluator_id: Optional[str] = None
+    suggested_evaluator_id: str | None = None
 
 
 class DeliverableRequest(BaseModel):
@@ -118,7 +117,7 @@ class JobResponse(BaseModel):
     status: str
     requirements: str
     agreed_fee_virtual: float
-    agreed_deadline: Optional[datetime]
+    agreed_deadline: datetime | None
     escrow_amount_virtual: float
     escrow_released: bool
     is_disputed: bool
@@ -200,9 +199,9 @@ async def create_offering(
 
 @router.get("/offerings", response_model=list[OfferingResponse])
 async def search_offerings(
-    service_type: Optional[str] = Query(None, description="Filter by service type"),
-    query: Optional[str] = Query(None, description="Search in title/description"),
-    max_fee: Optional[float] = Query(None, ge=0, description="Maximum base fee"),
+    service_type: str | None = Query(None, description="Filter by service type"),
+    query: str | None = Query(None, description="Search in title/description"),
+    max_fee: float | None = Query(None, ge=0, description="Maximum base fee"),
     limit: int = Query(20, ge=1, le=100, description="Max results"),
 ) -> list[OfferingResponse]:
     """
@@ -562,7 +561,7 @@ async def file_dispute(
 @router.get("/jobs/buyer/{agent_id}", response_model=JobListResponse)
 async def get_buyer_jobs(
     agent_id: str,
-    status: Optional[str] = Query(None, description="Filter by status"),
+    status: str | None = Query(None, description="Filter by status"),
     limit: int = Query(50, ge=1, le=100),
 ) -> JobListResponse:
     """Get jobs where agent is the buyer."""
@@ -590,7 +589,7 @@ async def get_buyer_jobs(
 @router.get("/jobs/provider/{agent_id}", response_model=JobListResponse)
 async def get_provider_jobs(
     agent_id: str,
-    status: Optional[str] = Query(None, description="Filter by status"),
+    status: str | None = Query(None, description="Filter by status"),
     limit: int = Query(50, ge=1, le=100),
 ) -> JobListResponse:
     """Get jobs where agent is the provider."""

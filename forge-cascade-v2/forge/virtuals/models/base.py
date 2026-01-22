@@ -8,7 +8,7 @@ foundation for agent management, tokenization, and commerce operations.
 
 from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 from uuid import uuid4
 
 from pydantic import BaseModel, Field, field_validator
@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field, field_validator
 class TokenizationStatus(str, Enum):
     """
     Status of an entity's tokenization process.
-    
+
     The tokenization lifecycle moves through these states:
     NOT_TOKENIZED -> PENDING -> BONDING -> GRADUATED -> (optionally) BRIDGED
     """
@@ -33,7 +33,7 @@ class TokenizationStatus(str, Enum):
 class AgentStatus(str, Enum):
     """
     Operational status of a Virtuals GAME agent.
-    
+
     Agents can be in various states depending on their
     lifecycle and operational health.
     """
@@ -46,7 +46,7 @@ class AgentStatus(str, Enum):
 class ACPPhase(str, Enum):
     """
     The four phases of the Agent Commerce Protocol.
-    
+
     Each transaction progresses through these phases sequentially,
     with cryptographic verification at each transition.
     """
@@ -82,7 +82,7 @@ class RevenueType(str, Enum):
 class VirtualsBaseModel(BaseModel):
     """
     Base model for all Virtuals-related entities.
-    
+
     Provides common fields and configuration used across
     the integration layer.
     """
@@ -102,7 +102,7 @@ class VirtualsBaseModel(BaseModel):
         default_factory=dict,
         description="Extensible metadata storage"
     )
-    
+
     model_config = {
         "json_schema_extra": {
             "examples": []
@@ -113,7 +113,7 @@ class VirtualsBaseModel(BaseModel):
 class WalletInfo(BaseModel):
     """
     Information about a blockchain wallet.
-    
+
     Used to track wallets across different chains for
     multi-chain operations.
     """
@@ -127,7 +127,7 @@ class WalletInfo(BaseModel):
         default=False,
         description="Whether this is an ERC-6551 token-bound account"
     )
-    parent_nft_id: Optional[str] = Field(
+    parent_nft_id: str | None = Field(
         default=None,
         description="If token-bound, the NFT ID that owns this wallet"
     )
@@ -135,7 +135,7 @@ class WalletInfo(BaseModel):
         default=0.0,
         description="Current VIRTUAL token balance"
     )
-    
+
     @field_validator('address')
     @classmethod
     def validate_address(cls, v: str, info) -> str:
@@ -153,7 +153,7 @@ class WalletInfo(BaseModel):
 class TokenInfo(BaseModel):
     """
     Information about a tokenized asset.
-    
+
     Tracks both the agent/capsule token and its relationship
     to the VIRTUAL token ecosystem.
     """
@@ -169,7 +169,7 @@ class TokenInfo(BaseModel):
         default=0,
         description="Currently circulating supply"
     )
-    liquidity_pool_address: Optional[str] = Field(
+    liquidity_pool_address: str | None = Field(
         default=None,
         description="Address of the Uniswap/DEX liquidity pool"
     )
@@ -192,7 +192,7 @@ class TokenInfo(BaseModel):
 class TransactionRecord(BaseModel):
     """
     Record of a blockchain transaction.
-    
+
     Used for tracking all on-chain operations for audit
     and compliance purposes.
     """
@@ -211,7 +211,7 @@ class TransactionRecord(BaseModel):
     transaction_type: str = Field(
         description="Type of transaction (transfer, mint, burn, swap, etc.)"
     )
-    related_entity_id: Optional[str] = Field(
+    related_entity_id: str | None = Field(
         default=None,
         description="ID of the Forge entity this transaction relates to"
     )
@@ -220,14 +220,14 @@ class TransactionRecord(BaseModel):
 class RevenueRecord(BaseModel):
     """
     Record of revenue generated within the ecosystem.
-    
+
     Tracks all revenue events for distribution and analytics.
     """
     id: str = Field(default_factory=lambda: str(uuid4()))
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     revenue_type: RevenueType
     amount_virtual: float = Field(description="Amount in VIRTUAL tokens")
-    amount_usd: Optional[float] = Field(
+    amount_usd: float | None = Field(
         default=None,
         description="USD equivalent at time of transaction"
     )
@@ -243,7 +243,7 @@ class RevenueRecord(BaseModel):
         default=False,
         description="Whether revenue has been distributed"
     )
-    tx_hash: Optional[str] = Field(
+    tx_hash: str | None = Field(
         default=None,
         description="Transaction hash of distribution"
     )
@@ -252,7 +252,7 @@ class RevenueRecord(BaseModel):
 class BridgeRequest(BaseModel):
     """
     Request to bridge tokens between chains.
-    
+
     Tracks cross-chain transfer operations using Wormhole
     or other bridge protocols.
     """
@@ -267,10 +267,10 @@ class BridgeRequest(BaseModel):
         default="pending",
         description="Bridge status (pending, processing, completed, failed)"
     )
-    source_tx_hash: Optional[str] = Field(default=None)
-    destination_tx_hash: Optional[str] = Field(default=None)
+    source_tx_hash: str | None = Field(default=None)
+    destination_tx_hash: str | None = Field(default=None)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    completed_at: Optional[datetime] = Field(default=None)
+    completed_at: datetime | None = Field(default=None)
     estimated_completion_minutes: int = Field(
         default=30,
         description="Estimated time for bridge completion"

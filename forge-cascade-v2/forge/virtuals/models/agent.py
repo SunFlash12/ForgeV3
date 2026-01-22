@@ -10,24 +10,24 @@ tokenization and graduation to sentient status.
 """
 
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 from uuid import uuid4
 
 from pydantic import BaseModel, Field, field_validator
 
 from .base import (
-    VirtualsBaseModel,
     AgentStatus,
-    TokenizationStatus,
-    WalletInfo,
     TokenInfo,
+    TokenizationStatus,
+    VirtualsBaseModel,
+    WalletInfo,
 )
 
 
 class AgentPersonality(BaseModel):
     """
     Defines the personality and behavioral characteristics of an agent.
-    
+
     This configuration shapes how the agent interacts with users
     and other agents, forming the basis of the GAME framework's
     agent definition prompts.
@@ -53,17 +53,17 @@ class AgentPersonality(BaseModel):
         default="",
         description="Guidelines for how the agent should respond to queries"
     )
-    
+
     def to_game_prompt(self) -> str:
         """
         Convert personality to GAME framework agent definition prompt.
-        
+
         The GAME framework uses natural language prompts to define
         agent behavior and decision-making patterns.
         """
         traits_str = ", ".join(self.personality_traits) if self.personality_traits else "helpful and professional"
         domains_str = ", ".join(self.expertise_domains) if self.expertise_domains else "general knowledge"
-        
+
         return f"""Agent Name: {self.name}
 
 Description: {self.description}
@@ -80,7 +80,7 @@ Response Guidelines: {self.response_guidelines if self.response_guidelines else 
 class WorkerDefinition(BaseModel):
     """
     Defines a worker (Low-Level Planner) for a GAME agent.
-    
+
     Workers are specialized components that handle specific types
     of tasks. Each worker has access to a defined set of functions
     that it can execute.
@@ -111,7 +111,7 @@ class WorkerDefinition(BaseModel):
 class AgentGoals(BaseModel):
     """
     Defines the goals and objectives for an agent.
-    
+
     Goals drive the High-Level Planner's decision making,
     determining what tasks the agent prioritizes.
     """
@@ -135,7 +135,7 @@ class AgentGoals(BaseModel):
 class AgentMemoryConfig(BaseModel):
     """
     Configuration for agent memory systems.
-    
+
     Agents maintain both short-term (working) memory and
     long-term persistent memory for cross-session continuity.
     """
@@ -164,7 +164,7 @@ class AgentMemoryConfig(BaseModel):
 class ForgeAgentCreate(BaseModel):
     """
     Schema for creating a new Forge agent on Virtuals Protocol.
-    
+
     This represents the creation request for tokenizing a Forge
     overlay or creating a standalone knowledge agent.
     """
@@ -176,9 +176,9 @@ class ForgeAgentCreate(BaseModel):
     )
     personality: AgentPersonality
     goals: AgentGoals
-    
+
     # Forge Integration
-    forge_overlay_id: Optional[str] = Field(
+    forge_overlay_id: str | None = Field(
         default=None,
         description="ID of the Forge overlay this agent represents"
     )
@@ -186,24 +186,24 @@ class ForgeAgentCreate(BaseModel):
         default_factory=list,
         description="IDs of Forge capsules this agent has access to"
     )
-    
+
     # Workers Configuration
     workers: list[WorkerDefinition] = Field(
         default_factory=list,
         description="Worker definitions for task execution"
     )
-    
+
     # Memory Configuration
     memory_config: AgentMemoryConfig = Field(
         default_factory=AgentMemoryConfig
     )
-    
+
     # Tokenization Options
     enable_tokenization: bool = Field(
         default=False,
         description="Whether to tokenize this agent (opt-in)"
     )
-    token_symbol: Optional[str] = Field(
+    token_symbol: str | None = Field(
         default=None,
         max_length=10,
         description="Token symbol if tokenizing (e.g., 'FRGSEC')"
@@ -213,16 +213,16 @@ class ForgeAgentCreate(BaseModel):
         ge=100.0,
         description="Initial VIRTUAL stake (minimum 100)"
     )
-    
+
     # Chain Configuration
     primary_chain: str = Field(
         default="base",
         description="Primary blockchain for deployment"
     )
-    
+
     @field_validator('token_symbol')
     @classmethod
-    def validate_symbol(cls, v: Optional[str]) -> Optional[str]:
+    def validate_symbol(cls, v: str | None) -> str | None:
         """Ensure token symbol is uppercase and valid."""
         if v is not None:
             v = v.upper()
@@ -234,7 +234,7 @@ class ForgeAgentCreate(BaseModel):
 class ForgeAgent(VirtualsBaseModel):
     """
     Complete representation of a Forge agent on Virtuals Protocol.
-    
+
     This model represents the full state of an agent including
     its configuration, tokenization status, and operational metrics.
     """
@@ -243,50 +243,50 @@ class ForgeAgent(VirtualsBaseModel):
     personality: AgentPersonality
     goals: AgentGoals
     status: AgentStatus = Field(default=AgentStatus.PROTOTYPE)
-    
+
     # Forge Integration
-    forge_overlay_id: Optional[str] = None
+    forge_overlay_id: str | None = None
     forge_capsule_ids: list[str] = Field(default_factory=list)
-    
+
     # Workers
     workers: list[WorkerDefinition] = Field(default_factory=list)
-    
+
     # Memory
     memory_config: AgentMemoryConfig = Field(default_factory=AgentMemoryConfig)
-    
+
     # Virtuals Protocol Integration
-    game_agent_id: Optional[str] = Field(
+    game_agent_id: str | None = Field(
         default=None,
         description="ID assigned by GAME framework"
     )
-    api_access_token: Optional[str] = Field(
+    api_access_token: str | None = Field(
         default=None,
         description="Current API access token (rotates)"
     )
-    
+
     # Blockchain State
     primary_chain: str = Field(default="base")
     wallets: dict[str, WalletInfo] = Field(
         default_factory=dict,
         description="Wallets by chain (e.g., {'base': WalletInfo(...)})"
     )
-    
+
     # Tokenization State
     tokenization_status: TokenizationStatus = Field(
         default=TokenizationStatus.NOT_TOKENIZED
     )
-    token_info: Optional[TokenInfo] = None
-    
+    token_info: TokenInfo | None = None
+
     # NFT State (ERC-721 + ERC-6551 TBA)
-    nft_token_id: Optional[str] = Field(
+    nft_token_id: str | None = Field(
         default=None,
         description="Agent NFT token ID"
     )
-    token_bound_account: Optional[str] = Field(
+    token_bound_account: str | None = Field(
         default=None,
         description="ERC-6551 token-bound account address"
     )
-    
+
     # Operational Metrics
     total_queries_handled: int = Field(default=0)
     total_revenue_generated: float = Field(default=0.0)
@@ -298,15 +298,15 @@ class ForgeAgent(VirtualsBaseModel):
         le=1.0,
         description="Trust score based on performance"
     )
-    
+
     # Activity Tracking
-    last_active_at: Optional[datetime] = None
+    last_active_at: datetime | None = None
     total_active_hours: float = Field(default=0.0)
-    
+
     def is_operational(self) -> bool:
         """Check if agent is in an operational state."""
         return self.status in [AgentStatus.PROTOTYPE, AgentStatus.SENTIENT]
-    
+
     def is_tokenized(self) -> bool:
         """Check if agent has been tokenized."""
         return self.tokenization_status in [
@@ -314,24 +314,24 @@ class ForgeAgent(VirtualsBaseModel):
             TokenizationStatus.GRADUATED,
             TokenizationStatus.BRIDGED,
         ]
-    
-    def get_wallet(self, chain: str) -> Optional[WalletInfo]:
+
+    def get_wallet(self, chain: str) -> WalletInfo | None:
         """Get wallet for a specific chain."""
         return self.wallets.get(chain)
-    
-    def get_primary_wallet(self) -> Optional[WalletInfo]:
+
+    def get_primary_wallet(self) -> WalletInfo | None:
         """Get the primary chain wallet."""
         return self.wallets.get(self.primary_chain)
 
 
 class AgentUpdate(BaseModel):
     """Schema for updating an existing agent."""
-    personality: Optional[AgentPersonality] = None
-    goals: Optional[AgentGoals] = None
-    workers: Optional[list[WorkerDefinition]] = None
-    memory_config: Optional[AgentMemoryConfig] = None
-    forge_capsule_ids: Optional[list[str]] = None
-    
+    personality: AgentPersonality | None = None
+    goals: AgentGoals | None = None
+    workers: list[WorkerDefinition] | None = None
+    memory_config: AgentMemoryConfig | None = None
+    forge_capsule_ids: list[str] | None = None
+
     # Cannot change these after creation
     # - name
     # - forge_overlay_id

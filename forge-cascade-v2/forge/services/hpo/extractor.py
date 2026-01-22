@@ -15,7 +15,6 @@ import structlog
 
 from .models import (
     ExtractedPhenotype,
-    PhenotypeMatch,
     PhenotypeSeverity,
 )
 from .ontology import HPOOntologyService

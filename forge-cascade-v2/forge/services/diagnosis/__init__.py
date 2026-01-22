@@ -10,43 +10,43 @@ Provides autonomous differential diagnosis generation:
 - Event streaming for real-time updates
 """
 
+from .engine import (
+    DiagnosisEngine,
+    EngineConfig,
+    create_diagnosis_engine,
+)
 from .models import (
     DiagnosisHypothesis,
+    DiagnosisResult,
     DiagnosisSession,
     DiagnosisState,
-    DiagnosisResult,
-    PatientProfile,
     EvidenceItem,
-    EvidenceType,
     EvidencePolarity,
+    EvidenceType,
     FollowUpQuestion,
+    PatientProfile,
 )
 from .scoring import (
     BayesianScorer,
     ScoringConfig,
     create_bayesian_scorer,
 )
-from .engine import (
-    DiagnosisEngine,
-    EngineConfig,
-    create_diagnosis_engine,
-)
 from .session import (
-    SessionController,
     SessionConfig,
+    SessionController,
     SessionEvent,
     SessionEventData,
     create_session_controller,
 )
 from .validation import (
-    is_valid_hpo_code,
-    is_valid_gene_symbol,
-    is_valid_disease_id,
-    sanitize_hpo_codes,
-    sanitize_gene_symbols,
-    validate_phenotype_input,
-    validate_genetic_input,
     InputValidator,
+    is_valid_disease_id,
+    is_valid_gene_symbol,
+    is_valid_hpo_code,
+    sanitize_gene_symbols,
+    sanitize_hpo_codes,
+    validate_genetic_input,
+    validate_phenotype_input,
 )
 
 __all__ = [

@@ -18,9 +18,7 @@ PrimeKG Statistics:
 - 17,080+ diseases with phenotype mappings
 """
 
-from datetime import UTC, datetime
 from typing import Any
-from uuid import uuid4
 
 import structlog
 
@@ -30,8 +28,8 @@ from forge.models.overlay import Capability, FuelBudget
 from forge.overlays.base import (
     BaseOverlay,
     OverlayContext,
-    OverlayResult,
     OverlayError,
+    OverlayResult,
 )
 
 logger = structlog.get_logger(__name__)
@@ -554,9 +552,9 @@ class PrimeKGOverlay(BaseOverlay):
         # Phase 3: Filter by contraindications if medications provided
         if medications and candidates:
             contraindicated_diseases = set()
-            for med in medications:
+            for _med in medications:
                 # This would query drug-disease contraindications
-                # Simplified for now
+                # Simplified for now - actual implementation would use _med
                 pass
 
             candidates = [

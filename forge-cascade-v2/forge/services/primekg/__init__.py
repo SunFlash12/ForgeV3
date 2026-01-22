@@ -18,17 +18,17 @@ PrimeKG Statistics:
 - 20 integrated biomedical data sources
 """
 
-from .download import PrimeKGDownloader, PrimeKGDataFiles
-from .parser import PrimeKGParser, PrimeKGNode, PrimeKGEdge
-from .import_service import PrimeKGImportService, ImportProgress, ImportResult
+from .download import PrimeKGDataFiles, PrimeKGDownloader
+from .import_service import ImportProgress, ImportResult, PrimeKGImportService
 from .models import (
-    PrimeKGNodeType,
-    PrimeKGEdgeType,
     PrimeKGDisease,
-    PrimeKGGene,
     PrimeKGDrug,
+    PrimeKGEdgeType,
+    PrimeKGGene,
+    PrimeKGNodeType,
     PrimeKGPhenotype,
 )
+from .parser import PrimeKGEdge, PrimeKGNode, PrimeKGParser
 
 __all__ = [
     # Download

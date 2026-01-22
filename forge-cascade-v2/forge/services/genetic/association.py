@@ -9,8 +9,8 @@ from typing import Any
 import structlog
 
 from .models import (
-    GeneInfo,
     GeneDiseaseAssociation,
+    GeneInfo,
     GeneticVariant,
     InheritancePattern,
 )
@@ -291,7 +291,7 @@ class GeneAssociationService:
 
         # Convert to list and sort by score
         results = []
-        for disease_id, evidence in disease_evidence.items():
+        for _disease_id, evidence in disease_evidence.items():
             evidence["phenotypes"] = list(evidence["phenotypes"])
             evidence["gene_count"] = len(evidence["supporting_genes"])
             evidence["variant_count"] = len(evidence["supporting_variants"])

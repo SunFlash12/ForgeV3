@@ -6,18 +6,19 @@ Parses VCF (Variant Call Format) files to extract genetic variants.
 
 import gzip
 import re
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterator, TextIO
+from typing import TextIO
 
 import structlog
 
 from .models import (
-    GeneticVariant,
-    VariantType,
-    VariantPathogenicity,
-    Zygosity,
     GeneticTestResult,
+    GeneticVariant,
+    VariantPathogenicity,
+    VariantType,
+    Zygosity,
 )
 
 logger = structlog.get_logger(__name__)
@@ -246,7 +247,7 @@ class VCFParser:
         ref = fields[3]
         alt = fields[4]
         qual = float(fields[5]) if fields[5] != "." else None
-        filter_status = fields[6]
+        fields[6]
         info = fields[7]
 
         # Skip multi-allelic for now (could split)
@@ -265,7 +266,7 @@ class VCFParser:
         if len(fields) > 9 and header.format_fields:
             format_keys = fields[8].split(":")
             sample_values = fields[9 + sample_idx].split(":") if len(fields) > 9 + sample_idx else []
-            sample_data = dict(zip(format_keys, sample_values))
+            sample_data = dict(zip(format_keys, sample_values, strict=False))
 
             # Extract zygosity from GT
             gt = sample_data.get("GT", "")
@@ -366,7 +367,7 @@ class VCFParser:
     def _parse_pathogenicity(self, info: dict) -> VariantPathogenicity:
         """Parse ClinVar clinical significance."""
         clnsig = info.get("CLNSIG", "").lower()
-        clnrevstat = info.get("CLNREVSTAT", "")
+        info.get("CLNREVSTAT", "")
 
         if "pathogenic" in clnsig:
             if "likely" in clnsig:

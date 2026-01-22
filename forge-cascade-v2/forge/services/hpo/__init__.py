@@ -8,17 +8,17 @@ Provides phenotype processing for the differential diagnosis engine:
 - Semantic similarity between phenotypes
 """
 
-from .models import (
-    HPOTerm,
-    HPOAnnotation,
-    PhenotypeMatch,
-    PhenotypeSeverity,
-    PhenotypeOccurrence,
-    ExtractedPhenotype,
-)
-from .ontology import HPOOntologyService, create_hpo_ontology_service
 from .extractor import PhenotypeExtractor, create_phenotype_extractor
+from .models import (
+    ExtractedPhenotype,
+    HPOAnnotation,
+    HPOTerm,
+    PhenotypeMatch,
+    PhenotypeOccurrence,
+    PhenotypeSeverity,
+)
 from .normalizer import PhenotypeNormalizer, create_phenotype_normalizer
+from .ontology import HPOOntologyService, create_hpo_ontology_service
 
 __all__ = [
     # Models

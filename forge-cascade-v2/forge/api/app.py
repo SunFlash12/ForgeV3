@@ -20,12 +20,12 @@ from typing import Any
 import sentry_sdk
 import structlog
 from fastapi import FastAPI, Request
-from sentry_sdk.integrations.fastapi import FastApiIntegration
-from sentry_sdk.integrations.starlette import StarletteIntegration
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from neo4j.exceptions import ServiceUnavailable, SessionExpired, TransientError
+from sentry_sdk.integrations.fastapi import FastApiIntegration
+from sentry_sdk.integrations.starlette import StarletteIntegration
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from forge.config import get_settings
@@ -205,8 +205,8 @@ class ForgeApp:
         # Initialize Virtuals Protocol integration (ACP, GAME SDK)
         try:
             from forge.services.virtuals_integration import (
-                init_virtuals_service,
                 get_virtuals_config,
+                init_virtuals_service,
             )
 
             virtuals_config = get_virtuals_config()
@@ -339,15 +339,15 @@ class ForgeApp:
 
     async def _initialize_diagnosis_services(self) -> None:
         """Initialize the differential diagnosis services."""
+        from forge.api.routes.diagnosis import initialize_diagnosis_services
         from forge.services.diagnosis import (
-            create_session_controller,
             SessionConfig,
+            create_session_controller,
         )
         from forge.services.diagnosis.agents import (
-            create_diagnostic_coordinator,
             CoordinatorConfig,
+            create_diagnostic_coordinator,
         )
-        from forge.api.routes.diagnosis import initialize_diagnosis_services
 
         # Get PrimeKG overlay for disease/phenotype queries
         primekg_overlay = None

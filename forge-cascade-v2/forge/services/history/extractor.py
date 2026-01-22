@@ -11,12 +11,12 @@ from typing import Any
 import structlog
 
 from .models import (
-    HistoryItem,
-    HistoryType,
     FamilyMember,
+    HistoryItem,
+    HistoryTimeline,
+    HistoryType,
     MedicationRecord,
     ProcedureRecord,
-    HistoryTimeline,
 )
 
 logger = structlog.get_logger(__name__)
@@ -377,7 +377,6 @@ class HistoryExtractor:
 
         # Pattern for allergies
         # e.g., "Penicillin (rash)", "Sulfa - hives"
-        allergy_pattern = r'([A-Za-z]+)(?:\s*[\(\-:]\s*([^,\n\)]+))?'
 
         # Common allergen keywords
         allergen_keywords = [

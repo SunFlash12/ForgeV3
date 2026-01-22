@@ -11,11 +11,9 @@ Chain: Solana
 
 from datetime import UTC, datetime
 from enum import Enum
-from typing import Optional
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
-
 
 # FROWG token constants
 FROWG_TOKEN_MINT = "uogFxqx5SPdL7CMWTTttz4KZ2WctR4RjgZwmGcwpump"
@@ -40,7 +38,7 @@ class Tip(BaseModel):
 
     # Sender
     sender_wallet: str = Field(description="Solana wallet that sent the tip")
-    sender_user_id: Optional[str] = Field(
+    sender_user_id: str | None = Field(
         default=None,
         description="Forge user ID if logged in"
     )
@@ -61,14 +59,14 @@ class Tip(BaseModel):
     )
 
     # Optional message
-    message: Optional[str] = Field(
+    message: str | None = Field(
         default=None,
         max_length=280,
         description="Optional tip message (tweet-length)"
     )
 
     # Transaction
-    tx_signature: Optional[str] = Field(
+    tx_signature: str | None = Field(
         default=None,
         description="Solana transaction signature"
     )
@@ -79,7 +77,7 @@ class Tip(BaseModel):
 
     # Timestamps
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    confirmed_at: Optional[datetime] = None
+    confirmed_at: datetime | None = None
 
     def to_lamports(self) -> int:
         """Convert FROWG amount to lamports (smallest unit)."""
@@ -91,13 +89,13 @@ class TipCreate(BaseModel):
     target_type: TipTargetType
     target_id: str
     amount_frowg: float = Field(gt=0, le=1_000_000)
-    message: Optional[str] = Field(default=None, max_length=280)
+    message: str | None = Field(default=None, max_length=280)
 
 
 class TipResponse(BaseModel):
     """Response after creating a tip."""
     tip_id: str
-    tx_signature: Optional[str] = None
+    tx_signature: str | None = None
     status: str = Field(description="pending, confirmed, or failed")
     message: str
 

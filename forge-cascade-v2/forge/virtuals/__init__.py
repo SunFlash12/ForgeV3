@@ -42,20 +42,20 @@ Quick Start:
     # 1. Configure environment
     export VIRTUALS_API_KEY="your-game-api-key"
     export VIRTUALS_OPERATOR_PRIVATE_KEY="0x..."
-    
+
     # 2. Initialize services
     from forge.virtuals import initialize_virtuals
     await initialize_virtuals()
-    
+
     # 3. Create a knowledge agent
     from forge.virtuals.game import get_game_client, create_knowledge_worker
-    
+
     client = await get_game_client()
     agent = await client.create_agent(...)
-    
+
     # 4. Enable tokenization (opt-in)
     from forge.virtuals.tokenization import get_tokenization_service
-    
+
     service = await get_tokenization_service()
     await service.request_tokenization(...)
 
@@ -68,72 +68,72 @@ For detailed documentation and examples, see:
 __version__ = "0.1.0"
 
 # Configuration
+from .acp import ACPService, get_acp_service
+from .chains import MultiChainManager, get_chain_manager
 from .config import (
+    ChainNetwork,
     VirtualsConfig,
     VirtualsEnvironment,
-    ChainNetwork,
-    get_virtuals_config,
     configure_virtuals,
-)
-
-# Models (re-export commonly used models)
-from .models import (
-    # Agent models
-    ForgeAgent,
-    ForgeAgentCreate,
-    AgentStatus,
-    AgentPersonality,
-    AgentGoals,
-    WorkerDefinition,
-    # Tokenization models
-    TokenizedEntity,
-    TokenizationRequest,
-    TokenizationStatus,
-    TokenDistribution,
-    RevenueShare,
-    # ACP models
-    ACPJob,
-    ACPJobCreate,
-    ACPPhase,
-    ACPJobStatus,
-    JobOffering,
-    # Base models
-    WalletInfo,
-    TokenInfo,
-    TransactionRecord,
-    RevenueRecord,
-    RevenueType,
+    get_virtuals_config,
 )
 
 # Service access functions
-from .game import get_game_client, GAMESDKClient
-from .acp import get_acp_service, ACPService
-from .tokenization import get_tokenization_service, TokenizationService
-from .revenue import get_revenue_service, RevenueService
-from .chains import get_chain_manager, MultiChainManager
+from .game import GAMESDKClient, get_game_client
+
+# Models (re-export commonly used models)
+from .models import (
+    # ACP models
+    ACPJob,
+    ACPJobCreate,
+    ACPJobStatus,
+    ACPPhase,
+    AgentGoals,
+    AgentPersonality,
+    AgentStatus,
+    # Agent models
+    ForgeAgent,
+    ForgeAgentCreate,
+    JobOffering,
+    RevenueRecord,
+    RevenueShare,
+    RevenueType,
+    TokenDistribution,
+    TokenInfo,
+    TokenizationRequest,
+    TokenizationStatus,
+    # Tokenization models
+    TokenizedEntity,
+    TransactionRecord,
+    # Base models
+    WalletInfo,
+    WorkerDefinition,
+)
+from .revenue import RevenueService, get_revenue_service
+from .tokenization import TokenizationService, get_tokenization_service
 
 
 async def initialize_virtuals() -> dict[str, any]:
     """
     Initialize all Virtuals Protocol integration services.
-    
+
     This convenience function initializes all required services
     in the correct order, handling dependencies and configuration.
-    
+
     Returns:
         Dict containing initialized service instances
-        
+
     Example:
         services = await initialize_virtuals()
         game_client = services['game']
         chain_manager = services['chains']
     """
     config = get_virtuals_config()
-    
+
     # Initialize in dependency order
     chain_manager = await get_chain_manager()
     game_client = await get_game_client()
-    
+
     return {
         'config': config,
         'chains': chain_manager,
@@ -148,7 +148,7 @@ __all__ = [
     "__version__",
     # Configuration
     "VirtualsConfig",
-    "VirtualsEnvironment", 
+    "VirtualsEnvironment",
     "ChainNetwork",
     "get_virtuals_config",
     "configure_virtuals",

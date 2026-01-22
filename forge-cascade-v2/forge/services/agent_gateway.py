@@ -1006,14 +1006,6 @@ class AgentGatewayService:
             raise ValueError(f"Session {session_id} not found")
 
         # Map Agent Gateway capabilities to ACP service capabilities
-        capability_map = {
-            AgentCapability.QUERY_GRAPH: "knowledge_query",
-            AgentCapability.SEMANTIC_SEARCH: "semantic_search",
-            AgentCapability.CREATE_CAPSULES: "capsule_generation",
-            AgentCapability.EXECUTE_CASCADE: "overlay_execution",
-            AgentCapability.READ_CAPSULES: "capsule_access",
-            AgentCapability.ACCESS_LINEAGE: "lineage_query",
-        }
 
         # Build input schema based on capabilities
         input_schema: dict[str, Any] = {"type": "object", "properties": {}}

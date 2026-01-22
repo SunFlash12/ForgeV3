@@ -14,9 +14,9 @@ import structlog
 
 from forge.database.client import Neo4jClient
 from forge.models.marketplace import (
+    CapsuleListing,
     Cart,
     CartItem,
-    CapsuleListing,
     Currency,
     License,
     LicenseType,

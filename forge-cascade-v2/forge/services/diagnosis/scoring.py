@@ -7,16 +7,15 @@ Uses phenotype-disease frequencies, genetic evidence, and clinical context.
 
 import math
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Any
+from datetime import UTC, datetime
 
 import structlog
 
 from .models import (
     DiagnosisHypothesis,
     EvidenceItem,
-    EvidenceType,
     EvidencePolarity,
+    EvidenceType,
     PatientProfile,
 )
 
@@ -117,7 +116,7 @@ class BayesianScorer:
         # Genetic evidence
         genetic_lr = self._calculate_genetic_likelihood(
             hypothesis.associated_genes,
-            [e for e in patient.genetic_variants],
+            list(patient.genetic_variants),
         )
         hypothesis.genetic_score = self._lr_to_score(genetic_lr)
 
@@ -155,7 +154,7 @@ class BayesianScorer:
         # Classify evidence
         self._classify_evidence(hypothesis, patient)
 
-        hypothesis.updated_at = datetime.now(timezone.utc)
+        hypothesis.updated_at = datetime.now(UTC)
         return hypothesis
 
     async def score_all_hypotheses(

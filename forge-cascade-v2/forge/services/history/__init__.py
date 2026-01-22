@@ -9,21 +9,21 @@ Provides extraction and analysis of medical history:
 - ICD-10/SNOMED coding
 """
 
-from .models import (
-    HistoryItem,
-    HistoryType,
-    FamilyMember,
-    MedicationRecord,
-    ProcedureRecord,
-    HistoryTimeline,
+from .analyzer import (
+    HistoryAnalyzer,
+    create_history_analyzer,
 )
 from .extractor import (
     HistoryExtractor,
     create_history_extractor,
 )
-from .analyzer import (
-    HistoryAnalyzer,
-    create_history_analyzer,
+from .models import (
+    FamilyMember,
+    HistoryItem,
+    HistoryTimeline,
+    HistoryType,
+    MedicationRecord,
+    ProcedureRecord,
 )
 
 __all__ = [

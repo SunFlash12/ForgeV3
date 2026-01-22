@@ -13,10 +13,10 @@ Revenue Streams:
 
 Example Usage:
     from forge.virtuals.revenue import get_revenue_service
-    
+
     async def track_capsule_usage():
         service = await get_revenue_service(revenue_repo)
-        
+
         # Record fee when capsule is queried
         record = await service.record_inference_fee(
             capsule_id="capsule_123",
@@ -24,7 +24,7 @@ Example Usage:
             query_text="What is our Q3 strategy?",
             tokens_processed=1500,
         )
-        
+
         # Get revenue analytics
         summary = await service.get_revenue_summary(
             entity_id="capsule_123",
@@ -32,15 +32,14 @@ Example Usage:
         )
 """
 
+from .repository import (
+    RevenueRepository,
+    get_revenue_repository,
+)
 from .service import (
     RevenueService,
     RevenueServiceError,
     get_revenue_service,
-)
-
-from .repository import (
-    RevenueRepository,
-    get_revenue_repository,
 )
 
 __all__ = [

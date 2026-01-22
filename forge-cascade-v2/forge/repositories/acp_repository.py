@@ -9,16 +9,13 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
-from typing import Any, Optional
-from uuid import uuid4
+from typing import Any
 
 import structlog
 
 from forge.database.client import Neo4jClient
-from forge.repositories.base import BaseRepository, validate_identifier
 from forge.virtuals.models.acp import (
     ACPJob,
-    ACPJobCreate,
     ACPJobStatus,
     ACPPhase,
     JobOffering,
@@ -115,7 +112,7 @@ class OfferingRepository:
 
         return offering
 
-    async def get_by_id(self, offering_id: str) -> Optional[JobOffering]:
+    async def get_by_id(self, offering_id: str) -> JobOffering | None:
         """Get an offering by ID."""
         query = """
         MATCH (o:JobOffering {id: $id})
@@ -144,9 +141,9 @@ class OfferingRepository:
 
     async def search(
         self,
-        service_type: Optional[str] = None,
-        query: Optional[str] = None,
-        max_fee: Optional[float] = None,
+        service_type: str | None = None,
+        query: str | None = None,
+        max_fee: float | None = None,
         min_provider_reputation: float = 0.0,
         limit: int = 20,
     ) -> list[JobOffering]:
@@ -396,7 +393,7 @@ class ACPJobRepository:
 
         return job
 
-    async def get_by_id(self, job_id: str) -> Optional[ACPJob]:
+    async def get_by_id(self, job_id: str) -> ACPJob | None:
         """Get a job by ID."""
         query = """
         MATCH (j:ACPJob {id: $id})
@@ -496,7 +493,7 @@ class ACPJobRepository:
     async def list_by_buyer(
         self,
         buyer_agent_id: str,
-        status: Optional[ACPJobStatus] = None,
+        status: ACPJobStatus | None = None,
         limit: int = 50,
     ) -> list[ACPJob]:
         """Get jobs where agent is the buyer."""
@@ -524,7 +521,7 @@ class ACPJobRepository:
     async def list_by_provider(
         self,
         provider_agent_id: str,
-        status: Optional[ACPJobStatus] = None,
+        status: ACPJobStatus | None = None,
         limit: int = 50,
     ) -> list[ACPJob]:
         """Get jobs where agent is the provider."""
@@ -578,7 +575,7 @@ class ACPJobRepository:
 
     async def average_rating_by_provider(
         self, provider_agent_id: str
-    ) -> Optional[float]:
+    ) -> float | None:
         """Get average evaluation score for a provider."""
         query = """
         MATCH (j:ACPJob {provider_agent_id: $provider_agent_id, status: 'completed'})
@@ -675,8 +672,8 @@ class ACPJobRepository:
 
 
 # Global repository instances
-_offering_repository: Optional[OfferingRepository] = None
-_job_repository: Optional[ACPJobRepository] = None
+_offering_repository: OfferingRepository | None = None
+_job_repository: ACPJobRepository | None = None
 
 
 def get_offering_repository(client: Neo4jClient) -> OfferingRepository:

@@ -5,7 +5,7 @@ Data models for medical history representation.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime, date, timezone
+from datetime import UTC, date, datetime
 from enum import Enum
 from typing import Any
 from uuid import uuid4
@@ -13,7 +13,7 @@ from uuid import uuid4
 
 def _utc_now() -> datetime:
     """Get current UTC time (Python 3.12+ compatible)."""
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class HistoryType(str, Enum):

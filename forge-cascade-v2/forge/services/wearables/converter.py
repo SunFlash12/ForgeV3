@@ -10,12 +10,12 @@ from typing import Any
 import structlog
 
 from .models import (
-    WearableSession,
-    HeartRateData,
-    SleepData,
     ActivityData,
-    OxygenData,
     ECGData,
+    HeartRateData,
+    OxygenData,
+    SleepData,
+    WearableSession,
 )
 
 logger = structlog.get_logger(__name__)
@@ -179,7 +179,7 @@ class WearableConverter:
 
         # Get resting HR
         resting_values = [d.resting_hr for d in data if d.resting_hr]
-        avg_resting = sum(resting_values) / len(resting_values) if resting_values else None
+        sum(resting_values) / len(resting_values) if resting_values else None
 
         # Check for tachycardia
         tachy_count = sum(1 for hr in hr_values if hr > self.config.tachycardia_threshold)
@@ -255,7 +255,7 @@ class WearableConverter:
         # Calculate averages (len(data) > 0 guaranteed by check above)
         avg_efficiency = sum(d.sleep_efficiency for d in data) / len(data)
         avg_deep_pct = sum(d.deep_sleep_percentage for d in data) / len(data)
-        avg_duration = sum(d.total_duration_minutes for d in data) / len(data)
+        sum(d.total_duration_minutes for d in data) / len(data)
         total_wake_count = sum(d.wake_count for d in data)
         total_apnea_possible = sum(1 for d in data if d.possible_apnea)
 
