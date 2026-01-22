@@ -5,16 +5,17 @@ Generates vector embeddings for semantic search on capsules.
 Supports multiple embedding providers:
 - OpenAI (text-embedding-3-small, text-embedding-3-large, ada-002)
 - Local sentence-transformers (all-MiniLM-L6-v2, etc.)
-- Mock embeddings for testing
 
 The default dimension is 1536 to match Neo4j vector index configuration.
+
+IMPORTANT: A real embedding provider is REQUIRED for Forge to function.
+Set OPENAI_API_KEY for cloud embeddings, or install sentence-transformers for local.
 """
 
 from __future__ import annotations
 
 import asyncio
 import hashlib
-import struct
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
@@ -32,7 +33,11 @@ class EmbeddingProvider(str, Enum):
     """Supported embedding providers."""
     OPENAI = "openai"
     SENTENCE_TRANSFORMERS = "sentence_transformers"
-    MOCK = "mock"
+
+
+class EmbeddingConfigurationError(Exception):
+    """Raised when embedding provider is not properly configured."""
+    pass
 
 
 @dataclass
@@ -43,8 +48,8 @@ class EmbeddingConfig:
     SECURITY FIX (Audit 4 - H24): API keys are loaded from environment
     variables and are redacted in logs/repr to prevent exposure.
     """
-    provider: EmbeddingProvider = EmbeddingProvider.MOCK
-    model: str = "text-embedding-3-small"
+    provider: EmbeddingProvider = EmbeddingProvider.SENTENCE_TRANSFORMERS
+    model: str = "all-MiniLM-L6-v2"  # Default to local model
     dimensions: int = 1536
     api_key: str | None = None  # SECURITY: Load from env, redact in logs
     api_base: str | None = None
@@ -113,76 +118,6 @@ class EmbeddingProviderBase(ABC):
     def get_dimensions(self) -> int:
         """Get the embedding dimensions."""
         pass
-
-
-class MockEmbeddingProvider(EmbeddingProviderBase):
-    """
-    Mock embedding provider for testing.
-
-    Generates deterministic embeddings based on text hash.
-    This allows consistent results for testing while
-    maintaining semantic similarity properties (same text = same embedding).
-    """
-
-    def __init__(self, dimensions: int = 1536):
-        self._dimensions = dimensions
-
-    def get_dimensions(self) -> int:
-        return self._dimensions
-
-    def _hash_to_embedding(self, text: str) -> list[float]:
-        """Convert text hash to normalized embedding vector."""
-        # Use SHA-256 to get deterministic bytes
-        text_bytes = text.encode('utf-8')
-        hashlib.sha256(text_bytes).digest()
-
-        # Extend hash to fill dimensions
-        extended = bytearray()
-        counter = 0
-        while len(extended) < self._dimensions * 4:
-            combined = text_bytes + counter.to_bytes(4, 'big')
-            extended.extend(hashlib.sha256(combined).digest())
-            counter += 1
-
-        # Convert to floats in range [-1, 1]
-        embedding = []
-        for i in range(self._dimensions):
-            # Take 4 bytes and convert to float
-            chunk = bytes(extended[i*4:(i+1)*4])
-            # Convert to unsigned int, then scale to [-1, 1]
-            value = struct.unpack('>I', chunk)[0]
-            normalized = (value / (2**32 - 1)) * 2 - 1
-            embedding.append(normalized)
-
-        # L2 normalize
-        magnitude = sum(x**2 for x in embedding) ** 0.5
-        if magnitude > 0:
-            embedding = [x / magnitude for x in embedding]
-
-        return embedding
-
-    async def embed(self, text: str) -> EmbeddingResult:
-        """Generate mock embedding."""
-        # Simulate small delay
-        await asyncio.sleep(0.001)
-
-        embedding = self._hash_to_embedding(text)
-
-        return EmbeddingResult(
-            embedding=embedding,
-            model="mock-embedding",
-            dimensions=self._dimensions,
-            tokens_used=len(text.split()),
-            cached=False,
-        )
-
-    async def embed_batch(self, texts: list[str]) -> list[EmbeddingResult]:
-        """Generate mock embeddings for batch."""
-        results = []
-        for text in texts:
-            result = await self.embed(text)
-            results.append(result)
-        return results
 
 
 class OpenAIEmbeddingProvider(EmbeddingProviderBase):
@@ -471,8 +406,12 @@ class EmbeddingService:
         elif self._config.provider == EmbeddingProvider.SENTENCE_TRANSFORMERS:
             return SentenceTransformersProvider(model=self._config.model)
 
-        else:  # MOCK
-            return MockEmbeddingProvider(dimensions=self._config.dimensions)
+        else:
+            raise EmbeddingConfigurationError(
+                f"Unsupported embedding provider: {self._config.provider}. "
+                "Supported providers: openai, sentence_transformers. "
+                "Set OPENAI_API_KEY for cloud embeddings, or install sentence-transformers for local."
+            )
 
     @property
     def dimensions(self) -> int:
@@ -682,6 +621,7 @@ def euclidean_distance(a: list[float], b: list[float]) -> float:
 __all__ = [
     "EmbeddingProvider",
     "EmbeddingConfig",
+    "EmbeddingConfigurationError",
     "EmbeddingResult",
     "EmbeddingService",
     "get_embedding_service",

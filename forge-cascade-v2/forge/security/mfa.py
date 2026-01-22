@@ -633,18 +633,42 @@ class MFAService:
         Returns:
             True if MFA was disabled
         """
+        # SECURITY FIX: Ensure MFA data is loaded before checking
+        await self._ensure_loaded(user_id)
+
         if user_id not in self._secrets:
             return False
 
-        # Remove all MFA data
+        # Remove all MFA data from memory
         self._secrets.pop(user_id, None)
         self._backup_codes.pop(user_id, None)
         self._verified.pop(user_id, None)
         self._last_used.pop(user_id, None)
         self._verification_attempts.pop(user_id, None)
 
+        # SECURITY FIX: Also delete from database
+        await self._delete_mfa_data(user_id)
+
         logger.info("MFA disabled", user_id=user_id)
         return True
+
+    async def _delete_mfa_data(self, user_id: str) -> None:
+        """Delete MFA data from database."""
+        if not self._use_db:
+            return
+
+        try:
+            async with self._db.session() as session:
+                await session.run(
+                    """
+                    MATCH (m:MFACredential {user_id: $user_id})
+                    DELETE m
+                    """,
+                    {"user_id": user_id}
+                )
+            logger.info("mfa_data_deleted_from_db", user_id=user_id)
+        except Exception as e:
+            logger.error("mfa_data_delete_error", user_id=user_id, error=str(e))
 
     async def regenerate_backup_codes(self, user_id: str) -> list[str]:
         """
@@ -661,6 +685,9 @@ class MFAService:
         Raises:
             ValueError: If MFA is not enabled for user
         """
+        # Ensure data is loaded from database
+        await self._ensure_loaded(user_id)
+
         if user_id not in self._secrets:
             raise ValueError("MFA is not enabled for this user")
 
@@ -668,9 +695,13 @@ class MFAService:
         backup_codes = self.generate_backup_codes()
 
         # Replace stored codes
-        self._backup_codes[user_id] = {
+        hashed_codes = {
             self._hash_backup_code(code) for code in backup_codes
         }
+        self._backup_codes[user_id] = hashed_codes
+
+        # Persist to database
+        await self._update_backup_codes(user_id, hashed_codes)
 
         logger.info(
             "MFA backup codes regenerated",
@@ -679,6 +710,28 @@ class MFAService:
         )
 
         return backup_codes
+
+    async def _update_backup_codes(self, user_id: str, hashed_codes: set[str]) -> None:
+        """Update backup codes in database."""
+        if not self._use_db:
+            return
+
+        try:
+            async with self._db.session() as session:
+                await session.run(
+                    """
+                    MATCH (m:MFACredential {user_id: $user_id})
+                    SET m.backup_codes_hashed = $backup_codes_hashed,
+                        m.updated_at = datetime()
+                    """,
+                    {
+                        "user_id": user_id,
+                        "backup_codes_hashed": list(hashed_codes),
+                    }
+                )
+            logger.info("mfa_backup_codes_updated_in_db", user_id=user_id)
+        except Exception as e:
+            logger.error("mfa_backup_codes_update_error", user_id=user_id, error=str(e))
 
 
 # Singleton instance

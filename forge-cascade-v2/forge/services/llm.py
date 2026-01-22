@@ -6,11 +6,13 @@ Language model integration for:
 - Constitutional AI: Ethical review and policy compliance
 - Content Analysis: Intelligent capsule processing
 
-Supports multiple LLM providers:
-- Anthropic Claude (recommended)
-- OpenAI GPT-4
+Supports LLM providers:
+- OpenAI GPT-4 (default)
+- Anthropic Claude (recommended for complex reasoning)
 - Local models via Ollama
-- Mock for testing
+
+IMPORTANT: An LLM API key is REQUIRED for Forge to function.
+Set OPENAI_API_KEY or ANTHROPIC_API_KEY environment variable.
 """
 
 from __future__ import annotations
@@ -33,17 +35,16 @@ logger = structlog.get_logger(__name__)
 
 class LLMProvider(str, Enum):
     """Supported LLM providers."""
-    ANTHROPIC = "anthropic"
     OPENAI = "openai"
+    ANTHROPIC = "anthropic"
     OLLAMA = "ollama"
-    MOCK = "mock"
 
 
 @dataclass
 class LLMConfig:
     """Configuration for LLM service."""
-    provider: LLMProvider = LLMProvider.MOCK
-    model: str = "claude-sonnet-4-20250514"
+    provider: LLMProvider = LLMProvider.OPENAI
+    model: str = "gpt-4-turbo-preview"
     api_key: str | None = None
     api_base: str | None = None
     max_tokens: int = 4096
@@ -92,72 +93,9 @@ class LLMProviderBase(ABC):
         pass
 
 
-class MockLLMProvider(LLMProviderBase):
-    """Mock LLM provider for testing."""
-
-    def __init__(self):
-        self._call_count = 0
-
-    async def complete(
-        self,
-        messages: list[LLMMessage],
-        max_tokens: int | None = None,
-        temperature: float | None = None,
-    ) -> LLMResponse:
-        """Generate mock response based on message content."""
-        await asyncio.sleep(0.1)  # Simulate latency
-        self._call_count += 1
-
-        # Get the last user message
-        user_message = ""
-        for msg in reversed(messages):
-            if msg.role == "user":
-                user_message = msg.content.lower()
-                break
-
-        # Generate contextual mock responses
-        if "proposal" in user_message or "governance" in user_message:
-            content = json.dumps({
-                "recommendation": "approve",
-                "confidence": 0.85,
-                "reasoning": [
-                    "The proposal aligns with system governance principles",
-                    "No ethical concerns identified",
-                    "Implementation appears technically feasible"
-                ],
-                "concerns": [],
-                "suggested_amendments": []
-            })
-        elif "constitutional" in user_message or "ethical" in user_message:
-            content = json.dumps({
-                "compliant": True,
-                "score": 0.92,
-                "principles_evaluated": [
-                    {"name": "transparency", "passed": True},
-                    {"name": "fairness", "passed": True},
-                    {"name": "safety", "passed": True}
-                ],
-                "concerns": [],
-                "recommendations": []
-            })
-        elif "analyze" in user_message or "capsule" in user_message:
-            content = json.dumps({
-                "summary": "This capsule contains technical knowledge about system architecture.",
-                "topics": ["architecture", "design", "best-practices"],
-                "sentiment": "neutral",
-                "quality_score": 0.88,
-                "suggested_tags": ["technical", "reference"]
-            })
-        else:
-            content = "I understand your request. Based on my analysis, I recommend proceeding with caution while considering all stakeholders."
-
-        return LLMResponse(
-            content=content,
-            model="mock-llm",
-            tokens_used=len(content.split()),
-            finish_reason="stop",
-            latency_ms=100.0,
-        )
+class LLMConfigurationError(Exception):
+    """Raised when LLM is not properly configured."""
+    pass
 
 
 class AnthropicProvider(LLMProviderBase):
@@ -493,8 +431,12 @@ class LLMService:
                 timeout=self._config.timeout_seconds,
             )
 
-        else:  # MOCK
-            return MockLLMProvider()
+        else:
+            raise LLMConfigurationError(
+                f"Unsupported LLM provider: {self._config.provider}. "
+                "Supported providers: openai, anthropic, ollama. "
+                "Set OPENAI_API_KEY or ANTHROPIC_API_KEY environment variable."
+            )
 
     async def complete(
         self,
@@ -892,6 +834,7 @@ async def shutdown_llm_service() -> None:
 __all__ = [
     "LLMProvider",
     "LLMConfig",
+    "LLMConfigurationError",
     "LLMMessage",
     "LLMResponse",
     "LLMService",
