@@ -550,7 +550,7 @@ class DiagnosticCoordinator:
         return {
             "keys": list(analysis.keys()),
             "items_count": sum(
-                len(v) if isinstance(v, (list, dict)) else 1
+                len(v) if isinstance(v, list | dict) else 1
                 for v in analysis.values()
             ),
         }
