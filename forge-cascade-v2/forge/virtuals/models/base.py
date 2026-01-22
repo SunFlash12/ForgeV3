@@ -215,6 +215,10 @@ class TransactionRecord(BaseModel):
         default=None,
         description="ID of the Forge entity this transaction relates to"
     )
+    error_message: str | None = Field(
+        default=None,
+        description="Error message if transaction failed"
+    )
 
 
 class RevenueRecord(BaseModel):
