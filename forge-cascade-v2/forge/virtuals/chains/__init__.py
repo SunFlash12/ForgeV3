@@ -10,18 +10,21 @@ with multiple chains supported by Virtuals Protocol:
 
 Usage:
     from forge.virtuals.chains import get_chain_manager, ChainNetwork
-    
+
     async def example():
         manager = await get_chain_manager()
-        
+
         # Get client for specific chain
         base_client = manager.get_client(ChainNetwork.BASE)
-        
+
         # Check VIRTUAL balance
         balance = await base_client.get_virtual_balance("0x...")
-        
+
         # Or use the primary chain client
         primary = manager.primary_client
+
+Note: Blockchain dependencies (web3, solders, solana) are optional.
+      Chain clients will only be available if their dependencies are installed.
 """
 
 from .base_client import (
@@ -34,8 +37,19 @@ from .base_client import (
     get_chain_manager,
 )
 
-from .evm_client import EVMChainClient
-from .solana_client import SolanaChainClient
+# Lazy imports for optional blockchain dependencies
+EVMChainClient = None
+SolanaChainClient = None
+
+try:
+    from .evm_client import EVMChainClient
+except ImportError:
+    pass  # web3 not installed
+
+try:
+    from .solana_client import SolanaChainClient
+except ImportError:
+    pass  # solders/solana not installed
 
 __all__ = [
     # Base classes and exceptions
@@ -44,7 +58,7 @@ __all__ = [
     "InsufficientFundsError",
     "TransactionFailedError",
     "ContractNotFoundError",
-    # Chain implementations
+    # Chain implementations (may be None if dependencies not installed)
     "EVMChainClient",
     "SolanaChainClient",
     # Manager
