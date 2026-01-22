@@ -110,7 +110,7 @@ class TippingService:
             target_id=target_id,
             recipient_wallet=recipient_wallet,
             amount_frowg=amount_frowg,
-            amount_lamports=tip.to_lamports() if amount_frowg else 0,
+            amount_lamports=0,  # Set after creation
             message=message,
             tx_signature=tx_signature,
             confirmed=False,
