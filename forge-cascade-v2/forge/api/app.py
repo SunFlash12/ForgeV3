@@ -17,8 +17,11 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import Any
 
+import sentry_sdk
 import structlog
 from fastapi import FastAPI, Request
+from sentry_sdk.integrations.fastapi import FastApiIntegration
+from sentry_sdk.integrations.starlette import StarletteIntegration
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
@@ -42,6 +45,42 @@ from forge.resilience.integration import (
 
 # Configure logging early - before any other logging occurs
 _settings = get_settings()
+
+
+def _sentry_before_send(event, hint):
+    """Filter out health check endpoint errors from Sentry."""
+    url = event.get("request", {}).get("url", "")
+    if "/health" in url or "/ready" in url:
+        return None
+    return event
+
+
+# Initialize Sentry for error tracking (if DSN is configured)
+_sentry_initialized = False
+if _settings.sentry_dsn:
+    sentry_sdk.init(
+        dsn=_settings.sentry_dsn,
+        integrations=[
+            StarletteIntegration(transaction_style="endpoint"),
+            FastApiIntegration(transaction_style="endpoint"),
+        ],
+        # Performance monitoring - sample 10% of transactions in production
+        traces_sample_rate=0.1 if _settings.app_env == "production" else 1.0,
+        # Profile 10% of sampled transactions
+        profiles_sample_rate=0.1 if _settings.app_env == "production" else 1.0,
+        # Environment tag for filtering in Sentry dashboard
+        environment=_settings.app_env,
+        # Release version for tracking deployments
+        release="forge-cascade@2.0.0",
+        # Send default PII (user IDs) - disable if privacy concerns
+        send_default_pii=False,
+        # Attach request data for debugging
+        request_bodies="medium",
+        # Don't send health check errors
+        before_send=_sentry_before_send,
+    )
+    _sentry_initialized = True
+
 configure_logging(
     level=_settings.log_level if hasattr(_settings, 'log_level') else "INFO",
     json_output=_settings.app_env == "production",
@@ -51,6 +90,12 @@ configure_logging(
 )
 
 logger = structlog.get_logger(__name__)
+
+# Log Sentry status after logger is configured
+if _sentry_initialized:
+    logger.info("sentry_initialized", environment=_settings.app_env)
+else:
+    logger.debug("sentry_not_configured", hint="Set SENTRY_DSN to enable error tracking")
 
 
 class ForgeApp:
