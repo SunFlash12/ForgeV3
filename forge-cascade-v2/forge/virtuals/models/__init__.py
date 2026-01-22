@@ -65,6 +65,17 @@ from .tokenization import (
     BondingCurveContribution,
 )
 
+from .tipping import (
+    FROWG_TOKEN_MINT,
+    FROWG_DECIMALS,
+    TipTargetType,
+    Tip,
+    TipCreate,
+    TipResponse,
+    TipSummary,
+    TipLeaderboard,
+)
+
 __all__ = [
     # Base Enums
     "TokenizationStatus",
@@ -115,4 +126,13 @@ __all__ = [
     "TokenHolderGovernanceVote",
     "TokenHolderProposal",
     "BondingCurveContribution",
+    # Tipping Models
+    "FROWG_TOKEN_MINT",
+    "FROWG_DECIMALS",
+    "TipTargetType",
+    "Tip",
+    "TipCreate",
+    "TipResponse",
+    "TipSummary",
+    "TipLeaderboard",
 ]
