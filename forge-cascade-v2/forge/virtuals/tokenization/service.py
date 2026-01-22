@@ -50,6 +50,7 @@ from .contracts import (
     AGENT_FACTORY_ABI,
     BONDING_CURVE_ABI,
     ERC20_ABI,
+    MULTISEND_ABI,
     ContractAddresses,
     is_abi_complete,
 )
@@ -1003,20 +1004,85 @@ class TokenizationService:
             )
 
         token_address = entity.token_info.token_address
+        web3 = client._w3
 
-        # TODO: Implement graduation transaction when ABI is available
-        # contract = web3.eth.contract(address=token_address, abi=TOKEN_ABI)
-        # tx = contract.functions.graduate().build_transaction({
-        #     'from': self.config.system_wallet,  # System triggers graduation
-        #     ...
-        # })
+        # Get the BondingCurve contract address - this is where graduation happens
+        # The bonding curve contract manages the token lifecycle including graduation
+        bonding_curve_address = self.config.bonding_curve_address
+        if not bonding_curve_address:
+            raise BlockchainConfigurationError(
+                "BondingCurve contract address not configured for graduation. "
+                "Set BONDING_CURVE_ADDRESS in environment or config."
+            )
 
-        raise BlockchainConfigurationError(
-            f"Token graduation requires complete contract ABI implementation. "
-            f"Token at {token_address} has accumulated "
-            f"{entity.bonding_curve_virtual_accumulated} VIRTUAL and is ready for graduation. "
-            f"See https://docs.virtuals.io/developers/contracts for graduation contract ABI."
-        )
+        try:
+            # Create BondingCurve contract instance
+            bonding_contract = web3.eth.contract(
+                address=web3.to_checksum_address(bonding_curve_address),
+                abi=BONDING_CURVE_ABI,
+            )
+
+            # Get token info to verify it's ready for graduation
+            token_info = await bonding_contract.functions.tokenInfo(
+                web3.to_checksum_address(token_address)
+            ).call()
+
+            # token_info.status: 0=pending, 1=active, 2=graduated
+            if token_info[6] == 2:  # Already graduated
+                logger.info(f"Token {token_address} is already graduated")
+                return TransactionRecord(
+                    tx_hash="",
+                    chain=self._chain_manager.primary_client.chain.value,
+                    block_number=0,
+                    timestamp=datetime.now(UTC),
+                    from_address="",
+                    to_address=token_address,
+                    value=0,
+                    gas_used=0,
+                    status="already_graduated",
+                    transaction_type="graduation",
+                )
+
+            # Call unwrapToken to convert FERC20 to ERC20 and create LP
+            # This requires the token to have reached graduation threshold
+            # The function takes: srcTokenAddress and list of account addresses to unwrap for
+            accounts_to_unwrap = [entity.creator_address] if entity.creator_address else []
+
+            unwrap_data = bonding_contract.encodeABI(
+                fn_name='unwrapToken',
+                args=[
+                    web3.to_checksum_address(token_address),
+                    [web3.to_checksum_address(a) for a in accounts_to_unwrap],
+                ]
+            )
+
+            tx_record = await client.send_transaction(
+                to_address=bonding_curve_address,
+                value=0,
+                data=bytes.fromhex(unwrap_data[2:]),
+            )
+
+            # Wait for graduation transaction to confirm
+            tx_record = await client.wait_for_transaction(
+                tx_record.tx_hash,
+                timeout_seconds=180,  # Graduation may take longer
+            )
+            tx_record.transaction_type = "graduation"
+
+            logger.info(
+                f"[BLOCKCHAIN] Token {token_address} graduated successfully "
+                f"(tx: {tx_record.tx_hash})"
+            )
+
+            return tx_record
+
+        except Exception as e:
+            logger.error(f"Graduation transaction failed: {e}")
+            raise BlockchainConfigurationError(
+                f"Token graduation failed for {token_address}: {e}. "
+                f"Token has accumulated {entity.bonding_curve_virtual_accumulated} VIRTUAL. "
+                f"Verify graduation threshold and contract configuration."
+            )
 
     async def _execute_distributions(
         self,
@@ -1047,26 +1113,126 @@ class TokenizationService:
                     if k not in ("creator", "treasury", "buyback_burn") and v > 0
                 }
 
-                if len(recipient_distributions) <= 5:
-                    # Individual transfers for small batches
-                    for recipient, amount in recipient_distributions.items():
-                        # tx = virtual_token.functions.transfer(recipient, amount).build_transaction(...)
-                        logger.info(f"[BLOCKCHAIN] Would transfer {amount} VIRTUAL to {recipient}")
-                else:
-                    # Batch transfer via multi-send
-                    # recipients = list(recipient_distributions.keys())
-                    # amounts = [web3.to_wei(v, 'ether') for v in recipient_distributions.values()]
-                    # tx = multi_send.functions.multiTransfer(recipients, amounts).build_transaction(...)
-                    logger.info(
-                        f"[BLOCKCHAIN] Would batch transfer {total_amount} VIRTUAL "
-                        f"to {len(recipient_distributions)} recipients"
+                # Get VIRTUAL token address for the chain
+                virtual_address = ContractAddresses.get_address("base", "virtual_token")
+                if not virtual_address:
+                    raise BlockchainConfigurationError(
+                        "VIRTUAL token address not configured for distribution"
                     )
 
-                # TODO: Implement actual distribution transactions
-                raise BlockchainConfigurationError(
-                    f"Revenue distribution requires complete transfer implementation. "
-                    f"Total to distribute: {total_amount} VIRTUAL to {len(recipient_distributions)} recipients."
-                )
+                tx_records: list[TransactionRecord] = []
+
+                if len(recipient_distributions) <= 5:
+                    # Individual transfers for small batches - more gas but simpler
+                    for recipient, amount in recipient_distributions.items():
+                        try:
+                            tx_record = await client.transfer_tokens(
+                                token_address=virtual_address,
+                                to_address=recipient,
+                                amount=amount,
+                            )
+                            # Wait for confirmation
+                            tx_record = await client.wait_for_transaction(
+                                tx_record.tx_hash,
+                                timeout_seconds=60,
+                            )
+                            tx_records.append(tx_record)
+                            logger.info(
+                                f"[BLOCKCHAIN] Transferred {amount} VIRTUAL to {recipient} "
+                                f"(tx: {tx_record.tx_hash})"
+                            )
+                        except Exception as e:
+                            logger.error(f"Transfer to {recipient} failed: {e}")
+                            # Continue with other transfers, but record failure
+                            tx_records.append(TransactionRecord(
+                                tx_hash="",
+                                chain="base",
+                                block_number=0,
+                                timestamp=datetime.now(UTC),
+                                from_address=client._operator_account.address if client._operator_account else "",
+                                to_address=recipient,
+                                value=amount,
+                                gas_used=0,
+                                status="failed",
+                                transaction_type="distribution",
+                                error_message=str(e),
+                            ))
+                else:
+                    # Batch transfer via MultiSend for gas efficiency
+                    multisend_address = ContractAddresses.get_address("base", "multisend")
+                    if not multisend_address:
+                        # Fall back to individual transfers if MultiSend not available
+                        logger.warning(
+                            "MultiSend not configured, using individual transfers for batch"
+                        )
+                        for recipient, amount in recipient_distributions.items():
+                            try:
+                                tx_record = await client.transfer_tokens(
+                                    token_address=virtual_address,
+                                    to_address=recipient,
+                                    amount=amount,
+                                )
+                                tx_record = await client.wait_for_transaction(
+                                    tx_record.tx_hash,
+                                    timeout_seconds=60,
+                                )
+                                tx_records.append(tx_record)
+                            except Exception as e:
+                                logger.error(f"Transfer to {recipient} failed: {e}")
+                    else:
+                        # Use MultiSend contract for batch efficiency
+                        # Encode multiple transfer calls into single transaction
+                        web3 = client._w3
+                        virtual_contract = web3.eth.contract(
+                            address=web3.to_checksum_address(virtual_address),
+                            abi=ERC20_ABI,
+                        )
+
+                        # Build encoded transfer calls for MultiSend
+                        # Each transfer is: operation(0) + to(20 bytes) + value(32) + data_length(32) + data
+                        encoded_txs = b''
+                        for recipient, amount in recipient_distributions.items():
+                            amount_wei = int(amount * 10**18)
+                            transfer_data = virtual_contract.encodeABI(
+                                fn_name='transfer',
+                                args=[web3.to_checksum_address(recipient), amount_wei]
+                            )
+                            # Pack for MultiSend: operation(1) + to + value + dataLength + data
+                            encoded_txs += (
+                                bytes([0]) +  # operation: 0 = call
+                                bytes.fromhex(virtual_address[2:].zfill(40)) +  # to address
+                                (0).to_bytes(32, 'big') +  # value (0 for token transfer)
+                                len(bytes.fromhex(transfer_data[2:])).to_bytes(32, 'big') +
+                                bytes.fromhex(transfer_data[2:])
+                            )
+
+                        multisend_contract = web3.eth.contract(
+                            address=web3.to_checksum_address(multisend_address),
+                            abi=MULTISEND_ABI,
+                        )
+                        multisend_data = multisend_contract.encodeABI(
+                            fn_name='multiSend',
+                            args=[encoded_txs]
+                        )
+
+                        tx_record = await client.send_transaction(
+                            to_address=multisend_address,
+                            value=0,
+                            data=bytes.fromhex(multisend_data[2:]),
+                        )
+                        tx_record = await client.wait_for_transaction(
+                            tx_record.tx_hash,
+                            timeout_seconds=120,
+                        )
+                        tx_record.transaction_type = "batch_distribution"
+                        tx_records.append(tx_record)
+
+                        logger.info(
+                            f"[BLOCKCHAIN] Batch transferred {total_amount} VIRTUAL "
+                            f"to {len(recipient_distributions)} recipients (tx: {tx_record.tx_hash})"
+                        )
+
+                return tx_records
 
             except BlockchainConfigurationError:
                 raise
@@ -1150,21 +1316,19 @@ class TokenizationService:
                 "Token balance query requires web3 client configuration."
             )
 
-        # TODO: Implement actual balance query when ERC20_ABI is complete
-        # web3 = client.web3
-        # contract = web3.eth.contract(
-        #     address=entity.token_info.token_address,
-        #     abi=ERC20_ABI
-        # )
-        # balance = await asyncio.to_thread(
-        #     contract.functions.balanceOf(wallet).call
-        # )
-        # return Decimal(balance) / Decimal(10 ** 18)
-
-        raise BlockchainConfigurationError(
-            f"Token balance query requires complete ERC20 ABI implementation. "
-            f"Would query balance for {wallet} on token {entity.token_info.token_address}."
-        )
+        # Use the EVM client's get_wallet_balance method which handles ERC-20 queries
+        try:
+            balance = await client.get_wallet_balance(
+                address=wallet,
+                token_address=entity.token_info.token_address,
+            )
+            return Decimal(str(balance))
+        except Exception as e:
+            logger.error(f"Failed to query token balance: {e}")
+            raise BlockchainConfigurationError(
+                f"Token balance query failed for {wallet} on token "
+                f"{entity.token_info.token_address}: {e}"
+            )
 
 
 # Global service instance

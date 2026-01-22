@@ -160,6 +160,16 @@ class VirtualsConfig(BaseSettings):
         description="Percentage of revenue allocated to governance rewards"
     )
 
+    # Contract Addresses (can override defaults from CONTRACT_ADDRESSES)
+    bonding_curve_address: str | None = Field(
+        default=None,
+        description="BondingCurve contract address for token graduation"
+    )
+    multisend_address: str | None = Field(
+        default="0x40A2aCCbd92BCA938b02010E17A5b8929b49130D",
+        description="Gnosis Safe MultiSend contract for batch transfers"
+    )
+
     # ACP Configuration
     acp_escrow_timeout_hours: int = Field(
         default=24,

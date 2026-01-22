@@ -6,6 +6,7 @@ Provides AI agents with programmatic access to Forge's knowledge graph.
 
 import asyncio
 import hashlib
+import json
 import logging
 import secrets
 from collections.abc import AsyncIterator
@@ -976,6 +977,203 @@ class AgentGatewayService:
     # =========================================================================
     # ACP Integration Bridge
     # =========================================================================
+
+    # Capability to ACP service type mapping
+    CAPABILITY_SERVICE_MAP = {
+        AgentCapability.QUERY_GRAPH: "knowledge_query",
+        AgentCapability.SEMANTIC_SEARCH: "semantic_search",
+        AgentCapability.CREATE_CAPSULES: "capsule_generation",
+        AgentCapability.EXECUTE_CASCADE: "overlay_execution",
+        AgentCapability.READ_CAPSULES: "capsule_access",
+        AgentCapability.ACCESS_LINEAGE: "lineage_query",
+        AgentCapability.VIEW_GOVERNANCE: "governance_info",
+    }
+
+    async def register_as_acp_provider(
+        self,
+        session_id: str,
+        acp_service: Any,  # ACPService
+        title: str,
+        description: str,
+        base_fee_virtual: float,
+        service_type: str | None = None,
+    ) -> dict[str, Any]:
+        """
+        Register an Agent Gateway session as an ACP service provider.
+
+        This method bridges the Agent Gateway to the Virtuals Protocol ACP,
+        allowing Forge agents to offer their knowledge services to other agents.
+
+        Args:
+            session_id: The Agent Gateway session ID
+            acp_service: The ACP service instance for registration
+            title: Human-readable offering title
+            description: Detailed description of the service
+            base_fee_virtual: Base fee in VIRTUAL tokens
+            service_type: Optional service type override (auto-detected if None)
+
+        Returns:
+            Dict with registration details including offering_id
+        """
+        session = await self.get_session(session_id)
+        if not session:
+            raise ValueError(f"Session {session_id} not found")
+
+        # Auto-detect service type from capabilities
+        if service_type is None:
+            # Use the highest-value capability as the primary service type
+            for cap in [AgentCapability.EXECUTE_CASCADE, AgentCapability.QUERY_GRAPH,
+                        AgentCapability.SEMANTIC_SEARCH, AgentCapability.CREATE_CAPSULES]:
+                if cap in session.capabilities:
+                    service_type = self.CAPABILITY_SERVICE_MAP.get(cap, "knowledge_query")
+                    break
+            else:
+                service_type = "knowledge_query"
+
+        # Build offering data
+        offering_data = await self.to_acp_offering(
+            session_id=session_id,
+            service_type=service_type,
+            title=title,
+            description=description,
+            base_fee_virtual=base_fee_virtual,
+        )
+
+        # Import JobOffering model
+        from forge.virtuals.models import JobOffering
+
+        # Create and register the offering
+        offering = JobOffering(
+            service_type=service_type,
+            title=title,
+            description=description,
+            input_schema=offering_data["input_schema"],
+            output_schema=offering_data["output_schema"],
+            base_fee_virtual=base_fee_virtual,
+            max_execution_time_seconds=offering_data["max_execution_time_seconds"],
+        )
+
+        wallet_address = session.metadata.get("wallet_address", "")
+        if not wallet_address:
+            raise ValueError("Session must have wallet_address in metadata for ACP registration")
+
+        registered_offering = await acp_service.register_offering(
+            agent_id=session.agent_id,
+            agent_wallet=wallet_address,
+            offering=offering,
+        )
+
+        # Store offering ID in session metadata for future reference
+        session.metadata["acp_offering_id"] = registered_offering.id
+        session.metadata["acp_service_type"] = service_type
+
+        logger.info(
+            f"Registered ACP offering for session {session_id}: "
+            f"offering_id={registered_offering.id}, service_type={service_type}"
+        )
+
+        return {
+            "offering_id": registered_offering.id,
+            "service_type": service_type,
+            "title": title,
+            "base_fee_virtual": base_fee_virtual,
+            "capabilities": [c.value for c in session.capabilities],
+        }
+
+    async def handle_acp_job_request(
+        self,
+        session_id: str,
+        acp_service: Any,  # ACPService
+        job_id: str,
+    ) -> dict[str, Any]:
+        """
+        Handle an incoming ACP job request and execute it.
+
+        This method:
+        1. Retrieves the ACP job details
+        2. Executes the job using the Agent Gateway
+        3. Submits the deliverable back to ACP
+
+        Args:
+            session_id: The Agent Gateway session ID (provider)
+            acp_service: The ACP service instance
+            job_id: The ACP job ID to execute
+
+        Returns:
+            Dict with execution result and deliverable details
+        """
+        session = await self.get_session(session_id)
+        if not session:
+            raise ValueError(f"Session {session_id} not found")
+
+        # Get the job from ACP
+        job = await acp_service.get_job(job_id)
+        if not job:
+            raise ValueError(f"ACP job {job_id} not found")
+
+        # Verify this session is the provider
+        if job.provider_agent_id != session.agent_id:
+            raise ValueError(
+                f"Session {session_id} is not the provider for job {job_id}"
+            )
+
+        # Execute the job using the existing execute_acp_job method
+        result = await self.execute_acp_job(
+            session_id=session_id,
+            job_requirements=job.requirements,
+            input_data=job.input_data or {},
+        )
+
+        # Import ACPDeliverable model
+        from forge.virtuals.models import ACPDeliverable
+
+        # Create and submit the deliverable
+        deliverable = ACPDeliverable(
+            job_id=job_id,
+            content=result,
+            content_hash=hashlib.sha256(
+                json.dumps(result, sort_keys=True).encode()
+            ).hexdigest(),
+            mime_type="application/json",
+        )
+
+        wallet_address = session.metadata.get("wallet_address", "")
+        if not wallet_address:
+            raise ValueError("Session must have wallet_address for deliverable submission")
+
+        updated_job = await acp_service.submit_deliverable(
+            job_id=job_id,
+            deliverable=deliverable,
+            provider_wallet=wallet_address,
+        )
+
+        logger.info(
+            f"Submitted deliverable for ACP job {job_id} from session {session_id}"
+        )
+
+        return {
+            "job_id": job_id,
+            "deliverable_hash": deliverable.content_hash,
+            "job_phase": updated_job.phase.value,
+            "execution_result": result,
+        }
+
+    async def get_acp_capabilities(self, session_id: str) -> list[str]:
+        """
+        Get the ACP service types this session can provide.
+
+        Returns:
+            List of ACP service type strings
+        """
+        session = await self.get_session(session_id)
+        if not session:
+            return []
+
+        return [
+            self.CAPABILITY_SERVICE_MAP[cap]
+            for cap in session.capabilities
+            if cap in self.CAPABILITY_SERVICE_MAP
+        ]
 
     async def to_acp_offering(
         self,
