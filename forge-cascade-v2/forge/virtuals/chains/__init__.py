@@ -51,6 +51,15 @@ try:
 except ImportError:
     pass  # solders/solana not installed
 
+# Performance optimization
+from .optimization import (
+    ChainQueryOptimizer,
+    ParallelExecutor,
+    QueryCache,
+    RateLimiter,
+    get_query_optimizer,
+)
+
 __all__ = [
     # Base classes and exceptions
     "BaseChainClient",
@@ -64,4 +73,10 @@ __all__ = [
     # Manager
     "MultiChainManager",
     "get_chain_manager",
+    # Optimization
+    "ChainQueryOptimizer",
+    "QueryCache",
+    "RateLimiter",
+    "ParallelExecutor",
+    "get_query_optimizer",
 ]

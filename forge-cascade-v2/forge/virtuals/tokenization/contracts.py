@@ -76,6 +76,8 @@ class ContractAddresses:
     # Solana Mainnet
     SOLANA_MAINNET = {
         "virtual_token": "3iQL8BFS2vE7mww4ehAqQHAsbmRNCrPxizWAT2Zfyr9y",
+        # FROWG token for tipping - community token on Solana
+        "frowg_token": "uogFxqx5SPdL7CMWTTttz4KZ2WctR4RjgZwmGcwpump",
     }
 
     @classmethod

@@ -35,6 +35,12 @@ Example Usage:
         )
 """
 
+from .escrow import (
+    EscrowRecord,
+    EscrowService,
+    EscrowStatus,
+    get_escrow_service,
+)
 from .nonce_store import (
     NonceStore,
     close_nonce_store,
@@ -56,6 +62,11 @@ __all__ = [
     "InvalidPhaseTransitionError",
     "EscrowError",
     "get_acp_service",
+    # Escrow
+    "EscrowService",
+    "EscrowRecord",
+    "EscrowStatus",
+    "get_escrow_service",
     # Nonce Store (for replay attack prevention)
     "NonceStore",
     "init_nonce_store",

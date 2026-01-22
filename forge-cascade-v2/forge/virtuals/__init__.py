@@ -69,6 +69,7 @@ __version__ = "0.1.0"
 
 # Configuration
 from .acp import ACPService, get_acp_service
+from .bridge import BridgeRoute, BridgeService, BridgeStatus, get_bridge_service
 from .chains import MultiChainManager, get_chain_manager
 from .config import (
     ChainNetwork,
@@ -110,6 +111,7 @@ from .models import (
     WorkerDefinition,
 )
 from .revenue import RevenueService, get_revenue_service
+from .tipping import FrowgTippingService, TipCategory, TipRecord, TipStatus
 from .tokenization import TokenizationService, get_tokenization_service
 
 
@@ -185,6 +187,16 @@ __all__ = [
     "RevenueService",
     "get_chain_manager",
     "MultiChainManager",
+    # Tipping
+    "FrowgTippingService",
+    "TipRecord",
+    "TipStatus",
+    "TipCategory",
+    # Bridge
+    "BridgeService",
+    "BridgeRoute",
+    "BridgeStatus",
+    "get_bridge_service",
     # Initialization
     "initialize_virtuals",
 ]
