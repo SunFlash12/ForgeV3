@@ -163,11 +163,11 @@ class Settings(BaseSettings):
     # AI/ML CONFIGURATION
     # ═══════════════════════════════════════════════════════════════
     llm_provider: Literal["anthropic", "openai", "ollama", "mock"] = Field(
-        default="mock", description="LLM provider"
+        default="openai", description="LLM provider (auto-detects from API keys if not set)"
     )
     llm_api_key: str | None = Field(default=None, description="LLM API key")
     llm_model: str = Field(
-        default="claude-sonnet-4-20250514", description="LLM model name"
+        default="gpt-4-turbo-preview", description="LLM model name"
     )
     # Cost optimization: Reduced from 4096 - Ghost Council responses typically 500-800 tokens
     llm_max_tokens: int = Field(default=2000, ge=1, description="Max LLM output tokens")
@@ -176,7 +176,7 @@ class Settings(BaseSettings):
 
     # Embeddings
     embedding_provider: Literal["openai", "sentence_transformers", "mock"] = Field(
-        default="mock", description="Embedding provider"
+        default="openai", description="Embedding provider (auto-detects from API keys if not set)"
     )
     embedding_api_key: str | None = Field(default=None, description="Embedding API key (for OpenAI)")
     embedding_model: str = Field(
@@ -189,6 +189,46 @@ class Settings(BaseSettings):
     embedding_batch_size: int = Field(default=100, ge=1, description="Batch size for embedding")
     # Cost optimization: Increased from 10000 for better cache hit rates
     embedding_cache_size: int = Field(default=50000, ge=1000, description="Max embedding cache entries")
+
+    @field_validator("llm_api_key")
+    @classmethod
+    def validate_llm_api_key(cls, v: str | None, info) -> str | None:
+        """Validate LLM API key format if provided."""
+        if v is None:
+            return v
+
+        # Get the provider from validation context
+        provider = info.data.get("llm_provider", "openai") if info.data else "openai"
+
+        if provider == "openai" and not v.startswith(("sk-", "org-")):
+            logger.warning(
+                "llm_api_key_format_warning",
+                hint="OpenAI API keys typically start with 'sk-'",
+            )
+
+        if provider == "anthropic" and not v.startswith("sk-ant-"):
+            logger.warning(
+                "llm_api_key_format_warning",
+                hint="Anthropic API keys typically start with 'sk-ant-'",
+            )
+
+        return v
+
+    @field_validator("embedding_api_key")
+    @classmethod
+    def validate_embedding_api_key(cls, v: str | None) -> str | None:
+        """Validate embedding API key format if provided."""
+        if v is None:
+            return v
+
+        # OpenAI keys typically start with sk-
+        if not v.startswith(("sk-", "org-")):
+            logger.warning(
+                "embedding_api_key_format_warning",
+                hint="OpenAI API keys typically start with 'sk-'",
+            )
+
+        return v
 
     # ═══════════════════════════════════════════════════════════════
     # GHOST COUNCIL

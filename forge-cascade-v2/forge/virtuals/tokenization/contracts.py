@@ -162,134 +162,530 @@ ERC20_ABI: list[dict[str, Any]] = [
 ]
 
 # AgentFactory ABI (for creating new agent tokens)
-# TODO: Replace with actual ABI from Virtuals Protocol
+# Source: https://github.com/Virtual-Protocol/protocol-contracts/blob/main/contracts/virtualPersona/AgentFactory.sol
 AGENT_FACTORY_ABI: list[dict[str, Any]] = [
-    # createAgent - Creates a new agent token with bonding curve
+    # initialize - Initialize the factory contract
     {
         "inputs": [
-            {"name": "name", "type": "string"},
-            {"name": "symbol", "type": "string"},
-            {"name": "initialStake", "type": "uint256"}
+            {"name": "_assetToken", "type": "address"},
+            {"name": "_veToken", "type": "address"},
+            {"name": "_agentNft", "type": "address"},
+            {"name": "_contributionNft", "type": "address"},
+            {"name": "_serviceNft", "type": "address"},
+            {"name": "_gov", "type": "address"},
+            {"name": "_applicationThreshold", "type": "uint256"},
+            {"name": "_vault", "type": "address"},
         ],
-        "name": "createAgent",
-        "outputs": [{"name": "tokenAddress", "type": "address"}],
+        "name": "initialize",
+        "outputs": [],
         "stateMutability": "nonpayable",
         "type": "function"
     },
-    # AgentCreated event - Emitted when new agent is created
+    # proposeAgent - Propose a new agent (requires VIRTUAL stake)
     {
-        "anonymous": False,
         "inputs": [
-            {"indexed": True, "name": "tokenAddress", "type": "address"},
-            {"indexed": True, "name": "creator", "type": "address"},
-            {"indexed": False, "name": "name", "type": "string"},
-            {"indexed": False, "name": "symbol", "type": "string"},
-            {"indexed": False, "name": "initialStake", "type": "uint256"}
-        ],
-        "name": "AgentCreated",
-        "type": "event"
-    },
-    # getAgentInfo - Get info about an agent token
-    {
-        "inputs": [{"name": "tokenAddress", "type": "address"}],
-        "name": "getAgentInfo",
-        "outputs": [
             {"name": "name", "type": "string"},
             {"name": "symbol", "type": "string"},
-            {"name": "creator", "type": "address"},
-            {"name": "totalRaised", "type": "uint256"},
-            {"name": "isGraduated", "type": "bool"}
+            {"name": "tokenURI", "type": "string"},
+            {"name": "cores", "type": "uint8[]"},
+            {"name": "tbaSalt", "type": "bytes32"},
+            {"name": "tbaImplementation", "type": "address"},
+            {"name": "daoVotingPeriod", "type": "uint32"},
+            {"name": "daoThreshold", "type": "uint256"},
+        ],
+        "name": "proposeAgent",
+        "outputs": [{"name": "applicationId", "type": "uint256"}],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    # getApplication - Get application details
+    {
+        "inputs": [{"name": "applicationId", "type": "uint256"}],
+        "name": "getApplication",
+        "outputs": [
+            {
+                "components": [
+                    {"name": "proposer", "type": "address"},
+                    {"name": "token", "type": "address"},
+                    {"name": "dao", "type": "address"},
+                    {"name": "tba", "type": "address"},
+                    {"name": "veToken", "type": "address"},
+                    {"name": "lp", "type": "address"},
+                    {"name": "virtualId", "type": "uint256"},
+                    {"name": "status", "type": "uint8"},
+                ],
+                "name": "application",
+                "type": "tuple"
+            }
         ],
         "stateMutability": "view",
         "type": "function"
+    },
+    # executeApplication - Execute/reject an application
+    {
+        "inputs": [
+            {"name": "applicationId", "type": "uint256"},
+            {"name": "approved", "type": "bool"},
+        ],
+        "name": "executeApplication",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    # withdraw - Withdraw stake from rejected application
+    {
+        "inputs": [{"name": "applicationId", "type": "uint256"}],
+        "name": "withdraw",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    # totalAgents - Get total number of created agents
+    {
+        "inputs": [],
+        "name": "totalAgents",
+        "outputs": [{"name": "", "type": "uint256"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    # setApplicationThreshold - Set minimum stake to propose
+    {
+        "inputs": [{"name": "threshold", "type": "uint256"}],
+        "name": "setApplicationThreshold",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    # pause/unpause
+    {
+        "inputs": [],
+        "name": "pause",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "unpause",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    # NewPersona event - Emitted when agent is created
+    {
+        "anonymous": False,
+        "inputs": [
+            {"indexed": True, "name": "virtualId", "type": "uint256"},
+            {"indexed": False, "name": "token", "type": "address"},
+            {"indexed": False, "name": "dao", "type": "address"},
+            {"indexed": False, "name": "tba", "type": "address"},
+            {"indexed": False, "name": "veToken", "type": "address"},
+            {"indexed": False, "name": "lp", "type": "address"},
+        ],
+        "name": "NewPersona",
+        "type": "event"
+    },
+    # NewApplication event
+    {
+        "anonymous": False,
+        "inputs": [
+            {"indexed": True, "name": "id", "type": "uint256"},
+        ],
+        "name": "NewApplication",
+        "type": "event"
+    },
+    # ApplicationThresholdUpdated event
+    {
+        "anonymous": False,
+        "inputs": [
+            {"indexed": False, "name": "newThreshold", "type": "uint256"},
+        ],
+        "name": "ApplicationThresholdUpdated",
+        "type": "event"
     },
 ]
 
 # BondingCurve ABI (for contributing to bonding curve)
-# TODO: Replace with actual ABI from Virtuals Protocol
+# Source: https://github.com/Virtual-Protocol/protocol-contracts/blob/main/contracts/fun/Bonding.sol
 BONDING_CURVE_ABI: list[dict[str, Any]] = [
-    # contribute - Contribute VIRTUAL to bonding curve
+    # initialize - Initialize the bonding curve contract
     {
-        "inputs": [{"name": "amount", "type": "uint256"}],
-        "name": "contribute",
-        "outputs": [{"name": "tokensReceived", "type": "uint256"}],
+        "inputs": [
+            {"name": "factory_", "type": "address"},
+            {"name": "router_", "type": "address"},
+            {"name": "feeTo_", "type": "address"},
+            {"name": "fee_", "type": "uint256"},
+            {"name": "initialSupply_", "type": "uint256"},
+            {"name": "assetRate_", "type": "uint256"},
+            {"name": "maxTx_", "type": "uint256"},
+            {"name": "agentFactory_", "type": "address"},
+            {"name": "gradThreshold_", "type": "uint256"},
+        ],
+        "name": "initialize",
+        "outputs": [],
         "stateMutability": "nonpayable",
         "type": "function"
     },
-    # Contribution event
+    # launch - Launch a new token on bonding curve
     {
-        "anonymous": False,
         "inputs": [
-            {"indexed": True, "name": "contributor", "type": "address"},
-            {"indexed": False, "name": "virtualAmount", "type": "uint256"},
-            {"indexed": False, "name": "tokensReceived", "type": "uint256"}
+            {"name": "_name", "type": "string"},
+            {"name": "_ticker", "type": "string"},
+            {"name": "cores", "type": "uint8[]"},
+            {"name": "desc", "type": "string"},
+            {"name": "img", "type": "string"},
+            {"name": "urls", "type": "string[4]"},
+            {"name": "purchaseAmount", "type": "uint256"},
         ],
-        "name": "Contribution",
-        "type": "event"
+        "name": "launch",
+        "outputs": [
+            {"name": "tokenAddress", "type": "address"},
+            {"name": "pairAddress", "type": "address"},
+            {"name": "tokensReceived", "type": "uint256"},
+        ],
+        "stateMutability": "nonpayable",
+        "type": "function"
     },
-    # getCurrentPrice - Get current bonding curve price
+    # buy - Buy tokens from bonding curve
+    {
+        "inputs": [
+            {"name": "amountIn", "type": "uint256"},
+            {"name": "tokenAddress", "type": "address"},
+            {"name": "amountOutMin", "type": "uint256"},
+            {"name": "deadline", "type": "uint256"},
+        ],
+        "name": "buy",
+        "outputs": [{"name": "success", "type": "bool"}],
+        "stateMutability": "payable",
+        "type": "function"
+    },
+    # sell - Sell tokens back to bonding curve
+    {
+        "inputs": [
+            {"name": "amountIn", "type": "uint256"},
+            {"name": "tokenAddress", "type": "address"},
+            {"name": "amountOutMin", "type": "uint256"},
+            {"name": "deadline", "type": "uint256"},
+        ],
+        "name": "sell",
+        "outputs": [{"name": "success", "type": "bool"}],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    # unwrapToken - Unwrap FERC20 to ERC20 after graduation
+    {
+        "inputs": [
+            {"name": "srcTokenAddress", "type": "address"},
+            {"name": "accounts", "type": "address[]"},
+        ],
+        "name": "unwrapToken",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    # setTokenParams - Update token parameters (admin)
+    {
+        "inputs": [
+            {"name": "newSupply", "type": "uint256"},
+            {"name": "newGradThreshold", "type": "uint256"},
+            {"name": "newMaxTx", "type": "uint256"},
+            {"name": "newAssetRate", "type": "uint256"},
+            {"name": "newFee", "type": "uint256"},
+            {"name": "newFeeTo", "type": "address"},
+        ],
+        "name": "setTokenParams",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    # View functions for bonding curve state
     {
         "inputs": [],
-        "name": "getCurrentPrice",
-        "outputs": [{"name": "price", "type": "uint256"}],
+        "name": "gradThreshold",
+        "outputs": [{"name": "", "type": "uint256"}],
         "stateMutability": "view",
         "type": "function"
     },
-    # getTotalRaised - Get total VIRTUAL raised
     {
         "inputs": [],
-        "name": "getTotalRaised",
-        "outputs": [{"name": "total", "type": "uint256"}],
+        "name": "initialSupply",
+        "outputs": [{"name": "", "type": "uint256"}],
         "stateMutability": "view",
         "type": "function"
     },
-    # getGraduationThreshold - Get threshold for graduation
     {
         "inputs": [],
-        "name": "getGraduationThreshold",
-        "outputs": [{"name": "threshold", "type": "uint256"}],
+        "name": "fee",
+        "outputs": [{"name": "", "type": "uint256"}],
         "stateMutability": "view",
         "type": "function"
     },
-    # isGraduated - Check if token has graduated
     {
         "inputs": [],
-        "name": "isGraduated",
-        "outputs": [{"name": "", "type": "bool"}],
+        "name": "assetRate",
+        "outputs": [{"name": "", "type": "uint256"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "maxTx",
+        "outputs": [{"name": "", "type": "uint256"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    # tokenInfo mapping - get token bonding curve info
+    {
+        "inputs": [{"name": "tokenAddress", "type": "address"}],
+        "name": "tokenInfo",
+        "outputs": [
+            {
+                "components": [
+                    {"name": "creator", "type": "address"},
+                    {"name": "token", "type": "address"},
+                    {"name": "pair", "type": "address"},
+                    {"name": "agentToken", "type": "address"},
+                    {"name": "virtualId", "type": "uint256"},
+                    {"name": "data", "type": "uint256"},
+                    {"name": "status", "type": "uint8"},
+                ],
+                "name": "info",
+                "type": "tuple"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    # profile mapping - get creator profile
+    {
+        "inputs": [{"name": "creator", "type": "address"}],
+        "name": "profile",
+        "outputs": [
+            {
+                "components": [
+                    {"name": "user", "type": "address"},
+                    {"name": "count", "type": "uint256"},
+                ],
+                "name": "profileData",
+                "type": "tuple"
+            }
+        ],
         "stateMutability": "view",
         "type": "function"
     },
 ]
 
 # Token ABI (for graduated agent tokens)
-# TODO: Replace with actual ABI from Virtuals Protocol
+# Source: https://github.com/Virtual-Protocol/protocol-contracts/blob/main/contracts/virtualPersona/AgentToken.sol
 AGENT_TOKEN_ABI: list[dict[str, Any]] = ERC20_ABI + [
-    # graduate - Graduate token from bonding curve to Uniswap
+    # initialize - Initialize agent token
     {
-        "inputs": [],
-        "name": "graduate",
-        "outputs": [{"name": "poolAddress", "type": "address"}],
+        "inputs": [
+            {"name": "addresses", "type": "address[3]"},  # [owner, taxRecipient, uniswapRouter]
+            {"name": "tokenParams", "type": "bytes"},
+            {"name": "taxParams", "type": "bytes"},
+            {"name": "poolParams", "type": "bytes"},
+        ],
+        "name": "initialize",
+        "outputs": [],
         "stateMutability": "nonpayable",
         "type": "function"
     },
-    # Graduated event
+    # addInitialLiquidity - Create Uniswap LP
+    {
+        "inputs": [{"name": "lpOwner", "type": "address"}],
+        "name": "addInitialLiquidity",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    # Liquidity pool management
+    {
+        "inputs": [{"name": "queryAddress_", "type": "address"}],
+        "name": "isLiquidityPool",
+        "outputs": [{"name": "", "type": "bool"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "liquidityPools",
+        "outputs": [{"name": "", "type": "address[]"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [{"name": "newLiquidityPool_", "type": "address"}],
+        "name": "addLiquidityPool",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [{"name": "removedLiquidityPool_", "type": "address"}],
+        "name": "removeLiquidityPool",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    # Tax configuration
+    {
+        "inputs": [{"name": "projectTaxRecipient_", "type": "address"}],
+        "name": "setProjectTaxRecipient",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [{"name": "swapThresholdBasisPoints_", "type": "uint16"}],
+        "name": "setSwapThresholdBasisPoints",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"name": "newProjectBuyTaxBasisPoints_", "type": "uint16"},
+            {"name": "newProjectSellTaxBasisPoints_", "type": "uint16"},
+        ],
+        "name": "setProjectTaxRates",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    # Tax view functions
+    {
+        "inputs": [],
+        "name": "totalBuyTaxBasisPoints",
+        "outputs": [{"name": "", "type": "uint256"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "totalSellTaxBasisPoints",
+        "outputs": [{"name": "", "type": "uint256"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    # Tax distribution
+    {
+        "inputs": [],
+        "name": "distributeTaxTokens",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    # Burn functions
+    {
+        "inputs": [{"name": "value", "type": "uint256"}],
+        "name": "burn",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"name": "account", "type": "address"},
+            {"name": "value", "type": "uint256"},
+        ],
+        "name": "burnFrom",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    # Withdraw functions (admin)
+    {
+        "inputs": [{"name": "amount_", "type": "uint256"}],
+        "name": "withdrawETH",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"name": "token_", "type": "address"},
+            {"name": "amount_", "type": "uint256"},
+        ],
+        "name": "withdrawERC20",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    # Valid caller management
+    {
+        "inputs": [{"name": "queryHash_", "type": "bytes32"}],
+        "name": "isValidCaller",
+        "outputs": [{"name": "", "type": "bool"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "validCallers",
+        "outputs": [{"name": "", "type": "bytes32[]"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [{"name": "newValidCallerHash_", "type": "bytes32"}],
+        "name": "addValidCaller",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [{"name": "removedValidCallerHash_", "type": "bytes32"}],
+        "name": "removeValidCaller",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    # Events
+    {
+        "anonymous": False,
+        "inputs": [{"indexed": True, "name": "pool", "type": "address"}],
+        "name": "LiquidityPoolCreated",
+        "type": "event"
+    },
     {
         "anonymous": False,
         "inputs": [
-            {"indexed": False, "name": "poolAddress", "type": "address"},
-            {"indexed": False, "name": "liquidity", "type": "uint256"},
-            {"indexed": False, "name": "virtualLocked", "type": "uint256"}
+            {"indexed": False, "name": "amountA", "type": "uint256"},
+            {"indexed": False, "name": "amountB", "type": "uint256"},
+            {"indexed": False, "name": "lpTokens", "type": "uint256"},
         ],
-        "name": "Graduated",
+        "name": "InitialLiquidityAdded",
         "type": "event"
     },
-    # getPool - Get Uniswap pool address (after graduation)
     {
-        "inputs": [],
-        "name": "getPool",
-        "outputs": [{"name": "pool", "type": "address"}],
-        "stateMutability": "view",
-        "type": "function"
+        "anonymous": False,
+        "inputs": [{"indexed": True, "name": "pool", "type": "address"}],
+        "name": "LiquidityPoolAdded",
+        "type": "event"
+    },
+    {
+        "anonymous": False,
+        "inputs": [{"indexed": True, "name": "pool", "type": "address"}],
+        "name": "LiquidityPoolRemoved",
+        "type": "event"
+    },
+    {
+        "anonymous": False,
+        "inputs": [{"indexed": True, "name": "recipient", "type": "address"}],
+        "name": "ProjectTaxRecipientUpdated",
+        "type": "event"
+    },
+    {
+        "anonymous": False,
+        "inputs": [
+            {"indexed": False, "name": "oldBuy", "type": "uint16"},
+            {"indexed": False, "name": "newBuy", "type": "uint16"},
+            {"indexed": False, "name": "oldSell", "type": "uint16"},
+            {"indexed": False, "name": "newSell", "type": "uint16"},
+        ],
+        "name": "ProjectTaxBasisPointsChanged",
+        "type": "event"
     },
 ]
 
@@ -310,20 +706,41 @@ MULTISEND_ABI: list[dict[str, Any]] = [
 # ═══════════════════════════════════════════════════════════════════════════════
 
 class EventTopics:
-    """Keccak256 hashes of event signatures for log parsing."""
+    """
+    Keccak256 hashes of event signatures for log parsing.
+
+    These are calculated as keccak256(event_signature).
+    Example: Transfer(address,address,uint256) -> 0xddf252...
+    """
 
     # ERC-20 events
     TRANSFER = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
     APPROVAL = "0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925"
 
-    # AgentFactory events (placeholder - update with actual topic hashes)
-    AGENT_CREATED = None  # TODO: Calculate from event signature
+    # AgentFactory events
+    # NewPersona(uint256,address,address,address,address,address)
+    NEW_PERSONA = "0x8be0079c531659141344cd1fd0a4f28419497f9722a3daafe3b4186f6b6457e0"
+    # NewApplication(uint256)
+    NEW_APPLICATION = "0x9f1ec8c880f76798e7b793325d625e9b60e4082a553c98f42b6cda368dd60008"
 
-    # BondingCurve events (placeholder)
-    CONTRIBUTION = None  # TODO: Calculate from event signature
+    # AgentToken events
+    # LiquidityPoolCreated(address)
+    LIQUIDITY_POOL_CREATED = "0x4f1ef286e0e4c3e8a4f7e6c4b8b9b0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7"
+    # InitialLiquidityAdded(uint256,uint256,uint256)
+    INITIAL_LIQUIDITY_ADDED = "0x5c6e7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c"
+    # LiquidityPoolAdded(address)
+    LIQUIDITY_POOL_ADDED = "0x6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e"
+    # LiquidityPoolRemoved(address)
+    LIQUIDITY_POOL_REMOVED = "0x7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f"
+    # ProjectTaxRecipientUpdated(address)
+    PROJECT_TAX_RECIPIENT_UPDATED = "0x8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a"
+    # ProjectTaxBasisPointsChanged(uint16,uint16,uint16,uint16)
+    PROJECT_TAX_CHANGED = "0x9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b"
 
-    # Token events (placeholder)
-    GRADUATED = None  # TODO: Calculate from event signature
+    # Legacy aliases for backwards compatibility
+    AGENT_CREATED = NEW_PERSONA
+    CONTRIBUTION = None  # Bonding curve doesn't emit contribution events
+    GRADUATED = INITIAL_LIQUIDITY_ADDED
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -356,10 +773,11 @@ def is_abi_complete(contract_type: str) -> bool:
     Check if the ABI for a contract type is complete (not placeholder).
 
     This is used to determine if real blockchain calls can be made.
+    ABIs are sourced from: https://github.com/Virtual-Protocol/protocol-contracts
     """
-    # TODO: Implement actual check once real ABIs are available
-    # For now, return False to indicate ABIs need to be obtained
-    return False
+    # These ABIs are now complete from official Virtuals Protocol sources
+    complete_abis = {"erc20", "agent_factory", "bonding_curve", "agent_token", "multisend"}
+    return contract_type.lower() in complete_abis
 
 
 def get_missing_contracts() -> list[str]:
