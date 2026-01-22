@@ -15,6 +15,7 @@ from forge.api.routes.graph import router as graph_router
 from forge.api.routes.overlays import router as overlays_router
 from forge.api.routes.primekg import router as primekg_router
 from forge.api.routes.system import router as system_router
+from forge.api.routes.tipping import router as tipping_router
 
 __all__ = [
     "acp_router",
@@ -28,4 +29,5 @@ __all__ = [
     "system_router",
     "graph_router",
     "primekg_router",
+    "tipping_router",
 ]

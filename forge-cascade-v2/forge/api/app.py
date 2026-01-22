@@ -725,6 +725,7 @@ def create_app(
         overlays,
         primekg,
         system,
+        tipping,
     )
 
     app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
@@ -742,6 +743,7 @@ def create_app(
     app.include_router(agent_gateway.router, prefix="/api/v1", tags=["Agent Gateway"])
     app.include_router(acp.router, prefix="/api/v1", tags=["Agent Commerce Protocol"])
     app.include_router(game.router, prefix="/api/v1", tags=["GAME SDK"])
+    app.include_router(tipping.router, prefix="/api/v1", tags=["Tipping"])
 
     # WebSocket endpoints
     from forge.api.websocket import websocket_router
