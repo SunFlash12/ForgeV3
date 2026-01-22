@@ -335,8 +335,8 @@ class MLIntelligenceOverlay(BaseOverlay):
         """
         Generate embedding for content.
 
-        Uses external provider if available, otherwise falls back
-        to a simple hash-based pseudo-embedding for development.
+        Uses the Forge embedding service for real semantic embeddings.
+        Falls back to external provider if configured.
         """
         import time
         start_time = time.time()
@@ -353,13 +353,43 @@ class MLIntelligenceOverlay(BaseOverlay):
                 generation_time_ms=0.0
             )
 
-        # Use external provider if available
+        embedding = None
+        model_name = "unknown"
+
+        # Try custom external provider first if configured
         if self._embedding_provider:
-            embedding = await self._embedding_provider(content)
-        else:
-            # Fallback: deterministic pseudo-embedding
-            # This is NOT a real embedding - use for development only
-            embedding = self._pseudo_embedding(content)
+            try:
+                embedding = await self._embedding_provider(content)
+                model_name = "external"
+            except Exception as e:
+                self._logger.warning("external_embedding_provider_failed", error=str(e))
+
+        # Use Forge embedding service as default
+        if embedding is None:
+            try:
+                from forge.services.embedding import get_embedding_service, EmbeddingConfigurationError
+
+                embedding_service = get_embedding_service()
+                result = await embedding_service.embed(content)
+                embedding = result.embedding
+                model_name = result.model
+                self._embedding_dim = result.dimensions
+
+            except EmbeddingConfigurationError as e:
+                self._logger.warning(
+                    "embedding_service_not_configured",
+                    error=str(e),
+                    action="falling_back_to_pseudo_embedding"
+                )
+                # Fall back to pseudo-embedding only if no embedding service configured
+                embedding = self._pseudo_embedding(content)
+                model_name = "pseudo-hash-fallback"
+
+            except Exception as e:
+                self._logger.error("embedding_service_error", error=str(e))
+                # Fall back to pseudo-embedding on error
+                embedding = self._pseudo_embedding(content)
+                model_name = "pseudo-hash-fallback"
 
         # Cache result
         if len(self._embedding_cache) >= self._cache_max_size:
@@ -372,7 +402,7 @@ class MLIntelligenceOverlay(BaseOverlay):
 
         return EmbeddingResult(
             embedding=embedding,
-            model="pseudo-hash" if not self._embedding_provider else "external",
+            model=model_name,
             dimensions=len(embedding),
             input_tokens=len(content.split()),
             generation_time_ms=duration_ms
@@ -382,8 +412,13 @@ class MLIntelligenceOverlay(BaseOverlay):
         """
         Generate a deterministic pseudo-embedding.
 
-        NOT a real semantic embedding - for development/testing only.
-        In production, use proper embedding models.
+        WARNING: This is NOT a real semantic embedding. It provides consistent
+        but meaningless vectors for fallback scenarios when embedding service
+        is unavailable. The Forge embedding service should be configured for
+        real semantic search functionality.
+
+        This fallback exists only to prevent errors during development or when
+        embedding infrastructure is temporarily unavailable.
         """
         # Normalize content
         normalized = content.lower().strip()

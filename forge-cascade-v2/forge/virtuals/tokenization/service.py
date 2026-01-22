@@ -19,21 +19,16 @@ Key Concepts:
 - Token-Bound Account: ERC-6551 wallet owned by the token
 - Contribution Vault: On-chain record of all improvements
 
-BLOCKCHAIN INTEGRATION STATUS:
-- Contract ABIs: Placeholder ABIs in contracts.py (need official Virtuals ABIs)
+BLOCKCHAIN INTEGRATION REQUIREMENTS:
+- Contract ABIs: Must be complete in contracts.py (from https://docs.virtuals.io/developers/contracts)
 - Wallet signing: Uses SecretsManager for secure key retrieval
-- Transaction building: Implemented but requires real ABIs to execute
-- Simulation mode: Active until is_abi_complete() returns True
+- Operator key: VIRTUALS_OPERATOR_PRIVATE_KEY must be configured
 
-To enable real blockchain operations:
-1. Obtain contract ABIs from https://docs.virtuals.io/developers/contracts
-2. Update contracts.py with real ABIs
-3. Configure secrets manager with operator wallet private key
-4. Set VIRTUALS_ENVIRONMENT=production
+IMPORTANT: This service requires real blockchain connectivity.
+Simulation mode has been removed - all operations require proper configuration.
 """
 
 import asyncio
-import hashlib
 import logging
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -84,6 +79,11 @@ class InsufficientStakeError(TokenizationServiceError):
 
 class AlreadyTokenizedError(TokenizationServiceError):
     """Raised when entity is already tokenized."""
+    pass
+
+
+class BlockchainConfigurationError(TokenizationServiceError):
+    """Raised when blockchain infrastructure is not properly configured."""
     pass
 
 
@@ -201,38 +201,41 @@ class TokenizationService:
             is_multichain=request.enable_multichain,
         )
         
-        # Create on-chain token (if ACP/tokenization enabled)
-        if self.config.enable_tokenization:
-            try:
-                # Deploy token contract via Virtuals Protocol
-                tx_record = await self._deploy_token_contract(
-                    entity=entity,
-                    initial_stake=request.initial_stake_virtual,
-                    owner_wallet=request.owner_wallet,
-                )
-                
-                entity.creation_tx_hash = tx_record.tx_hash
-                entity.status = TokenizationStatus.BONDING
-                entity.bonding_curve_virtual_accumulated = request.initial_stake_virtual
-                entity.bonding_curve_contributors = 1
-                
-                # Extract token address from transaction (would parse from events)
-                # entity.token_info.token_address = extract_token_address(tx_record)
-                
-                logger.info(
-                    f"Token deployed for {request.entity_type}:{request.entity_id}, "
-                    f"tx: {tx_record.tx_hash}"
-                )
-                
-            except Exception as e:
-                logger.error(f"Token deployment failed: {e}")
-                entity.status = TokenizationStatus.FAILED
-                entity.metadata["failure_reason"] = str(e)
-        else:
-            # Simulation mode - mark as bonding without on-chain tx
+        # Tokenization must be enabled - no simulation mode
+        if not self.config.enable_tokenization:
+            raise BlockchainConfigurationError(
+                "Tokenization is disabled. Set enable_tokenization=True in Virtuals config "
+                "and configure blockchain infrastructure."
+            )
+
+        try:
+            # Deploy token contract via Virtuals Protocol
+            tx_record = await self._deploy_token_contract(
+                entity=entity,
+                initial_stake=request.initial_stake_virtual,
+                owner_wallet=request.owner_wallet,
+            )
+
+            entity.creation_tx_hash = tx_record.tx_hash
             entity.status = TokenizationStatus.BONDING
             entity.bonding_curve_virtual_accumulated = request.initial_stake_virtual
             entity.bonding_curve_contributors = 1
+
+            # Extract token address from transaction (would parse from events)
+            # entity.token_info.token_address = extract_token_address(tx_record)
+
+            logger.info(
+                f"Token deployed for {request.entity_type}:{request.entity_id}, "
+                f"tx: {tx_record.tx_hash}"
+            )
+
+        except BlockchainConfigurationError:
+            raise
+        except Exception as e:
+            logger.error(f"Token deployment failed: {e}")
+            entity.status = TokenizationStatus.FAILED
+            entity.metadata["failure_reason"] = str(e)
+            raise TokenizationServiceError(f"Token deployment failed: {e}")
         
         # Estimate graduation date based on current accumulation rate
         # (In practice, this would use historical data and projections)
@@ -678,12 +681,7 @@ class TokenizationService:
             "estimated_completion_minutes": bridge_request.estimated_completion_minutes,
         }
     
-    # ==================== Helper Methods ====================
-
-    def _generate_tx_hash(self, *args: Any) -> str:
-        """Generate a deterministic transaction hash for simulation mode."""
-        data = ":".join(str(arg) for arg in args) + str(datetime.now(UTC).timestamp())
-        return "0x" + hashlib.sha256(data.encode()).hexdigest()
+    # ==================== Blockchain Operations ====================
 
     async def _deploy_token_contract(
         self,
@@ -801,9 +799,9 @@ class TokenizationService:
 
             except Exception as e:
                 logger.error(f"Blockchain deployment failed: {e}")
-                # Fall through to simulation mode
+                raise BlockchainConfigurationError(f"Token deployment failed: {e}")
 
-        # Simulation mode - return deterministic tx hash
+        # No simulation mode - require real blockchain configuration
         missing_reqs = []
         if not hasattr(client, 'web3'):
             missing_reqs.append("web3_client")
@@ -812,27 +810,12 @@ class TokenizationService:
         if not is_abi_complete("agent_factory"):
             missing_reqs.append("contract_abi")
         if self.config.operator_private_key is None:
-            missing_reqs.append("operator_key")
+            missing_reqs.append("operator_key (VIRTUALS_OPERATOR_PRIVATE_KEY)")
 
-        logger.info(
-            f"[SIMULATION] Token deployment simulated for {entity.token_info.name}. "
-            f"Missing for real deployment: {missing_reqs}"
-        )
-
-        tx_hash = self._generate_tx_hash("deploy", entity.id, owner_wallet, initial_stake)
-
-        return TransactionRecord(
-            tx_hash=tx_hash,
-            chain=chain,
-            block_number=0,
-            timestamp=datetime.now(UTC),
-            from_address=owner_wallet,
-            to_address=factory_address or "agent_factory_pending",
-            value=initial_stake,
-            gas_used=0,
-            status="simulated",
-            transaction_type="token_deploy",
-            related_entity_id=entity.id,
+        raise BlockchainConfigurationError(
+            f"Token deployment requires real blockchain configuration. "
+            f"Missing requirements: {', '.join(missing_reqs)}. "
+            f"See https://docs.virtuals.io/developers/contracts for contract ABIs."
         )
 
     async def _contribute_on_chain(
@@ -971,9 +954,9 @@ class TokenizationService:
 
             except Exception as e:
                 logger.error(f"Blockchain contribution failed: {e}")
-                # Fall through to simulation mode
+                raise BlockchainConfigurationError(f"Bonding curve contribution failed: {e}")
 
-        # Simulation mode
+        # No simulation mode - require real blockchain configuration
         missing_reqs = []
         if not hasattr(client, 'web3'):
             missing_reqs.append("web3_client")
@@ -982,27 +965,12 @@ class TokenizationService:
         if not is_abi_complete("bonding_curve"):
             missing_reqs.append("contract_abi")
         if self.config.operator_private_key is None:
-            missing_reqs.append("operator_key")
+            missing_reqs.append("operator_key (VIRTUALS_OPERATOR_PRIVATE_KEY)")
 
-        logger.info(
-            f"[SIMULATION] Bonding curve contribution simulated for {amount_virtual} VIRTUAL. "
-            f"Missing for real contribution: {missing_reqs}"
-        )
-
-        tx_hash = self._generate_tx_hash("contribute", entity.id, contributor_wallet, amount_virtual)
-
-        return TransactionRecord(
-            tx_hash=tx_hash,
-            chain=chain,
-            block_number=0,
-            timestamp=datetime.now(UTC),
-            from_address=contributor_wallet,
-            to_address=token_address or "bonding_curve_pending",
-            value=amount_virtual,
-            gas_used=0,
-            status="simulated",
-            transaction_type="bonding_contribution",
-            related_entity_id=entity.id,
+        raise BlockchainConfigurationError(
+            f"Bonding curve contribution requires real blockchain configuration. "
+            f"Missing requirements: {', '.join(missing_reqs)}. "
+            f"See https://docs.virtuals.io/developers/contracts for contract ABIs."
         )
 
     async def _execute_graduation_on_chain(
@@ -1025,40 +993,30 @@ class TokenizationService:
         """
         client = self._chain_manager.primary_client
 
-        if hasattr(client, 'web3') and entity.token_info.token_address:
-            try:
-                token_address = entity.token_info.token_address
+        if not hasattr(client, 'web3'):
+            raise BlockchainConfigurationError(
+                "Token graduation requires web3 client configuration."
+            )
 
-                # Build graduation transaction (requires ABI)
-                # contract = web3.eth.contract(address=token_address, abi=TOKEN_ABI)
-                # tx = contract.functions.graduate().build_transaction({
-                #     'from': self.config.system_wallet,  # System triggers graduation
-                #     ...
-                # })
+        if not entity.token_info.token_address:
+            raise BlockchainConfigurationError(
+                "Token graduation requires valid token contract address."
+            )
 
-                logger.info(
-                    f"[BLOCKCHAIN] Would graduate token at {token_address} "
-                    f"with {entity.bonding_curve_virtual_accumulated} VIRTUAL accumulated"
-                )
+        token_address = entity.token_info.token_address
 
-            except Exception as e:
-                logger.error(f"Blockchain graduation preparation failed: {e}")
+        # TODO: Implement graduation transaction when ABI is available
+        # contract = web3.eth.contract(address=token_address, abi=TOKEN_ABI)
+        # tx = contract.functions.graduate().build_transaction({
+        #     'from': self.config.system_wallet,  # System triggers graduation
+        #     ...
+        # })
 
-        # Simulation mode
-        tx_hash = self._generate_tx_hash("graduate", entity.id, entity.bonding_curve_virtual_accumulated)
-
-        return TransactionRecord(
-            tx_hash=tx_hash,
-            chain=self.config.primary_chain.value,
-            block_number=0,
-            timestamp=datetime.now(UTC),
-            from_address=getattr(self.config, 'system_wallet', 'system'),
-            to_address=entity.token_info.token_address or "token_contract",
-            value=0,
-            gas_used=0,
-            status="simulated",
-            transaction_type="graduation",
-            related_entity_id=entity.id,
+        raise BlockchainConfigurationError(
+            f"Token graduation requires complete contract ABI implementation. "
+            f"Token at {token_address} has accumulated "
+            f"{entity.bonding_curve_virtual_accumulated} VIRTUAL and is ready for graduation. "
+            f"See https://docs.virtuals.io/developers/contracts for graduation contract ABI."
         )
 
     async def _execute_distributions(
@@ -1106,33 +1064,21 @@ class TokenizationService:
                         f"to {len(recipient_distributions)} recipients"
                     )
 
+                # TODO: Implement actual distribution transactions
+                raise BlockchainConfigurationError(
+                    f"Revenue distribution requires complete transfer implementation. "
+                    f"Total to distribute: {total_amount} VIRTUAL to {len(recipient_distributions)} recipients."
+                )
+
+            except BlockchainConfigurationError:
+                raise
             except Exception as e:
                 logger.error(f"Distribution preparation failed: {e}")
+                raise BlockchainConfigurationError(f"Distribution failed: {e}")
 
-        # Create simulation records for each distribution
-        for recipient, amount in distributions.items():
-            if amount > 0:
-                tx_hash = self._generate_tx_hash("distribute", entity.id, recipient, amount)
-                tx_records.append(TransactionRecord(
-                    tx_hash=tx_hash,
-                    chain=self.config.primary_chain.value,
-                    block_number=0,
-                    timestamp=datetime.now(UTC),
-                    from_address="treasury",
-                    to_address=recipient,
-                    value=amount,
-                    gas_used=0,
-                    status="simulated",
-                    transaction_type="revenue_distribution",
-                    related_entity_id=entity.id,
-                ))
-
-        logger.info(
-            f"Prepared {len(tx_records)} distribution transactions "
-            f"for entity {entity.id}"
+        raise BlockchainConfigurationError(
+            "Revenue distribution requires web3 client configuration."
         )
-
-        return tx_records
 
     async def _execute_buyback_burn(
         self,
@@ -1152,54 +1098,36 @@ class TokenizationService:
         client = self._chain_manager.primary_client
 
         if not entity.token_info.token_address or not entity.liquidity_pool_address:
-            logger.warning(
+            raise BlockchainConfigurationError(
                 f"Cannot execute buyback for entity {entity.id}: "
                 "missing token address or liquidity pool"
             )
-            return None
 
-        if hasattr(client, 'web3'):
-            try:
-                pool_address = entity.liquidity_pool_address
+        if not hasattr(client, 'web3'):
+            raise BlockchainConfigurationError(
+                "Buyback-burn requires web3 client configuration."
+            )
 
-                # Uniswap router interaction pattern:
-                # router = web3.eth.contract(address=UNISWAP_ROUTER, abi=ROUTER_ABI)
-                #
-                # # Approve VIRTUAL spend
-                # virtual_token.functions.approve(UNISWAP_ROUTER, amount)
-                #
-                # # Swap VIRTUAL for entity token
-                # tx = router.functions.swapExactTokensForTokens(
-                #     amountIn=web3.to_wei(amount, 'ether'),
-                #     amountOutMin=0,  # Could add slippage protection
-                #     path=[VIRTUAL_ADDRESS, token_address],
-                #     to=BURN_ADDRESS,  # Send directly to burn
-                #     deadline=int(datetime.now(UTC).timestamp()) + 300
-                # ).build_transaction(...)
+        pool_address = entity.liquidity_pool_address
 
-                logger.info(
-                    f"[BLOCKCHAIN] Would swap {amount} VIRTUAL for entity tokens "
-                    f"and burn at pool {pool_address}"
-                )
+        # Uniswap router interaction pattern:
+        # router = web3.eth.contract(address=UNISWAP_ROUTER, abi=ROUTER_ABI)
+        #
+        # # Approve VIRTUAL spend
+        # virtual_token.functions.approve(UNISWAP_ROUTER, amount)
+        #
+        # # Swap VIRTUAL for entity token
+        # tx = router.functions.swapExactTokensForTokens(
+        #     amountIn=web3.to_wei(amount, 'ether'),
+        #     amountOutMin=0,  # Could add slippage protection
+        #     path=[VIRTUAL_ADDRESS, token_address],
+        #     to=BURN_ADDRESS,  # Send directly to burn
+        #     deadline=int(datetime.now(UTC).timestamp()) + 300
+        # ).build_transaction(...)
 
-            except Exception as e:
-                logger.error(f"Buyback-burn preparation failed: {e}")
-
-        # Simulation mode
-        tx_hash = self._generate_tx_hash("buyback_burn", entity.id, amount)
-
-        return TransactionRecord(
-            tx_hash=tx_hash,
-            chain=self.config.primary_chain.value,
-            block_number=0,
-            timestamp=datetime.now(UTC),
-            from_address="treasury",
-            to_address="0x000000000000000000000000000000000000dEaD",  # Burn address
-            value=amount,
-            gas_used=0,
-            status="simulated",
-            transaction_type="buyback_burn",
-            related_entity_id=entity.id,
+        raise BlockchainConfigurationError(
+            f"Buyback-burn requires complete Uniswap router ABI implementation. "
+            f"Would swap {amount} VIRTUAL for entity tokens and burn at pool {pool_address}."
         )
 
     async def _get_token_balance(
@@ -1213,26 +1141,32 @@ class TokenizationService:
         Used for governance voting power calculation.
         """
         if not entity.token_info.token_address:
-            return Decimal("0")
+            raise BlockchainConfigurationError(
+                "Cannot query token balance: token contract address not set."
+            )
 
         client = self._chain_manager.primary_client
 
-        if hasattr(client, 'web3'):
-            try:
-                # contract = web3.eth.contract(
-                #     address=entity.token_info.token_address,
-                #     abi=ERC20_ABI
-                # )
-                # balance = await contract.functions.balanceOf(wallet).call()
-                # return Decimal(balance) / Decimal(10 ** 18)
+        if not hasattr(client, 'web3'):
+            raise BlockchainConfigurationError(
+                "Token balance query requires web3 client configuration."
+            )
 
-                logger.debug(f"[BLOCKCHAIN] Would query balance for {wallet}")
+        # TODO: Implement actual balance query when ERC20_ABI is complete
+        # web3 = client.web3
+        # contract = web3.eth.contract(
+        #     address=entity.token_info.token_address,
+        #     abi=ERC20_ABI
+        # )
+        # balance = await asyncio.to_thread(
+        #     contract.functions.balanceOf(wallet).call
+        # )
+        # return Decimal(balance) / Decimal(10 ** 18)
 
-            except Exception as e:
-                logger.error(f"Balance query failed: {e}")
-
-        # Simulation mode - return placeholder
-        return Decimal("1000")
+        raise BlockchainConfigurationError(
+            f"Token balance query requires complete ERC20 ABI implementation. "
+            f"Would query balance for {wallet} on token {entity.token_info.token_address}."
+        )
 
 
 # Global service instance

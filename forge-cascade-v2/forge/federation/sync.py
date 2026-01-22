@@ -69,12 +69,24 @@ class SyncService:
         self.capsule_repo = capsule_repository
         self.driver = neo4j_driver
 
-        # In-memory state (would be persisted in production)
+        # State caches - backed by Neo4j persistence
         self._peers: dict[str, FederatedPeer] = {}
         self._federated_capsules: dict[str, FederatedCapsule] = {}
         self._federated_edges: dict[str, FederatedEdge] = {}
         self._sync_states: dict[str, SyncState] = {}
         self._sync_lock = asyncio.Lock()
+        self._initialized = False
+
+    async def initialize(self) -> None:
+        """Initialize the sync service by loading state from Neo4j."""
+        if self._initialized:
+            return
+
+        await self.load_peers_from_db()
+        await self._load_federated_capsules_from_db()
+        await self._load_federated_edges_from_db()
+        self._initialized = True
+        logger.info("Federation sync service initialized")
 
     async def register_peer(self, peer: FederatedPeer) -> None:
         """Register a new federated peer."""
@@ -599,6 +611,9 @@ class SyncService:
         key = f"{peer.id}:{remote_capsule['id']}"
         self._federated_capsules[key] = fed_capsule
 
+        # Persist to Neo4j
+        await self._persist_federated_capsule(fed_capsule)
+
     async def _update_local_capsule(
         self,
         fed_capsule: FederatedCapsule,
@@ -684,6 +699,9 @@ class SyncService:
         )
 
         self._federated_edges[fed_edge.id] = fed_edge
+
+        # Persist the mapping to Neo4j
+        await self._persist_federated_edge(fed_edge)
 
         # Create actual edge in Neo4j
         try:
@@ -1059,3 +1077,158 @@ class SyncService:
         except Exception as e:
             logger.error(f"Failed to persist trust score for {peer_id}: {e}")
             return False
+
+    # =========================================================================
+    # Federated Capsule Persistence
+    # =========================================================================
+
+    async def _persist_federated_capsule(self, fed_capsule: FederatedCapsule) -> bool:
+        """Persist a federated capsule mapping to Neo4j."""
+        try:
+            async with self.driver.session() as session:
+                query = """
+                MERGE (fc:FederatedCapsule {
+                    peer_id: $peer_id,
+                    remote_capsule_id: $remote_capsule_id
+                })
+                SET fc.local_capsule_id = $local_capsule_id,
+                    fc.remote_content_hash = $remote_content_hash,
+                    fc.local_content_hash = $local_content_hash,
+                    fc.sync_status = $sync_status,
+                    fc.remote_title = $remote_title,
+                    fc.remote_type = $remote_type,
+                    fc.remote_trust_level = $remote_trust_level,
+                    fc.remote_owner_id = $remote_owner_id,
+                    fc.last_synced_at = $last_synced_at,
+                    fc.conflict_reason = $conflict_reason
+                RETURN fc.peer_id AS peer_id
+                """
+                result = await session.run(query, {
+                    "peer_id": fed_capsule.peer_id,
+                    "remote_capsule_id": fed_capsule.remote_capsule_id,
+                    "local_capsule_id": fed_capsule.local_capsule_id,
+                    "remote_content_hash": fed_capsule.remote_content_hash,
+                    "local_content_hash": fed_capsule.local_content_hash,
+                    "sync_status": fed_capsule.sync_status.value if hasattr(fed_capsule.sync_status, 'value') else str(fed_capsule.sync_status),
+                    "remote_title": fed_capsule.remote_title,
+                    "remote_type": fed_capsule.remote_type,
+                    "remote_trust_level": fed_capsule.remote_trust_level,
+                    "remote_owner_id": fed_capsule.remote_owner_id,
+                    "last_synced_at": fed_capsule.last_synced_at.isoformat() if fed_capsule.last_synced_at else None,
+                    "conflict_reason": fed_capsule.conflict_reason,
+                })
+                await result.single()
+                return True
+        except Exception as e:
+            logger.error(f"Failed to persist federated capsule mapping: {e}")
+            return False
+
+    async def _load_federated_capsules_from_db(self) -> None:
+        """Load federated capsule mappings from Neo4j."""
+        try:
+            async with self.driver.session() as session:
+                query = """
+                MATCH (fc:FederatedCapsule)
+                RETURN fc {.*} AS fc
+                """
+                result = await session.run(query)
+                records = await result.data()
+
+                for record in records:
+                    fc_data = record.get("fc", {})
+                    try:
+                        fed_capsule = FederatedCapsule(
+                            peer_id=fc_data["peer_id"],
+                            remote_capsule_id=fc_data["remote_capsule_id"],
+                            local_capsule_id=fc_data.get("local_capsule_id"),
+                            remote_content_hash=fc_data.get("remote_content_hash", ""),
+                            local_content_hash=fc_data.get("local_content_hash", ""),
+                            sync_status=FederatedSyncStatus(fc_data.get("sync_status", "pending")),
+                            remote_title=fc_data.get("remote_title"),
+                            remote_type=fc_data.get("remote_type"),
+                            remote_trust_level=fc_data.get("remote_trust_level"),
+                            remote_owner_id=fc_data.get("remote_owner_id"),
+                            last_synced_at=datetime.fromisoformat(fc_data["last_synced_at"]) if fc_data.get("last_synced_at") else None,
+                            conflict_reason=fc_data.get("conflict_reason"),
+                        )
+                        key = f"{fed_capsule.peer_id}:{fed_capsule.remote_capsule_id}"
+                        self._federated_capsules[key] = fed_capsule
+                    except Exception as e:
+                        logger.error(f"Failed to parse federated capsule: {e}")
+
+                logger.info(f"Loaded {len(self._federated_capsules)} federated capsule mappings")
+        except Exception as e:
+            logger.error(f"Failed to load federated capsules: {e}")
+
+    # =========================================================================
+    # Federated Edge Persistence
+    # =========================================================================
+
+    async def _persist_federated_edge(self, fed_edge: FederatedEdge) -> bool:
+        """Persist a federated edge mapping to Neo4j."""
+        try:
+            async with self.driver.session() as session:
+                query = """
+                MERGE (fe:FederatedEdge {id: $id})
+                SET fe.peer_id = $peer_id,
+                    fe.remote_edge_id = $remote_edge_id,
+                    fe.source_capsule_id = $source_capsule_id,
+                    fe.target_capsule_id = $target_capsule_id,
+                    fe.relationship_type = $relationship_type,
+                    fe.source_is_local = $source_is_local,
+                    fe.target_is_local = $target_is_local,
+                    fe.sync_status = $sync_status,
+                    fe.last_synced_at = $last_synced_at
+                RETURN fe.id AS id
+                """
+                result = await session.run(query, {
+                    "id": fed_edge.id,
+                    "peer_id": fed_edge.peer_id,
+                    "remote_edge_id": fed_edge.remote_edge_id,
+                    "source_capsule_id": fed_edge.source_capsule_id,
+                    "target_capsule_id": fed_edge.target_capsule_id,
+                    "relationship_type": fed_edge.relationship_type,
+                    "source_is_local": fed_edge.source_is_local,
+                    "target_is_local": fed_edge.target_is_local,
+                    "sync_status": fed_edge.sync_status.value if hasattr(fed_edge.sync_status, 'value') else str(fed_edge.sync_status),
+                    "last_synced_at": fed_edge.last_synced_at.isoformat() if fed_edge.last_synced_at else None,
+                })
+                await result.single()
+                return True
+        except Exception as e:
+            logger.error(f"Failed to persist federated edge mapping: {e}")
+            return False
+
+    async def _load_federated_edges_from_db(self) -> None:
+        """Load federated edge mappings from Neo4j."""
+        try:
+            async with self.driver.session() as session:
+                query = """
+                MATCH (fe:FederatedEdge)
+                RETURN fe {.*} AS fe
+                """
+                result = await session.run(query)
+                records = await result.data()
+
+                for record in records:
+                    fe_data = record.get("fe", {})
+                    try:
+                        fed_edge = FederatedEdge(
+                            id=fe_data["id"],
+                            peer_id=fe_data["peer_id"],
+                            remote_edge_id=fe_data.get("remote_edge_id", ""),
+                            source_capsule_id=fe_data.get("source_capsule_id", ""),
+                            target_capsule_id=fe_data.get("target_capsule_id", ""),
+                            relationship_type=fe_data.get("relationship_type", "RELATED_TO"),
+                            source_is_local=fe_data.get("source_is_local", True),
+                            target_is_local=fe_data.get("target_is_local", True),
+                            sync_status=FederatedSyncStatus(fe_data.get("sync_status", "pending")),
+                            last_synced_at=datetime.fromisoformat(fe_data["last_synced_at"]) if fe_data.get("last_synced_at") else None,
+                        )
+                        self._federated_edges[fed_edge.id] = fed_edge
+                    except Exception as e:
+                        logger.error(f"Failed to parse federated edge: {e}")
+
+                logger.info(f"Loaded {len(self._federated_edges)} federated edge mappings")
+        except Exception as e:
+            logger.error(f"Failed to load federated edges: {e}")
