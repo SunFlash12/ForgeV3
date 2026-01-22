@@ -478,7 +478,7 @@ class DiagnosisEngine:
             return 0.001  # Default 1 in 1000
 
         try:
-            if isinstance(prevalence, (int, float)):
+            if isinstance(prevalence, int | float):
                 return float(prevalence)
             if isinstance(prevalence, str):
                 # Handle formats like "1/100000" or "0.00001"
