@@ -4,23 +4,21 @@ Diagnosis API Routes
 REST endpoints for the differential diagnosis hypothesis engine.
 """
 
-from datetime import datetime, timezone
+import json
+from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
+import structlog
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-import asyncio
-import json
-import structlog
 
 from forge.api.dependencies import (
     get_current_active_user,
-    get_overlay_manager,
 )
 from forge.services.diagnosis.validation import (
-    validate_phenotype_input,
     validate_genetic_input,
+    validate_phenotype_input,
 )
 
 logger = structlog.get_logger(__name__)
@@ -645,9 +643,9 @@ async def health_check():
     return {
         "status": "healthy",
         "service": "diagnosis",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "session_controller_available": _session_controller is not None,
-        "coordinator_available": _diagnostic_coordinator is not None,
+        "timestamp": datetime.now(UTC).isoformat(),
+        "session_controller_available": _services.session_controller is not None,
+        "coordinator_available": _services.diagnostic_coordinator is not None,
     }
 
 

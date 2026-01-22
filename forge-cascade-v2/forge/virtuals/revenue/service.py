@@ -19,18 +19,17 @@ are loaded back into the pending queue. This ensures no revenue is lost on resta
 """
 
 import logging
-from datetime import UTC, datetime, timedelta
-from typing import Any, Optional
 from collections import defaultdict
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
+from ..chains import get_chain_manager
 from ..config import get_virtuals_config
 from ..models import (
     RevenueRecord,
     RevenueType,
     TransactionRecord,
 )
-from ..chains import get_chain_manager
-
 
 logger = logging.getLogger(__name__)
 
@@ -43,24 +42,24 @@ class RevenueServiceError(Exception):
 class RevenueService:
     """
     Service for managing revenue streams within the Forge-Virtuals ecosystem.
-    
+
     This service provides comprehensive revenue management including:
     - Fee collection from various sources (inference, service, trading)
     - Revenue distribution according to configured splits
     - Analytics and reporting on revenue performance
     - Integration with tokenization for revenue-based valuations
-    
+
     The service maintains accurate accounting while enabling real-time
     distribution to stakeholders through the blockchain infrastructure.
     """
-    
+
     def __init__(
         self,
         revenue_repository: Any,  # Forge's RevenueRepository
     ):
         """
         Initialize the revenue service.
-        
+
         Args:
             revenue_repository: Repository for storing revenue records
         """
@@ -68,7 +67,7 @@ class RevenueService:
         self._revenue_repo = revenue_repository
         self._chain_manager = None
         self._pending_distributions: list[RevenueRecord] = []
-    
+
     async def initialize(self) -> None:
         """Initialize the service and chain connections."""
         self._chain_manager = await get_chain_manager()
@@ -106,9 +105,9 @@ class RevenueService:
         except Exception as e:
             logger.warning(f"Failed to load pending distributions: {e}")
             self._pending_distributions = []
-    
+
     # ==================== Fee Collection ====================
-    
+
     async def record_inference_fee(
         self,
         capsule_id: str,
@@ -118,17 +117,17 @@ class RevenueService:
     ) -> RevenueRecord:
         """
         Record an inference fee for a knowledge capsule query.
-        
+
         Inference fees are charged when users or agents query knowledge
         capsules. The fee is calculated based on the configured per-query
         rate and the complexity of the query (tokens processed).
-        
+
         Args:
             capsule_id: ID of the queried capsule
             user_wallet: Wallet of the user making the query
             query_text: The query for logging purposes
             tokens_processed: Number of tokens in query + response
-            
+
         Returns:
             The recorded revenue event
         """
@@ -138,7 +137,7 @@ class RevenueService:
         base_fee = self.config.inference_fee_per_query
         token_fee = (tokens_processed / 1000) * 0.0001  # $0.0001 per 1K tokens
         total_fee = base_fee + token_fee
-        
+
         record = RevenueRecord(
             revenue_type=RevenueType.INFERENCE_FEE,
             amount_virtual=total_fee,
@@ -150,13 +149,13 @@ class RevenueService:
                 "query_preview": query_text[:100] if query_text else "",
             },
         )
-        
+
         await self._revenue_repo.create(record)
         self._pending_distributions.append(record)
-        
+
         logger.debug(f"Recorded inference fee: {total_fee} VIRTUAL for capsule {capsule_id}")
         return record
-    
+
     async def record_service_fee(
         self,
         overlay_id: str,
@@ -166,24 +165,24 @@ class RevenueService:
     ) -> RevenueRecord:
         """
         Record a service fee for overlay-as-a-service usage.
-        
+
         Service fees are a percentage of the value provided by overlay
         services. This creates alignment between overlay value and
         revenue generation. Higher-value services generate proportionally
         higher fees, incentivizing quality improvements.
-        
+
         Args:
             overlay_id: ID of the overlay providing service
             service_type: Type of service (analysis, validation, etc.)
             base_amount_virtual: The base transaction amount
             client_wallet: Wallet of the service consumer
-            
+
         Returns:
             The recorded revenue event
         """
         fee_percentage = self.config.overlay_service_fee_percentage
         fee_amount = base_amount_virtual * fee_percentage
-        
+
         record = RevenueRecord(
             revenue_type=RevenueType.SERVICE_FEE,
             amount_virtual=fee_amount,
@@ -196,13 +195,13 @@ class RevenueService:
                 "client_wallet": client_wallet,
             },
         )
-        
+
         await self._revenue_repo.create(record)
         self._pending_distributions.append(record)
-        
+
         logger.debug(f"Recorded service fee: {fee_amount} VIRTUAL for overlay {overlay_id}")
         return record
-    
+
     async def record_governance_reward(
         self,
         participant_wallet: str,
@@ -211,18 +210,18 @@ class RevenueService:
     ) -> RevenueRecord:
         """
         Record a governance participation reward.
-        
+
         Governance rewards incentivize active participation in the
         democratic governance process. Rewards are distributed from
         the protocol's governance reward pool based on participation
         type and quality. This ensures sustained engagement with
         important protocol decisions.
-        
+
         Args:
             participant_wallet: Wallet receiving the reward
             proposal_id: ID of the proposal participated in
             participation_type: Type (vote, proposal, evaluation)
-            
+
         Returns:
             The recorded revenue event
         """
@@ -234,9 +233,9 @@ class RevenueService:
             "proposal": 0.5,    # Larger reward for creating proposals
             "evaluation": 0.1,  # Medium reward for evaluation
         }
-        
+
         reward_amount = reward_amounts.get(participation_type, 0.01)
-        
+
         record = RevenueRecord(
             revenue_type=RevenueType.GOVERNANCE_REWARD,
             amount_virtual=reward_amount,
@@ -247,15 +246,15 @@ class RevenueService:
                 "participation_type": participation_type,
             },
         )
-        
+
         await self._revenue_repo.create(record)
-        
+
         logger.debug(
             f"Recorded governance reward: {reward_amount} VIRTUAL "
             f"for {participation_type} on {proposal_id}"
         )
         return record
-    
+
     async def record_trading_fee(
         self,
         token_address: str,
@@ -265,24 +264,24 @@ class RevenueService:
     ) -> RevenueRecord:
         """
         Record the Sentient Tax from token trading.
-        
+
         The Sentient Tax is a 1% fee on all trades of graduated agent
         tokens. This fee funds ongoing development, creator rewards,
         and deflationary buyback-burn mechanisms. It creates sustainable
         revenue tied to token market activity.
-        
+
         Args:
             token_address: Address of the traded token
             trade_amount_virtual: Value of the trade in VIRTUAL
             trader_wallet: Wallet executing the trade
             trade_type: Type of trade (buy, sell)
-            
+
         Returns:
             The recorded revenue event
         """
         sentient_tax_rate = 0.01  # 1% Sentient Tax
         tax_amount = trade_amount_virtual * sentient_tax_rate
-        
+
         record = RevenueRecord(
             revenue_type=RevenueType.TRADING_FEE,
             amount_virtual=tax_amount,
@@ -295,15 +294,15 @@ class RevenueService:
                 "tax_rate": sentient_tax_rate,
             },
         )
-        
+
         await self._revenue_repo.create(record)
         self._pending_distributions.append(record)
-        
+
         logger.debug(f"Recorded trading fee: {tax_amount} VIRTUAL from {trade_type}")
         return record
-    
+
     # ==================== Revenue Distribution ====================
-    
+
     async def process_pending_distributions(
         self,
         batch_size: int = 100,
@@ -382,22 +381,22 @@ class RevenueService:
         )
 
         return dict(aggregated)
-    
+
     async def _execute_batch_distribution(
         self,
         distributions: dict[str, float],
     ) -> TransactionRecord:
         """
         Execute a batch of distributions in a single transaction.
-        
+
         This uses a multi-send pattern to distribute VIRTUAL tokens
         to multiple recipients efficiently. The batch approach
         significantly reduces gas costs compared to individual transfers.
         """
-        
+
         # In production, this would use a multi-send contract or
         # aggregate into a merkle distributor for gas efficiency
-        
+
         return TransactionRecord(
             tx_hash=f"0x{'d' * 64}",
             chain=self.config.primary_chain.value,
@@ -410,29 +409,29 @@ class RevenueService:
             status="pending",
             transaction_type="batch_distribution",
         )
-    
+
     # ==================== Analytics and Reporting ====================
-    
+
     async def get_revenue_summary(
         self,
-        entity_id: Optional[str] = None,
-        entity_type: Optional[str] = None,
-        start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None,
+        entity_id: str | None = None,
+        entity_type: str | None = None,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
     ) -> dict[str, Any]:
         """
         Get a summary of revenue for analysis and reporting.
-        
+
         This method provides comprehensive revenue analytics filtered by
         entity, type, and time period. The summary includes totals by
         revenue type, top performers, and trend data for visualization.
-        
+
         Args:
             entity_id: Optional filter by specific entity
             entity_type: Optional filter by entity type (capsule, overlay, etc.)
             start_date: Optional start of analysis period
             end_date: Optional end of analysis period
-            
+
         Returns:
             Dict containing revenue summary statistics
         """
@@ -441,7 +440,7 @@ class RevenueService:
             end_date = datetime.now(UTC)
         if start_date is None:
             start_date = end_date - timedelta(days=30)
-        
+
         # Query revenue records with filters
         records = await self._revenue_repo.query(
             entity_id=entity_id,
@@ -449,27 +448,27 @@ class RevenueService:
             start_date=start_date,
             end_date=end_date,
         )
-        
+
         # Aggregate by revenue type
         by_type: dict[str, float] = defaultdict(float)
         by_entity: dict[str, float] = defaultdict(float)
         daily_totals: dict[str, float] = defaultdict(float)
-        
+
         for record in records:
             by_type[record.revenue_type.value] += record.amount_virtual
             by_entity[record.source_entity_id] += record.amount_virtual
             day_key = record.timestamp.strftime("%Y-%m-%d")
             daily_totals[day_key] += record.amount_virtual
-        
+
         total_revenue = sum(by_type.values())
-        
+
         # Calculate top performers
         top_entities = sorted(
             by_entity.items(),
             key=lambda x: x[1],
             reverse=True,
         )[:10]
-        
+
         return {
             "period": {
                 "start": start_date.isoformat(),
@@ -485,7 +484,7 @@ class RevenueService:
             "record_count": len(records),
             "average_per_record": total_revenue / len(records) if records else 0,
         }
-    
+
     async def get_entity_revenue(
         self,
         entity_id: str,
@@ -493,15 +492,15 @@ class RevenueService:
     ) -> dict[str, Any]:
         """
         Get detailed revenue information for a specific entity.
-        
+
         This provides entity-level revenue analytics including lifetime
         totals, recent activity, and distribution history. This information
         is valuable for assessing entity value and performance.
-        
+
         Args:
             entity_id: ID of the entity
             entity_type: Type of entity
-            
+
         Returns:
             Dict containing entity-specific revenue details
         """
@@ -510,7 +509,7 @@ class RevenueService:
             entity_id=entity_id,
             entity_type=entity_type,
         )
-        
+
         if not records:
             return {
                 "entity_id": entity_id,
@@ -518,25 +517,25 @@ class RevenueService:
                 "total_revenue": 0,
                 "record_count": 0,
             }
-        
+
         # Calculate statistics
         total_revenue = sum(r.amount_virtual for r in records)
-        
+
         # Group by month for trend analysis
         monthly: dict[str, float] = defaultdict(float)
         for record in records:
             month_key = record.timestamp.strftime("%Y-%m")
             monthly[month_key] += record.amount_virtual
-        
+
         # Find first and last revenue dates
         dates = [r.timestamp for r in records]
         first_revenue = min(dates)
         last_revenue = max(dates)
-        
+
         # Calculate average monthly revenue
         months_active = max(1, len(monthly))
         avg_monthly = total_revenue / months_active
-        
+
         return {
             "entity_id": entity_id,
             "entity_type": entity_type,
@@ -547,7 +546,7 @@ class RevenueService:
             "average_monthly_revenue": avg_monthly,
             "monthly_breakdown": dict(monthly),
         }
-    
+
     async def estimate_entity_value(
         self,
         entity_id: str,
@@ -557,27 +556,27 @@ class RevenueService:
     ) -> dict[str, Any]:
         """
         Estimate the value of an entity based on revenue.
-        
+
         This uses a discounted cash flow (DCF) model to estimate the
         present value of future revenue streams. The estimate considers
         historical revenue, growth projections, and risk-adjusted
         discount rates. This is useful for tokenization pricing
         and investment decisions.
-        
+
         Args:
             entity_id: ID of the entity to value
             entity_type: Type of entity
             discount_rate: Annual discount rate (default 10%)
             growth_rate: Expected annual growth rate (default 5%)
-            
+
         Returns:
             Dict containing valuation estimates
         """
         revenue_data = await self.get_entity_revenue(entity_id, entity_type)
-        
+
         avg_monthly = revenue_data.get("average_monthly_revenue", 0)
         annual_revenue = avg_monthly * 12
-        
+
         if annual_revenue <= 0:
             return {
                 "entity_id": entity_id,
@@ -585,7 +584,7 @@ class RevenueService:
                 "method": "dcf",
                 "note": "No revenue history",
             }
-        
+
         # Calculate present value of growing perpetuity. This formula
         # provides a reasonable long-term valuation by discounting future
         # cash flows at the difference between discount and growth rates.
@@ -595,7 +594,7 @@ class RevenueService:
             estimated_value = annual_revenue * 10
         else:
             estimated_value = annual_revenue / (discount_rate - growth_rate)
-        
+
         return {
             "entity_id": entity_id,
             "entity_type": entity_type,
@@ -609,7 +608,7 @@ class RevenueService:
 
 
 # Global service instance
-_revenue_service: Optional[RevenueService] = None
+_revenue_service: RevenueService | None = None
 
 
 async def get_revenue_service(

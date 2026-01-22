@@ -5,23 +5,23 @@ The core engine for generating and refining differential diagnoses.
 Integrates PrimeKG, HPO, genetic data, and Bayesian scoring.
 """
 
-import asyncio
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from datetime import UTC
 from typing import Any
 
 import structlog
 
 from .models import (
     DiagnosisHypothesis,
+    DiagnosisResult,
     DiagnosisSession,
     DiagnosisState,
-    PatientProfile,
     EvidenceItem,
     EvidenceType,
     FollowUpQuestion,
-    DiagnosisResult,
+    PatientProfile,
 )
-from .scoring import BayesianScorer, ScoringConfig, create_bayesian_scorer
+from .scoring import ScoringConfig, create_bayesian_scorer
 
 logger = structlog.get_logger(__name__)
 
@@ -728,9 +728,9 @@ class DiagnosisEngine:
             return session
 
         # Record answer
-        from datetime import datetime, timezone
+        from datetime import datetime
         question.answer = answer
-        question.answered_at = datetime.now(timezone.utc)
+        question.answered_at = datetime.now(UTC)
 
         # Move to answered
         session.pending_questions.remove(question)

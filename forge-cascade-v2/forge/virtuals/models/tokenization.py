@@ -11,12 +11,12 @@ Protocol bonding curve mechanism.
 
 from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 from uuid import uuid4
 
 from pydantic import BaseModel, Field, field_validator
 
-from .base import VirtualsBaseModel, TokenizationStatus, TokenInfo
+from .base import TokenInfo, TokenizationStatus, VirtualsBaseModel
 
 
 # FIX: Convert fake enum classes to proper Python Enum classes
@@ -45,7 +45,7 @@ class GenesisTier(str, Enum):
 class TokenDistribution(BaseModel):
     """
     Distribution of token supply among stakeholders.
-    
+
     Standard Virtuals distribution is:
     - 60% public circulation
     - 35% ecosystem treasury
@@ -72,13 +72,13 @@ class TokenDistribution(BaseModel):
         le=100,
         description="Optional creator allocation (reduces public %)"
     )
-    
+
     @field_validator('creator_allocation_percent')
     @classmethod
     def validate_total(cls, v, info):
         """Ensure allocations don't exceed 100%."""
         data = info.data
-        total = (data.get('public_circulation_percent', 60) + 
+        total = (data.get('public_circulation_percent', 60) +
                  data.get('ecosystem_treasury_percent', 35) +
                  data.get('liquidity_pool_percent', 5) + v)
         if total > 100:
@@ -89,7 +89,7 @@ class TokenDistribution(BaseModel):
 class RevenueShare(BaseModel):
     """
     Configuration for revenue sharing from tokenized entity.
-    
+
     Revenue from the entity flows back to token holders through
     buyback-and-burn mechanics and direct distributions.
     """
@@ -122,7 +122,7 @@ class RevenueShare(BaseModel):
 class TokenizationRequest(BaseModel):
     """
     Request to tokenize a Forge entity.
-    
+
     This initiates the tokenization process which requires:
     1. Entity owner authorization
     2. Initial VIRTUAL stake (minimum 100)
@@ -131,7 +131,7 @@ class TokenizationRequest(BaseModel):
     # Entity Reference
     entity_type: str = Field(description="Type of entity being tokenized")
     entity_id: str = Field(description="ID of the Forge entity")
-    
+
     # Token Configuration
     token_name: str = Field(
         max_length=64,
@@ -145,33 +145,33 @@ class TokenizationRequest(BaseModel):
         max_length=2000,
         description="Description shown on exchanges and explorers"
     )
-    
+
     # Launch Configuration
     launch_type: str = Field(
         default=TokenLaunchType.STANDARD,
         description="standard or genesis launch"
     )
-    genesis_tier: Optional[str] = Field(
+    genesis_tier: str | None = Field(
         default=None,
         description="If genesis launch, which tier"
     )
-    
+
     # Stake
     initial_stake_virtual: float = Field(
         ge=100.0,
         description="Initial VIRTUAL tokens to stake"
     )
-    
+
     # Distribution
     distribution: TokenDistribution = Field(
         default_factory=TokenDistribution
     )
-    
+
     # Revenue Configuration
     revenue_share: RevenueShare = Field(
         default_factory=RevenueShare
     )
-    
+
     # Governance
     enable_holder_governance: bool = Field(
         default=True,
@@ -183,7 +183,7 @@ class TokenizationRequest(BaseModel):
         le=100.0,
         description="Minimum participation for valid votes"
     )
-    
+
     # Chain Selection
     primary_chain: str = Field(
         default="base",
@@ -193,14 +193,14 @@ class TokenizationRequest(BaseModel):
         default=False,
         description="Whether to enable cross-chain bridging"
     )
-    
+
     # Owner Authorization
     owner_wallet: str = Field(description="Wallet authorizing tokenization")
-    owner_signature: Optional[str] = Field(
+    owner_signature: str | None = Field(
         default=None,
         description="Signature authorizing the tokenization"
     )
-    
+
     @field_validator('token_symbol')
     @classmethod
     def validate_symbol(cls, v: str) -> str:
@@ -214,54 +214,54 @@ class TokenizationRequest(BaseModel):
 class TokenizedEntity(VirtualsBaseModel):
     """
     A Forge entity that has been tokenized on Virtuals Protocol.
-    
+
     This represents the complete tokenization state including
     bonding curve progress, holder information, and revenue metrics.
     """
     # Entity Reference
     entity_type: str
     entity_id: str
-    
+
     # Token Information
     token_info: TokenInfo
-    
+
     # Launch Information
     launch_type: str
-    genesis_tier: Optional[str] = None
-    
+    genesis_tier: str | None = None
+
     # Distribution
     distribution: TokenDistribution
     revenue_share: RevenueShare
-    
+
     # Status
     status: TokenizationStatus = Field(default=TokenizationStatus.PENDING)
-    
+
     # Bonding Curve State (if not yet graduated)
     bonding_curve_virtual_accumulated: float = Field(default=0.0)
     bonding_curve_contributors: int = Field(default=0)
-    estimated_graduation_date: Optional[datetime] = None
-    
+    estimated_graduation_date: datetime | None = None
+
     # Post-Graduation State
-    graduation_tx_hash: Optional[str] = None
-    graduated_at: Optional[datetime] = None
-    liquidity_pool_address: Optional[str] = None
-    liquidity_locked_until: Optional[datetime] = None
-    
+    graduation_tx_hash: str | None = None
+    graduated_at: datetime | None = None
+    liquidity_pool_address: str | None = None
+    liquidity_locked_until: datetime | None = None
+
     # Holder Information
     total_holders: int = Field(default=0)
     top_holders: list[dict[str, Any]] = Field(default_factory=list)
-    
+
     # Revenue Metrics
     total_revenue_generated: float = Field(default=0.0)
     total_buyback_burned: float = Field(default=0.0)
     total_distributed_to_holders: float = Field(default=0.0)
-    
+
     # Governance State
     enable_holder_governance: bool = Field(default=True)
     governance_quorum_percent: float = Field(default=10.0)
     active_proposals: int = Field(default=0)
     total_proposals: int = Field(default=0)
-    
+
     # Multi-chain State
     is_multichain: bool = Field(default=False)
     bridged_chains: list[str] = Field(default_factory=list)
@@ -269,21 +269,21 @@ class TokenizedEntity(VirtualsBaseModel):
         default_factory=dict,
         description="Token addresses by chain"
     )
-    
+
     # Contribution Vault
-    contribution_vault_address: Optional[str] = None
+    contribution_vault_address: str | None = None
     total_contributions: int = Field(default=0)
-    
+
     # Transactions
-    creation_tx_hash: Optional[str] = None
-    
+    creation_tx_hash: str | None = None
+
     def is_graduated(self) -> bool:
         """Check if token has graduated from bonding curve."""
         return self.status in [
             TokenizationStatus.GRADUATED,
             TokenizationStatus.BRIDGED
         ]
-    
+
     def graduation_progress(self) -> float:
         """Calculate progress toward graduation (0.0 to 1.0)."""
         threshold = 42000  # Standard graduation threshold
@@ -297,14 +297,14 @@ class TokenizedEntity(VirtualsBaseModel):
 class ContributionRecord(BaseModel):
     """
     Record of a contribution to a tokenized entity.
-    
+
     Contributions are stored in the Immutable Contribution Vault
     and can earn ongoing rewards from the entity's revenue.
     """
     id: str = Field(default_factory=lambda: str(uuid4()))
     tokenized_entity_id: str
     contributor_wallet: str
-    
+
     # Contribution Details
     contribution_type: str = Field(
         description="Type: data, model, code, curation, etc."
@@ -313,9 +313,9 @@ class ContributionRecord(BaseModel):
     contribution_hash: str = Field(
         description="Hash of the contributed content"
     )
-    
+
     # Validation
-    validated_by: Optional[str] = Field(
+    validated_by: str | None = Field(
         default=None,
         description="Agent or address that validated"
     )
@@ -325,7 +325,7 @@ class ContributionRecord(BaseModel):
         le=1.0
     )
     is_approved: bool = Field(default=False)
-    
+
     # Rewards
     reward_share_percent: float = Field(
         default=0.0,
@@ -334,14 +334,14 @@ class ContributionRecord(BaseModel):
         description="Percentage of contributor pool this contribution earns"
     )
     total_rewards_earned: float = Field(default=0.0)
-    
+
     # NFT Representation (ERC-1155 Service NFT)
-    contribution_nft_id: Optional[str] = None
-    contribution_nft_tx_hash: Optional[str] = None
-    
+    contribution_nft_id: str | None = None
+    contribution_nft_tx_hash: str | None = None
+
     # Timestamps
     submitted_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    approved_at: Optional[datetime] = None
+    approved_at: datetime | None = None
 
 
 class TokenHolderGovernanceVote(BaseModel):
@@ -354,20 +354,20 @@ class TokenHolderGovernanceVote(BaseModel):
         description="Voting power based on token holdings"
     )
     voted_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    tx_hash: Optional[str] = None
+    tx_hash: str | None = None
 
 
 class TokenHolderProposal(BaseModel):
     """
     Governance proposal created by token holders.
-    
+
     Proposals can modify entity parameters, allocate treasury funds,
     or make other decisions about the tokenized entity.
     """
     id: str = Field(default_factory=lambda: str(uuid4()))
     tokenized_entity_id: str
     proposer_wallet: str
-    
+
     # Proposal Content
     title: str = Field(max_length=200)
     description: str = Field(max_length=5000)
@@ -377,7 +377,7 @@ class TokenHolderProposal(BaseModel):
     proposed_changes: dict[str, Any] = Field(
         description="Specific changes being proposed"
     )
-    
+
     # Voting State
     voting_starts: datetime
     voting_ends: datetime
@@ -385,19 +385,19 @@ class TokenHolderProposal(BaseModel):
     votes_against: float = Field(default=0.0)
     votes_abstain: float = Field(default=0.0)
     total_voters: int = Field(default=0)
-    
+
     # Requirements
     quorum_required: float
     quorum_reached: bool = Field(default=False)
-    
+
     # Outcome
     status: str = Field(
         default="active",
         description="active, passed, rejected, executed, cancelled"
     )
-    execution_tx_hash: Optional[str] = None
-    executed_at: Optional[datetime] = None
-    
+    execution_tx_hash: str | None = None
+    executed_at: datetime | None = None
+
     # Timestamps
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 

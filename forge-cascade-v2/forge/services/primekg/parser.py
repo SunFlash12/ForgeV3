@@ -13,22 +13,22 @@ Handles:
 
 import csv
 from collections import defaultdict
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import AsyncIterator, Callable, Iterator
 
 import structlog
 
 from .models import (
-    PrimeKGNode,
-    PrimeKGEdge,
-    PrimeKGNodeType,
-    PrimeKGStats,
     PrimeKGDisease,
-    PrimeKGGene,
     PrimeKGDrug,
+    PrimeKGEdge,
+    PrimeKGGene,
+    PrimeKGNode,
+    PrimeKGNodeType,
     PrimeKGPhenotype,
+    PrimeKGStats,
 )
 
 logger = structlog.get_logger(__name__)
@@ -170,14 +170,14 @@ class PrimeKGParser:
 
         progress = ParseProgress(
             file_name=file_path.name,
-            started_at=datetime.now(timezone.utc),
+            started_at=datetime.now(UTC),
         )
 
         # Count total lines for progress
         progress.total_lines = self.count_lines(file_path)
         logger.info("primekg_parsing_nodes", total_lines=progress.total_lines)
 
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(file_path, encoding="utf-8") as f:
             reader = csv.DictReader(f)
 
             for row in reader:
@@ -203,7 +203,7 @@ class PrimeKGParser:
                         progress_callback(progress)
                     self._notify_progress(progress)
 
-        progress.completed_at = datetime.now(timezone.utc)
+        progress.completed_at = datetime.now(UTC)
         if progress_callback:
             progress_callback(progress)
         self._notify_progress(progress)
@@ -291,14 +291,14 @@ class PrimeKGParser:
 
         progress = ParseProgress(
             file_name=file_path.name,
-            started_at=datetime.now(timezone.utc),
+            started_at=datetime.now(UTC),
         )
 
         # Count total lines for progress
         progress.total_lines = self.count_lines(file_path)
         logger.info("primekg_parsing_edges", total_lines=progress.total_lines)
 
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(file_path, encoding="utf-8") as f:
             reader = csv.DictReader(f)
 
             for row in reader:
@@ -324,7 +324,7 @@ class PrimeKGParser:
                         progress_callback(progress)
                     self._notify_progress(progress)
 
-        progress.completed_at = datetime.now(timezone.utc)
+        progress.completed_at = datetime.now(UTC)
         if progress_callback:
             progress_callback(progress)
         self._notify_progress(progress)
@@ -407,13 +407,13 @@ class PrimeKGParser:
 
         progress = ParseProgress(
             file_name=file_path.name,
-            started_at=datetime.now(timezone.utc),
+            started_at=datetime.now(UTC),
         )
 
         progress.total_lines = self.count_lines(file_path)
         logger.info("primekg_parsing_kg", total_lines=progress.total_lines)
 
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(file_path, encoding="utf-8") as f:
             reader = csv.reader(f)
             next(reader)  # Skip header
 
@@ -437,7 +437,7 @@ class PrimeKGParser:
                         progress_callback(progress)
                     self._notify_progress(progress)
 
-        progress.completed_at = datetime.now(timezone.utc)
+        progress.completed_at = datetime.now(UTC)
         if progress_callback:
             progress_callback(progress)
         self._notify_progress(progress)
@@ -462,7 +462,7 @@ class PrimeKGParser:
             PrimeKGStats with counts and metadata
         """
         stats = PrimeKGStats(
-            import_timestamp=datetime.now(timezone.utc),
+            import_timestamp=datetime.now(UTC),
         )
 
         # Count nodes by type

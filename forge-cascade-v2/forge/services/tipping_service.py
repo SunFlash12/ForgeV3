@@ -18,19 +18,14 @@ Usage:
     )
 """
 
-import logging
-from datetime import UTC, datetime
-from typing import Optional
+from datetime import datetime
 
 import structlog
 
 from forge.database.client import Neo4jClient
 from forge.virtuals.models.tipping import (
-    FROWG_TOKEN_MINT,
     Tip,
-    TipCreate,
     TipLeaderboard,
-    TipResponse,
     TipSummary,
     TipTargetType,
 )
@@ -80,9 +75,9 @@ class TippingService:
         target_id: str,
         recipient_wallet: str,
         amount_frowg: float,
-        message: Optional[str] = None,
-        sender_user_id: Optional[str] = None,
-        tx_signature: Optional[str] = None,
+        message: str | None = None,
+        sender_user_id: str | None = None,
+        tx_signature: str | None = None,
     ) -> Tip:
         """
         Create a new tip record.
@@ -177,7 +172,7 @@ class TippingService:
             record = await result.single()
             return record is not None
 
-    async def get_tip(self, tip_id: str) -> Optional[Tip]:
+    async def get_tip(self, tip_id: str) -> Tip | None:
         """Get a tip by ID."""
         async with self._db.session() as session:
             result = await session.run(
@@ -324,10 +319,10 @@ class TippingService:
 
 
 # Global service instance
-_tipping_service: Optional[TippingService] = None
+_tipping_service: TippingService | None = None
 
 
-def get_tipping_service() -> Optional[TippingService]:
+def get_tipping_service() -> TippingService | None:
     """Get the global tipping service instance."""
     return _tipping_service
 

@@ -9,7 +9,7 @@ from typing import Any
 
 import structlog
 
-from .base import DiagnosticAgent, AgentConfig, AgentRole, AgentMessage, MessageType
+from .base import AgentConfig, AgentRole, DiagnosticAgent
 
 logger = structlog.get_logger(__name__)
 
@@ -96,7 +96,7 @@ class PhenotypeAgent(DiagnosticAgent):
         """
         phenotypes = patient_data.get("phenotypes", [])
         negated_phenotypes = patient_data.get("negated_phenotypes", [])
-        age = patient_data.get("age")
+        _age = patient_data.get("age")  # Reserved for age-adjusted analysis
         age_of_onset = patient_data.get("age_of_onset")
 
         # Normalize phenotypes

@@ -8,17 +8,17 @@ Provides genetic data processing for the differential diagnosis engine:
 - ClinVar and OMIM integration
 """
 
+from .annotator import VariantAnnotator, create_variant_annotator
+from .association import GeneAssociationService, create_gene_association_service
 from .models import (
-    GeneticVariant,
-    VariantType,
-    VariantPathogenicity,
-    VariantAnnotation,
     GeneInfo,
     GeneticTestResult,
+    GeneticVariant,
+    VariantAnnotation,
+    VariantPathogenicity,
+    VariantType,
 )
 from .parser import VCFParser, create_vcf_parser
-from .association import GeneAssociationService, create_gene_association_service
-from .annotator import VariantAnnotator, create_variant_annotator
 
 __all__ = [
     # Models

@@ -12,9 +12,8 @@ infrastructure, enabling:
 - Trust-based pricing integration
 """
 
-import logging
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 import structlog
 
@@ -26,17 +25,15 @@ from forge.repositories.acp_repository import (
     get_job_repository,
     get_offering_repository,
 )
-from forge.virtuals.acp.service import ACPService, get_acp_service
+from forge.virtuals.acp.service import ACPService
+from forge.virtuals.game.forge_functions import (
+    create_analysis_worker,
+    create_governance_worker,
+    create_knowledge_worker,
+)
 from forge.virtuals.game.sdk_client import (
     GAMESDKClient,
     GAMEWorker,
-    FunctionDefinition,
-    GAMEClientError,
-)
-from forge.virtuals.game.forge_functions import (
-    create_knowledge_worker,
-    create_analysis_worker,
-    create_governance_worker,
 )
 from forge.virtuals.models.acp import (
     ACPDeliverable,
@@ -62,16 +59,16 @@ class VirtualsIntegrationConfig:
     # Base L2 Configuration
     base_rpc_url: str = "https://mainnet.base.org"
     base_chain_id: int = 8453
-    base_private_key: Optional[str] = None
-    acp_escrow_contract_address: Optional[str] = None
-    acp_registry_contract_address: Optional[str] = None
+    base_private_key: str | None = None
+    acp_escrow_contract_address: str | None = None
+    acp_registry_contract_address: str | None = None
     virtual_token_address: str = "0x0b3e328455c4059EEb9e3f84b5543F74E24e7E1b"
 
     # Solana Configuration
     solana_rpc_url: str = "https://api.mainnet-beta.solana.com"
-    solana_private_key: Optional[str] = None
-    solana_acp_program_id: Optional[str] = None
-    frowg_token_address: Optional[str] = None
+    solana_private_key: str | None = None
+    solana_acp_program_id: str | None = None
+    frowg_token_address: str | None = None
 
     # Timeouts
     default_escrow_timeout_hours: int = 72
@@ -79,7 +76,7 @@ class VirtualsIntegrationConfig:
     max_job_fee_virtual: float = 10000.0
 
     # GAME SDK Configuration
-    game_api_key: Optional[str] = None
+    game_api_key: str | None = None
     game_api_base_url: str = "https://game.virtuals.io/api"
     game_api_rate_limit: int = 100
     game_max_agent_iterations: int = 50
@@ -116,11 +113,11 @@ class VirtualsIntegrationService:
         self,
         config: VirtualsIntegrationConfig,
         db_client: Neo4jClient,
-        job_repository: Optional[ACPJobRepository] = None,
-        offering_repository: Optional[OfferingRepository] = None,
-        capsule_repository: Optional[Any] = None,
-        overlay_manager: Optional[Any] = None,
-        governance_service: Optional[Any] = None,
+        job_repository: ACPJobRepository | None = None,
+        offering_repository: OfferingRepository | None = None,
+        capsule_repository: Any | None = None,
+        overlay_manager: Any | None = None,
+        governance_service: Any | None = None,
     ):
         """
         Initialize the Virtuals integration service.
@@ -138,11 +135,11 @@ class VirtualsIntegrationService:
         self._db_client = db_client
         self._job_repo = job_repository or get_job_repository(db_client)
         self._offering_repo = offering_repository or get_offering_repository(db_client)
-        self._acp_service: Optional[ACPService] = None
+        self._acp_service: ACPService | None = None
         self._initialized = False
 
         # GAME SDK components
-        self._game_client: Optional[GAMESDKClient] = None
+        self._game_client: GAMESDKClient | None = None
         self._capsule_repo = capsule_repository
         self._overlay_manager = overlay_manager
         self._governance_service = governance_service
@@ -244,9 +241,9 @@ class VirtualsIntegrationService:
 
     async def search_offerings(
         self,
-        service_type: Optional[str] = None,
-        query: Optional[str] = None,
-        max_fee: Optional[float] = None,
+        service_type: str | None = None,
+        query: str | None = None,
+        max_fee: float | None = None,
         min_provider_reputation: float = 0.0,
         limit: int = 20,
     ) -> list[JobOffering]:
@@ -273,7 +270,7 @@ class VirtualsIntegrationService:
             limit=limit,
         )
 
-    async def get_offering(self, offering_id: str) -> Optional[JobOffering]:
+    async def get_offering(self, offering_id: str) -> JobOffering | None:
         """Get a specific offering by ID."""
         return await self._offering_repo.get_by_id(offering_id)
 
@@ -440,14 +437,14 @@ class VirtualsIntegrationService:
 
     # ==================== Job Queries ====================
 
-    async def get_job(self, job_id: str) -> Optional[ACPJob]:
+    async def get_job(self, job_id: str) -> ACPJob | None:
         """Get a job by ID."""
         return await self._job_repo.get_by_id(job_id)
 
     async def get_buyer_jobs(
         self,
         buyer_agent_id: str,
-        status: Optional[str] = None,
+        status: str | None = None,
         limit: int = 50,
     ) -> list[ACPJob]:
         """Get jobs where agent is the buyer."""
@@ -463,7 +460,7 @@ class VirtualsIntegrationService:
     async def get_provider_jobs(
         self,
         provider_agent_id: str,
-        status: Optional[str] = None,
+        status: str | None = None,
         limit: int = 50,
     ) -> list[ACPJob]:
         """Get jobs where agent is the provider."""
@@ -636,9 +633,9 @@ class VirtualsIntegrationService:
 
         # Create agent request
         from forge.virtuals.models import (
-            ForgeAgentCreate,
             AgentGoals,
             AgentPersonality,
+            ForgeAgentCreate,
         )
 
         create_request = ForgeAgentCreate(
@@ -951,7 +948,7 @@ class VirtualsIntegrationService:
 
 
 # Global service instance
-_virtuals_service: Optional[VirtualsIntegrationService] = None
+_virtuals_service: VirtualsIntegrationService | None = None
 
 
 def get_virtuals_config() -> VirtualsIntegrationConfig:
@@ -984,7 +981,7 @@ def get_virtuals_config() -> VirtualsIntegrationConfig:
 
 async def init_virtuals_service(
     db_client: Neo4jClient,
-    config: Optional[VirtualsIntegrationConfig] = None,
+    config: VirtualsIntegrationConfig | None = None,
 ) -> VirtualsIntegrationService:
     """
     Initialize the global Virtuals integration service.

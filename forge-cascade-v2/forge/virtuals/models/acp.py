@@ -15,12 +15,12 @@ Supported payment tokens:
 
 from datetime import UTC, datetime, timedelta
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
-from .base import VirtualsBaseModel, ACPPhase, ACPJobStatus
+from .base import ACPJobStatus, ACPPhase, VirtualsBaseModel
 
 
 class PaymentToken(str, Enum):
@@ -75,7 +75,7 @@ class TokenPayment(BaseModel):
         ge=0,
         description="Amount in token units"
     )
-    token_address: Optional[str] = Field(
+    token_address: str | None = Field(
         default=None,
         description="Token contract/mint address (auto-filled based on token type)"
     )
@@ -96,7 +96,7 @@ class TokenPayment(BaseModel):
 class JobOffering(BaseModel):
     """
     A service offering that an agent advertises for other agents/users.
-    
+
     Job offerings are registered on-chain and discoverable through
     the ACP registry, enabling agents to find providers for specific
     capabilities.
@@ -104,7 +104,7 @@ class JobOffering(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
     provider_agent_id: str = Field(description="ID of the agent offering this service")
     provider_wallet: str = Field(description="Wallet address of provider")
-    
+
     # Service Definition
     service_type: str = Field(
         description="Type of service (knowledge_query, analysis, generation, etc.)"
@@ -117,7 +117,7 @@ class JobOffering(BaseModel):
         max_length=2000,
         description="Detailed description of what the service provides"
     )
-    
+
     # Capabilities
     input_schema: dict[str, Any] = Field(
         default_factory=dict,
@@ -131,7 +131,7 @@ class JobOffering(BaseModel):
         default_factory=lambda: ["json", "text"],
         description="Supported input/output formats"
     )
-    
+
     # Pricing
     base_fee_virtual: float = Field(
         ge=0,
@@ -142,7 +142,7 @@ class JobOffering(BaseModel):
         ge=0,
         description="Additional fee per unit (e.g., per 1000 tokens)"
     )
-    unit_type: Optional[str] = Field(
+    unit_type: str | None = Field(
         default=None,
         description="Type of unit for per-unit pricing (tokens, queries, etc.)"
     )
@@ -152,11 +152,11 @@ class JobOffering(BaseModel):
         default_factory=lambda: [PaymentToken.VIRTUAL],
         description="Payment tokens accepted for this offering"
     )
-    frowg_fee_equivalent: Optional[float] = Field(
+    frowg_fee_equivalent: float | None = Field(
         default=None,
         description="Base fee in $FROWG tokens (if accepted)"
     )
-    
+
     # Constraints
     max_execution_time_seconds: int = Field(
         default=300,
@@ -172,25 +172,25 @@ class JobOffering(BaseModel):
         le=1.0,
         description="Minimum trust score required for buyers"
     )
-    
+
     # Availability
     is_active: bool = Field(default=True)
     available_capacity: int = Field(
         default=100,
         description="Current capacity for concurrent jobs"
     )
-    
+
     # Metadata
     tags: list[str] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    
+
     # On-chain registration
-    registry_id: Optional[str] = Field(
+    registry_id: str | None = Field(
         default=None,
         description="ID in the on-chain ACP registry"
     )
-    registration_tx_hash: Optional[str] = None
+    registration_tx_hash: str | None = None
 
 
 class ACPMemo(BaseModel):
@@ -227,15 +227,15 @@ class ACPMemo(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     # On-chain state
-    tx_hash: Optional[str] = None
-    block_number: Optional[int] = None
+    tx_hash: str | None = None
+    block_number: int | None = None
     is_on_chain: bool = Field(default=False)
 
 
 class ACPJob(VirtualsBaseModel):
     """
     A complete ACP job representing a transaction between agents.
-    
+
     Jobs progress through four phases:
     1. Request - Buyer initiates job from provider's offering
     2. Negotiation - Parties agree on specific terms
@@ -244,41 +244,41 @@ class ACPJob(VirtualsBaseModel):
     """
     # Job Identity
     job_offering_id: str = Field(description="Reference to the job offering")
-    
+
     # Participants
     buyer_agent_id: str
     buyer_wallet: str
     provider_agent_id: str
     provider_wallet: str
-    evaluator_agent_id: Optional[str] = Field(
+    evaluator_agent_id: str | None = Field(
         default=None,
         description="Optional third-party evaluator"
     )
-    
+
     # Status Tracking
     current_phase: ACPPhase = Field(default=ACPPhase.REQUEST)
     status: ACPJobStatus = Field(default=ACPJobStatus.OPEN)
-    
+
     # Request Phase Data
-    request_memo: Optional[ACPMemo] = None
+    request_memo: ACPMemo | None = None
     requirements: str = Field(
         default="",
         description="Buyer's requirements for the job"
     )
-    
+
     # Negotiation Phase Data
-    requirement_memo: Optional[ACPMemo] = None
-    agreement_memo: Optional[ACPMemo] = None
+    requirement_memo: ACPMemo | None = None
+    agreement_memo: ACPMemo | None = None
     negotiated_terms: dict[str, Any] = Field(
         default_factory=dict,
         description="Final agreed terms"
     )
     agreed_fee_virtual: float = Field(default=0.0)
-    agreed_deadline: Optional[datetime] = None
-    
+    agreed_deadline: datetime | None = None
+
     # Transaction Phase Data
-    transaction_memo: Optional[ACPMemo] = None
-    escrow_tx_hash: Optional[str] = None
+    transaction_memo: ACPMemo | None = None
+    escrow_tx_hash: str | None = None
     escrow_amount_virtual: float = Field(default=0.0)
     escrow_released: bool = Field(default=False)
     fund_transfer_enabled: bool = Field(
@@ -303,36 +303,36 @@ class ACPJob(VirtualsBaseModel):
         default="base",
         description="Blockchain used for payment"
     )
-    
+
     # Deliverable Data
-    deliverable_memo: Optional[ACPMemo] = None
-    deliverable_content: Optional[dict[str, Any]] = None
-    deliverable_url: Optional[str] = None
-    delivered_at: Optional[datetime] = None
-    
+    deliverable_memo: ACPMemo | None = None
+    deliverable_content: dict[str, Any] | None = None
+    deliverable_url: str | None = None
+    delivered_at: datetime | None = None
+
     # Evaluation Phase Data
-    evaluation_memo: Optional[ACPMemo] = None
-    evaluation_result: Optional[str] = Field(
+    evaluation_memo: ACPMemo | None = None
+    evaluation_result: str | None = Field(
         default=None,
         description="approved, rejected, or disputed"
     )
-    evaluation_score: Optional[float] = Field(
+    evaluation_score: float | None = Field(
         default=None,
         ge=0.0,
         le=1.0
     )
-    evaluation_feedback: Optional[str] = None
-    evaluated_at: Optional[datetime] = None
-    
+    evaluation_feedback: str | None = None
+    evaluated_at: datetime | None = None
+
     # Completion Data
-    completed_at: Optional[datetime] = None
-    settlement_tx_hash: Optional[str] = None
-    
+    completed_at: datetime | None = None
+    settlement_tx_hash: str | None = None
+
     # Dispute Handling
     is_disputed: bool = Field(default=False)
-    dispute_reason: Optional[str] = None
-    dispute_resolution: Optional[str] = None
-    
+    dispute_reason: str | None = None
+    dispute_resolution: str | None = None
+
     # Timeouts
     request_timeout: datetime = Field(
         default_factory=lambda: datetime.now(UTC) + timedelta(hours=24)
@@ -340,22 +340,22 @@ class ACPJob(VirtualsBaseModel):
     negotiation_timeout: datetime = Field(
         default_factory=lambda: datetime.now(UTC) + timedelta(hours=48)
     )
-    execution_timeout: Optional[datetime] = None
-    evaluation_timeout: Optional[datetime] = None
-    
+    execution_timeout: datetime | None = None
+    evaluation_timeout: datetime | None = None
+
     def advance_to_phase(self, phase: ACPPhase) -> None:
         """Advance the job to the next phase."""
-        phase_order = [ACPPhase.REQUEST, ACPPhase.NEGOTIATION, 
+        phase_order = [ACPPhase.REQUEST, ACPPhase.NEGOTIATION,
                        ACPPhase.TRANSACTION, ACPPhase.EVALUATION]
         current_idx = phase_order.index(self.current_phase)
         target_idx = phase_order.index(phase)
-        
+
         if target_idx != current_idx + 1:
             raise ValueError(f"Cannot advance from {self.current_phase} to {phase}")
-        
+
         self.current_phase = phase
         self.updated_at = datetime.now(UTC)
-    
+
     def is_timed_out(self) -> bool:
         """Check if current phase has timed out."""
         now = datetime.now(UTC)
@@ -382,7 +382,7 @@ class ACPJobCreate(BaseModel):
         ge=0,
         description="Maximum fee buyer is willing to pay (in VIRTUAL equivalent)"
     )
-    preferred_deadline: Optional[datetime] = None
+    preferred_deadline: datetime | None = None
     additional_context: dict[str, Any] = Field(default_factory=dict)
 
     # Multi-token payment support
@@ -390,7 +390,7 @@ class ACPJobCreate(BaseModel):
         default=PaymentToken.VIRTUAL,
         description="Preferred payment token"
     )
-    max_fee_in_token: Optional[float] = Field(
+    max_fee_in_token: float | None = Field(
         default=None,
         description="Maximum fee in the selected token (if different from VIRTUAL)"
     )
@@ -405,7 +405,7 @@ class ACPNegotiationTerms(BaseModel):
     deliverable_description: str
     special_conditions: list[str] = Field(default_factory=list)
     requires_evaluator: bool = Field(default=False)
-    suggested_evaluator_id: Optional[str] = None
+    suggested_evaluator_id: str | None = None
 
 
 class ACPDeliverable(BaseModel):
@@ -468,7 +468,7 @@ class ACPRegistryEntry(BaseModel):
     reputation_score: float = Field(default=0.5, ge=0.0, le=1.0)
     is_verified: bool = Field(default=False)
     registered_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    last_active_at: Optional[datetime] = None
+    last_active_at: datetime | None = None
 
 
 class ACPStats(BaseModel):

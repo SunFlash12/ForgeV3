@@ -10,8 +10,6 @@ from typing import Any
 import structlog
 
 from .models import (
-    HistoryItem,
-    HistoryType,
     HistoryTimeline,
 )
 
@@ -330,7 +328,7 @@ class HistoryAnalyzer:
         if early_onset:
             hints.append({
                 "type": "early_onset",
-                "description": f"Early onset conditions (before age 18)",
+                "description": "Early onset conditions (before age 18)",
                 "detail": f"{len(early_onset)} conditions with pediatric onset",
                 "relevance": "high",
             })
@@ -342,7 +340,7 @@ class HistoryAnalyzer:
                 if cluster["count"] >= 3:
                     hints.append({
                         "type": "condition_cluster",
-                        "description": f"Multiple conditions with similar onset",
+                        "description": "Multiple conditions with similar onset",
                         "detail": f"{cluster['count']} conditions at {cluster['onset_period']}",
                         "relevance": "moderate",
                     })

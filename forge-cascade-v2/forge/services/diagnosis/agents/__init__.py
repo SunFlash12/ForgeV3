@@ -9,28 +9,28 @@ Provides specialized diagnostic agents that collaborate:
 """
 
 from .base import (
-    DiagnosticAgent,
     AgentConfig,
     AgentMessage,
     AgentRole,
+    DiagnosticAgent,
     MessageType,
 )
-from .phenotype_agent import (
-    PhenotypeAgent,
-    create_phenotype_agent,
-)
-from .genetic_agent import (
-    GeneticAgent,
-    create_genetic_agent,
+from .coordinator import (
+    CoordinatorConfig,
+    DiagnosticCoordinator,
+    create_diagnostic_coordinator,
 )
 from .differential_agent import (
     DifferentialAgent,
     create_differential_agent,
 )
-from .coordinator import (
-    DiagnosticCoordinator,
-    CoordinatorConfig,
-    create_diagnostic_coordinator,
+from .genetic_agent import (
+    GeneticAgent,
+    create_genetic_agent,
+)
+from .phenotype_agent import (
+    PhenotypeAgent,
+    create_phenotype_agent,
 )
 
 __all__ = [

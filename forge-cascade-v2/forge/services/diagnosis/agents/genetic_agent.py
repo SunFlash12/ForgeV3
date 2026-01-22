@@ -10,7 +10,7 @@ from typing import Any
 
 import structlog
 
-from .base import DiagnosticAgent, AgentConfig, AgentRole, MessageType
+from .base import AgentConfig, AgentRole, DiagnosticAgent
 
 logger = structlog.get_logger(__name__)
 

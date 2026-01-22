@@ -12,9 +12,9 @@ GAME provides the decision-making engine that powers autonomous agents:
 
 import logging
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel, Field
 
 from forge.api.dependencies import ActiveUserDep
@@ -58,7 +58,7 @@ class CreateAgentRequest(BaseModel):
     personality: AgentPersonalityRequest
     goals: AgentGoalsRequest
     workers: list[WorkerConfig] = Field(default_factory=list)
-    forge_overlay_id: Optional[str] = None
+    forge_overlay_id: str | None = None
     forge_capsule_ids: list[str] = Field(default_factory=list)
     enable_memory: bool = True
     primary_chain: str = Field(default="base")
@@ -69,11 +69,11 @@ class AgentResponse(BaseModel):
     id: str
     name: str
     status: str
-    game_agent_id: Optional[str]
+    game_agent_id: str | None
     personality: dict
     goals: dict
     workers: list[dict]
-    forge_overlay_id: Optional[str]
+    forge_overlay_id: str | None
     forge_capsule_ids: list[str]
     primary_chain: str
     created_at: datetime
@@ -82,7 +82,7 @@ class AgentResponse(BaseModel):
 
 class RunAgentRequest(BaseModel):
     """Request to run an agent loop."""
-    context: Optional[str] = Field(None, max_length=5000, description="Initial context or query")
+    context: str | None = Field(None, max_length=5000, description="Initial context or query")
     max_iterations: int = Field(default=10, ge=1, le=100)
     stop_on_done: bool = True
 
@@ -112,13 +112,13 @@ class StoreMemoryRequest(BaseModel):
     """Request to store agent memory."""
     memory_type: str = Field(description="Type: conversation, fact, preference, insight")
     content: dict
-    ttl_days: Optional[int] = None
+    ttl_days: int | None = None
 
 
 class SearchMemoryRequest(BaseModel):
     """Request to search agent memories."""
     query: str = Field(max_length=500)
-    memory_type: Optional[str] = None
+    memory_type: str | None = None
     limit: int = Field(default=10, ge=1, le=100)
 
 
@@ -140,11 +140,11 @@ async def create_agent(
     """
     try:
         from forge.services.virtuals_integration import get_virtuals_service
-        from forge.virtuals.game.sdk_client import get_game_client, GAMEWorker
+        from forge.virtuals.game.sdk_client import GAMEWorker, get_game_client
         from forge.virtuals.models import (
-            ForgeAgentCreate,
-            AgentPersonality,
             AgentGoals,
+            AgentPersonality,
+            ForgeAgentCreate,
         )
 
         # Build personality
@@ -181,12 +181,12 @@ async def create_agent(
         workers = []
         if not request.workers:
             # Create knowledge worker with Forge functions
-            from forge.virtuals.game.forge_functions import (
-                create_knowledge_worker,
-                create_analysis_worker,
-            )
-            from forge.repositories.capsule_repository import CapsuleRepository
             from forge.database.client import get_db_client
+            from forge.repositories.capsule_repository import CapsuleRepository
+            from forge.virtuals.game.forge_functions import (
+                create_analysis_worker,
+                create_knowledge_worker,
+            )
 
             db_client = get_db_client()
             capsule_repo = CapsuleRepository(db_client)
@@ -308,15 +308,14 @@ async def run_agent(
     the agent decides it has completed its task.
     """
     try:
-        from forge.virtuals.game.sdk_client import get_game_client
+        from uuid import uuid4
+
+        from forge.database.client import get_db_client
+        from forge.repositories.capsule_repository import CapsuleRepository
         from forge.virtuals.game.forge_functions import (
             create_knowledge_worker,
-            create_analysis_worker,
-            create_governance_worker,
         )
-        from forge.repositories.capsule_repository import CapsuleRepository
-        from forge.database.client import get_db_client
-        from uuid import uuid4
+        from forge.virtuals.game.sdk_client import get_game_client
 
         game_client = await get_game_client()
         agent = await game_client.get_agent(agent_id)
@@ -363,7 +362,7 @@ async def run_agent(
 async def get_next_action(
     agent_id: str,
     current_state: dict,
-    context: Optional[str] = None,
+    context: str | None = None,
     current_user: ActiveUserDep = None,
 ) -> AgentActionResponse:
     """

@@ -5,18 +5,18 @@ Analyzes wearable data for health insights and abnormality detection.
 """
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
 
+from .converter import WearableConverter, create_wearable_converter
 from .models import (
-    WearableSession,
+    ActivityData,
     HeartRateData,
     SleepData,
-    ActivityData,
+    WearableSession,
 )
-from .converter import WearableConverter, create_wearable_converter
 
 logger = structlog.get_logger(__name__)
 
@@ -78,7 +78,7 @@ class WearableAnalyzer:
         """
         results = {
             "session_id": session.id,
-            "analysis_timestamp": datetime.now(timezone.utc).isoformat(),
+            "analysis_timestamp": datetime.now(UTC).isoformat(),
             "data_summary": self._generate_data_summary(session),
             "heart_analysis": None,
             "sleep_analysis": None,

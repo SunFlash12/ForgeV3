@@ -5,7 +5,7 @@ Data models for wearable device readings.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Any
 from uuid import uuid4
@@ -13,7 +13,7 @@ from uuid import uuid4
 
 def _utc_now() -> datetime:
     """Get current UTC time (Python 3.12+ compatible)."""
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class WearableDataType(str, Enum):

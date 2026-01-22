@@ -9,7 +9,7 @@ from typing import Any
 
 import structlog
 
-from .base import DiagnosticAgent, AgentConfig, AgentRole, AgentMessage, MessageType
+from .base import AgentConfig, AgentRole, DiagnosticAgent
 
 logger = structlog.get_logger(__name__)
 
@@ -113,7 +113,7 @@ class DifferentialAgent(DiagnosticAgent):
         # Get analyses from other agents if available
         phenotype_analysis = context.get("phenotype_analysis", {})
         genetic_analysis = context.get("genetic_analysis", {})
-        history_analysis = context.get("history_analysis", {})
+        _history_analysis = context.get("history_analysis", {})  # Reserved for future use
 
         # Generate candidate hypotheses
         hypotheses = await self._generate_candidates(

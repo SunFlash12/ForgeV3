@@ -21,26 +21,25 @@ import hashlib
 import json
 import logging
 from datetime import UTC, datetime, timedelta
-from typing import Any, Optional
+from typing import Any
 from uuid import uuid4
 
+from ..chains import get_chain_manager
 from ..config import get_virtuals_config
 from ..models import (
+    ACPDeliverable,
+    ACPDispute,
+    ACPEvaluation,
     ACPJob,
     ACPJobCreate,
     ACPJobStatus,
-    ACPPhase,
     ACPMemo,
     ACPNegotiationTerms,
-    ACPDeliverable,
-    ACPEvaluation,
-    ACPDispute,
-    JobOffering,
+    ACPPhase,
     ACPRegistryEntry,
+    JobOffering,
 )
-from ..chains import get_chain_manager
 from .nonce_store import NonceStore, init_nonce_store
-
 
 logger = logging.getLogger(__name__)
 
@@ -122,9 +121,9 @@ class ACPService:
             )
 
         logger.info("ACP Service initialized")
-    
+
     # ==================== Service Registry ====================
-    
+
     async def register_offering(
         self,
         agent_id: str,
@@ -133,25 +132,25 @@ class ACPService:
     ) -> JobOffering:
         """
         Register a new service offering in the ACP registry.
-        
+
         This makes the agent's service discoverable by other agents and users.
         The offering is stored both on-chain (for verifiability) and in the
         local database (for efficient querying).
-        
+
         Args:
             agent_id: ID of the agent offering the service
             agent_wallet: Wallet address of the offering agent
             offering: The service offering to register
-            
+
         Returns:
             The registered offering with registry ID assigned
         """
         offering.provider_agent_id = agent_id
         offering.provider_wallet = agent_wallet
-        
+
         # Store in local repository for fast queries
         await self._offering_repo.create(offering)
-        
+
         # Register on-chain for verifiability (if ACP contracts are available)
         if self.config.enable_acp:
             try:
@@ -167,32 +166,32 @@ class ACPService:
                 pass
             except Exception as e:
                 logger.warning(f"On-chain registration failed: {e}")
-        
+
         logger.info(f"Registered offering {offering.id} for agent {agent_id}")
         return offering
-    
+
     async def search_offerings(
         self,
-        service_type: Optional[str] = None,
-        query: Optional[str] = None,
-        max_fee: Optional[float] = None,
+        service_type: str | None = None,
+        query: str | None = None,
+        max_fee: float | None = None,
         min_provider_reputation: float = 0.0,
         limit: int = 20,
     ) -> list[JobOffering]:
         """
         Search the service registry for matching offerings.
-        
+
         This enables service discovery, allowing agents to find providers
         that can fulfill their needs. The search considers service type,
         natural language queries, pricing, and provider reputation.
-        
+
         Args:
             service_type: Filter by service type (knowledge_query, analysis, etc.)
             query: Natural language description of needed service
             max_fee: Maximum acceptable base fee in VIRTUAL
             min_provider_reputation: Minimum required provider reputation (0-1)
             limit: Maximum results to return
-            
+
         Returns:
             List of matching offerings sorted by relevance/reputation
         """
@@ -204,26 +203,26 @@ class ACPService:
             min_provider_reputation=min_provider_reputation,
             limit=limit,
         )
-        
+
         return offerings
-    
-    async def get_registry_entry(self, agent_id: str) -> Optional[ACPRegistryEntry]:
+
+    async def get_registry_entry(self, agent_id: str) -> ACPRegistryEntry | None:
         """
         Get an agent's complete registry entry with all offerings and stats.
-        
+
         This provides a comprehensive view of an agent's ACP presence,
         including all services offered, reputation, and historical metrics.
         """
         offerings = await self._offering_repo.get_by_agent(agent_id)
-        
+
         if not offerings:
             return None
-        
+
         # Calculate aggregate stats
         total_jobs = await self._job_repo.count_by_provider(agent_id)
         total_revenue = await self._job_repo.sum_revenue_by_provider(agent_id)
         avg_rating = await self._job_repo.average_rating_by_provider(agent_id)
-        
+
         return ACPRegistryEntry(
             id=str(uuid4()),
             agent_id=agent_id,
@@ -234,9 +233,9 @@ class ACPService:
             average_rating=avg_rating or 0.0,
             reputation_score=self._calculate_reputation(total_jobs, avg_rating),
         )
-    
+
     # ==================== Job Lifecycle ====================
-    
+
     async def create_job(
         self,
         create_request: ACPJobCreate,
@@ -244,15 +243,15 @@ class ACPService:
     ) -> ACPJob:
         """
         Create a new ACP job from a service offering.
-        
+
         This initiates the Request phase of the ACP protocol. The buyer
         specifies their requirements and maximum acceptable fee. The job
         is then available for the provider to accept and begin negotiation.
-        
+
         Args:
             create_request: Job creation specification
             buyer_wallet: Wallet address of the buyer
-            
+
         Returns:
             The created job in REQUEST phase
         """
@@ -260,13 +259,13 @@ class ACPService:
         offering = await self._offering_repo.get_by_id(create_request.job_offering_id)
         if not offering:
             raise ACPServiceError(f"Offering {create_request.job_offering_id} not found")
-        
+
         # Validate buyer's fee limit against offering's base fee
         if create_request.max_fee_virtual < offering.base_fee_virtual:
             raise ACPServiceError(
                 f"Max fee ({create_request.max_fee_virtual}) below offering minimum ({offering.base_fee_virtual})"
             )
-        
+
         # Create the job
         job = ACPJob(
             job_offering_id=create_request.job_offering_id,
@@ -278,7 +277,7 @@ class ACPService:
             status=ACPJobStatus.OPEN,
             requirements=create_request.requirements,
         )
-        
+
         # Create and sign the request memo
         request_memo = await self._create_memo(
             job_id=job.id,
@@ -292,13 +291,13 @@ class ACPService:
             sender_address=buyer_wallet,
         )
         job.request_memo = request_memo
-        
+
         # Store the job
         await self._job_repo.create(job)
-        
+
         logger.info(f"Created ACP job {job.id} for offering {offering.id}")
         return job
-    
+
     async def respond_to_request(
         self,
         job_id: str,
@@ -307,31 +306,31 @@ class ACPService:
     ) -> ACPJob:
         """
         Provider responds to a job request with proposed terms.
-        
+
         This transitions the job from REQUEST to NEGOTIATION phase. The
         provider specifies the fee, deadline, and deliverable details.
         The terms are cryptographically signed to create a binding offer.
-        
+
         Args:
             job_id: ID of the job to respond to
             terms: Proposed terms from the provider
             provider_wallet: Wallet address of provider (for verification)
-            
+
         Returns:
             Updated job in NEGOTIATION phase
         """
         job = await self._job_repo.get_by_id(job_id)
         if not job:
             raise ACPServiceError(f"Job {job_id} not found")
-        
+
         if job.current_phase != ACPPhase.REQUEST:
             raise InvalidPhaseTransitionError(
                 f"Cannot respond to job in {job.current_phase} phase"
             )
-        
+
         if job.provider_wallet != provider_wallet:
             raise ACPServiceError("Only the designated provider can respond")
-        
+
         # Create requirement memo with proposed terms
         requirement_memo = await self._create_memo(
             job_id=job.id,
@@ -345,17 +344,17 @@ class ACPService:
             },
             sender_address=provider_wallet,
         )
-        
+
         job.requirement_memo = requirement_memo
         job.negotiated_terms = requirement_memo.content
         job.advance_to_phase(ACPPhase.NEGOTIATION)
         job.status = ACPJobStatus.NEGOTIATING
-        
+
         await self._job_repo.update(job)
-        
+
         logger.info(f"Provider responded to job {job_id}, moved to NEGOTIATION")
         return job
-    
+
     async def accept_terms(
         self,
         job_id: str,
@@ -363,32 +362,32 @@ class ACPService:
     ) -> ACPJob:
         """
         Buyer accepts the proposed terms and initiates escrow.
-        
+
         This transitions the job from NEGOTIATION to TRANSACTION phase.
         The agreed fee is locked in escrow, and the provider is authorized
         to begin work. This is a critical on-chain operation.
-        
+
         Args:
             job_id: ID of the job
             buyer_wallet: Buyer's wallet (for escrow payment)
-            
+
         Returns:
             Updated job in TRANSACTION phase with escrow active
         """
         job = await self._job_repo.get_by_id(job_id)
         if not job:
             raise ACPServiceError(f"Job {job_id} not found")
-        
+
         if job.current_phase != ACPPhase.NEGOTIATION:
             raise InvalidPhaseTransitionError(
                 f"Cannot accept terms in {job.current_phase} phase"
             )
-        
+
         if job.buyer_wallet != buyer_wallet:
             raise ACPServiceError("Only the buyer can accept terms")
-        
+
         agreed_fee = job.negotiated_terms.get("proposed_fee_virtual", 0)
-        
+
         # Create agreement memo
         agreement_memo = await self._create_memo(
             job_id=job.id,
@@ -400,7 +399,7 @@ class ACPService:
             },
             sender_address=buyer_wallet,
         )
-        
+
         # Lock funds in escrow (on-chain)
         if self.config.enable_acp:
             try:
@@ -412,7 +411,7 @@ class ACPService:
                 job.escrow_tx_hash = escrow_tx.tx_hash
             except Exception as e:
                 raise EscrowError(f"Failed to lock escrow: {e}")
-        
+
         job.agreement_memo = agreement_memo
         job.agreed_fee_virtual = agreed_fee
         job.agreed_deadline = datetime.fromisoformat(
@@ -422,12 +421,12 @@ class ACPService:
         job.advance_to_phase(ACPPhase.TRANSACTION)
         job.status = ACPJobStatus.IN_PROGRESS
         job.execution_timeout = job.agreed_deadline
-        
+
         await self._job_repo.update(job)
-        
+
         logger.info(f"Terms accepted for job {job_id}, escrow locked: {agreed_fee} VIRTUAL")
         return job
-    
+
     async def submit_deliverable(
         self,
         job_id: str,
@@ -436,31 +435,31 @@ class ACPService:
     ) -> ACPJob:
         """
         Provider submits deliverables for the completed work.
-        
+
         This creates the deliverable memo and moves the job toward
         evaluation. The deliverable can be content, a URL reference,
         or a file hash depending on the service type.
-        
+
         Args:
             job_id: ID of the job
             deliverable: The deliverable submission
             provider_wallet: Provider's wallet (for verification)
-            
+
         Returns:
             Updated job awaiting evaluation
         """
         job = await self._job_repo.get_by_id(job_id)
         if not job:
             raise ACPServiceError(f"Job {job_id} not found")
-        
+
         if job.current_phase != ACPPhase.TRANSACTION:
             raise InvalidPhaseTransitionError(
                 f"Cannot submit deliverable in {job.current_phase} phase"
             )
-        
+
         if job.provider_wallet != provider_wallet:
             raise ACPServiceError("Only the provider can submit deliverables")
-        
+
         # Create deliverable memo
         deliverable_memo = await self._create_memo(
             job_id=job.id,
@@ -472,7 +471,7 @@ class ACPService:
             },
             sender_address=provider_wallet,
         )
-        
+
         job.deliverable_memo = deliverable_memo
         job.deliverable_content = deliverable.content
         job.delivered_at = datetime.now(UTC)
@@ -481,12 +480,12 @@ class ACPService:
         job.evaluation_timeout = datetime.now(UTC) + timedelta(
             hours=self.config.acp_evaluation_timeout_hours
         )
-        
+
         await self._job_repo.update(job)
-        
+
         logger.info(f"Deliverable submitted for job {job_id}")
         return job
-    
+
     async def evaluate_deliverable(
         self,
         job_id: str,
@@ -495,33 +494,33 @@ class ACPService:
     ) -> ACPJob:
         """
         Evaluate the deliverable and settle the transaction.
-        
+
         This is the final phase of the ACP protocol. The evaluator
         (buyer or designated evaluator agent) reviews the deliverable
         and approves or rejects it. Approval triggers escrow release
         to the provider; rejection may initiate dispute resolution.
-        
+
         Args:
             job_id: ID of the job
             evaluation: The evaluation result
             evaluator_wallet: Wallet of the evaluator
-            
+
         Returns:
             Completed job with evaluation recorded
         """
         job = await self._job_repo.get_by_id(job_id)
         if not job:
             raise ACPServiceError(f"Job {job_id} not found")
-        
+
         if job.current_phase != ACPPhase.EVALUATION:
             raise InvalidPhaseTransitionError(
                 f"Cannot evaluate in {job.current_phase} phase"
             )
-        
+
         # Verify evaluator authorization (buyer or designated evaluator)
         if evaluator_wallet not in [job.buyer_wallet, job.evaluator_agent_id]:
             raise ACPServiceError("Unauthorized evaluator")
-        
+
         # Create evaluation memo
         evaluation_memo = await self._create_memo(
             job_id=job.id,
@@ -535,14 +534,14 @@ class ACPService:
             },
             sender_address=evaluator_wallet,
         )
-        
+
         job.evaluation_memo = evaluation_memo
         job.evaluation_result = evaluation.result
         job.evaluation_score = evaluation.score
         job.evaluation_feedback = evaluation.feedback
         job.evaluated_at = datetime.now(UTC)
         job.status = ACPJobStatus.EVALUATING
-        
+
         # Handle evaluation result
         if evaluation.result == "approved":
             # Release escrow to provider
@@ -557,24 +556,24 @@ class ACPService:
                 except Exception as e:
                     logger.error(f"Escrow release failed: {e}")
                     raise EscrowError(f"Failed to release escrow: {e}")
-            
+
             job.escrow_released = True
             job.status = ACPJobStatus.COMPLETED
             job.completed_at = datetime.now(UTC)
-            
+
             logger.info(f"Job {job_id} completed successfully, escrow released")
-            
+
         elif evaluation.result == "rejected":
             # Initiate refund (partial or full based on work done)
             job.status = ACPJobStatus.DISPUTED
             job.is_disputed = True
             job.dispute_reason = f"Deliverable rejected: {evaluation.feedback}"
-            
+
             logger.warning(f"Job {job_id} deliverable rejected, dispute initiated")
-        
+
         await self._job_repo.update(job)
         return job
-    
+
     async def file_dispute(
         self,
         job_id: str,
@@ -583,7 +582,7 @@ class ACPService:
     ) -> ACPJob:
         """
         File a dispute for a job.
-        
+
         Disputes can be filed by either party when there's disagreement
         about terms, deliverables, or evaluation. The dispute triggers
         a resolution process that may involve arbitration.
@@ -591,21 +590,21 @@ class ACPService:
         job = await self._job_repo.get_by_id(job_id)
         if not job:
             raise ACPServiceError(f"Job {job_id} not found")
-        
+
         if filer_wallet not in [job.buyer_wallet, job.provider_wallet]:
             raise ACPServiceError("Only buyer or provider can file disputes")
-        
+
         job.is_disputed = True
         job.dispute_reason = dispute.reason
         job.status = ACPJobStatus.DISPUTED
-        
+
         await self._job_repo.update(job)
-        
+
         logger.warning(f"Dispute filed for job {job_id}: {dispute.reason}")
         return job
-    
+
     # ==================== Helper Methods ====================
-    
+
     async def _get_next_nonce(self, sender_address: str) -> int:
         """
         SECURITY FIX (Audit 4 - M11): Get and increment nonce for sender.
@@ -750,8 +749,8 @@ class ACPService:
     async def _sign_solana(self, message_bytes: bytes, private_key_base58: str) -> str:
         """Sign using Solana Ed25519."""
         try:
-            from solders.keypair import Keypair
             import base58
+            from solders.keypair import Keypair
 
             # Decode private key
             secret_bytes = base58.b58decode(private_key_base58)
@@ -829,9 +828,9 @@ class ACPService:
     ) -> bool:
         """Verify Solana Ed25519 signature."""
         try:
+            import base58
             from solders.pubkey import Pubkey
             from solders.signature import Signature
-            import base58
 
             pubkey = Pubkey.from_string(expected_pubkey)
             sig_bytes = base58.b58decode(signature_base58)
@@ -843,7 +842,7 @@ class ACPService:
         except Exception as e:
             logger.error("solana_verify_error", error=str(e))
             return False
-    
+
     async def _lock_escrow(
         self,
         job_id: str,
@@ -851,7 +850,7 @@ class ACPService:
         amount_virtual: float,
     ):
         """Lock funds in escrow for a job."""
-        
+
         # This would interact with the ACP escrow contract
         # For now, return a mock transaction
         from ..models import TransactionRecord
@@ -868,7 +867,7 @@ class ACPService:
             transaction_type="escrow_lock",
             related_entity_id=job_id,
         )
-    
+
     async def _release_escrow(
         self,
         job_id: str,
@@ -876,7 +875,7 @@ class ACPService:
         amount_virtual: float,
     ):
         """Release escrowed funds to the provider."""
-        
+
         # This would interact with the ACP escrow contract
         from ..models import TransactionRecord
         return TransactionRecord(
@@ -892,15 +891,15 @@ class ACPService:
             transaction_type="escrow_release",
             related_entity_id=job_id,
         )
-    
+
     def _calculate_reputation(
         self,
         total_jobs: int,
-        avg_rating: Optional[float],
+        avg_rating: float | None,
     ) -> float:
         """
         Calculate reputation score from job history.
-        
+
         The reputation algorithm considers:
         - Number of completed jobs (experience)
         - Average rating (quality)
@@ -908,24 +907,24 @@ class ACPService:
         """
         if total_jobs == 0:
             return 0.5  # Default neutral reputation
-        
+
         rating = avg_rating or 3.0  # Default average if no ratings
-        
+
         # Normalize rating from 0-5 scale to 0-1
         normalized_rating = rating / 5.0
-        
+
         # Experience factor (logarithmic scale)
         import math
         experience_factor = min(1.0, math.log(total_jobs + 1) / math.log(100))
-        
+
         # Combined reputation
         reputation = (normalized_rating * 0.7) + (experience_factor * 0.3)
-        
+
         return round(reputation, 3)
 
 
 # Global service instance
-_acp_service: Optional[ACPService] = None
+_acp_service: ACPService | None = None
 
 
 async def get_acp_service(
@@ -934,7 +933,7 @@ async def get_acp_service(
 ) -> ACPService:
     """
     Get the global ACP service instance.
-    
+
     Initializes the service if not already done.
     """
     global _acp_service

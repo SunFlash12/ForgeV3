@@ -15,18 +15,17 @@ Usage:
         create_knowledge_worker,
         create_governance_worker,
     )
-    
+
     # Create workers with Forge capabilities
     knowledge_worker = create_knowledge_worker(capsule_repository)
     governance_worker = create_governance_worker(governance_service)
 """
 
 import logging
-from typing import Any, Optional
 from datetime import UTC, datetime
+from typing import Any
 
 from .sdk_client import FunctionDefinition, GAMEWorker
-
 
 logger = logging.getLogger(__name__)
 
@@ -46,26 +45,26 @@ def create_search_capsules_function(
 ) -> FunctionDefinition:
     """
     Create a function for searching knowledge capsules.
-    
+
     This function allows agents to perform semantic search across the
     Forge knowledge base, finding relevant capsules based on natural
     language queries.
-    
+
     Args:
         capsule_repository: The Forge CapsuleRepository instance
-        
+
     Returns:
         FunctionDefinition for capsule search
     """
     async def search_capsules(
         query: str,
-        capsule_types: Optional[str] = None,
+        capsule_types: str | None = None,
         limit: int = 10,
         min_trust_level: float = 0.0,
     ) -> tuple[str, Any, dict]:
         """
         Search knowledge capsules by semantic similarity.
-        
+
         This performs a vector similarity search across all capsules,
         filtering by type and trust level as specified.
         """
@@ -74,7 +73,7 @@ def create_search_capsules_function(
             types_list = None
             if capsule_types:
                 types_list = [t.strip() for t in capsule_types.split(",")]
-            
+
             # Perform the search using Forge's capsule repository
             results = await capsule_repository.search_semantic(
                 query=query,
@@ -82,7 +81,7 @@ def create_search_capsules_function(
                 limit=limit,
                 min_trust_level=min_trust_level,
             )
-            
+
             # Format results for agent consumption
             formatted_results = []
             for capsule in results:
@@ -95,16 +94,16 @@ def create_search_capsules_function(
                     "created_at": capsule.created_at.isoformat(),
                     "relevance_score": capsule.relevance_score,
                 })
-            
+
             return STATUS_DONE, formatted_results, {
                 "last_search_query": query,
                 "results_count": len(formatted_results),
             }
-            
+
         except Exception as e:
             logger.error(f"Capsule search failed: {e}")
             return STATUS_FAILED, str(e), {}
-    
+
     return FunctionDefinition(
         name="search_capsules",
         description=(
@@ -147,7 +146,7 @@ def create_get_capsule_function(
 ) -> FunctionDefinition:
     """
     Create a function for retrieving a specific capsule's full content.
-    
+
     This function allows agents to fetch the complete content of a capsule
     when they need more detail than the search preview provides.
     """
@@ -155,10 +154,10 @@ def create_get_capsule_function(
         """Retrieve the full content and metadata of a specific capsule."""
         try:
             capsule = await capsule_repository.get_by_id(capsule_id)
-            
+
             if not capsule:
                 return STATUS_FAILED, f"Capsule {capsule_id} not found", {}
-            
+
             result = {
                 "id": capsule.id,
                 "title": capsule.title,
@@ -175,13 +174,13 @@ def create_get_capsule_function(
                 },
                 "metadata": capsule.metadata,
             }
-            
+
             return STATUS_DONE, result, {"last_retrieved_capsule": capsule_id}
-            
+
         except Exception as e:
             logger.error(f"Failed to get capsule {capsule_id}: {e}")
             return STATUS_FAILED, str(e), {}
-    
+
     return FunctionDefinition(
         name="get_capsule",
         description=(
@@ -205,7 +204,7 @@ def create_create_capsule_function(
 ) -> FunctionDefinition:
     """
     Create a function for creating new knowledge capsules.
-    
+
     This allows agents to contribute new knowledge to the Forge system,
     preserving insights and decisions as persistent institutional memory.
     """
@@ -213,8 +212,8 @@ def create_create_capsule_function(
         title: str,
         content: str,
         capsule_type: str,
-        tags: Optional[str] = None,
-        parent_capsule_id: Optional[str] = None,
+        tags: str | None = None,
+        parent_capsule_id: str | None = None,
     ) -> tuple[str, Any, dict]:
         """Create a new knowledge capsule in Forge."""
         try:
@@ -222,7 +221,7 @@ def create_create_capsule_function(
             tags_list = []
             if tags:
                 tags_list = [t.strip() for t in tags.split(",")]
-            
+
             # Create the capsule
             capsule = await capsule_repository.create(
                 title=title,
@@ -231,18 +230,18 @@ def create_create_capsule_function(
                 tags=tags_list,
                 parent_ids=[parent_capsule_id] if parent_capsule_id else [],
             )
-            
+
             return STATUS_DONE, {
                 "id": capsule.id,
                 "message": f"Capsule '{title}' created successfully",
             }, {
                 "created_capsule_id": capsule.id,
             }
-            
+
         except Exception as e:
             logger.error(f"Failed to create capsule: {e}")
             return STATUS_FAILED, str(e), {}
-    
+
     return FunctionDefinition(
         name="create_capsule",
         description=(
@@ -294,7 +293,7 @@ def create_run_overlay_function(
 ) -> FunctionDefinition:
     """
     Create a function for running Forge overlays.
-    
+
     Overlays are specialized analysis modules (security, compliance, ML, etc.)
     that can process data and provide insights. This function allows agents
     to invoke overlays and receive their analysis results.
@@ -302,11 +301,11 @@ def create_run_overlay_function(
     async def run_overlay(
         overlay_id: str,
         input_data: str,
-        parameters: Optional[str] = None,
+        parameters: str | None = None,
     ) -> tuple[str, Any, dict]:
         """
         Execute a Forge overlay with given input data.
-        
+
         The overlay will process the input according to its specialized
         logic and return analysis results.
         """
@@ -316,14 +315,14 @@ def create_run_overlay_function(
             if parameters:
                 import json
                 params_dict = json.loads(parameters)
-            
+
             # Run the overlay
             result = await overlay_manager.execute(
                 overlay_id=overlay_id,
                 input_data=input_data,
                 parameters=params_dict,
             )
-            
+
             return STATUS_DONE, {
                 "overlay_id": overlay_id,
                 "status": result.status,
@@ -334,11 +333,11 @@ def create_run_overlay_function(
                 "last_overlay_run": overlay_id,
                 "last_overlay_result": result.status,
             }
-            
+
         except Exception as e:
             logger.error(f"Overlay execution failed: {e}")
             return STATUS_FAILED, str(e), {}
-    
+
     return FunctionDefinition(
         name="run_overlay",
         description=(
@@ -376,14 +375,14 @@ def create_list_overlays_function(
 ) -> FunctionDefinition:
     """Create a function for listing available overlays."""
     async def list_overlays(
-        status_filter: Optional[str] = None,
+        status_filter: str | None = None,
     ) -> tuple[str, Any, dict]:
         """List all available Forge overlays with their status and capabilities."""
         try:
             overlays = await overlay_manager.list_overlays(
                 status_filter=status_filter
             )
-            
+
             formatted = []
             for overlay in overlays:
                 formatted.append({
@@ -394,13 +393,13 @@ def create_list_overlays_function(
                     "capabilities": overlay.capabilities,
                     "trust_level": overlay.trust_level,
                 })
-            
+
             return STATUS_DONE, formatted, {}
-            
+
         except Exception as e:
             logger.error(f"Failed to list overlays: {e}")
             return STATUS_FAILED, str(e), {}
-    
+
     return FunctionDefinition(
         name="list_overlays",
         description=(
@@ -426,7 +425,7 @@ def create_get_proposals_function(
 ) -> FunctionDefinition:
     """Create a function for retrieving governance proposals."""
     async def get_proposals(
-        status_filter: Optional[str] = None,
+        status_filter: str | None = None,
         limit: int = 10,
     ) -> tuple[str, Any, dict]:
         """Get current governance proposals requiring attention."""
@@ -435,7 +434,7 @@ def create_get_proposals_function(
                 status=status_filter,
                 limit=limit,
             )
-            
+
             formatted = []
             for prop in proposals:
                 formatted.append({
@@ -449,15 +448,15 @@ def create_get_proposals_function(
                     "voting_ends": prop.voting_ends.isoformat(),
                     "quorum_reached": prop.quorum_reached,
                 })
-            
+
             return STATUS_DONE, formatted, {
                 "active_proposals_count": len([p for p in formatted if p["status"] == "active"]),
             }
-            
+
         except Exception as e:
             logger.error(f"Failed to get proposals: {e}")
             return STATUS_FAILED, str(e), {}
-    
+
     return FunctionDefinition(
         name="get_proposals",
         description=(
@@ -487,7 +486,7 @@ def create_cast_vote_function(
 ) -> FunctionDefinition:
     """
     Create a function for casting governance votes.
-    
+
     This enables agents to participate in Forge's democratic governance
     by voting on proposals according to their analysis and judgment.
     """
@@ -498,21 +497,21 @@ def create_cast_vote_function(
     ) -> tuple[str, Any, dict]:
         """
         Cast a vote on a governance proposal.
-        
+
         The reasoning will be recorded on-chain as part of the vote,
         providing transparency into the agent's decision-making.
         """
         try:
             if vote not in ["for", "against", "abstain"]:
                 return STATUS_FAILED, "Vote must be 'for', 'against', or 'abstain'", {}
-            
+
             result = await governance_service.cast_vote(
                 proposal_id=proposal_id,
                 voter_address=agent_wallet,
                 vote=vote,
                 reasoning=reasoning,
             )
-            
+
             return STATUS_DONE, {
                 "proposal_id": proposal_id,
                 "vote": vote,
@@ -522,11 +521,11 @@ def create_cast_vote_function(
                 "last_vote_proposal": proposal_id,
                 "last_vote_direction": vote,
             }
-            
+
         except Exception as e:
             logger.error(f"Failed to cast vote: {e}")
             return STATUS_FAILED, str(e), {}
-    
+
     return FunctionDefinition(
         name="cast_vote",
         description=(
@@ -567,15 +566,15 @@ def create_knowledge_worker(
 ) -> GAMEWorker:
     """
     Create a complete knowledge management worker.
-    
+
     This worker provides all capsule-related functionality including
     search, retrieval, and creation. It's the primary interface for
     agents to interact with Forge's institutional memory.
-    
+
     Args:
         capsule_repository: The Forge CapsuleRepository instance
         worker_id: Unique identifier for this worker
-        
+
     Returns:
         Configured GAMEWorker with knowledge functions
     """
@@ -584,11 +583,11 @@ def create_knowledge_worker(
         create_get_capsule_function(capsule_repository),
         create_create_capsule_function(capsule_repository),
     ]
-    
+
     def get_state(function_result: Any, current_state: dict) -> dict:
         """Track knowledge worker state across function calls."""
         state = current_state.copy()
-        
+
         # Track search history
         if function_result and isinstance(function_result, dict):
             if "last_search_query" in function_result.get("state_update", {}):
@@ -600,9 +599,9 @@ def create_knowledge_worker(
                 })
                 # Keep last 10 searches
                 state["search_history"] = state["search_history"][-10:]
-        
+
         return state
-    
+
     return GAMEWorker(
         worker_id=worker_id,
         description=(
@@ -621,7 +620,7 @@ def create_analysis_worker(
 ) -> GAMEWorker:
     """
     Create an analysis worker for running Forge overlays.
-    
+
     This worker provides access to Forge's specialized analysis modules
     including security validation, compliance checking, and ML analysis.
     """
@@ -629,7 +628,7 @@ def create_analysis_worker(
         create_run_overlay_function(overlay_manager),
         create_list_overlays_function(overlay_manager),
     ]
-    
+
     return GAMEWorker(
         worker_id=worker_id,
         description=(
@@ -648,7 +647,7 @@ def create_governance_worker(
 ) -> GAMEWorker:
     """
     Create a governance participation worker.
-    
+
     This worker enables agents to participate in Forge's democratic
     governance system, viewing proposals and casting votes.
     """
@@ -656,7 +655,7 @@ def create_governance_worker(
         create_get_proposals_function(governance_service),
         create_cast_vote_function(governance_service, agent_wallet),
     ]
-    
+
     return GAMEWorker(
         worker_id=worker_id,
         description=(

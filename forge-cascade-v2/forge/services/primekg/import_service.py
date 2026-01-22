@@ -10,14 +10,14 @@ Imports PrimeKG data into Neo4j with:
 
 import asyncio
 import json
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Callable
 
 import structlog
 
-from .models import PrimeKGNode, PrimeKGEdge, PrimeKGStats, PrimeKGNodeType
+from .models import PrimeKGEdge, PrimeKGNode, PrimeKGNodeType, PrimeKGStats
 from .parser import PrimeKGParser
 
 logger = structlog.get_logger(__name__)
@@ -259,7 +259,7 @@ class PrimeKGImportService:
         # Initialize progress
         progress = ImportProgress(
             phase="nodes",
-            started_at=datetime.now(timezone.utc),
+            started_at=datetime.now(UTC),
         )
 
         # Count total records
@@ -312,7 +312,7 @@ class PrimeKGImportService:
             self._save_progress(progress)
             self._notify_progress(progress)
 
-        progress.completed_at = datetime.now(timezone.utc)
+        progress.completed_at = datetime.now(UTC)
         logger.info(
             "primekg_nodes_imported",
             imported=progress.imported_records,
@@ -473,7 +473,7 @@ class PrimeKGImportService:
 
         progress = ImportProgress(
             phase="edges",
-            started_at=datetime.now(timezone.utc),
+            started_at=datetime.now(UTC),
         )
 
         # Count total records
@@ -517,7 +517,7 @@ class PrimeKGImportService:
             self._save_progress(progress)
             self._notify_progress(progress)
 
-        progress.completed_at = datetime.now(timezone.utc)
+        progress.completed_at = datetime.now(UTC)
         logger.info(
             "primekg_edges_imported",
             imported=progress.imported_records,
@@ -608,7 +608,7 @@ class PrimeKGImportService:
         Returns:
             ImportResult with summary
         """
-        start_time = datetime.now(timezone.utc)
+        start_time = datetime.now(UTC)
         result = ImportResult(success=True)
 
         try:
@@ -643,7 +643,7 @@ class PrimeKGImportService:
             result.errors.append(str(e))
             logger.error("primekg_import_error", error=str(e))
 
-        result.duration_seconds = (datetime.now(timezone.utc) - start_time).total_seconds()
+        result.duration_seconds = (datetime.now(UTC) - start_time).total_seconds()
 
         logger.info(
             "primekg_import_complete",
@@ -656,7 +656,7 @@ class PrimeKGImportService:
 
     async def _compute_import_stats(self) -> PrimeKGStats:
         """Compute statistics from imported data."""
-        stats = PrimeKGStats(import_timestamp=datetime.now(timezone.utc))
+        stats = PrimeKGStats(import_timestamp=datetime.now(UTC))
 
         # Count nodes
         count_query = """
@@ -708,7 +708,7 @@ class PrimeKGImportService:
                 "phase": progress.phase,
                 "current_batch": progress.current_batch,
                 "imported_records": progress.imported_records,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
             }
 
             with open(self.progress_file, "w") as f:
@@ -721,7 +721,7 @@ class PrimeKGImportService:
         """Load saved progress for resume."""
         try:
             if self.progress_file.exists():
-                with open(self.progress_file, "r") as f:
+                with open(self.progress_file) as f:
                     return json.load(f)
         except Exception as e:
             logger.warning("primekg_progress_load_error", error=str(e))

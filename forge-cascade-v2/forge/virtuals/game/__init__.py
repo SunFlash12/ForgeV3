@@ -20,20 +20,20 @@ Example Usage:
         create_knowledge_worker,
         create_governance_worker,
     )
-    
+
     async def create_knowledge_agent():
         client = await get_game_client()
-        
+
         # Create workers with Forge capabilities
         knowledge_worker = create_knowledge_worker(capsule_repository)
         governance_worker = create_governance_worker(governance_service, wallet)
-        
+
         # Create the agent
         agent = await client.create_agent(
             create_request=agent_config,
             workers=[knowledge_worker, governance_worker],
         )
-        
+
         # Run the agent loop
         results = await client.run_agent_loop(
             agent=agent,
@@ -45,37 +45,36 @@ Example Usage:
         )
 """
 
-from .sdk_client import (
-    # Main client
-    GAMESDKClient,
-    get_game_client,
-    # Building blocks
-    FunctionDefinition,
-    GAMEWorker,
-    # Exceptions
-    GAMEClientError,
-    AuthenticationError,
-    RateLimitError,
-    AgentNotFoundError,
-)
-
 from .forge_functions import (
-    # Function factories
-    create_search_capsules_function,
-    create_get_capsule_function,
-    create_create_capsule_function,
-    create_run_overlay_function,
-    create_list_overlays_function,
-    create_get_proposals_function,
-    create_cast_vote_function,
-    # Worker factories
-    create_knowledge_worker,
-    create_analysis_worker,
-    create_governance_worker,
     # Status constants
     STATUS_DONE,
     STATUS_FAILED,
     STATUS_PENDING,
+    create_analysis_worker,
+    create_cast_vote_function,
+    create_create_capsule_function,
+    create_get_capsule_function,
+    create_get_proposals_function,
+    create_governance_worker,
+    # Worker factories
+    create_knowledge_worker,
+    create_list_overlays_function,
+    create_run_overlay_function,
+    # Function factories
+    create_search_capsules_function,
+)
+from .sdk_client import (
+    AgentNotFoundError,
+    AuthenticationError,
+    # Building blocks
+    FunctionDefinition,
+    # Exceptions
+    GAMEClientError,
+    # Main client
+    GAMESDKClient,
+    GAMEWorker,
+    RateLimitError,
+    get_game_client,
 )
 
 __all__ = [

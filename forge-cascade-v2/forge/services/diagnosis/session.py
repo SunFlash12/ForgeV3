@@ -6,21 +6,21 @@ event streaming, and multi-iteration refinement.
 """
 
 import asyncio
+from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-from typing import Any, AsyncIterator, Callable, Awaitable
+from datetime import UTC, datetime, timedelta
 from enum import Enum
+from typing import Any
 
 import structlog
 
+from .engine import DiagnosisEngine, EngineConfig, create_diagnosis_engine
 from .models import (
+    DiagnosisResult,
     DiagnosisSession,
     DiagnosisState,
-    DiagnosisResult,
     PatientProfile,
-    FollowUpQuestion,
 )
-from .engine import DiagnosisEngine, EngineConfig, create_diagnosis_engine
 from .scoring import ScoringConfig
 
 logger = structlog.get_logger(__name__)
@@ -44,7 +44,7 @@ class SessionEvent(str, Enum):
 
 def _utc_now() -> datetime:
     """Get current UTC time (Python 3.12+ compatible)."""
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 @dataclass
@@ -557,7 +557,7 @@ class SessionController:
                     }:
                         break
 
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     # Session idle timeout
                     break
 

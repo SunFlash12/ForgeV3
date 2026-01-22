@@ -11,11 +11,10 @@ Paper: Chandak et al. "Building a knowledge graph to enable precision medicine"
 
 from datetime import datetime
 from enum import Enum
-from typing import Any
 
 from pydantic import Field
 
-from forge.models.base import ForgeModel, TimestampMixin
+from forge.models.base import ForgeModel
 
 
 class PrimeKGNodeType(str, Enum):

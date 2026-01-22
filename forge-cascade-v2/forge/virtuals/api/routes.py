@@ -18,7 +18,7 @@ Routes are organized by feature area:
 
 import os
 from datetime import UTC, datetime
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -26,23 +26,22 @@ from pydantic import BaseModel, Field
 
 # Import models (these would be the actual Forge/Virtuals models)
 from ..models import (
-    ForgeAgentCreate,
-    TokenizationRequest,
-    ACPJobCreate,
-    ACPNegotiationTerms,
     ACPDeliverable,
     ACPEvaluation,
+    ACPJobCreate,
+    ACPNegotiationTerms,
+    ForgeAgentCreate,
     JobOffering,
+    TokenizationRequest,
 )
-
 
 # ==================== Response Models ====================
 
 class APIResponse(BaseModel):
     """Standard API response wrapper."""
     success: bool = True
-    data: Optional[Any] = None
-    error: Optional[str] = None
+    data: Any | None = None
+    error: str | None = None
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
@@ -136,35 +135,35 @@ async def create_agent(
 ):
     """
     Create a new Forge agent on Virtuals Protocol.
-    
+
     This endpoint registers an agent with the GAME framework, optionally
     enabling tokenization. The agent can represent a Forge overlay or
     standalone knowledge service.
-    
+
     The creation process involves:
     1. Validating the agent configuration
     2. Registering with GAME framework
     3. Creating blockchain wallet (if tokenized)
     4. Setting up workers and functions
-    
+
     Returns the created agent with all assigned IDs.
     """
     try:
         from ..game import get_game_client
-        
+
         client = await get_game_client()
-        
+
         # Create basic workers for the agent
         # In production, workers would be configured based on request
         workers = []
-        
+
         agent = await client.create_agent(
             create_request=request,
             workers=workers,
         )
-        
+
         return APIResponse(data=agent.model_dump())
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -173,12 +172,12 @@ async def create_agent(
 async def list_agents(
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
-    status: Optional[str] = None,
+    status: str | None = None,
     wallet: str = Depends(get_current_user_wallet),
 ):
     """
     List agents owned by the current user.
-    
+
     Supports pagination and filtering by status. Returns agents
     with their current operational state and metrics.
     """
@@ -199,21 +198,21 @@ async def get_agent(
 ):
     """
     Get detailed information about a specific agent.
-    
+
     Returns the complete agent configuration, metrics, and
     current operational status.
     """
     try:
         from ..game import get_game_client
-        
+
         client = await get_game_client()
         agent = await client.get_agent(agent_id)
-        
+
         if not agent:
             raise HTTPException(status_code=404, detail="Agent not found")
-        
+
         return APIResponse(data=agent.model_dump() if agent else None)
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -229,20 +228,20 @@ async def run_agent(
 ):
     """
     Execute the agent's autonomous decision loop.
-    
+
     The agent will analyze the context and execute appropriate actions
     using its configured workers and functions. Returns the results
     of all actions taken.
     """
     try:
         from ..game import get_game_client
-        
+
         client = await get_game_client()
         agent = await client.get_agent(agent_id)
-        
+
         if not agent:
             raise HTTPException(status_code=404, detail="Agent not found")
-        
+
         # In production, would load workers from agent configuration
         results = await client.run_agent_loop(
             agent=agent,
@@ -250,9 +249,9 @@ async def run_agent(
             context=context,
             max_iterations=max_iterations,
         )
-        
+
         return APIResponse(data={"results": results})
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -271,24 +270,24 @@ async def request_tokenization(
 ):
     """
     Request tokenization of a Forge entity.
-    
+
     This initiates the tokenization process, creating an ERC-20 token
     in bonding curve phase. The entity can be a capsule, overlay,
     capsule collection, or agent.
-    
+
     Requires minimum 100 VIRTUAL stake to begin.
     """
     try:
         from ..tokenization import get_tokenization_service
-        
+
         # Verify ownership of entity (would check Forge's entity repository)
         request.owner_wallet = wallet
-        
+
         service = await get_tokenization_service()
         entity = await service.request_tokenization(request)
-        
+
         return APIResponse(data=entity.model_dump())
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -300,7 +299,7 @@ async def get_tokenized_entity(
 ):
     """
     Get tokenization status and details for an entity.
-    
+
     Returns the complete tokenization state including bonding curve
     progress, holder information, and governance status.
     """
@@ -316,26 +315,26 @@ async def contribute_to_bonding_curve(
 ):
     """
     Contribute VIRTUAL to an entity's bonding curve.
-    
+
     Contributors receive placeholder tokens proportional to their
     contribution. Early contributors get more tokens per VIRTUAL
     due to the bonding curve mechanics.
     """
     try:
         from ..tokenization import get_tokenization_service
-        
+
         service = await get_tokenization_service()
         entity, contribution = await service.contribute_to_bonding_curve(
             entity_id=entity_id,
             contributor_wallet=wallet,
             amount_virtual=amount_virtual,
         )
-        
+
         return APIResponse(data={
             "entity": entity.model_dump(),
             "contribution": contribution.model_dump(),
         })
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -351,14 +350,14 @@ async def create_governance_proposal(
 ):
     """
     Create a governance proposal for token holders.
-    
+
     Only token holders can create proposals. Proposals are subject
     to voting by all token holders with voting power proportional
     to holdings.
     """
     try:
         from ..tokenization import get_tokenization_service
-        
+
         service = await get_tokenization_service()
         proposal = await service.create_governance_proposal(
             entity_id=entity_id,
@@ -368,9 +367,9 @@ async def create_governance_proposal(
             proposal_type=proposal_type,
             proposed_changes=proposed_changes,
         )
-        
+
         return APIResponse(data=proposal.model_dump())
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -383,22 +382,22 @@ async def vote_on_proposal(
 ):
     """
     Cast a vote on a governance proposal.
-    
+
     Voting power is proportional to token holdings. Each wallet
     can only vote once per proposal.
     """
     try:
         from ..tokenization import get_tokenization_service
-        
+
         service = await get_tokenization_service()
         vote_record = await service.cast_governance_vote(
             proposal_id=proposal_id,
             voter_wallet=wallet,
             vote=vote,
         )
-        
+
         return APIResponse(data=vote_record.model_dump())
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -416,45 +415,45 @@ async def register_offering(
 ):
     """
     Register a new service offering in the ACP registry.
-    
+
     This makes an agent's services discoverable by other agents
     and users. The offering specifies service type, pricing,
     and capabilities.
     """
     try:
         from ..acp import get_acp_service
-        
+
         service = await get_acp_service()
         registered = await service.register_offering(
             agent_id=agent_id,
             agent_wallet=wallet,
             offering=offering,
         )
-        
+
         return APIResponse(data=registered.model_dump())
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @acp_router.get("/offerings", response_model=PaginatedResponse)
 async def search_offerings(
-    service_type: Optional[str] = None,
-    query: Optional[str] = None,
-    max_fee: Optional[float] = None,
+    service_type: str | None = None,
+    query: str | None = None,
+    max_fee: float | None = None,
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
 ):
     """
     Search the ACP service registry for offerings.
-    
+
     Supports filtering by service type, natural language query,
     and maximum fee. Returns matching offerings sorted by
     relevance and provider reputation.
     """
     try:
         from ..acp import get_acp_service
-        
+
         service = await get_acp_service()
         offerings = await service.search_offerings(
             service_type=service_type,
@@ -462,14 +461,14 @@ async def search_offerings(
             max_fee=max_fee,
             limit=per_page,
         )
-        
+
         return PaginatedResponse(
             data=[o.model_dump() for o in offerings],
             total=len(offerings),
             page=page,
             per_page=per_page,
         )
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -481,21 +480,21 @@ async def create_job(
 ):
     """
     Create a new ACP job from a service offering.
-    
+
     This initiates the Request phase. The buyer specifies requirements
     and maximum fee, then waits for the provider to respond with terms.
     """
     try:
         from ..acp import get_acp_service
-        
+
         service = await get_acp_service()
         job = await service.create_job(
             create_request=request,
             buyer_wallet=wallet,
         )
-        
+
         return APIResponse(data=job.model_dump())
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -507,7 +506,7 @@ async def get_job(
 ):
     """
     Get detailed information about an ACP job.
-    
+
     Returns the complete job state including current phase,
     memos, and transaction history.
     """
@@ -523,22 +522,22 @@ async def respond_to_job(
 ):
     """
     Provider responds to a job request with proposed terms.
-    
+
     This moves the job to Negotiation phase. The buyer can then
     accept, reject, or counter the terms.
     """
     try:
         from ..acp import get_acp_service
-        
+
         service = await get_acp_service()
         job = await service.respond_to_request(
             job_id=job_id,
             terms=terms,
             provider_wallet=wallet,
         )
-        
+
         return APIResponse(data=job.model_dump())
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -550,21 +549,21 @@ async def accept_job_terms(
 ):
     """
     Buyer accepts proposed terms and escrows payment.
-    
+
     This moves the job to Transaction phase. The agreed fee is
     locked in escrow, and the provider can begin work.
     """
     try:
         from ..acp import get_acp_service
-        
+
         service = await get_acp_service()
         job = await service.accept_terms(
             job_id=job_id,
             buyer_wallet=wallet,
         )
-        
+
         return APIResponse(data=job.model_dump())
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -577,22 +576,22 @@ async def submit_deliverable(
 ):
     """
     Provider submits deliverables for evaluation.
-    
+
     This moves the job to Evaluation phase. The buyer (or
     designated evaluator) will review the deliverable.
     """
     try:
         from ..acp import get_acp_service
-        
+
         service = await get_acp_service()
         job = await service.submit_deliverable(
             job_id=job_id,
             deliverable=deliverable,
             provider_wallet=wallet,
         )
-        
+
         return APIResponse(data=job.model_dump())
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -605,22 +604,22 @@ async def evaluate_deliverable(
 ):
     """
     Evaluate a deliverable and settle the transaction.
-    
+
     If approved, escrow is released to the provider. If rejected,
     the job may enter dispute resolution.
     """
     try:
         from ..acp import get_acp_service
-        
+
         service = await get_acp_service()
         job = await service.evaluate_deliverable(
             job_id=job_id,
             evaluation=evaluation,
             evaluator_wallet=wallet,
         )
-        
+
         return APIResponse(data=job.model_dump())
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -632,21 +631,21 @@ revenue_router = APIRouter(prefix="/revenue", tags=["Revenue"])
 
 @revenue_router.get("/summary", response_model=APIResponse)
 async def get_revenue_summary(
-    entity_id: Optional[str] = None,
-    entity_type: Optional[str] = None,
-    start_date: Optional[datetime] = None,
-    end_date: Optional[datetime] = None,
+    entity_id: str | None = None,
+    entity_type: str | None = None,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
     wallet: str = Depends(get_current_user_wallet),
 ):
     """
     Get revenue summary with analytics.
-    
+
     Provides aggregated revenue statistics filtered by entity,
     type, and time period. Useful for dashboards and reporting.
     """
     try:
         from ..revenue import get_revenue_service
-        
+
         service = await get_revenue_service()
         summary = await service.get_revenue_summary(
             entity_id=entity_id,
@@ -654,9 +653,9 @@ async def get_revenue_summary(
             start_date=start_date,
             end_date=end_date,
         )
-        
+
         return APIResponse(data=summary)
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -669,21 +668,21 @@ async def get_entity_revenue(
 ):
     """
     Get detailed revenue for a specific entity.
-    
+
     Returns lifetime revenue, monthly breakdown, and trend data
     for the specified entity.
     """
     try:
         from ..revenue import get_revenue_service
-        
+
         service = await get_revenue_service()
         revenue = await service.get_entity_revenue(
             entity_id=entity_id,
             entity_type=entity_type,
         )
-        
+
         return APIResponse(data=revenue)
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -698,13 +697,13 @@ async def get_entity_valuation(
 ):
     """
     Estimate the value of an entity based on revenue.
-    
+
     Uses discounted cash flow analysis to estimate present value
     of future revenue streams. Useful for tokenization pricing.
     """
     try:
         from ..revenue import get_revenue_service
-        
+
         service = await get_revenue_service()
         valuation = await service.estimate_entity_value(
             entity_id=entity_id,
@@ -712,9 +711,9 @@ async def get_entity_valuation(
             discount_rate=discount_rate,
             growth_rate=growth_rate,
         )
-        
+
         return APIResponse(data=valuation)
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -724,21 +723,21 @@ async def get_entity_valuation(
 def create_virtuals_router() -> APIRouter:
     """
     Create the aggregated router for all Virtuals Protocol endpoints.
-    
+
     This function creates and configures the main router that includes
     all sub-routers for agents, tokenization, ACP, and revenue.
-    
+
     Usage:
         from forge.virtuals.api import create_virtuals_router
-        
+
         app = FastAPI()
         app.include_router(create_virtuals_router(), prefix="/api/v1/virtuals")
     """
     main_router = APIRouter()
-    
+
     main_router.include_router(agent_router)
     main_router.include_router(tokenization_router)
     main_router.include_router(acp_router)
     main_router.include_router(revenue_router)
-    
+
     return main_router

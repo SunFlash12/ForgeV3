@@ -5,23 +5,23 @@ Orchestrates multi-agent collaborative diagnosis.
 """
 
 import asyncio
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Awaitable
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from typing import Any
 from uuid import uuid4
 
 import structlog
 
 from .base import (
-    DiagnosticAgent,
-    AgentConfig,
-    AgentRole,
     AgentMessage,
+    AgentRole,
+    DiagnosticAgent,
     MessageType,
 )
-from .phenotype_agent import PhenotypeAgent, create_phenotype_agent
-from .genetic_agent import GeneticAgent, create_genetic_agent
 from .differential_agent import DifferentialAgent, create_differential_agent
+from .genetic_agent import GeneticAgent, create_genetic_agent
+from .phenotype_agent import PhenotypeAgent, create_phenotype_agent
 
 logger = structlog.get_logger(__name__)
 
@@ -54,7 +54,7 @@ class CoordinatorConfig:
 
 def _utc_now() -> datetime:
     """Get current UTC time (Python 3.12+ compatible)."""
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 @dataclass
@@ -221,7 +221,7 @@ class DiagnosticCoordinator:
 
             return self._build_result(session)
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.error("diagnosis_timeout", session_id=session.id)
             return {
                 "error": "Diagnosis timeout",
@@ -317,7 +317,7 @@ class DiagnosticCoordinator:
                 if self.config.broadcast_analyses:
                     await self._broadcast_analysis(session, role, response.content)
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning("agent_timeout", agent=role.value)
         except Exception as e:
             logger.error("agent_error", agent=role.value, error=str(e))
@@ -397,7 +397,7 @@ class DiagnosticCoordinator:
                     ),
                 })
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning("differential_timeout")
         except Exception as e:
             logger.error("differential_error", error=str(e))
@@ -599,7 +599,7 @@ class DiagnosticCoordinator:
                 timeout=self.config.agent_timeout,
             )
             return response.content if response else {"answer": "No response"}
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return {"error": "Agent timeout"}
 
     async def suggest_discriminating_phenotypes(
