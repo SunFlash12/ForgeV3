@@ -974,6 +974,160 @@ class AgentGatewayService:
         return sources
 
     # =========================================================================
+    # ACP Integration Bridge
+    # =========================================================================
+
+    async def to_acp_offering(
+        self,
+        session_id: str,
+        service_type: str,
+        title: str,
+        description: str,
+        base_fee_virtual: float,
+    ) -> dict[str, Any]:
+        """
+        Convert an Agent Gateway session to an ACP job offering.
+
+        This bridges the Agent Gateway's capabilities to Virtuals Protocol's
+        Agent Commerce Protocol, enabling the agent to offer services.
+
+        Args:
+            session_id: The Agent Gateway session ID
+            service_type: Type of service (knowledge_query, semantic_search, etc.)
+            title: Human-readable offering title
+            description: Detailed description of the service
+            base_fee_virtual: Base fee in VIRTUAL tokens
+
+        Returns:
+            Dict containing the offering data for ACP registration
+        """
+        session = await self.get_session(session_id)
+        if not session:
+            raise ValueError(f"Session {session_id} not found")
+
+        # Map Agent Gateway capabilities to ACP service capabilities
+        capability_map = {
+            AgentCapability.QUERY_GRAPH: "knowledge_query",
+            AgentCapability.SEMANTIC_SEARCH: "semantic_search",
+            AgentCapability.CREATE_CAPSULES: "capsule_generation",
+            AgentCapability.EXECUTE_CASCADE: "overlay_execution",
+            AgentCapability.READ_CAPSULES: "capsule_access",
+            AgentCapability.ACCESS_LINEAGE: "lineage_query",
+        }
+
+        # Build input schema based on capabilities
+        input_schema: dict[str, Any] = {"type": "object", "properties": {}}
+        output_schema: dict[str, Any] = {
+            "type": "object",
+            "properties": {
+                "results": {"type": "array"},
+                "answer": {"type": "string"},
+                "sources": {"type": "array"},
+            }
+        }
+
+        for cap in session.capabilities:
+            if cap == AgentCapability.QUERY_GRAPH:
+                input_schema["properties"]["query_text"] = {
+                    "type": "string",
+                    "description": "Natural language query"
+                }
+                input_schema["properties"]["query_type"] = {
+                    "type": "string",
+                    "enum": ["natural_language", "semantic_search", "graph_traverse"]
+                }
+            elif cap == AgentCapability.SEMANTIC_SEARCH:
+                input_schema["properties"]["query"] = {
+                    "type": "string",
+                    "description": "Semantic search query"
+                }
+                input_schema["properties"]["max_results"] = {
+                    "type": "integer",
+                    "default": 10
+                }
+            elif cap == AgentCapability.CREATE_CAPSULES:
+                input_schema["properties"]["capsule_data"] = {
+                    "type": "object",
+                    "properties": {
+                        "title": {"type": "string"},
+                        "content": {"type": "string"},
+                        "capsule_type": {"type": "string"},
+                    }
+                }
+
+        return {
+            "provider_agent_id": session.agent_id,
+            "provider_wallet": session.metadata.get("wallet_address", ""),
+            "service_type": service_type,
+            "title": title,
+            "description": description,
+            "base_fee_virtual": base_fee_virtual,
+            "input_schema": input_schema,
+            "output_schema": output_schema,
+            "max_execution_time_seconds": 300,
+            "capabilities": [c.value for c in session.capabilities],
+            "trust_level": session.trust_level.value,
+        }
+
+    async def execute_acp_job(
+        self,
+        session_id: str,
+        job_requirements: str,
+        input_data: dict[str, Any],
+    ) -> dict[str, Any]:
+        """
+        Execute an ACP job using the Agent Gateway.
+
+        This method handles incoming ACP job requests by routing them
+        through the Agent Gateway's query execution system.
+
+        Args:
+            session_id: The Agent Gateway session ID
+            job_requirements: The job requirements from the buyer
+            input_data: Input data as specified in the offering schema
+
+        Returns:
+            Dict containing the execution result for the ACP deliverable
+        """
+        session = await self.get_session(session_id)
+        if not session:
+            raise ValueError(f"Session {session_id} not found")
+
+        # Determine query type from input
+        query_type = QueryType.NATURAL_LANGUAGE
+        query_text = job_requirements
+
+        if "query_text" in input_data:
+            query_text = input_data["query_text"]
+            if input_data.get("query_type") == "semantic_search":
+                query_type = QueryType.SEMANTIC_SEARCH
+            elif input_data.get("query_type") == "graph_traverse":
+                query_type = QueryType.GRAPH_TRAVERSE
+        elif "query" in input_data:
+            query_text = input_data["query"]
+            query_type = QueryType.SEMANTIC_SEARCH
+
+        # Create and execute the query
+        query = AgentQuery(
+            query_type=query_type,
+            query_text=query_text,
+            max_results=input_data.get("max_results", 10),
+        )
+
+        result = await self.execute_query(session, query)
+
+        # Format result for ACP deliverable
+        return {
+            "success": result.success,
+            "results": result.results,
+            "answer": result.answer,
+            "sources": result.sources,
+            "execution_time_ms": result.execution_time_ms,
+            "tokens_used": result.tokens_used,
+            "error": result.error,
+        }
+
+    # =========================================================================
     # Statistics
     # =========================================================================
 
