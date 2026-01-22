@@ -300,6 +300,86 @@ class Settings(BaseSettings):
         default=10000, ge=100, description="Max cached query entries"
     )
 
+    # ═══════════════════════════════════════════════════════════════
+    # VIRTUALS PROTOCOL (ACP & GAME SDK)
+    # ═══════════════════════════════════════════════════════════════
+    # Agent Commerce Protocol (ACP)
+    acp_enabled: bool = Field(
+        default=False, description="Enable Agent Commerce Protocol integration"
+    )
+    virtuals_api_key: str | None = Field(
+        default=None, description="Virtuals Protocol API key"
+    )
+    virtuals_api_base_url: str = Field(
+        default="https://api.virtuals.io", description="Virtuals Protocol API base URL"
+    )
+
+    # Blockchain Configuration
+    virtuals_primary_chain: Literal["base", "solana"] = Field(
+        default="base", description="Primary blockchain for ACP transactions"
+    )
+
+    # Base L2 (EVM) Configuration
+    base_rpc_url: str = Field(
+        default="https://mainnet.base.org", description="Base L2 RPC endpoint"
+    )
+    base_chain_id: int = Field(default=8453, description="Base L2 chain ID")
+    base_private_key: str | None = Field(
+        default=None, description="Base wallet private key for signing (hex)"
+    )
+    acp_escrow_contract_address: str | None = Field(
+        default=None, description="ACP escrow contract address on Base"
+    )
+    acp_registry_contract_address: str | None = Field(
+        default=None, description="ACP registry contract address on Base"
+    )
+    virtual_token_address: str = Field(
+        default="0x0b3e328455c4059EEb9e3f84b5543F74E24e7E1b",
+        description="VIRTUAL token contract address on Base"
+    )
+
+    # Solana Configuration
+    solana_rpc_url: str = Field(
+        default="https://api.mainnet-beta.solana.com",
+        description="Solana RPC endpoint"
+    )
+    solana_private_key: str | None = Field(
+        default=None, description="Solana wallet private key (base58)"
+    )
+    solana_acp_program_id: str | None = Field(
+        default=None, description="ACP program ID on Solana"
+    )
+    frowg_token_address: str | None = Field(
+        default="uogFxqx5SPdL7CMWTTttz4KZ2WctR4RjgZwmGcwpump",
+        description="$FROWG token mint address on Solana (Rise of Frowg)"
+    )
+
+    # GAME SDK Configuration
+    game_enabled: bool = Field(
+        default=False, description="Enable GAME SDK for autonomous agents"
+    )
+    game_api_key: str | None = Field(
+        default=None, description="GAME SDK API key"
+    )
+    game_api_base_url: str = Field(
+        default="https://game.virtuals.io/api/v1",
+        description="GAME SDK API base URL"
+    )
+    game_api_rate_limit: int = Field(
+        default=60, ge=1, description="GAME API rate limit (requests per minute)"
+    )
+
+    # ACP Transaction Settings
+    acp_default_escrow_timeout_hours: int = Field(
+        default=72, ge=1, description="Default escrow timeout in hours"
+    )
+    acp_evaluation_timeout_hours: int = Field(
+        default=24, ge=1, description="Default evaluation timeout in hours"
+    )
+    acp_max_job_fee_virtual: float = Field(
+        default=10000.0, ge=0, description="Maximum job fee in VIRTUAL tokens"
+    )
+
 
 @lru_cache
 def get_settings() -> Settings:

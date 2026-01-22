@@ -157,6 +157,25 @@ class ForgeApp:
             logger.error("services_init_failed", error=str(e))
             # Continue - some features may not work
 
+        # Initialize Virtuals Protocol integration (ACP, GAME SDK)
+        try:
+            from forge.services.virtuals_integration import (
+                init_virtuals_service,
+                get_virtuals_config,
+            )
+
+            virtuals_config = get_virtuals_config()
+            if virtuals_config.acp_enabled or virtuals_config.game_enabled:
+                await init_virtuals_service(self.db_client, virtuals_config)
+                logger.info(
+                    "virtuals_integration_initialized",
+                    acp_enabled=virtuals_config.acp_enabled,
+                    game_enabled=virtuals_config.game_enabled,
+                )
+        except Exception as e:
+            logger.error("virtuals_integration_init_failed", error=str(e))
+            # Continue - Virtuals features may not work
+
         # Register core overlays
         try:
             await self._register_core_overlays()
@@ -371,6 +390,14 @@ class ForgeApp:
             except Exception as e:
                 logger.warning("resilience_shutdown_failed", error=str(e))
 
+        # Shutdown Virtuals integration
+        try:
+            from forge.services.virtuals_integration import shutdown_virtuals_service
+            await shutdown_virtuals_service()
+            logger.info("virtuals_integration_shutdown")
+        except Exception as e:
+            logger.warning("virtuals_shutdown_failed", error=str(e))
+
         # Shutdown services
         from forge.services.init import shutdown_all_services
         shutdown_all_services()
@@ -512,6 +539,10 @@ def create_app(
             {
                 "name": "diagnosis",
                 "description": "Differential diagnosis hypothesis engine - autonomous multi-agent diagnosis with Bayesian scoring",
+            },
+            {
+                "name": "GAME SDK",
+                "description": "GAME (Generative Autonomous Multimodal Entities) SDK for autonomous AI agents with task generation, workers, and function execution",
             },
         ],
     )
@@ -679,12 +710,14 @@ def create_app(
 
     # Include routers
     from forge.api.routes import (
+        acp,
         agent_gateway,
         auth,
         capsules,
         cascade,
         diagnosis,
         federation,
+        game,
         governance,
         graph,
         marketplace,
@@ -707,6 +740,8 @@ def create_app(
     app.include_router(notifications.router, prefix="/api/v1", tags=["Notifications"])
     app.include_router(marketplace.router, prefix="/api/v1", tags=["Marketplace"])
     app.include_router(agent_gateway.router, prefix="/api/v1", tags=["Agent Gateway"])
+    app.include_router(acp.router, prefix="/api/v1", tags=["Agent Commerce Protocol"])
+    app.include_router(game.router, prefix="/api/v1", tags=["GAME SDK"])
 
     # WebSocket endpoints
     from forge.api.websocket import websocket_router
