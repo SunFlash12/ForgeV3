@@ -1,14 +1,18 @@
 """Create the origin capsule directly in Neo4j."""
 import asyncio
+import os
 from neo4j import AsyncGraphDatabase
 import uuid
 from datetime import datetime
 
-# Database config from .env
-NEO4J_URI = "neo4j+s://b76c3818.databases.neo4j.io"
-NEO4J_USERNAME = "neo4j"
-NEO4J_PASSWORD = "UW-SRZ2dxKkLME2qX2B-vLJlbk3Bw5kClXXY8YqfEHg"
-NEO4J_DATABASE = "neo4j"
+# Database config from environment variables - NEVER hardcode credentials!
+NEO4J_URI = os.environ.get("NEO4J_URI")
+NEO4J_USERNAME = os.environ.get("NEO4J_USERNAME", "neo4j")
+NEO4J_PASSWORD = os.environ.get("NEO4J_PASSWORD")
+NEO4J_DATABASE = os.environ.get("NEO4J_DATABASE", "neo4j")
+
+if not NEO4J_URI or not NEO4J_PASSWORD:
+    raise ValueError("NEO4J_URI and NEO4J_PASSWORD environment variables must be set")
 
 # User ID from the forgemaster user
 CREATOR_ID = "ba21f02f-81b4-4478-a60b-13054b25d181"

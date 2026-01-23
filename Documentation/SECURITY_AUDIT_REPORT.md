@@ -166,11 +166,11 @@ All sensitive credentials are stored in:
 
 **Contains**:
 ```
-NEO4J_URI=neo4j+s://e1b0c943.databases.neo4j.io
+NEO4J_URI=neo4j+s://[INSTANCE_ID].databases.neo4j.io
 NEO4J_USER=neo4j
-NEO4J_PASSWORD=t3ryfBtL0dbzF4dtcEIe2Wdgv1uNZYJz_vm27V4yNgw
+NEO4J_PASSWORD=[REDACTED - use environment variable]
 NEO4J_DATABASE=neo4j
-JWT_SECRET_KEY=[generated]
+JWT_SECRET_KEY=[REDACTED - use environment variable]
 ```
 
 **Security Status**: ✅ Protected, not in git repository

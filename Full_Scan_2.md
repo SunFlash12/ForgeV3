@@ -1073,8 +1073,8 @@ Test suite (pytest), database scripts, backup/restore utilities, deployment auto
 ### CRITICAL SECURITY FINDING
 - **CRITICAL**: `.seed_credentials` file contains **plaintext passwords** - MUST rotate immediately:
   ```
-  SEED_ADMIN_PASSWORD=dyxIiN95JaM8hu3Fdl!mog*G
-  SEED_ORACLE_PASSWORD=Z^65k92u#JD8kJ7plWaadRgA
+  SEED_ADMIN_PASSWORD=[REDACTED - credentials rotated]
+  SEED_ORACLE_PASSWORD=[REDACTED - credentials rotated]
   ...
   ```
 

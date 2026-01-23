@@ -1,14 +1,20 @@
 """Create the perfect origin capsule for Forge."""
 import requests
 import json
+import os
 
 base_url = 'http://localhost:8000/api/v1'
+
+# Get credentials from environment - NEVER hardcode passwords!
+FORGEMASTER_PASSWORD = os.environ.get("FORGEMASTER_PASSWORD")
+if not FORGEMASTER_PASSWORD:
+    raise ValueError("FORGEMASTER_PASSWORD environment variable must be set")
 
 # Login first
 print("Logging in...")
 login_resp = requests.post(f'{base_url}/auth/login', json={
     'username': 'forgemaster',
-    'password': 'Kn0wl3dge!Gr4ph#2024'
+    'password': FORGEMASTER_PASSWORD
 })
 print(f"Login status: {login_resp.status_code}")
 
