@@ -48,10 +48,10 @@ from forge.virtuals.game.sdk_client import (
 )
 from forge.virtuals.models import (
     AgentGoals,
+    AgentMemoryConfig,
     AgentPersonality,
     ForgeAgent,
     ForgeAgentCreate,
-    MemoryConfig,
 )
 
 logger = logging.getLogger(__name__)
@@ -428,7 +428,7 @@ class GAMEGhostCouncilService:
                     "Maintain consistency with past decisions and precedents",
                 ],
             ),
-            memory_config=MemoryConfig(
+            memory_config=AgentMemoryConfig(
                 short_term_window=10,
                 long_term_enabled=True,
                 summarization_enabled=True,
