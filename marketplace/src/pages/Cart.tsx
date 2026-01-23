@@ -8,11 +8,9 @@ import {
   useAccount,
   useBalance,
   useChainId,
-  useSwitchChain,
   ConnectButton,
 } from '../contexts/Web3Context';
 import { api } from '../services/api';
-import { base } from 'wagmi/chains';
 
 const PLATFORM_FEE_RATE = 0.10;
 
@@ -24,7 +22,6 @@ export default function Cart() {
   // Wagmi hooks
   const { address: walletAddress, isConnected } = useAccount();
   const currentChainId = useChainId();
-  const { switchChain } = useSwitchChain();
 
   // Get $VIRTUAL balance
   const { data: virtualBalance } = useBalance({
@@ -54,15 +51,6 @@ export default function Cart() {
     } catch (error) {
       console.error('Failed to fetch $VIRTUAL price:', error);
       setVirtualPrice(0.10); // Fallback
-    }
-  };
-
-  const handleSwitchChain = async () => {
-    try {
-      await switchChain({ chainId: expectedChainId });
-    } catch (error) {
-      console.error('Failed to switch chain:', error);
-      setPurchaseError('Failed to switch to Base network. Please switch manually in your wallet.');
     }
   };
 

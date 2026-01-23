@@ -6,7 +6,7 @@
  */
 
 import { createContext, useContext, ReactNode } from 'react';
-import { WagmiProvider, createConfig, http } from 'wagmi';
+import { WagmiProvider } from 'wagmi';
 import { base, baseSepolia } from 'wagmi/chains';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
@@ -35,18 +35,13 @@ export const MARKETPLACE_CONTRACT = {
   testnet: import.meta.env.VITE_MARKETPLACE_CONTRACT_TESTNET || '',
 };
 
-// Configure wagmi
-const config = createConfig(
-  getDefaultConfig({
-    appName: 'Forge Shop',
-    projectId: WALLETCONNECT_PROJECT_ID,
-    chains: IS_TESTNET ? [baseSepolia] : [base],
-    transports: IS_TESTNET
-      ? { [baseSepolia.id]: http() }
-      : { [base.id]: http() },
-    ssr: false,
-  })
-);
+// Configure wagmi with RainbowKit's getDefaultConfig
+const config = getDefaultConfig({
+  appName: 'Forge Shop',
+  projectId: WALLETCONNECT_PROJECT_ID,
+  chains: IS_TESTNET ? [baseSepolia] : [base],
+  ssr: false,
+});
 
 // Create query client for wagmi
 const wagmiQueryClient = new QueryClient({
