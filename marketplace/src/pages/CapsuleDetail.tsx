@@ -2,7 +2,6 @@ import { useParams, Link } from 'react-router-dom';
 import { ShoppingCart, Share2, Heart, GitBranch, Shield, AlertCircle, Loader2 } from 'lucide-react';
 import { useCapsule } from '../hooks/useCapsules';
 
-// FIX: Implement actual data fetching instead of placeholder content
 export default function CapsuleDetail() {
   const { id } = useParams<{ id: string }>();
   const { data: capsule, isLoading, error } = useCapsule(id || '');

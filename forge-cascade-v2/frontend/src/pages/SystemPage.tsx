@@ -111,6 +111,13 @@ export default function SystemPage() {
     refetchInterval: 30000,
   });
 
+  // Real-time chart data from API
+  const { data: activityTimeline } = useQuery({
+    queryKey: ['activity-timeline-system'],
+    queryFn: () => api.getActivityTimeline(24),
+    refetchInterval: 60000,
+  });
+
   // Mutations
   const acknowledgeMutation = useMutation({
     mutationFn: (id: string) => api.acknowledgeAnomaly(id),
@@ -145,13 +152,24 @@ export default function SystemPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['maintenance-status'] }),
   });
 
-  // Mock historical data for charts (stable placeholder values)
-  const chartData = useMemo(() => Array.from({ length: 24 }, (_, i) => ({
-    time: `${i}:00`,
-    events: 50 + (i * 3) % 40,  // Deterministic pattern
-    errors: i % 5,              // Deterministic pattern
-    latency: 20 + (i * 2) % 30, // Deterministic pattern
-  })), []);
+  // Chart data from API with empty state fallback
+  const chartData = useMemo(() => {
+    if (activityTimeline?.data && activityTimeline.data.length > 0) {
+      return activityTimeline.data.map(item => ({
+        time: item.time,
+        events: item.events,
+        errors: 0, // Errors not tracked in this API
+        latency: metrics?.average_pipeline_duration_ms || 0,
+      }));
+    }
+    // Empty state - show 24-hour range with zeros
+    return Array.from({ length: 24 }, (_, i) => ({
+      time: `${i.toString().padStart(2, '0')}:00`,
+      events: 0,
+      errors: 0,
+      latency: 0,
+    }));
+  }, [activityTimeline, metrics]);
 
   if (healthLoading) {
     return (

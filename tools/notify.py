@@ -1,37 +1,113 @@
 #!/usr/bin/env python3
 """
-Notification tool - plays a sound when Claude finishes or needs input.
+Notification tool - sends push notifications when Claude finishes or needs input.
 
 Usage:
     python tools/notify.py              # Default notification
-    python tools/notify.py --done       # Task completed sound
-    python tools/notify.py --input      # Input needed sound
-    python tools/notify.py --error      # Error occurred sound
+    python tools/notify.py --done       # Task completed notification
+    python tools/notify.py --input      # Input needed notification
+    python tools/notify.py --error      # Error occurred notification
+
+Setup:
+    1. Install ntfy app on your phone (iOS/Android)
+    2. Subscribe to your topic in the app
+    3. Set NTFY_TOPIC environment variable or edit NTFY_TOPIC below
 """
 
 import sys
 import platform
+import os
+import urllib.request
+import urllib.error
+
+# Configure your ntfy topic here (or set NTFY_TOPIC environment variable)
+NTFY_TOPIC = os.environ.get("NTFY_TOPIC", "claude-notify-forge")
+NTFY_SERVER = os.environ.get("NTFY_SERVER", "https://ntfy.sh")
+
+def send_push_notification(sound_type: str = "default", custom_message: str = None):
+    """Send a push notification via ntfy.sh."""
+
+    titles = {
+        "default": "Claude Code",
+        "done": "Task Completed",
+        "input": "Input Needed",
+        "error": "Error Occurred",
+    }
+
+    messages = {
+        "default": "Notification from Claude Code",
+        "done": "Claude has finished the task!",
+        "input": "Claude needs your input",
+        "error": "An error occurred in Claude Code",
+    }
+
+    # ntfy priority levels: 1=min, 2=low, 3=default, 4=high, 5=urgent
+    priorities = {
+        "default": "3",
+        "done": "4",
+        "input": "5",
+        "error": "5",
+    }
+
+    # ntfy tags (emojis)
+    tags = {
+        "default": "robot",
+        "done": "white_check_mark,tada",
+        "input": "hourglass,question",
+        "error": "x,warning",
+    }
+
+    title = titles.get(sound_type, titles["default"])
+    message = custom_message or messages.get(sound_type, messages["default"])
+    priority = priorities.get(sound_type, "3")
+    tag = tags.get(sound_type, "robot")
+
+    url = f"{NTFY_SERVER}/{NTFY_TOPIC}"
+
+    try:
+        req = urllib.request.Request(url, data=message.encode('utf-8'))
+        req.add_header("Title", title)
+        req.add_header("Priority", priority)
+        req.add_header("Tags", tag)
+
+        with urllib.request.urlopen(req, timeout=5) as response:
+            if response.status == 200:
+                return True
+    except urllib.error.URLError as e:
+        print(f"[WARN] Push notification failed: {e}", file=sys.stderr)
+    except Exception as e:
+        print(f"[WARN] Push notification failed: {e}", file=sys.stderr)
+
+    return False
+
 
 def play_sound(sound_type: str = "default"):
-    """Play a notification sound based on the type."""
+    """Play a notification sound based on the type (fallback)."""
     system = platform.system()
 
     if system == "Windows":
         import winsound
 
-        sounds = {
-            "default": (800, 200),      # Medium beep
-            "done": [(523, 150), (659, 150), (784, 300)],  # C-E-G chord (happy)
-            "input": [(880, 300), (880, 300)],  # Double high beep (attention)
-            "error": [(400, 500)],      # Low beep (error)
+        # Use Windows system sounds (more reliable than PC speaker beeps)
+        system_sounds = {
+            "default": "SystemDefault",
+            "done": "SystemExclamation",      # Happy notification
+            "input": "SystemQuestion",         # Attention/question
+            "error": "SystemHand",             # Error/critical
         }
 
-        beeps = sounds.get(sound_type, sounds["default"])
-        if isinstance(beeps, tuple):
-            beeps = [beeps]
-
-        for freq, duration in beeps:
-            winsound.Beep(freq, duration)
+        sound_alias = system_sounds.get(sound_type, "SystemDefault")
+        try:
+            winsound.PlaySound(sound_alias, winsound.SND_ALIAS | winsound.SND_ASYNC)
+        except RuntimeError:
+            # Fallback to MessageBeep if PlaySound fails
+            beep_types = {
+                "default": winsound.MB_OK,
+                "done": winsound.MB_ICONEXCLAMATION,
+                "input": winsound.MB_ICONQUESTION,
+                "error": winsound.MB_ICONHAND,
+            }
+            winsound.MessageBeep(beep_types.get(sound_type, winsound.MB_OK))
 
     elif system == "Darwin":  # macOS
         import subprocess
@@ -66,26 +142,49 @@ def play_sound(sound_type: str = "default"):
 
 def main():
     sound_type = "default"
+    custom_message = None
 
-    if len(sys.argv) > 1:
-        arg = sys.argv[1].lower().replace("--", "").replace("-", "")
+    # Parse arguments
+    args = sys.argv[1:]
+    i = 0
+    while i < len(args):
+        arg = args[i].lower().replace("--", "").replace("-", "")
         if arg in ["done", "complete", "finished", "success"]:
             sound_type = "done"
         elif arg in ["input", "prompt", "attention", "wait"]:
             sound_type = "input"
         elif arg in ["error", "fail", "failed"]:
             sound_type = "error"
+        elif arg in ["message", "msg", "m"] and i + 1 < len(args):
+            i += 1
+            custom_message = args[i]
+        elif not arg.startswith("-") and custom_message is None:
+            # Treat non-flag arguments as custom message
+            custom_message = args[i]
+        i += 1
 
-    play_sound(sound_type)
+    # Send push notification (primary method)
+    push_sent = send_push_notification(sound_type, custom_message)
+
+    # Try to play sound as well (might work in some environments)
+    try:
+        play_sound(sound_type)
+    except Exception:
+        pass  # Sound is optional
 
     # Print status message
-    messages = {
-        "default": "[NOTIFY] Notification",
+    status_messages = {
+        "default": "[NOTIFY] Notification sent",
         "done": "[DONE] Task completed!",
         "input": "[INPUT] Input needed",
         "error": "[ERROR] Error occurred",
     }
-    print(messages.get(sound_type, messages["default"]))
+    status = status_messages.get(sound_type, status_messages["default"])
+
+    if push_sent:
+        print(f"{status} (push sent to {NTFY_TOPIC})")
+    else:
+        print(f"{status} (push failed, check NTFY_TOPIC)")
 
 
 if __name__ == "__main__":

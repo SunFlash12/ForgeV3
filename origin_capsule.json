@@ -1,0 +1,14 @@
+{
+  "title": "Forge: The Institutional Memory Engine",
+  "content": "# Forge: Institutional Memory Engine\n\n## Purpose\nForge is a cognitive architecture designed to preserve knowledge across AI system generations. It solves the fundamental problem of AI systems losing institutional memory during retraining, upgrades, or replacement.\n\n## Core Principles\n\n### 1. Capsules as Atomic Knowledge Units\nKnowledge is stored in **Capsules** - versioned, traceable, inheritable containers that:\n- Preserve content integrity via cryptographic hashing\n- Support symbolic inheritance (lineage tracking)\n- Enable semantic discovery through embeddings\n- Maintain trust levels for access control\n\n### 2. Overlays for Modular Processing\n**Overlays** are specialized processors that execute during the 7-phase pipeline:\n- Security Validator (content security)\n- ML Intelligence (semantic analysis)\n- Governance (consensus voting)\n- Lineage Tracker (chain of derivation)\n- Graph Algorithms (relationship discovery)\n\n### 3. Trust-Based Security (5 Levels)\n- CORE (100): System-critical, full access\n- TRUSTED (80): Verified, most operations\n- STANDARD (60): Default, basic operations\n- SANDBOX (40): Experimental, limited\n- QUARANTINE (0): Blocked\n\n### 4. Ghost Council (AI Governance)\nAn advisory board of AI personas that deliberates on proposals from three perspectives: Optimistic, Balanced, and Critical.\n\n### 5. Isnad (Lineage System)\nEvery capsule can derive from a parent, creating traceable chains of knowledge evolution. Origin capsules (like this one) have no parent and form the root of lineage trees.\n\n## Architecture Overview\n\nThe system flows from Capsules through Overlays and the 7-phase Pipeline to Events stored in the Neo4j Graph, supported by the Ghost Council, Trust System, and Immune System.\n\nThis capsule is the **origin** of the Forge knowledge graph - all derived knowledge traces back here.\n\n---\nCreated: 2026-01-23\nType: KNOWLEDGE (foundational)\nTrust: CORE",
+  "type": "KNOWLEDGE",
+  "tags": ["forge", "architecture", "origin", "foundational", "core"],
+  "metadata": {
+    "domain": "system-architecture",
+    "version": "1.0.0",
+    "is_origin": true,
+    "criticality": "foundational",
+    "reviewed_by": ["system-architect"],
+    "status": "canonical"
+  }
+}

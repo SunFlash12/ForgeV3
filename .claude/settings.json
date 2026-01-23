@@ -1,6 +1,6 @@
 {
   "permissions": {
-    "defaultMode": "acceptEdits",
+    "defaultMode": "bypassPermissions",
     "allow": [
       "Read(./**)",
       "Edit(./**)"
@@ -17,11 +17,30 @@
   "hooks": {
     "Stop": [
       {
-        "matcher": "",
         "hooks": [
           {
             "type": "command",
             "command": "python \"C:\\Users\\idean\\Downloads\\Forge V3\\tools\\notify.py\" --done"
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"C:\\Users\\idean\\Downloads\\Forge V3\\tools\\notify.py\" --input"
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"C:\\Users\\idean\\Downloads\\Forge V3\\tools\\notify.py\" --input"
           }
         ]
       }

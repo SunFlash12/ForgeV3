@@ -32,7 +32,7 @@ from forge.api.dependencies import (
     SettingsDep,
     UserRepoDep,
 )
-from forge.models.user import TrustLevel, User, UserUpdate
+from forge.models.user import AuthProvider, TrustLevel, User, UserUpdate
 
 # Resilience integration - validation and metrics
 from forge.resilience.integration import (
@@ -944,8 +944,12 @@ async def google_auth(
         )
 
         # Generate tokens
-        from forge.security.tokens import create_access_token, create_refresh_token, create_csrf_token
         from forge.config import get_settings
+        from forge.security.tokens import (
+            create_access_token,
+            create_csrf_token,
+            create_refresh_token,
+        )
 
         settings = get_settings()
 
@@ -972,7 +976,7 @@ async def google_auth(
         )
 
         # Set cookies
-        _set_auth_cookies(
+        set_auth_cookies(
             response=response,
             access_token=access_token,
             refresh_token=refresh_token,
