@@ -443,6 +443,14 @@ class ForgeApp:
         except Exception as e:
             logger.warning("virtuals_shutdown_failed", error=str(e))
 
+        # Shutdown Copilot agent
+        try:
+            from forge.api.routes.copilot import shutdown_agent
+            await shutdown_agent()
+            logger.info("copilot_agent_shutdown")
+        except Exception as e:
+            logger.warning("copilot_shutdown_failed", error=str(e))
+
         # Shutdown services
         from forge.services.init import shutdown_all_services
         shutdown_all_services()
@@ -588,6 +596,10 @@ def create_app(
             {
                 "name": "GAME SDK",
                 "description": "GAME (Generative Autonomous Multimodal Entities) SDK for autonomous AI agents with task generation, workers, and function execution",
+            },
+            {
+                "name": "Copilot",
+                "description": "GitHub Copilot SDK integration for AI-powered knowledge interactions",
             },
         ],
     )
@@ -760,6 +772,7 @@ def create_app(
         auth,
         capsules,
         cascade,
+        copilot,
         diagnosis,
         federation,
         game,
@@ -789,6 +802,7 @@ def create_app(
     app.include_router(acp.router, prefix="/api/v1", tags=["Agent Commerce Protocol"])
     app.include_router(game.router, prefix="/api/v1", tags=["GAME SDK"])
     app.include_router(tipping.router, prefix="/api/v1", tags=["Tipping"])
+    app.include_router(copilot.router, prefix="/api/v1", tags=["Copilot"])
 
     # WebSocket endpoints
     from forge.api.websocket import websocket_router
