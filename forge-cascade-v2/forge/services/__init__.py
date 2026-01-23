@@ -25,6 +25,10 @@ from .ghost_council import (
     get_ghost_council_service,
     init_ghost_council_service,
 )
+from .ghost_council_game import (
+    GAMEGhostCouncilService,
+    get_game_council_service,
+)
 from .llm import (
     LLMConfig,
     LLMMessage,
@@ -94,6 +98,9 @@ __all__ = [
     "get_ghost_council_service",
     "init_ghost_council_service",
     "DEFAULT_COUNCIL_MEMBERS",
+    # GAME-enabled Ghost Council
+    "GAMEGhostCouncilService",
+    "get_game_council_service",
     # Scheduler
     "BackgroundScheduler",
     "ScheduledTask",
