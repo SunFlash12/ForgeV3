@@ -13,5 +13,29 @@
       "Read(./build/**)",
       "Read(./**/node_modules/**)"
     ]
+  },
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"C:\\Users\\idean\\Downloads\\Forge V3\\tools\\notify.py\" --done"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "AskUserQuestion",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"C:\\Users\\idean\\Downloads\\Forge V3\\tools\\notify.py\" --input"
+          }
+        ]
+      }
+    ]
   }
 }
