@@ -81,11 +81,12 @@ export default function GovernancePage() {
     enabled: !!user,
   });
 
-  const { data: _receivedDelegations } = useQuery({
-    queryKey: ['received-delegations'],
-    queryFn: () => api.getDelegations(), // This would need a different endpoint for received delegations
-    enabled: !!user,
-  });
+  // TODO: Implement received delegations when backend endpoint is available
+  // const { data: receivedDelegations } = useQuery({
+  //   queryKey: ['received-delegations'],
+  //   queryFn: () => api.getReceivedDelegations(),
+  //   enabled: !!user,
+  // });
 
   // Revoke delegation mutation
   const revokeDelegationMutation = useMutation({
