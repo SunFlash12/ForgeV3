@@ -1,7 +1,10 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Store, Loader2 } from 'lucide-react';
+import { GoogleLogin, type CredentialResponse } from '@react-oauth/google';
 import { useAuth } from '../contexts/AuthContext';
+
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
 export default function Login() {
   const [mode, setMode] = useState<'login' | 'register'>('login');
@@ -11,8 +14,9 @@ export default function Login() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
 
-  const { login, register } = useAuth();
+  const { login, loginWithGoogle, register } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -87,6 +91,29 @@ export default function Login() {
       console.error('Invalid OAuth URL:', err);
       setError('Configuration error: Invalid OAuth URL');
     }
+  };
+
+  const handleGoogleSuccess = async (credentialResponse: CredentialResponse) => {
+    if (!credentialResponse.credential) {
+      setError('Google authentication failed - no credential received');
+      return;
+    }
+
+    setGoogleLoading(true);
+    setError('');
+
+    try {
+      await loginWithGoogle(credentialResponse.credential);
+      navigate(from, { replace: true });
+    } catch {
+      setError('Google authentication failed. Please try again.');
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
+  const handleGoogleError = () => {
+    setError('Google Sign-In was cancelled or failed');
   };
 
   return (
@@ -245,10 +272,34 @@ export default function Login() {
               </div>
             </div>
 
-            <div className="mt-6">
+            <div className="mt-6 space-y-3">
+              {/* Google Sign-In */}
+              {GOOGLE_CLIENT_ID && (
+                <div className="flex justify-center">
+                  {googleLoading ? (
+                    <div className="flex items-center justify-center gap-2 py-3 text-gray-600">
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      <span>Signing in with Google...</span>
+                    </div>
+                  ) : (
+                    <GoogleLogin
+                      onSuccess={handleGoogleSuccess}
+                      onError={handleGoogleError}
+                      theme="outline"
+                      size="large"
+                      text={mode === 'login' ? 'signin_with' : 'signup_with'}
+                      shape="rectangular"
+                      width="100%"
+                    />
+                  )}
+                </div>
+              )}
+
+              {/* Forge Cascade Sign-In */}
               <button
                 onClick={handleCascadeLogin}
-                className="w-full border border-gray-300 py-2 px-4 rounded-lg hover:bg-gray-50 transition text-sm font-medium flex items-center justify-center gap-2"
+                disabled={isLoading || googleLoading}
+                className="w-full border border-gray-300 py-2 px-4 rounded-lg hover:bg-gray-50 transition text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Store className="w-5 h-5 text-indigo-600" />
                 Sign in with Forge Cascade

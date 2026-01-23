@@ -19,7 +19,12 @@
     "zustand": "^5.0.0",
     "lucide-react": "^0.468.0",
     "clsx": "^2.1.0",
-    "tailwind-merge": "^2.2.0"
+    "tailwind-merge": "^2.2.0",
+    "@rainbow-me/rainbowkit": "^2.0.0",
+    "wagmi": "^2.0.0",
+    "viem": "^2.0.0",
+    "@react-oauth/google": "^0.12.0",
+    "@sentry/react": "^8.0.0"
   },
   "devDependencies": {
     "@types/react": "^19.0.0",

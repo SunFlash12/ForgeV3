@@ -100,3 +100,46 @@ export interface CapsuleFilters extends PaginationParams {
   is_public?: boolean;
   author_id?: string;
 }
+
+// ==========================================================================
+// Web3 / Virtuals Protocol Types
+// ==========================================================================
+
+export interface PurchaseItem {
+  listing_id: string;
+  capsule_id: string;
+  title: string;
+  price_virtual: string; // Price in $VIRTUAL tokens (wei)
+  price_usd?: number; // Estimated USD value
+}
+
+export interface WalletInfo {
+  address: string;
+  chain_id: number;
+  balance_virtual?: string; // $VIRTUAL balance
+  balance_eth?: string; // ETH balance for gas
+}
+
+export interface PurchaseRequest {
+  items: PurchaseItem[];
+  wallet_address: string;
+  transaction_hash?: string;
+}
+
+export interface PurchaseResponse {
+  purchase_id: string;
+  status: 'pending' | 'confirmed' | 'failed';
+  transaction_hash: string | null;
+  capsule_ids: string[];
+  total_virtual: string;
+  created_at: string;
+}
+
+export interface TransactionStatus {
+  transaction_hash: string;
+  status: 'pending' | 'confirmed' | 'failed';
+  block_number: number | null;
+  confirmations: number;
+  capsule_ids: string[];
+  total_virtual: string;
+}

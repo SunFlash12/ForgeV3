@@ -424,10 +424,17 @@ class PaginationParams:
 
 def get_pagination(
     page: int = 1,
-    per_page: int = 20,
+    per_page: int | None = None,
+    page_size: int | None = None,  # Alias for per_page (frontend compatibility)
 ) -> PaginationParams:
-    """Get pagination parameters from query."""
-    return PaginationParams(page=page, per_page=per_page)
+    """Get pagination parameters from query.
+
+    Accepts both per_page and page_size for frontend compatibility.
+    page_size takes precedence if both are provided.
+    """
+    # Use page_size if provided, otherwise per_page, otherwise default to 20
+    size = page_size if page_size is not None else (per_page if per_page is not None else 20)
+    return PaginationParams(page=page, per_page=size)
 
 
 PaginationDep = Annotated[PaginationParams, Depends(get_pagination)]

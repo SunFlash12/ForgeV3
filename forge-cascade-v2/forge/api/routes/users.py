@@ -37,6 +37,20 @@ class UserListResponse(BaseModel):
     per_page: int
 
 
+class UserSearchResult(BaseModel):
+    """User search result item."""
+    id: str
+    username: str
+    display_name: str | None
+    trust_level: str
+    created_at: str
+
+
+class UserSearchResponse(BaseModel):
+    """User search response."""
+    users: list[UserSearchResult]
+
+
 class UserActivityItem(BaseModel):
     """Single activity item."""
     id: str
@@ -86,6 +100,37 @@ class AdminUpdateUserRequest(BaseModel):
 # =============================================================================
 # User Endpoints
 # =============================================================================
+
+
+@router.get("/search", response_model=UserSearchResponse)
+async def search_users(
+    current_user: ActiveUserDep,
+    user_repo: UserRepoDep,
+    q: str = Query(..., min_length=1, max_length=100, description="Search query"),
+    limit: int = Query(default=20, ge=1, le=100),
+) -> UserSearchResponse:
+    """
+    Search for users by username or display name.
+
+    Available to all authenticated users for features like delegation,
+    mentions, and collaboration. Returns public user information only.
+    """
+    from forge.models.base import TrustLevel
+
+    users = await user_repo.search(query_str=q, limit=limit)
+
+    return UserSearchResponse(
+        users=[
+            UserSearchResult(
+                id=u.id,
+                username=u.username,
+                display_name=u.display_name,
+                trust_level=TrustLevel.from_flame(u.trust_flame).name if u.trust_flame is not None else "UNKNOWN",
+                created_at=u.created_at.isoformat() if u.created_at else "",
+            )
+            for u in users
+        ]
+    )
 
 
 @router.get("/", response_model=UserListResponse)

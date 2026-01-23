@@ -2,15 +2,338 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ==========================================================================
+   Forge Shop Design System
+   ========================================================================== */
+
 :root {
-  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  /* Brand Colors */
+  --color-primary: 99 102 241; /* indigo-500 */
+  --color-primary-hover: 79 70 229; /* indigo-600 */
+  --color-accent: 139 92 246; /* violet-500 */
+
+  /* Trust Level Colors */
+  --color-trust-core: 139 92 246; /* violet-500 */
+  --color-trust-trusted: 34 197 94; /* green-500 */
+  --color-trust-standard: 59 130 246; /* blue-500 */
+  --color-trust-sandbox: 245 158 11; /* amber-500 */
+  --color-trust-quarantine: 239 68 68; /* red-500 */
+
+  /* Typography */
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   line-height: 1.5;
   font-weight: 400;
-  color-scheme: light dark;
+
+  /* Light Mode Colors */
+  --bg-primary: 255 255 255;
+  --bg-secondary: 248 250 252; /* slate-50 */
+  --bg-tertiary: 241 245 249; /* slate-100 */
+  --text-primary: 15 23 42; /* slate-900 */
+  --text-secondary: 71 85 105; /* slate-600 */
+  --text-muted: 148 163 184; /* slate-400 */
+  --border-color: 226 232 240; /* slate-200 */
+  --border-hover: 203 213 225; /* slate-300 */
+}
+
+.dark {
+  --bg-primary: 15 23 42; /* slate-900 */
+  --bg-secondary: 30 41 59; /* slate-800 */
+  --bg-tertiary: 51 65 85; /* slate-700 */
+  --text-primary: 248 250 252; /* slate-50 */
+  --text-secondary: 203 213 225; /* slate-300 */
+  --text-muted: 100 116 139; /* slate-500 */
+  --border-color: 51 65 85; /* slate-700 */
+  --border-hover: 71 85 105; /* slate-600 */
 }
 
 body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  background-color: rgb(var(--bg-secondary));
+  color: rgb(var(--text-primary));
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* ==========================================================================
+   Component Styles
+   ========================================================================== */
+
+@layer components {
+  /* Buttons */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm
+           transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-primary {
+    @apply btn bg-indigo-600 text-white hover:bg-indigo-700
+           focus:ring-indigo-500 shadow-sm hover:shadow-md;
+  }
+
+  .btn-secondary {
+    @apply btn bg-white text-slate-700 border border-slate-200
+           hover:bg-slate-50 hover:border-slate-300 focus:ring-slate-500;
+  }
+
+  .btn-ghost {
+    @apply btn bg-transparent text-slate-600 hover:bg-slate-100
+           hover:text-slate-800 focus:ring-slate-500;
+  }
+
+  .btn-danger {
+    @apply btn bg-red-600 text-white hover:bg-red-700
+           focus:ring-red-500;
+  }
+
+  .btn-lg {
+    @apply px-6 py-3 text-base;
+  }
+
+  .btn-sm {
+    @apply px-3 py-1.5 text-xs;
+  }
+
+  /* Dark mode button adjustments */
+  .dark .btn-secondary {
+    @apply bg-slate-800 text-slate-200 border-slate-700
+           hover:bg-slate-700 hover:border-slate-600;
+  }
+
+  .dark .btn-ghost {
+    @apply text-slate-300 hover:bg-slate-800 hover:text-slate-100;
+  }
+
+  /* Cards */
+  .card {
+    @apply bg-white rounded-2xl border border-slate-200 p-6
+           shadow-sm hover:shadow-md transition-shadow duration-200;
+  }
+
+  .card-hover {
+    @apply card cursor-pointer hover:border-indigo-200 hover:shadow-lg
+           transform hover:-translate-y-0.5 transition-all duration-200;
+  }
+
+  .dark .card {
+    @apply bg-slate-800 border-slate-700;
+  }
+
+  .dark .card-hover {
+    @apply hover:border-indigo-500/50;
+  }
+
+  /* Inputs */
+  .input {
+    @apply w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl
+           text-slate-800 placeholder-slate-400
+           focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100
+           transition-all duration-200;
+  }
+
+  .dark .input {
+    @apply bg-slate-800 border-slate-700 text-slate-100 placeholder-slate-500
+           focus:border-indigo-400 focus:ring-indigo-900/30;
+  }
+
+  .label {
+    @apply block text-sm font-medium text-slate-700 mb-1.5;
+  }
+
+  .dark .label {
+    @apply text-slate-300;
+  }
+
+  /* Badges */
+  .badge {
+    @apply inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold;
+  }
+
+  .badge-primary {
+    @apply badge bg-indigo-100 text-indigo-700;
+  }
+
+  .badge-success {
+    @apply badge bg-green-100 text-green-700;
+  }
+
+  .badge-warning {
+    @apply badge bg-amber-100 text-amber-700;
+  }
+
+  .badge-danger {
+    @apply badge bg-red-100 text-red-700;
+  }
+
+  .badge-neutral {
+    @apply badge bg-slate-100 text-slate-700;
+  }
+
+  .dark .badge-primary {
+    @apply bg-indigo-900/40 text-indigo-300;
+  }
+
+  .dark .badge-success {
+    @apply bg-green-900/40 text-green-300;
+  }
+
+  .dark .badge-warning {
+    @apply bg-amber-900/40 text-amber-300;
+  }
+
+  .dark .badge-danger {
+    @apply bg-red-900/40 text-red-300;
+  }
+
+  .dark .badge-neutral {
+    @apply bg-slate-700 text-slate-300;
+  }
+
+  /* Trust Level Badges */
+  .trust-core {
+    @apply badge bg-violet-100 text-violet-700;
+  }
+
+  .trust-trusted {
+    @apply badge bg-green-100 text-green-700;
+  }
+
+  .trust-standard {
+    @apply badge bg-blue-100 text-blue-700;
+  }
+
+  .trust-sandbox {
+    @apply badge bg-amber-100 text-amber-700;
+  }
+
+  .trust-quarantine {
+    @apply badge bg-red-100 text-red-700;
+  }
+
+  .dark .trust-core {
+    @apply bg-violet-900/40 text-violet-300;
+  }
+
+  .dark .trust-trusted {
+    @apply bg-green-900/40 text-green-300;
+  }
+
+  .dark .trust-standard {
+    @apply bg-blue-900/40 text-blue-300;
+  }
+
+  .dark .trust-sandbox {
+    @apply bg-amber-900/40 text-amber-300;
+  }
+
+  .dark .trust-quarantine {
+    @apply bg-red-900/40 text-red-300;
+  }
+}
+
+/* ==========================================================================
+   Animations
+   ========================================================================== */
+
+@layer utilities {
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-out;
+  }
+
+  .animate-slide-up {
+    animation: slideUp 0.3s ease-out;
+  }
+
+  .animate-scale-in {
+    animation: scaleIn 0.2s ease-out;
+  }
+
+  .animate-pulse-subtle {
+    animation: pulseSoft 2s ease-in-out infinite;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes pulseSoft {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+/* ==========================================================================
+   Scrollbar Styling
+   ========================================================================== */
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgb(203 213 225); /* slate-300 */
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgb(148 163 184); /* slate-400 */
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: rgb(71 85 105); /* slate-600 */
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgb(100 116 139); /* slate-500 */
+}
+
+/* ==========================================================================
+   Selection Styling
+   ========================================================================== */
+
+::selection {
+  background: rgb(199 210 254); /* indigo-200 */
+  color: rgb(30 27 75); /* indigo-950 */
+}
+
+.dark ::selection {
+  background: rgb(67 56 202 / 0.5); /* indigo-700/50 */
+  color: rgb(238 242 255); /* indigo-50 */
 }

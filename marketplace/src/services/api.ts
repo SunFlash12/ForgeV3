@@ -9,6 +9,9 @@ import type {
   AuthTokens,
   ApiError,
   CapsuleFilters,
+  PurchaseItem,
+  PurchaseResponse,
+  TransactionStatus,
 } from '../types';
 
 const CASCADE_API_URL = import.meta.env.VITE_CASCADE_API_URL || 'http://localhost:8000/api/v1';
@@ -155,17 +158,73 @@ class ApiClient {
   }
 
   // ==========================================================================
-  // Marketplace specific (these would need backend implementation)
+  // Google OAuth
+  // ==========================================================================
+
+  async googleAuth(idToken: string, source: 'cascade' | 'shop' = 'shop'): Promise<User> {
+    const { data } = await this.client.post<User>('/auth/google', {
+      id_token: idToken,
+      source,
+    });
+    return data;
+  }
+
+  // ==========================================================================
+  // Web3 / Virtuals Protocol Purchases
+  // ==========================================================================
+
+  /**
+   * Submit a purchase after on-chain transaction is confirmed.
+   * Backend will verify the transaction on Base and grant capsule access.
+   */
+  async submitPurchase(
+    items: PurchaseItem[],
+    walletAddress: string,
+    transactionHash: string
+  ): Promise<PurchaseResponse> {
+    const { data } = await this.client.post<PurchaseResponse>(
+      '/marketplace/purchase',
+      {
+        items,
+        wallet_address: walletAddress,
+        transaction_hash: transactionHash,
+      }
+    );
+    return data;
+  }
+
+  /**
+   * Check status of a purchase by transaction hash.
+   */
+  async getTransactionStatus(transactionHash: string): Promise<TransactionStatus> {
+    const { data } = await this.client.get<TransactionStatus>(
+      `/marketplace/transaction/${transactionHash}`
+    );
+    return data;
+  }
+
+  /**
+   * Get current $VIRTUAL token price in USD.
+   */
+  async getVirtualPrice(): Promise<{ price_usd: number; updated_at: string }> {
+    const { data } = await this.client.get<{ price_usd: number; updated_at: string }>(
+      '/marketplace/virtual-price'
+    );
+    return data;
+  }
+
+  // ==========================================================================
+  // Marketplace Purchases
   // ==========================================================================
 
   async purchaseCapsule(capsuleId: string): Promise<{ success: boolean; transaction_id: string }> {
-    // This is a placeholder - would need marketplace backend
-    const { data } = await this.client.post(`/marketplace/purchase`, { capsule_id: capsuleId });
+    const { data } = await this.client.post(`/marketplace/listings/${capsuleId}/purchase`, {
+      capsule_id: capsuleId,
+    });
     return data;
   }
 
   async getMyPurchases(): Promise<Capsule[]> {
-    // This is a placeholder - would need marketplace backend
     const { data } = await this.client.get<{ capsules: Capsule[] }>('/marketplace/purchases');
     return data.capsules;
   }

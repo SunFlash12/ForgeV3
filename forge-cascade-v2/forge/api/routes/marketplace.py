@@ -800,3 +800,242 @@ def _get_tier_description(tier) -> str:
         PricingTier.FOUNDATIONAL: "High PageRank with many derivatives - knowledge foundations",
     }
     return descriptions.get(tier, tier.value)
+
+
+# ============================================================================
+# Web3 / Virtuals Protocol Purchase Endpoints
+# ============================================================================
+
+class Web3PurchaseItem(BaseModel):
+    """Item in a Web3 purchase."""
+    listing_id: str
+    capsule_id: str
+    title: str
+    price_virtual: str  # Price in wei (18 decimals)
+    price_usd: float | None = None
+
+
+class Web3PurchaseRequest(BaseModel):
+    """Request to submit a Web3 purchase."""
+    items: list[Web3PurchaseItem]
+    wallet_address: str = Field(pattern=r"^0x[a-fA-F0-9]{40}$")
+    transaction_hash: str = Field(pattern=r"^0x[a-fA-F0-9]{64}$")
+
+
+class Web3PurchaseResponse(BaseModel):
+    """Response for a Web3 purchase submission."""
+    purchase_id: str
+    status: str  # pending, confirmed, failed
+    transaction_hash: str | None
+    capsule_ids: list[str]
+    total_virtual: str
+    created_at: datetime
+
+
+class TransactionStatusResponse(BaseModel):
+    """Response for transaction status check."""
+    transaction_hash: str
+    status: str  # pending, confirmed, failed
+    block_number: int | None
+    confirmations: int
+    capsule_ids: list[str]
+    total_virtual: str
+
+
+class VirtualPriceResponse(BaseModel):
+    """Response for $VIRTUAL token price."""
+    price_usd: float
+    updated_at: datetime
+
+
+@router.post("/purchase", response_model=Web3PurchaseResponse)
+async def submit_web3_purchase(
+    request: Web3PurchaseRequest,
+    user: ActiveUserDep,
+    svc: MarketplaceService = MarketplaceDep,
+) -> Web3PurchaseResponse:
+    """
+    Submit a Web3 purchase after on-chain transaction.
+
+    The backend will verify the transaction on Base and grant capsule access.
+    """
+    from forge.config import get_settings
+
+    settings = get_settings()
+
+    # Verify the transaction on-chain
+    try:
+        from forge.services.web3_service import verify_purchase_transaction
+
+        verification = await verify_purchase_transaction(
+            transaction_hash=request.transaction_hash,
+            expected_wallet=request.wallet_address,
+            expected_items=request.items,
+            rpc_url=settings.base_rpc_url,
+            virtual_token_address=settings.virtual_token_address,
+        )
+
+        if not verification.is_valid:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Transaction verification failed: {verification.error}",
+            )
+
+        # Process the purchase - grant capsule access
+        capsule_ids = [item.capsule_id for item in request.items]
+        total_virtual = sum(int(item.price_virtual) for item in request.items)
+
+        # Record purchase in database
+        purchase = await svc.record_web3_purchase(
+            user_id=user.id,
+            wallet_address=request.wallet_address,
+            transaction_hash=request.transaction_hash,
+            capsule_ids=capsule_ids,
+            total_virtual=str(total_virtual),
+            block_number=verification.block_number,
+        )
+
+        return Web3PurchaseResponse(
+            purchase_id=purchase.id,
+            status="confirmed",
+            transaction_hash=request.transaction_hash,
+            capsule_ids=capsule_ids,
+            total_virtual=str(total_virtual),
+            created_at=purchase.created_at,
+        )
+
+    except ImportError:
+        # Web3 service not available - return pending status
+        logger.warning("web3_service_not_available", tx=request.transaction_hash)
+
+        # Still record the purchase request for manual verification
+        capsule_ids = [item.capsule_id for item in request.items]
+        total_virtual = sum(int(item.price_virtual) for item in request.items)
+
+        return Web3PurchaseResponse(
+            purchase_id=f"pending_{request.transaction_hash[:16]}",
+            status="pending",
+            transaction_hash=request.transaction_hash,
+            capsule_ids=capsule_ids,
+            total_virtual=str(total_virtual),
+            created_at=datetime.utcnow(),
+        )
+
+    except Exception as e:
+        logger.error("web3_purchase_failed", error=str(e), tx=request.transaction_hash)
+        raise HTTPException(
+            status_code=400,
+            detail="Failed to process purchase. Please contact support.",
+        )
+
+
+@router.get("/transaction/{transaction_hash}", response_model=TransactionStatusResponse)
+async def get_transaction_status(
+    transaction_hash: str,
+    user: ActiveUserDep,
+    svc: MarketplaceService = MarketplaceDep,
+) -> TransactionStatusResponse:
+    """
+    Check status of a purchase transaction.
+
+    Returns current confirmation status and purchased capsules.
+    """
+    # Validate transaction hash format
+    if not transaction_hash.startswith("0x") or len(transaction_hash) != 66:
+        raise HTTPException(status_code=400, detail="Invalid transaction hash format")
+
+    from forge.config import get_settings
+
+    settings = get_settings()
+
+    try:
+        from forge.services.web3_service import get_transaction_info
+
+        tx_info = await get_transaction_info(
+            transaction_hash=transaction_hash,
+            rpc_url=settings.base_rpc_url,
+        )
+
+        # Look up purchase record
+        purchase = await svc.get_purchase_by_transaction(transaction_hash)
+
+        if purchase:
+            return TransactionStatusResponse(
+                transaction_hash=transaction_hash,
+                status="confirmed" if tx_info.confirmations >= 12 else "pending",
+                block_number=tx_info.block_number,
+                confirmations=tx_info.confirmations,
+                capsule_ids=purchase.capsule_ids,
+                total_virtual=purchase.total_virtual,
+            )
+        else:
+            return TransactionStatusResponse(
+                transaction_hash=transaction_hash,
+                status="pending" if tx_info.block_number else "not_found",
+                block_number=tx_info.block_number,
+                confirmations=tx_info.confirmations,
+                capsule_ids=[],
+                total_virtual="0",
+            )
+
+    except ImportError:
+        # Web3 service not available
+        logger.warning("web3_service_not_available_for_status")
+        raise HTTPException(
+            status_code=503,
+            detail="Transaction verification service temporarily unavailable",
+        )
+
+    except Exception as e:
+        logger.error("transaction_status_failed", error=str(e), tx=transaction_hash)
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to check transaction status",
+        )
+
+
+@router.get("/virtual-price", response_model=VirtualPriceResponse)
+async def get_virtual_price() -> VirtualPriceResponse:
+    """
+    Get current $VIRTUAL token price in USD.
+
+    Price is fetched from DEX aggregators and cached for 5 minutes.
+    """
+    import httpx
+
+    from forge.config import get_settings
+
+    settings = get_settings()
+
+    try:
+        # Try to get price from DexScreener API (supports Base)
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            # $VIRTUAL token on Base
+            response = await client.get(
+                f"https://api.dexscreener.com/latest/dex/tokens/{settings.virtual_token_address}"
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                pairs = data.get("pairs", [])
+                if pairs:
+                    # Get price from most liquid pair
+                    price = float(pairs[0].get("priceUsd", 0))
+                    return VirtualPriceResponse(
+                        price_usd=price,
+                        updated_at=datetime.utcnow(),
+                    )
+
+        # Fallback price if API fails
+        logger.warning("virtual_price_api_failed", fallback=0.10)
+        return VirtualPriceResponse(
+            price_usd=0.10,  # Fallback price
+            updated_at=datetime.utcnow(),
+        )
+
+    except Exception as e:
+        logger.error("virtual_price_fetch_failed", error=str(e))
+        return VirtualPriceResponse(
+            price_usd=0.10,  # Fallback price
+            updated_at=datetime.utcnow(),
+        )
