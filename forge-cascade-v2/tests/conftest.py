@@ -8,15 +8,15 @@ from __future__ import annotations
 
 import asyncio
 import os
-from datetime import datetime, timezone
-from typing import AsyncGenerator, Generator
+from collections.abc import AsyncGenerator, Generator
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from httpx import AsyncClient, ASGITransport
+from httpx import ASGITransport, AsyncClient
 
 # =============================================================================
 # TEST ENVIRONMENT SETUP
@@ -79,8 +79,8 @@ def mock_db_client():
 @pytest.fixture
 def mock_embedding_service():
     """Create a mock embedding service."""
-    from forge.services.embedding import EmbeddingService, EmbeddingConfig, EmbeddingProvider
-    
+    from forge.services.embedding import EmbeddingConfig, EmbeddingProvider, EmbeddingService
+
     config = EmbeddingConfig(provider=EmbeddingProvider.MOCK)
     return EmbeddingService(config)
 
@@ -88,8 +88,8 @@ def mock_embedding_service():
 @pytest.fixture
 def mock_llm_service():
     """Create a mock LLM service."""
-    from forge.services.llm import LLMService, LLMConfig, LLMProvider
-    
+    from forge.services.llm import LLMConfig, LLMProvider, LLMService
+
     config = LLMConfig(provider=LLMProvider.MOCK)
     return LLMService(config)
 
@@ -98,7 +98,7 @@ def mock_llm_service():
 def mock_search_service(mock_embedding_service, mock_db_client):
     """Create a mock search service."""
     from forge.services.search import SearchService
-    
+
     return SearchService(
         embedding_service=mock_embedding_service,
         db_client=mock_db_client,
@@ -138,7 +138,7 @@ def user_factory():
             "email": email or f"test_{uuid4().hex[:8]}@example.com",
             "trust_level": trust_level,
             "is_active": True,
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
         }
     return _create_user
 
@@ -166,8 +166,8 @@ def capsule_factory():
             "view_count": 0,
             "fork_count": 0,
             "is_archived": False,
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
+            "updated_at": datetime.now(UTC).isoformat(),
         }
     return _create_capsule
 
@@ -190,7 +190,7 @@ def proposal_factory():
             "votes_for": 0,
             "votes_against": 0,
             "votes_abstain": 0,
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
             "expires_at": None,
         }
     return _create_proposal
@@ -204,7 +204,7 @@ def proposal_factory():
 def auth_headers(user_factory):
     """Create authentication headers with a valid JWT token."""
     from forge.security.tokens import create_access_token
-    
+
     user = user_factory()
     token = create_access_token(
         user_id=user["id"],
@@ -218,7 +218,7 @@ def auth_headers(user_factory):
 def admin_auth_headers(user_factory):
     """Create authentication headers for an admin user."""
     from forge.security.tokens import create_access_token
-    
+
     user = user_factory(trust_level=90)
     token = create_access_token(
         user_id=user["id"],
@@ -236,7 +236,7 @@ def admin_auth_headers(user_factory):
 def app() -> FastAPI:
     """Create a test FastAPI application."""
     from forge.api.app import create_app
-    
+
     return create_app(
         title="Forge Test",
         version="test",
@@ -274,9 +274,9 @@ async def db_client():
     Requires Neo4j to be running.
     """
     from forge.database.client import Neo4jClient
-    
+
     client = Neo4jClient()
-    
+
     try:
         await client.connect()
         yield client
@@ -293,9 +293,9 @@ async def clean_db(db_client):
     """
     # Clean before test
     await db_client.execute("MATCH (n) DETACH DELETE n", {})
-    
+
     yield db_client
-    
+
     # Clean after test
     await db_client.execute("MATCH (n) DETACH DELETE n", {})
 
@@ -308,7 +308,7 @@ async def clean_db(db_client):
 def capsule_repository(mock_db_client):
     """Create a capsule repository with mock client."""
     from forge.repositories.capsule_repository import CapsuleRepository
-    
+
     return CapsuleRepository(mock_db_client)
 
 
@@ -316,7 +316,7 @@ def capsule_repository(mock_db_client):
 def user_repository(mock_db_client):
     """Create a user repository with mock client."""
     from forge.repositories.user_repository import UserRepository
-    
+
     return UserRepository(mock_db_client)
 
 
@@ -324,7 +324,7 @@ def user_repository(mock_db_client):
 def governance_repository(mock_db_client):
     """Create a governance repository with mock client."""
     from forge.repositories.governance_repository import GovernanceRepository
-    
+
     return GovernanceRepository(mock_db_client)
 
 
@@ -336,7 +336,7 @@ def governance_repository(mock_db_client):
 def overlay_manager(mock_event_system):
     """Create an overlay manager."""
     from forge.kernel.overlay_manager import OverlayManager
-    
+
     return OverlayManager(mock_event_system)
 
 
@@ -344,7 +344,7 @@ def overlay_manager(mock_event_system):
 async def security_overlay():
     """Create a security validator overlay."""
     from forge.overlays import create_security_validator
-    
+
     return create_security_validator(strict_mode=False)
 
 
@@ -352,7 +352,7 @@ async def security_overlay():
 async def governance_overlay():
     """Create a governance overlay."""
     from forge.overlays import create_governance_overlay
-    
+
     return create_governance_overlay(strict_mode=False)
 
 
@@ -364,7 +364,7 @@ async def governance_overlay():
 def circuit_breaker():
     """Create a circuit breaker."""
     from forge.immune.circuit_breaker import CircuitBreaker
-    
+
     return CircuitBreaker(
         name="test_circuit",
         failure_threshold=3,
@@ -377,7 +377,7 @@ def circuit_breaker():
 def health_checker(mock_db_client, mock_event_system):
     """Create a health checker."""
     from forge.immune.health_checker import HealthChecker
-    
+
     return HealthChecker(
         db_client=mock_db_client,
         event_system=mock_event_system,
@@ -392,10 +392,10 @@ def health_checker(mock_db_client, mock_event_system):
 def reset_singletons():
     """Reset singleton instances between tests."""
     yield
-    
+
     # Reset service singletons
     from forge.services import embedding, llm, search
-    
+
     embedding._embedding_service = None
     llm._llm_service = None
     search._search_service = None

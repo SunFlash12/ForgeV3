@@ -14,6 +14,8 @@ import ContradictionsPage from './pages/ContradictionsPage';
 import VersionHistoryPage from './pages/VersionHistoryPage';
 import FederationPage from './pages/FederationPage';
 import GraphExplorerPage from './pages/GraphExplorerPage';
+import DiagnosisPage from './pages/DiagnosisPage';
+import UserDirectoryPage from './pages/UserDirectoryPage';
 import NotFoundPage from './pages/NotFoundPage';
 
 function App() {
@@ -49,6 +51,8 @@ function App() {
         <Route path="contradictions" element={<ContradictionsPage />} />
         <Route path="federation" element={<FederationPage />} />
         <Route path="graph" element={<GraphExplorerPage />} />
+        <Route path="diagnosis" element={<DiagnosisPage />} />
+        <Route path="users" element={<UserDirectoryPage />} />
         <Route path="system" element={<SystemPage />} />
         <Route path="settings" element={<SettingsPage />} />
       </Route>

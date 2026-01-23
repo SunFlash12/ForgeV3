@@ -255,6 +255,33 @@ class ForgeApiClient {
     return response.data;
   }
 
+  // ============================================================================
+  // MFA Endpoints
+  // ============================================================================
+
+  async getMfaStatus(): Promise<{ enabled: boolean; backup_codes_remaining?: number }> {
+    const response = await this.client.get<{ enabled: boolean; backup_codes_remaining?: number }>('/auth/me/mfa/status');
+    return response.data;
+  }
+
+  async setupMfa(): Promise<{ secret: string; qr_code: string; backup_codes: string[] }> {
+    const response = await this.client.post<{ secret: string; qr_code: string; backup_codes: string[] }>('/auth/me/mfa/setup');
+    return response.data;
+  }
+
+  async verifyMfa(code: string): Promise<void> {
+    await this.client.post('/auth/me/mfa/verify', { code });
+  }
+
+  async disableMfa(code: string): Promise<void> {
+    await this.client.delete('/auth/me/mfa', { data: { code } });
+  }
+
+  async regenerateBackupCodes(code: string): Promise<{ backup_codes: string[] }> {
+    const response = await this.client.post<{ backup_codes: string[] }>('/auth/me/mfa/backup-codes', { code });
+    return response.data;
+  }
+
   // Check if user is authenticated (has valid session)
   async checkAuth(): Promise<boolean> {
     try {
@@ -300,8 +327,48 @@ class ForgeApiClient {
     return response.data;
   }
 
-  async linkCapsules(childId: string, parentId: string): Promise<void> {
-    await this.client.post(`/capsules/${childId}/link/${parentId}`);
+  async linkCapsules(childId: string, parentId: string): Promise<Capsule> {
+    const response = await this.client.post<Capsule>(`/capsules/${childId}/link/${parentId}`);
+    return response.data;
+  }
+
+  async forkCapsule(id: string, data: {
+    title?: string;
+    content?: string;
+    evolution_reason: string;
+  }): Promise<Capsule> {
+    const response = await this.client.post<Capsule>(`/capsules/${id}/fork`, data);
+    return response.data;
+  }
+
+  async verifyCapsuleIntegrity(id: string): Promise<{
+    capsule_id: string;
+    is_valid: boolean;
+    content_hash_valid: boolean;
+    signature_valid: boolean | null;
+    merkle_chain_valid: boolean | null;
+    verified_at: string;
+    issues: string[];
+  }> {
+    const response = await this.client.get(`/capsules/${id}/integrity`);
+    return response.data;
+  }
+
+  async verifyLineageIntegrity(id: string): Promise<{
+    capsule_id: string;
+    chain_length: number;
+    all_valid: boolean;
+    broken_links: string[];
+    verified_capsules: Array<{
+      id: string;
+      title: string;
+      is_valid: boolean;
+      issues: string[];
+    }>;
+    verified_at: string;
+  }> {
+    const response = await this.client.get(`/capsules/${id}/lineage/integrity`);
+    return response.data;
   }
 
   async searchCapsules(query: string, params?: { limit?: number; type?: string; min_trust?: number }): Promise<Capsule[]> {
@@ -412,6 +479,21 @@ class ForgeApiClient {
 
   async finalizeProposal(proposalId: string): Promise<Proposal> {
     const response = await this.client.post<Proposal>(`/governance/proposals/${proposalId}/finalize`);
+    return response.data;
+  }
+
+  async getConstitutionalAnalysis(proposalId: string): Promise<{
+    proposal_id: string;
+    is_constitutional: boolean;
+    principles_checked: Array<{
+      principle: string;
+      compliant: boolean;
+      notes: string;
+    }>;
+    summary: string;
+    analyzed_at: string;
+  }> {
+    const response = await this.client.get(`/governance/proposals/${proposalId}/constitutional-analysis`);
     return response.data;
   }
 
@@ -556,6 +638,245 @@ class ForgeApiClient {
     average_total_duration_ms: number;
   }> {
     const response = await this.client.get('/system/metrics/pipeline-performance');
+    return response.data;
+  }
+
+  // ============================================================================
+  // Diagnosis / PrimeKG Endpoints
+  // ============================================================================
+
+  async createDiagnosisSession(data: {
+    phenotypes?: string[];
+    genetic_variants?: string[];
+    patient_demographics?: Record<string, unknown>;
+    medical_history?: string[];
+  }): Promise<{
+    session_id: string;
+    status: string;
+    created_at: string;
+  }> {
+    const response = await this.client.post('/diagnosis/sessions', data);
+    return response.data;
+  }
+
+  async getDiagnosisSession(sessionId: string): Promise<{
+    session_id: string;
+    status: string;
+    current_questions?: Array<{ question_id: string; text: string; options?: string[] }>;
+    progress: number;
+  }> {
+    const response = await this.client.get(`/diagnosis/sessions/${sessionId}`);
+    return response.data;
+  }
+
+  async startDiagnosis(sessionId: string, data: {
+    symptoms: string[];
+    duration?: string;
+    severity?: string;
+  }): Promise<{
+    session_id: string;
+    status: string;
+    follow_up_questions?: Array<{ question_id: string; text: string; options?: string[] }>;
+  }> {
+    const response = await this.client.post(`/diagnosis/sessions/${sessionId}/start`, data);
+    return response.data;
+  }
+
+  async answerDiagnosisQuestion(sessionId: string, data: {
+    question_id: string;
+    answer: string;
+  }): Promise<{
+    session_id: string;
+    status: string;
+    next_questions?: Array<{ question_id: string; text: string; options?: string[] }>;
+    progress: number;
+  }> {
+    const response = await this.client.post(`/diagnosis/sessions/${sessionId}/answer`, data);
+    return response.data;
+  }
+
+  async getDiagnosisResults(sessionId: string): Promise<{
+    session_id: string;
+    diagnoses: Array<{
+      disease_id: string;
+      disease_name: string;
+      confidence: number;
+      matching_phenotypes: string[];
+      evidence: string[];
+    }>;
+    recommendations: string[];
+    generated_at: string;
+  }> {
+    const response = await this.client.get(`/diagnosis/sessions/${sessionId}/results`);
+    return response.data;
+  }
+
+  async searchPhenotypes(query: string): Promise<{
+    phenotypes: Array<{
+      hpo_id: string;
+      name: string;
+      definition?: string;
+    }>;
+  }> {
+    const response = await this.client.post('/primekg/phenotype-search', { query, limit: 20 });
+    return response.data;
+  }
+
+  async getDrugDiseaseInfo(diseaseId: string): Promise<{
+    disease_id: string;
+    disease_name: string;
+    drugs: Array<{
+      drug_id: string;
+      drug_name: string;
+      relationship: string;
+      evidence_level?: string;
+    }>;
+  }> {
+    const response = await this.client.post('/primekg/drug-disease', { disease_id: diseaseId });
+    return response.data;
+  }
+
+  async getGeneAssociations(diseaseId: string): Promise<{
+    disease_id: string;
+    genes: Array<{
+      gene_id: string;
+      gene_symbol: string;
+      association_type: string;
+      evidence?: string;
+    }>;
+  }> {
+    const response = await this.client.post('/primekg/gene-association', { disease_id: diseaseId });
+    return response.data;
+  }
+
+  // ============================================================================
+  // Notifications Endpoints
+  // ============================================================================
+
+  async getNotifications(params?: { unread_only?: boolean; limit?: number }): Promise<{
+    notifications: Array<{
+      id: string;
+      type: string;
+      title: string;
+      message: string;
+      priority: string;
+      read: boolean;
+      created_at: string;
+      data?: Record<string, unknown>;
+    }>;
+    unread_count: number;
+  }> {
+    const response = await this.client.get('/notifications', { params });
+    return response.data;
+  }
+
+  async markNotificationRead(id: string): Promise<void> {
+    await this.client.post(`/notifications/${id}/read`);
+  }
+
+  async deleteNotification(id: string): Promise<void> {
+    await this.client.delete(`/notifications/${id}`);
+  }
+
+  // ============================================================================
+  // Maintenance Mode Endpoints
+  // ============================================================================
+
+  async getMaintenanceStatus(): Promise<{
+    enabled: boolean;
+    message?: string;
+    estimated_end?: string;
+  }> {
+    const response = await this.client.get('/system/maintenance');
+    return response.data;
+  }
+
+  async enableMaintenance(data: { message: string; estimated_minutes?: number }): Promise<void> {
+    await this.client.post('/system/maintenance/enable', data);
+  }
+
+  async disableMaintenance(): Promise<void> {
+    await this.client.post('/system/maintenance/disable');
+  }
+
+  // ============================================================================
+  // Knowledge Query Endpoints
+  // ============================================================================
+
+  async executeKnowledgeQuery(query: string): Promise<{
+    results: Array<Record<string, unknown>>;
+    query_type: string;
+    execution_time_ms: number;
+    cached: boolean;
+  }> {
+    const response = await this.client.post('/graph/query/knowledge', { query });
+    return response.data;
+  }
+
+  // ============================================================================
+  // Delegation Endpoints
+  // ============================================================================
+
+  async createDelegation(data: {
+    delegate_to: string;
+    proposal_type?: string;
+    expires_at?: string;
+  }): Promise<{
+    id: string;
+    delegator_id: string;
+    delegate_id: string;
+    proposal_type: string | null;
+    created_at: string;
+    expires_at: string | null;
+  }> {
+    const response = await this.client.post('/governance/delegations', data);
+    return response.data;
+  }
+
+  async getMyDelegations(): Promise<Array<{
+    id: string;
+    delegate_id: string;
+    delegate_username: string;
+    proposal_type: string | null;
+    created_at: string;
+    expires_at: string | null;
+  }>> {
+    const response = await this.client.get('/governance/delegations');
+    return response.data;
+  }
+
+  async revokeDelegation(id: string): Promise<void> {
+    await this.client.delete(`/governance/delegations/${id}`);
+  }
+
+  // ============================================================================
+  // User Directory Endpoints
+  // ============================================================================
+
+  async searchUsers(query: string, params?: { limit?: number }): Promise<{
+    users: Array<{
+      id: string;
+      username: string;
+      display_name: string | null;
+      trust_level: string;
+      created_at: string;
+    }>;
+  }> {
+    const response = await this.client.get('/users/search', { params: { q: query, ...params } });
+    return response.data;
+  }
+
+  async getUserProfile(userId: string): Promise<{
+    id: string;
+    username: string;
+    display_name: string | null;
+    trust_level: string;
+    capsules_created: number;
+    proposals_made: number;
+    votes_cast: number;
+    created_at: string;
+  }> {
+    const response = await this.client.get(`/users/${userId}`);
     return response.data;
   }
 

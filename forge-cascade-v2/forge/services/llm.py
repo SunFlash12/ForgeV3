@@ -38,6 +38,7 @@ class LLMProvider(str, Enum):
     OPENAI = "openai"
     ANTHROPIC = "anthropic"
     OLLAMA = "ollama"
+    MOCK = "mock"  # For testing and fallback when no real provider available
 
 
 @dataclass
@@ -369,6 +370,60 @@ class OllamaProvider(LLMProviderBase):
         )
 
 
+class MockLLMProvider(LLMProviderBase):
+    """
+    Mock LLM provider for testing and fallback.
+
+    Returns generic responses for development when no API key is available.
+    NOT RECOMMENDED FOR PRODUCTION USE.
+    """
+
+    def __init__(self):
+        logger.warning(
+            "mock_llm_provider_initialized",
+            warning="Using mock LLM. AI features will not work properly.",
+            hint="Set OPENAI_API_KEY or ANTHROPIC_API_KEY for real LLM capabilities.",
+        )
+
+    async def complete(
+        self,
+        messages: list[LLMMessage],
+        max_tokens: int | None = None,
+        temperature: float | None = None,
+    ) -> LLMResponse:
+        """Generate a mock response."""
+        import time
+
+        start_time = time.monotonic()
+
+        # Extract the last user message for context
+        last_user_msg = ""
+        for msg in reversed(messages):
+            if msg.role == "user":
+                last_user_msg = msg.content[:100]
+                break
+
+        # Generate a simple mock response
+        mock_response = (
+            f"[MOCK LLM RESPONSE]\n"
+            f"This is a mock response. In production, an actual LLM would process your request.\n"
+            f"Your query: '{last_user_msg}...'\n\n"
+            f"To enable real AI capabilities:\n"
+            f"- Set OPENAI_API_KEY for OpenAI GPT-4\n"
+            f"- Set ANTHROPIC_API_KEY for Claude"
+        )
+
+        latency_ms = (time.monotonic() - start_time) * 1000
+
+        return LLMResponse(
+            content=mock_response,
+            model="mock",
+            tokens_used=0,
+            finish_reason="stop",
+            latency_ms=latency_ms,
+        )
+
+
 class LLMService:
     """
     Main LLM service for Forge.
@@ -431,10 +486,13 @@ class LLMService:
                 timeout=self._config.timeout_seconds,
             )
 
+        elif self._config.provider == LLMProvider.MOCK:
+            return MockLLMProvider()
+
         else:
             raise LLMConfigurationError(
                 f"Unsupported LLM provider: {self._config.provider}. "
-                "Supported providers: openai, anthropic, ollama. "
+                "Supported providers: openai, anthropic, ollama, mock. "
                 "Set OPENAI_API_KEY or ANTHROPIC_API_KEY environment variable."
             )
 

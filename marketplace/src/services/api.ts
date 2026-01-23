@@ -11,7 +11,7 @@ import type {
   CapsuleFilters,
 } from '../types';
 
-const CASCADE_API_URL = import.meta.env.VITE_CASCADE_API_URL || 'https://forgecascade.org/api/v1';
+const CASCADE_API_URL = import.meta.env.VITE_CASCADE_API_URL || 'http://localhost:8000/api/v1';
 
 class ApiClient {
   private client: AxiosInstance;

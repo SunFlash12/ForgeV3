@@ -33,6 +33,7 @@ class EmbeddingProvider(str, Enum):
     """Supported embedding providers."""
     OPENAI = "openai"
     SENTENCE_TRANSFORMERS = "sentence_transformers"
+    MOCK = "mock"  # For testing and fallback when no real provider available
 
 
 class EmbeddingConfigurationError(Exception):
@@ -290,6 +291,70 @@ class SentenceTransformersProvider(EmbeddingProviderBase):
         return results
 
 
+class MockEmbeddingProvider(EmbeddingProviderBase):
+    """
+    Mock embedding provider for testing and fallback.
+
+    Generates deterministic pseudo-embeddings based on text hash.
+    This allows basic functionality when no real embedding provider
+    is available, though semantic search quality will be poor.
+
+    NOT RECOMMENDED FOR PRODUCTION USE.
+    Install sentence-transformers for proper local embeddings.
+    """
+
+    def __init__(self, dimensions: int = 1536):
+        self._dimensions = dimensions
+        logger.warning(
+            "mock_embedding_provider_initialized",
+            warning="Using mock embeddings. Semantic search will not work properly.",
+            hint="Install sentence-transformers or set OPENAI_API_KEY for real embeddings.",
+        )
+
+    def get_dimensions(self) -> int:
+        return self._dimensions
+
+    def _generate_mock_embedding(self, text: str) -> list[float]:
+        """Generate a deterministic pseudo-embedding from text hash."""
+        import random
+
+        # Use text hash as seed for reproducibility
+        text_hash = hashlib.md5(text.encode()).hexdigest()
+        seed = int(text_hash[:8], 16)
+        rng = random.Random(seed)
+
+        # Generate normalized random vector
+        embedding = [rng.gauss(0, 1) for _ in range(self._dimensions)]
+        magnitude = sum(x**2 for x in embedding) ** 0.5
+        if magnitude > 0:
+            embedding = [x / magnitude for x in embedding]
+
+        return embedding
+
+    async def embed(self, text: str) -> EmbeddingResult:
+        """Generate mock embedding."""
+        return EmbeddingResult(
+            embedding=self._generate_mock_embedding(text),
+            model="mock",
+            dimensions=self._dimensions,
+            tokens_used=0,
+            cached=False,
+        )
+
+    async def embed_batch(self, texts: list[str]) -> list[EmbeddingResult]:
+        """Generate mock embeddings for batch."""
+        return [
+            EmbeddingResult(
+                embedding=self._generate_mock_embedding(text),
+                model="mock",
+                dimensions=self._dimensions,
+                tokens_used=0,
+                cached=False,
+            )
+            for text in texts
+        ]
+
+
 class EmbeddingCache:
     """Simple in-memory cache for embeddings with thread-safe operations."""
 
@@ -406,10 +471,13 @@ class EmbeddingService:
         elif self._config.provider == EmbeddingProvider.SENTENCE_TRANSFORMERS:
             return SentenceTransformersProvider(model=self._config.model)
 
+        elif self._config.provider == EmbeddingProvider.MOCK:
+            return MockEmbeddingProvider(dimensions=self._config.dimensions)
+
         else:
             raise EmbeddingConfigurationError(
                 f"Unsupported embedding provider: {self._config.provider}. "
-                "Supported providers: openai, sentence_transformers. "
+                "Supported providers: openai, sentence_transformers, mock. "
                 "Set OPENAI_API_KEY for cloud embeddings, or install sentence-transformers for local."
             )
 

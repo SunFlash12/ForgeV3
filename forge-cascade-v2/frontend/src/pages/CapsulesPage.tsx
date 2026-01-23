@@ -25,6 +25,11 @@ import {
   Loader2,
   RefreshCw,
   Sparkles,
+  GitFork,
+  Link,
+  Shield,
+  ChevronRight,
+  ExternalLink,
 } from 'lucide-react';
 import { api } from '../api/client';
 import { Card, Button, LoadingSpinner, EmptyState, Modal } from '../components/common';
@@ -300,8 +305,8 @@ export default function CapsulesPage() {
       ) : (
         <EmptyState
           icon={<Database className="w-8 h-8" />}
-          title="No capsules found"
-          description={searchQuery ? "Try adjusting your search terms" : "Create your first knowledge capsule to get started"}
+          title={searchQuery ? "No matches found" : "Start building knowledge"}
+          description={searchQuery ? "Try different keywords or clear your search" : "Create your first capsule to capture and preserve institutional wisdom"}
           action={
             <Button
               variant="primary"
@@ -340,8 +345,8 @@ export default function CapsulesPage() {
         onSuccess={() => {
           addToast({
             type: 'success',
-            title: 'Capsule Created!',
-            message: 'Your knowledge capsule is now being processed through the pipeline.',
+            title: '✨ Capsule Created!',
+            message: 'Your knowledge has been captured and added to the graph.',
           });
         }}
         onError={(error: string) => {
@@ -364,6 +369,14 @@ export default function CapsulesPage() {
               type: 'success',
               title: 'Capsule Updated',
               message: 'Your changes have been saved successfully.',
+            });
+            setSelectedCapsule(null);
+          }}
+          onFork={(forkedCapsule) => {
+            addToast({
+              type: 'success',
+              title: 'Capsule Forked',
+              message: `Created new capsule: ${forkedCapsule.title}`,
             });
             setSelectedCapsule(null);
           }}
@@ -792,12 +805,15 @@ interface CapsuleDetailModalProps {
   onClose: () => void;
   onDelete: () => void;
   onUpdate?: () => void;
+  onFork?: (forkedCapsule: Capsule) => void;
   canEdit: boolean;
   canDelete: boolean;
 }
 
-function CapsuleDetailModal({ capsule, onClose, onDelete, onUpdate, canEdit, canDelete }: CapsuleDetailModalProps) {
+function CapsuleDetailModal({ capsule, onClose, onDelete, onUpdate, onFork, canEdit, canDelete }: CapsuleDetailModalProps) {
   const [isEditing, setIsEditing] = useState(false);
+  const [showLineage, setShowLineage] = useState(false);
+  const [showForkModal, setShowForkModal] = useState(false);
   const [editData, setEditData] = useState({
     title: capsule.title || '',
     content: capsule.content || '',
@@ -805,6 +821,21 @@ function CapsuleDetailModal({ capsule, onClose, onDelete, onUpdate, canEdit, can
   });
   const [tagInput, setTagInput] = useState('');
   const queryClient = useQueryClient();
+  const { user } = useAuthStore();
+
+  // Fetch lineage data
+  const { data: lineageData, isLoading: lineageLoading } = useQuery({
+    queryKey: ['capsule-lineage', capsule.id],
+    queryFn: () => api.getCapsuleLineage(capsule.id, 5),
+    enabled: showLineage,
+  });
+
+  // Verify integrity
+  const { data: integrityData, isLoading: integrityLoading, refetch: refetchIntegrity } = useQuery({
+    queryKey: ['capsule-integrity', capsule.id],
+    queryFn: () => api.verifyCapsuleIntegrity(capsule.id),
+    enabled: false,
+  });
 
   const TypeIcon = CAPSULE_TYPE_INFO[capsule.type]?.icon || BookOpen;
 
@@ -890,6 +921,15 @@ function CapsuleDetailModal({ capsule, onClose, onDelete, onUpdate, canEdit, can
                 icon={<Trash2 className="w-4 h-4" />}
               >
                 Delete
+              </Button>
+            )}
+            {user && ['STANDARD', 'TRUSTED', 'CORE'].includes(user.trust_level) && (
+              <Button
+                variant="secondary"
+                icon={<GitFork className="w-4 h-4" />}
+                onClick={() => setShowForkModal(true)}
+              >
+                Fork
               </Button>
             )}
             {canEdit && (
@@ -1023,19 +1063,285 @@ function CapsuleDetailModal({ capsule, onClose, onDelete, onUpdate, canEdit, can
             </div>
           </div>
 
-          {capsule.parent_id && (
-            <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
-              <p className="text-sm font-medium text-slate-800 dark:text-white mb-2 flex items-center gap-2">
+          {/* Lineage Section */}
+          <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
+            <button
+              onClick={() => setShowLineage(!showLineage)}
+              className="w-full flex items-center justify-between text-sm font-medium text-slate-800 dark:text-white mb-2"
+            >
+              <span className="flex items-center gap-2">
                 <GitBranch className="w-4 h-4" />
-                Lineage
-              </p>
-              <div className="text-sm">
-                <p className="text-slate-500">Parent: {capsule.parent_id}</p>
+                Lineage (Isnad Chain)
+              </span>
+              <ChevronRight className={`w-4 h-4 transition-transform ${showLineage ? 'rotate-90' : ''}`} />
+            </button>
+
+            {showLineage && (
+              <div className="mt-3 space-y-3">
+                {lineageLoading ? (
+                  <div className="flex items-center gap-2 text-slate-500">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span className="text-sm">Loading lineage...</span>
+                  </div>
+                ) : lineageData ? (
+                  <div className="space-y-3">
+                    {/* Ancestors */}
+                    {lineageData.ancestors && lineageData.ancestors.length > 0 && (
+                      <div>
+                        <p className="text-xs text-slate-500 uppercase tracking-wider mb-2">Ancestors</p>
+                        <div className="space-y-2">
+                          {lineageData.ancestors.map((ancestor: { id: string; title: string; type: string; depth: number }, idx: number) => (
+                            <div
+                              key={ancestor.id}
+                              className="flex items-center gap-2 p-2 bg-slate-50 dark:bg-slate-800 rounded-lg"
+                              style={{ marginLeft: `${idx * 12}px` }}
+                            >
+                              <GitBranch className="w-4 h-4 text-slate-400" />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-slate-800 dark:text-white truncate">{ancestor.title}</p>
+                                <p className="text-xs text-slate-500">{ancestor.type} • Depth: {ancestor.depth}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Current Capsule */}
+                    <div className="p-3 bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-800 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 bg-sky-500 rounded-full flex items-center justify-center">
+                          <CheckCircle className="w-4 h-4 text-white" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-slate-800 dark:text-white">{capsule.title}</p>
+                          <p className="text-xs text-slate-500">Current capsule</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Descendants */}
+                    {lineageData.descendants && lineageData.descendants.length > 0 && (
+                      <div>
+                        <p className="text-xs text-slate-500 uppercase tracking-wider mb-2">Descendants (Forks)</p>
+                        <div className="space-y-2">
+                          {lineageData.descendants.map((descendant: { id: string; title: string; type: string; depth: number }) => (
+                            <div
+                              key={descendant.id}
+                              className="flex items-center gap-2 p-2 bg-slate-50 dark:bg-slate-800 rounded-lg"
+                            >
+                              <GitFork className="w-4 h-4 text-slate-400" />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-slate-800 dark:text-white truncate">{descendant.title}</p>
+                                <p className="text-xs text-slate-500">{descendant.type}</p>
+                              </div>
+                              <ExternalLink className="w-4 h-4 text-slate-400" />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Stats */}
+                    <div className="flex items-center gap-4 text-xs text-slate-500">
+                      <span>Chain depth: {lineageData.depth || 0}</span>
+                      <span>Forks: {capsule.fork_count || 0}</span>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-500">No lineage data available</p>
+                )}
+
+                {/* Integrity Check Button */}
+                <div className="pt-3 border-t border-slate-100 dark:border-slate-700">
+                  <button
+                    onClick={() => refetchIntegrity()}
+                    disabled={integrityLoading}
+                    className="flex items-center gap-2 text-sm text-sky-600 hover:text-sky-700"
+                  >
+                    {integrityLoading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Shield className="w-4 h-4" />
+                    )}
+                    Verify Integrity
+                  </button>
+
+                  {integrityData && (
+                    <div className={`mt-2 p-3 rounded-lg ${
+                      integrityData.is_valid
+                        ? 'bg-emerald-50 border border-emerald-200'
+                        : 'bg-red-50 border border-red-200'
+                    }`}>
+                      <div className="flex items-center gap-2 mb-2">
+                        {integrityData.is_valid ? (
+                          <CheckCircle className="w-5 h-5 text-emerald-600" />
+                        ) : (
+                          <AlertCircle className="w-5 h-5 text-red-600" />
+                        )}
+                        <span className={`font-medium ${
+                          integrityData.is_valid ? 'text-emerald-800' : 'text-red-800'
+                        }`}>
+                          {integrityData.is_valid ? 'Integrity Verified' : 'Integrity Issues Found'}
+                        </span>
+                      </div>
+                      <div className="text-xs space-y-1">
+                        <p className={integrityData.content_hash_valid ? 'text-emerald-600' : 'text-red-600'}>
+                          Content Hash: {integrityData.content_hash_valid ? 'Valid' : 'Invalid'}
+                        </p>
+                        {integrityData.signature_valid !== null && (
+                          <p className={integrityData.signature_valid ? 'text-emerald-600' : 'text-red-600'}>
+                            Signature: {integrityData.signature_valid ? 'Valid' : 'Invalid'}
+                          </p>
+                        )}
+                        {integrityData.issues && integrityData.issues.length > 0 && (
+                          <div className="mt-2 text-red-600">
+                            <p className="font-medium">Issues:</p>
+                            <ul className="list-disc list-inside">
+                              {integrityData.issues.map((issue: string, idx: number) => (
+                                <li key={idx}>{issue}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       )}
+
+      {/* Fork Modal */}
+      {showForkModal && (
+        <ForkCapsuleModal
+          capsule={capsule}
+          onClose={() => setShowForkModal(false)}
+          onSuccess={(forkedCapsule) => {
+            setShowForkModal(false);
+            onFork?.(forkedCapsule);
+          }}
+        />
+      )}
+    </Modal>
+  );
+}
+
+// ============================================================================
+// Fork Capsule Modal
+// ============================================================================
+
+interface ForkCapsuleModalProps {
+  capsule: Capsule;
+  onClose: () => void;
+  onSuccess: (forkedCapsule: Capsule) => void;
+}
+
+function ForkCapsuleModal({ capsule, onClose, onSuccess }: ForkCapsuleModalProps) {
+  const [formData, setFormData] = useState({
+    title: `Fork of: ${capsule.title}`,
+    content: capsule.content,
+    evolution_reason: '',
+  });
+  const queryClient = useQueryClient();
+
+  const forkMutation = useMutation({
+    mutationFn: (data: { title?: string; content?: string; evolution_reason: string }) =>
+      api.forkCapsule(capsule.id, data),
+    onSuccess: (forkedCapsule) => {
+      queryClient.invalidateQueries({ queryKey: ['capsules'] });
+      queryClient.invalidateQueries({ queryKey: ['capsule-lineage', capsule.id] });
+      onSuccess(forkedCapsule);
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.evolution_reason.trim()) return;
+    forkMutation.mutate(formData);
+  };
+
+  return (
+    <Modal
+      isOpen={true}
+      onClose={onClose}
+      title="Fork Capsule"
+      size="lg"
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            onClick={handleSubmit}
+            loading={forkMutation.isPending}
+            disabled={!formData.evolution_reason.trim()}
+            icon={<GitFork className="w-4 h-4" />}
+          >
+            Create Fork
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <div className="p-4 bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-800 rounded-lg">
+          <div className="flex items-start gap-3">
+            <GitBranch className="w-5 h-5 text-sky-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <h4 className="font-medium text-sky-800 dark:text-sky-300">Forking from:</h4>
+              <p className="text-sm text-sky-700 dark:text-sky-400">{capsule.title}</p>
+              <p className="text-xs text-sky-600 dark:text-sky-500 mt-1">
+                The new capsule will be linked to this parent in the lineage chain.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <label className="label">Title</label>
+          <input
+            type="text"
+            value={formData.title}
+            onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+            className="input"
+            placeholder="Title for the forked capsule"
+          />
+        </div>
+
+        <div>
+          <label className="label">Content</label>
+          <textarea
+            value={formData.content}
+            onChange={(e) => setFormData({ ...formData, content: e.target.value })}
+            className="input min-h-32"
+            placeholder="Modify the content as needed..."
+          />
+        </div>
+
+        <div>
+          <label className="label">Evolution Reason *</label>
+          <textarea
+            value={formData.evolution_reason}
+            onChange={(e) => setFormData({ ...formData, evolution_reason: e.target.value })}
+            className="input min-h-20"
+            placeholder="Why are you creating this fork? What's different?"
+            required
+          />
+          <p className="text-xs text-slate-500 mt-1">
+            Explain why this fork is needed and what changes were made.
+          </p>
+        </div>
+
+        {forkMutation.isError && (
+          <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-400">
+            <AlertCircle className="w-4 h-4" />
+            {forkMutation.error?.message || 'Failed to fork capsule'}
+          </div>
+        )}
+      </div>
     </Modal>
   );
 }

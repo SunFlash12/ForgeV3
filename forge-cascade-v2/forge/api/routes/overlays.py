@@ -27,7 +27,7 @@ from forge.api.dependencies import (
     OverlayManagerDep,
     TrustedUserDep,
 )
-from forge.models.overlay import OverlayPhase, OverlayState
+from forge.models.base import OverlayPhase, OverlayState
 
 # Resilience integration - metrics and caching
 from forge.resilience.integration import (

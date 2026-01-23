@@ -9,19 +9,17 @@ These tests verify the complete ACP lifecycle including:
 - Agent Gateway ↔ ACP bridge functionality
 """
 
-import asyncio
 import hashlib
 import json
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 from uuid import uuid4
 
 import pytest
 
 from forge.virtuals.acp.nonce_store import NonceStore
-from forge.virtuals.acp.service import ACPService, ACPServiceError
+from forge.virtuals.acp.service import ACPService
 from forge.virtuals.models.acp import (
     ACPDeliverable,
     ACPDispute,
@@ -34,7 +32,6 @@ from forge.virtuals.models.acp import (
     ACPPhase,
     JobOffering,
     PaymentToken,
-    TokenPayment,
 )
 
 

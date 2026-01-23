@@ -721,7 +721,10 @@ class GhostCouncilMemberResponse(BaseModel):
     id: str
     name: str
     role: str
+    domain: str | None = None
+    icon: str | None = None
     weight: float
+    persona: str | None = None
 
 
 @router.get("/ghost-council/members", response_model=list[GhostCouncilMemberResponse])
@@ -732,20 +735,24 @@ async def get_ghost_council_members(
     Get the list of Ghost Council members.
 
     The Ghost Council consists of AI advisors with different expertise areas
-    who deliberate on proposals and serious issues.
+    who deliberate on proposals and serious issues. Returns all 10 council
+    members with their domain expertise, icons, and personas.
     """
-    from forge.services.ghost_council import get_ghost_council_service
+    from forge.services.ghost_council import DEFAULT_COUNCIL_MEMBERS
 
-    ghost_council = get_ghost_council_service()
-
+    # Always return all 10 council members for display purposes
+    # (The actual deliberation may use fewer based on profile setting)
     return [
         GhostCouncilMemberResponse(
             id=member.id,
             name=member.name,
             role=member.role,
+            domain=member.domain,
+            icon=member.icon,
             weight=member.weight,
+            persona=member.persona,
         )
-        for member in ghost_council.members
+        for member in DEFAULT_COUNCIL_MEMBERS
     ]
 
 

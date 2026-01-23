@@ -74,8 +74,6 @@ if _settings.sentry_dsn:
         release="forge-cascade@2.0.0",
         # Send default PII (user IDs) - disable if privacy concerns
         send_default_pii=False,
-        # Attach request data for debugging
-        request_bodies="medium",
         # Don't send health check errors
         before_send=_sentry_before_send,
     )
@@ -837,7 +835,7 @@ def create_app(
 
     # Prometheus metrics endpoint
     # Returns metrics in Prometheus text format for scraping
-    metrics_response = create_metrics_endpoint()
+    metrics_response = create_metrics_endpoint(app)
 
     @app.get("/metrics", include_in_schema=False)
     async def metrics():

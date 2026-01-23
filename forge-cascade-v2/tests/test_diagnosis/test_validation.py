@@ -4,17 +4,16 @@ Tests for diagnosis input validation module.
 Tests HPO code validation, gene symbol validation, and input sanitization.
 """
 
-import pytest
 
 from forge.services.diagnosis.validation import (
-    is_valid_hpo_code,
-    is_valid_gene_symbol,
-    is_valid_disease_id,
-    sanitize_hpo_codes,
-    sanitize_gene_symbols,
-    validate_phenotype_input,
-    validate_genetic_input,
     InputValidator,
+    is_valid_disease_id,
+    is_valid_gene_symbol,
+    is_valid_hpo_code,
+    sanitize_gene_symbols,
+    sanitize_hpo_codes,
+    validate_genetic_input,
+    validate_phenotype_input,
 )
 
 

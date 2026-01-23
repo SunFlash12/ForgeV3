@@ -120,8 +120,8 @@ export default function DashboardPage() {
       {/* Page Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Dashboard</h1>
-          <p className="text-slate-500 mt-1">Forge Knowledge Cascade System Overview</p>
+          <h1 className="text-2xl font-bold text-slate-800">Welcome to Forge</h1>
+          <p className="text-slate-500 mt-1">Your institutional knowledge at a glance</p>
         </div>
         <div className="flex items-center gap-2 text-sm text-slate-500">
           <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
@@ -175,7 +175,7 @@ export default function DashboardPage() {
                     <StatusBadge status={comp.status as HealthStatus} />
                   </div>
                   {name === 'database' && (
-                    <p className="text-xs text-slate-400">PostgreSQL</p>
+                    <p className="text-xs text-slate-400">Neo4j Graph Database</p>
                   )}
                   {name === 'overlay_manager' && comp.active_overlays !== undefined && (
                     <p className="text-xs text-slate-400">
@@ -325,8 +325,8 @@ export default function DashboardPage() {
           ) : (
             <div className="text-center py-10 text-slate-400">
               <Shield className="w-10 h-10 mx-auto mb-3 opacity-40" />
-              <p className="font-medium">No active anomalies</p>
-              <p className="text-sm mt-1">All systems operating normally</p>
+              <p className="font-medium text-emerald-600">All Clear!</p>
+              <p className="text-sm mt-1">No issues detected. Your systems are running smoothly.</p>
             </div>
           )}
         </Card>
@@ -364,8 +364,8 @@ export default function DashboardPage() {
           ) : (
             <div className="text-center py-10 text-slate-400">
               <Vote className="w-10 h-10 mx-auto mb-3 opacity-40" />
-              <p className="font-medium">No active proposals</p>
-              <p className="text-sm mt-1">Create a new proposal to get started</p>
+              <p className="font-medium">No proposals pending</p>
+              <p className="text-sm mt-1">Head to Governance to propose changes to the knowledge base.</p>
             </div>
           )}
         </Card>
@@ -400,8 +400,8 @@ export default function DashboardPage() {
           ) : (
             <div className="text-center py-10 text-slate-400">
               <Database className="w-10 h-10 mx-auto mb-3 opacity-40" />
-              <p className="font-medium">No capsules yet</p>
-              <p className="text-sm mt-1">Create your first knowledge capsule</p>
+              <p className="font-medium">Your knowledge journey starts here</p>
+              <p className="text-sm mt-1">Create your first capsule to begin building institutional memory.</p>
             </div>
           )}
         </Card>

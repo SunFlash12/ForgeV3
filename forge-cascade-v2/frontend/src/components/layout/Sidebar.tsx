@@ -8,14 +8,16 @@ import {
   Activity,
   Settings,
   LogOut,
-  Shield,
   ChevronLeft,
   ChevronRight,
   Globe,
   GitBranch,
+  Stethoscope,
+  Users,
 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuthStore } from '../../stores/authStore';
+import { Logo, LogoIcon } from '../common';
 
 interface NavItem {
   icon: React.ElementType;
@@ -28,8 +30,10 @@ const navItems: NavItem[] = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
   { icon: Database, label: 'Capsules', path: '/capsules' },
   { icon: GitBranch, label: 'Graph Explorer', path: '/graph' },
+  { icon: Stethoscope, label: 'Diagnosis', path: '/diagnosis' },
   { icon: Vote, label: 'Governance', path: '/governance' },
   { icon: Ghost, label: 'Ghost Council', path: '/ghost-council' },
+  { icon: Users, label: 'User Directory', path: '/users', requiredTrust: ['TRUSTED', 'CORE'] },
   { icon: Layers, label: 'Overlays', path: '/overlays', requiredTrust: ['TRUSTED', 'CORE'] },
   { icon: Globe, label: 'Federation', path: '/federation', requiredTrust: ['TRUSTED', 'CORE'] },
   { icon: Activity, label: 'System', path: '/system', requiredTrust: ['TRUSTED', 'CORE'] },
@@ -68,17 +72,11 @@ export function Sidebar() {
     >
       {/* Logo */}
       <div className="flex items-center justify-between p-4 border-b border-slate-100">
-        {!collapsed && (
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-sky-500 to-violet-500 flex items-center justify-center shadow-lg shadow-sky-500/20">
-              <Shield className="w-5 h-5 text-white" />
-            </div>
-            <span className="font-bold text-xl text-gradient">FORGE</span>
-          </div>
-        )}
-        {collapsed && (
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-sky-500 to-violet-500 flex items-center justify-center shadow-lg shadow-sky-500/20 mx-auto">
-            <Shield className="w-5 h-5 text-white" />
+        {!collapsed ? (
+          <Logo size="sm" showText={true} />
+        ) : (
+          <div className="mx-auto">
+            <LogoIcon size={36} />
           </div>
         )}
         <button
