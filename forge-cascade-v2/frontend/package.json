@@ -11,6 +11,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@react-oauth/google": "^0.12.0",
+    "@sentry/react": "^8.0.0",
     "@tanstack/react-query": "^5.90.16",
     "axios": "^1.13.2",
     "date-fns": "^4.1.0",
