@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
-import { Shield, Eye, EyeOff, Loader2, Sparkles, Check, X } from 'lucide-react';
+import { Eye, EyeOff, Loader2, Sparkles, Check, X } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
+import { Logo, LogoIcon } from '../components/common';
 
 type AuthMode = 'login' | 'register';
 
@@ -107,9 +108,7 @@ export default function LoginPage() {
         
         <div className="relative z-10">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
-              <Shield className="w-7 h-7 text-white" />
-            </div>
+            <LogoIcon size={48} className="drop-shadow-lg" />
             <span className="text-2xl font-bold text-white">FORGE</span>
           </div>
         </div>
@@ -137,7 +136,7 @@ export default function LoginPage() {
         </div>
         
         <div className="relative z-10 text-sm text-white/50">
-          © 2025 Forge Cascade. Built for institutional memory.
+          © 2026 Forge Cascade. Built for institutional memory.
         </div>
       </div>
 
@@ -146,22 +145,22 @@ export default function LoginPage() {
         <div className="w-full max-w-md">
           {/* Mobile Logo */}
           <div className="lg:hidden text-center mb-10">
-            <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-sky-500 to-violet-500 mb-4 shadow-lg shadow-sky-500/30">
-              <Shield className="w-8 h-8 text-white" />
+            <div className="inline-flex items-center justify-center mb-4">
+              <LogoIcon size={56} />
             </div>
-            <h1 className="text-2xl font-bold text-gradient">FORGE</h1>
+            <h1 className="text-2xl font-bold bg-gradient-to-r from-sky-500 via-indigo-500 to-violet-500 bg-clip-text text-transparent">FORGE</h1>
             <p className="text-slate-500 mt-1 text-sm">Cognitive Architecture Platform</p>
           </div>
 
           {/* Welcome Text */}
           <div className="mb-8">
             <h2 className="text-2xl font-bold text-slate-800">
-              {mode === 'login' ? 'Welcome back' : 'Create your account'}
+              {mode === 'login' ? 'Welcome back!' : 'Join Forge'}
             </h2>
             <p className="text-slate-500 mt-2">
-              {mode === 'login' 
-                ? 'Sign in to continue to your dashboard' 
-                : 'Join the cognitive architecture community'}
+              {mode === 'login'
+                ? 'Sign in to access your knowledge dashboard'
+                : 'Start building your institutional memory today'}
             </p>
           </div>
 
@@ -328,12 +327,12 @@ export default function LoginPage() {
             <p className="text-xs text-slate-500 text-center leading-relaxed">
               {mode === 'register' ? (
                 <>
-                  New accounts start at <span className="font-semibold text-amber-600">SANDBOX</span> trust level.
-                  Contribute to the community to increase your trust score and unlock more capabilities.
+                  🌱 New accounts start at <span className="font-semibold text-amber-600">SANDBOX</span> trust level.
+                  Contribute quality knowledge to grow your trust and unlock more features.
                 </>
               ) : (
                 <>
-                  Forge uses a trust-based permission system. Your access level determines which features and operations are available to you.
+                  🔐 Forge uses trust-based access control. Your contributions determine your capabilities.
                 </>
               )}
             </p>

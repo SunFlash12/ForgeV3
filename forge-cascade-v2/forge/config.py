@@ -56,7 +56,7 @@ class Settings(BaseSettings):
 
     # CORS
     cors_origins: str = Field(
-        default="http://localhost:3000,http://localhost:8000",
+        default="http://localhost:3000,http://localhost:3001,http://localhost:3002,http://localhost:5173,http://localhost:8000",
         description="Comma-separated CORS origins",
     )
 
@@ -202,14 +202,12 @@ class Settings(BaseSettings):
 
         if provider == "openai" and not v.startswith(("sk-", "org-")):
             logger.warning(
-                "llm_api_key_format_warning",
-                hint="OpenAI API keys typically start with 'sk-'",
+                "llm_api_key_format_warning: OpenAI API keys typically start with 'sk-'"
             )
 
         if provider == "anthropic" and not v.startswith("sk-ant-"):
             logger.warning(
-                "llm_api_key_format_warning",
-                hint="Anthropic API keys typically start with 'sk-ant-'",
+                "llm_api_key_format_warning: Anthropic API keys typically start with 'sk-ant-'"
             )
 
         return v
@@ -224,8 +222,7 @@ class Settings(BaseSettings):
         # OpenAI keys typically start with sk-
         if not v.startswith(("sk-", "org-")):
             logger.warning(
-                "embedding_api_key_format_warning",
-                hint="OpenAI API keys typically start with 'sk-'",
+                "embedding_api_key_format_warning: OpenAI API keys typically start with 'sk-'"
             )
 
         return v

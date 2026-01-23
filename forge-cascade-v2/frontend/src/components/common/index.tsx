@@ -661,3 +661,6 @@ export function Skeleton({ className = '', variant = 'text', width, height }: Sk
     />
   );
 }
+
+// Re-export Logo component
+export { Logo, LogoIcon } from './Logo';

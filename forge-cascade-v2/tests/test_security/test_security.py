@@ -12,11 +12,10 @@ SECURITY FIX (Audit 3): Comprehensive security test suite covering:
 Run with: pytest tests/test_security/ -v
 """
 
-import pytest
-import time
 import re
-from datetime import datetime, timezone, timedelta
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock
+
+import pytest
 
 # =============================================================================
 # Password Security Tests
@@ -27,14 +26,14 @@ class TestPasswordValidation:
 
     def test_password_min_length(self):
         """Password must be at least 8 characters."""
-        from forge.security.password import validate_password_strength, PasswordValidationError
+        from forge.security.password import PasswordValidationError, validate_password_strength
 
         with pytest.raises(PasswordValidationError, match="at least 8 characters"):
             validate_password_strength("Short1!")
 
     def test_password_max_length(self):
         """Password must not exceed 128 characters."""
-        from forge.security.password import validate_password_strength, PasswordValidationError
+        from forge.security.password import PasswordValidationError, validate_password_strength
 
         long_password = "A" * 129 + "a1!"
         with pytest.raises(PasswordValidationError, match="cannot exceed"):
@@ -42,63 +41,63 @@ class TestPasswordValidation:
 
     def test_password_requires_uppercase(self):
         """Password must contain uppercase letter."""
-        from forge.security.password import validate_password_strength, PasswordValidationError
+        from forge.security.password import PasswordValidationError, validate_password_strength
 
         with pytest.raises(PasswordValidationError, match="uppercase"):
             validate_password_strength("lowercase123!")
 
     def test_password_requires_lowercase(self):
         """Password must contain lowercase letter."""
-        from forge.security.password import validate_password_strength, PasswordValidationError
+        from forge.security.password import PasswordValidationError, validate_password_strength
 
         with pytest.raises(PasswordValidationError, match="lowercase"):
             validate_password_strength("UPPERCASE123!")
 
     def test_password_requires_digit(self):
         """Password must contain at least one digit."""
-        from forge.security.password import validate_password_strength, PasswordValidationError
+        from forge.security.password import PasswordValidationError, validate_password_strength
 
         with pytest.raises(PasswordValidationError, match="digit"):
             validate_password_strength("NoDigitsHere!")
 
     def test_password_requires_special_char(self):
         """Password must contain special character."""
-        from forge.security.password import validate_password_strength, PasswordValidationError
+        from forge.security.password import PasswordValidationError, validate_password_strength
 
         with pytest.raises(PasswordValidationError, match="special character"):
             validate_password_strength("NoSpecial123")
 
     def test_password_common_rejected(self):
         """Common passwords are rejected."""
-        from forge.security.password import validate_password_strength, PasswordValidationError
+        from forge.security.password import PasswordValidationError, validate_password_strength
 
         with pytest.raises(PasswordValidationError, match="too common"):
             validate_password_strength("Password123!")
 
     def test_password_banned_substrings(self):
         """Passwords with banned substrings are rejected."""
-        from forge.security.password import validate_password_strength, PasswordValidationError
+        from forge.security.password import PasswordValidationError, validate_password_strength
 
         with pytest.raises(PasswordValidationError, match="common words"):
             validate_password_strength("MyForge123!")  # Contains 'forge'
 
     def test_password_username_similarity(self):
         """Password cannot contain username."""
-        from forge.security.password import validate_password_strength, PasswordValidationError
+        from forge.security.password import PasswordValidationError, validate_password_strength
 
         with pytest.raises(PasswordValidationError, match="username"):
             validate_password_strength("JohnDoe123!", username="johndoe")
 
     def test_password_email_similarity(self):
         """Password cannot contain email local part."""
-        from forge.security.password import validate_password_strength, PasswordValidationError
+        from forge.security.password import PasswordValidationError, validate_password_strength
 
         with pytest.raises(PasswordValidationError, match="email"):
             validate_password_strength("TestUser123!", email="testuser@example.com")
 
     def test_password_repetitive_pattern(self):
         """Password with repetitive patterns is rejected."""
-        from forge.security.password import validate_password_strength, PasswordValidationError
+        from forge.security.password import PasswordValidationError, validate_password_strength
 
         with pytest.raises(PasswordValidationError, match="repetitive"):
             validate_password_strength("AbcAbcAbcA1!")
@@ -262,7 +261,7 @@ class TestSafeRegex:
 
     def test_validate_pattern_too_long(self):
         """Pattern exceeding max length is rejected."""
-        from forge.security.safe_regex import validate_pattern, MAX_PATTERN_LENGTH
+        from forge.security.safe_regex import MAX_PATTERN_LENGTH, validate_pattern
 
         long_pattern = "a" * (MAX_PATTERN_LENGTH + 1)
         is_valid, error = validate_pattern(long_pattern)
@@ -287,7 +286,7 @@ class TestSafeRegex:
 
     def test_safe_search_timeout(self):
         """Safe search with timeout prevents hanging."""
-        from forge.security.safe_regex import safe_search, RegexTimeoutError
+        from forge.security.safe_regex import safe_search
 
         # This shouldn't hang due to timeout
         # Note: The simple pattern won't actually timeout, but the mechanism is tested
@@ -296,7 +295,7 @@ class TestSafeRegex:
 
     def test_safe_search_truncates_long_input(self):
         """Input exceeding max length is truncated."""
-        from forge.security.safe_regex import safe_search, MAX_INPUT_LENGTH
+        from forge.security.safe_regex import MAX_INPUT_LENGTH, safe_search
 
         long_input = "a" * (MAX_INPUT_LENGTH + 1000)
         # Should not raise, input is truncated
@@ -334,8 +333,9 @@ class TestGovernanceActionValidation:
 
     def test_invalid_action_type_rejected(self):
         """Action type not valid for proposal type is rejected."""
-        from forge.models.governance import ProposalCreate, ProposalType
         from pydantic import ValidationError
+
+        from forge.models.governance import ProposalCreate, ProposalType
 
         with pytest.raises(ValidationError, match="not valid"):
             ProposalCreate(
@@ -347,8 +347,9 @@ class TestGovernanceActionValidation:
 
     def test_missing_required_fields_rejected(self):
         """Action missing required fields is rejected."""
-        from forge.models.governance import ProposalCreate, ProposalType
         from pydantic import ValidationError
+
+        from forge.models.governance import ProposalCreate, ProposalType
 
         with pytest.raises(ValidationError, match="missing required"):
             ProposalCreate(
@@ -360,8 +361,9 @@ class TestGovernanceActionValidation:
 
     def test_dangerous_fields_rejected(self):
         """Action with dangerous fields is rejected."""
-        from forge.models.governance import ProposalCreate, ProposalType
         from pydantic import ValidationError
+
+        from forge.models.governance import ProposalCreate, ProposalType
 
         with pytest.raises(ValidationError, match="forbidden"):
             ProposalCreate(
@@ -399,7 +401,7 @@ class TestTokenSecurity:
 
     def test_token_blacklist_bounded(self):
         """Token blacklist has bounded size."""
-        from forge.security.tokens import TokenBlacklist, _MAX_BLACKLIST_SIZE
+        from forge.security.tokens import _MAX_BLACKLIST_SIZE, TokenBlacklist
 
         # Add many tokens
         for i in range(_MAX_BLACKLIST_SIZE + 100):
@@ -468,7 +470,7 @@ class TestSecurityIntegration:
     @pytest.mark.asyncio
     async def test_password_change_validates_new_password(self):
         """Password change validates new password against username."""
-        from forge.security.password import hash_password, PasswordValidationError
+        from forge.security.password import PasswordValidationError, hash_password
 
         # This should raise because password contains username
         with pytest.raises(PasswordValidationError):
@@ -477,8 +479,8 @@ class TestSecurityIntegration:
     @pytest.mark.asyncio
     async def test_mfa_and_password_together(self):
         """MFA and password security work together."""
-        from forge.security.password import validate_password_strength
         from forge.security.mfa import MFAService
+        from forge.security.password import validate_password_strength
 
         # Valid password
         validate_password_strength("SecureP@ss2024!")

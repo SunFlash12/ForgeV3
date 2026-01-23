@@ -9,17 +9,15 @@ Tests cover:
 - Threat detection patterns
 """
 
-import pytest
 import asyncio
-from datetime import datetime, timedelta
-from collections import defaultdict
+
+import pytest
 
 from forge.overlays.security_validator import (
     ContentPolicyRule,
-    TrustRule,
-    RateLimitRule,
     InputSanitizationRule,
-    SecurityValidationError,
+    RateLimitRule,
+    TrustRule,
 )
 
 

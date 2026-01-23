@@ -10,24 +10,16 @@ Tests cover:
 - Price suggestions
 """
 
-import pytest
-from datetime import datetime, timedelta
 from decimal import Decimal
 from uuid import uuid4
 
+import pytest
+
 from forge.models.marketplace import (
-    CapsuleListing,
-    Cart,
-    CartItem,
     Currency,
-    License,
     LicenseType,
     ListingStatus,
-    PaymentMethod,
     PaymentStatus,
-    Purchase,
-    RevenueDistribution,
-    PriceSuggestion,
 )
 from forge.services.marketplace import MarketplaceService
 

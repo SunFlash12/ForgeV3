@@ -17,7 +17,7 @@ import json
 import logging
 import socket
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, Callable
 from urllib.parse import urlparse
 
 import httpx
@@ -252,7 +252,7 @@ class NotificationService:
         message: str,
         data: dict[str, Any] | None = None,
         priority: NotificationPriority = NotificationPriority.NORMAL,
-        user_filter: callable | None = None,
+        user_filter: Callable | None = None,
         caller_id: str | None = None,
         caller_role: str | None = None,
     ) -> int:

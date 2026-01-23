@@ -12,7 +12,12 @@ import {
   Shield,
   Zap,
   ChevronRight,
+  Power,
+  Loader2,
+  Lock,
+  AlertCircle,
 } from 'lucide-react';
+import { useAuthStore } from '../stores/authStore';
 import { format, formatDistanceToNow } from 'date-fns';
 import {
   LineChart,
@@ -65,9 +70,15 @@ const getStatusIcon = (status: string) => {
 
 export default function SystemPage() {
   const queryClient = useQueryClient();
+  const { user } = useAuthStore();
   const [selectedAnomaly, setSelectedAnomaly] = useState<Anomaly | null>(null);
   const [showResolveModal, setShowResolveModal] = useState(false);
   const [resolveNotes, setResolveNotes] = useState('');
+  const [showMaintenanceModal, setShowMaintenanceModal] = useState(false);
+  const [maintenanceMessage, setMaintenanceMessage] = useState('System is undergoing scheduled maintenance. Please check back later.');
+  const [maintenanceDuration, setMaintenanceDuration] = useState(60);
+
+  const isCore = user?.trust_level === 'CORE';
 
   // Queries
   const { data: health, isLoading: healthLoading } = useQuery({
@@ -94,6 +105,12 @@ export default function SystemPage() {
     refetchInterval: 15000,
   });
 
+  const { data: maintenanceStatus, isLoading: maintenanceLoading } = useQuery({
+    queryKey: ['maintenance-status'],
+    queryFn: () => api.getMaintenanceStatus(),
+    refetchInterval: 30000,
+  });
+
   // Mutations
   const acknowledgeMutation = useMutation({
     mutationFn: (id: string) => api.acknowledgeAnomaly(id),
@@ -113,6 +130,19 @@ export default function SystemPage() {
   const resetBreakerMutation = useMutation({
     mutationFn: (name: string) => api.resetCircuitBreaker(name),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['circuit-breakers'] }),
+  });
+
+  const enableMaintenanceMutation = useMutation({
+    mutationFn: (options: { message?: string; duration_minutes?: number }) => api.enableMaintenance(options),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['maintenance-status'] });
+      setShowMaintenanceModal(false);
+    },
+  });
+
+  const disableMaintenanceMutation = useMutation({
+    mutationFn: () => api.disableMaintenance(),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['maintenance-status'] }),
   });
 
   // Mock historical data for charts (stable placeholder values)
@@ -187,6 +217,94 @@ export default function SystemPage() {
             <div className="text-slate-800 font-mono">{healthData?.version || 'N/A'}</div>
           </div>
         </div>
+      </Card>
+
+      {/* Maintenance Mode */}
+      <Card className="p-6 mb-8">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className={`p-3 rounded-xl ${
+              maintenanceStatus?.enabled ? 'bg-amber-500/20' : 'bg-slate-100'
+            }`}>
+              <Power className={`w-8 h-8 ${
+                maintenanceStatus?.enabled ? 'text-amber-500' : 'text-slate-400'
+              }`} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-xl font-semibold text-slate-800">Maintenance Mode</h2>
+                {maintenanceLoading ? (
+                  <Loader2 className="w-4 h-4 text-slate-400 animate-spin" />
+                ) : (
+                  <span className={`px-2 py-1 rounded text-sm font-medium ${
+                    maintenanceStatus?.enabled
+                      ? 'bg-amber-500/20 text-amber-600'
+                      : 'bg-green-500/20 text-green-600'
+                  }`}>
+                    {maintenanceStatus?.enabled ? 'ACTIVE' : 'INACTIVE'}
+                  </span>
+                )}
+              </div>
+              <p className="text-slate-500 mt-1">
+                {maintenanceStatus?.enabled
+                  ? maintenanceStatus.message || 'System is under maintenance'
+                  : 'System is operating normally'}
+              </p>
+              {maintenanceStatus?.enabled && maintenanceStatus.ends_at && (
+                <p className="text-sm text-amber-600 mt-1">
+                  Ends: {format(new Date(maintenanceStatus.ends_at), 'PPpp')}
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            {!isCore ? (
+              <div className="flex items-center gap-2 text-slate-500">
+                <Lock className="w-4 h-4" />
+                <span className="text-sm">CORE access required</span>
+              </div>
+            ) : maintenanceStatus?.enabled ? (
+              <Button
+                variant="secondary"
+                icon={<Power className="w-4 h-4" />}
+                onClick={() => disableMaintenanceMutation.mutate()}
+                loading={disableMaintenanceMutation.isPending}
+              >
+                Disable Maintenance
+              </Button>
+            ) : (
+              <Button
+                variant="primary"
+                icon={<AlertCircle className="w-4 h-4" />}
+                onClick={() => setShowMaintenanceModal(true)}
+              >
+                Enable Maintenance Mode
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {/* Active Maintenance Details */}
+        {maintenanceStatus?.enabled && (
+          <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <h4 className="font-medium text-amber-800">Maintenance Active</h4>
+                <p className="text-sm text-amber-700 mt-1">
+                  External users and non-essential services are restricted during maintenance.
+                  Only CORE and TRUSTED users have access to critical functions.
+                </p>
+                {maintenanceStatus.started_at && (
+                  <p className="text-xs text-amber-600 mt-2">
+                    Started: {formatDistanceToNow(new Date(maintenanceStatus.started_at))} ago
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </Card>
 
       {/* Quick Stats Grid */}
@@ -490,6 +608,92 @@ export default function SystemPage() {
               loading={resolveMutation.isPending}
             >
               Mark as Resolved
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Enable Maintenance Mode Modal */}
+      <Modal
+        isOpen={showMaintenanceModal}
+        onClose={() => setShowMaintenanceModal(false)}
+        title="Enable Maintenance Mode"
+        size="md"
+      >
+        <div className="space-y-6">
+          <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <h4 className="font-medium text-amber-800">Warning</h4>
+                <p className="text-sm text-amber-700 mt-1">
+                  Enabling maintenance mode will restrict access for most users. Only CORE and
+                  TRUSTED users will have limited access to critical functions.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <label className="label">Maintenance Message</label>
+            <textarea
+              className="input min-h-[80px]"
+              value={maintenanceMessage}
+              onChange={(e) => setMaintenanceMessage(e.target.value)}
+              placeholder="Message to display to users..."
+            />
+            <p className="text-xs text-slate-500 mt-1">
+              This message will be shown to users attempting to access the system.
+            </p>
+          </div>
+
+          <div>
+            <label className="label">Duration (minutes)</label>
+            <div className="flex items-center gap-4">
+              <input
+                type="number"
+                className="input w-32"
+                value={maintenanceDuration}
+                onChange={(e) => setMaintenanceDuration(parseInt(e.target.value) || 60)}
+                min={1}
+                max={1440}
+              />
+              <div className="flex gap-2">
+                {[30, 60, 120, 240].map((mins) => (
+                  <button
+                    key={mins}
+                    type="button"
+                    onClick={() => setMaintenanceDuration(mins)}
+                    className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${
+                      maintenanceDuration === mins
+                        ? 'bg-sky-100 border-sky-300 text-sky-700'
+                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    {mins < 60 ? `${mins}m` : `${mins / 60}h`}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <p className="text-xs text-slate-500 mt-1">
+              Maintenance will automatically end after this duration.
+            </p>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
+            <Button variant="ghost" onClick={() => setShowMaintenanceModal(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              icon={<Power className="w-4 h-4" />}
+              onClick={() => enableMaintenanceMutation.mutate({
+                message: maintenanceMessage,
+                duration_minutes: maintenanceDuration,
+              })}
+              loading={enableMaintenanceMutation.isPending}
+            >
+              Enable Maintenance Mode
             </Button>
           </div>
         </div>

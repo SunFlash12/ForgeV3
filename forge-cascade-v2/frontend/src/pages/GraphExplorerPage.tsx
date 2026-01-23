@@ -18,6 +18,9 @@ import {
   ChevronUp,
   Eye,
   Link2,
+  MessageSquare,
+  Send,
+  Sparkles,
 } from 'lucide-react';
 import { api } from '../api/client';
 import {
@@ -125,6 +128,35 @@ export default function GraphExplorerPage() {
   const [minTrust, setMinTrust] = useState(0);
   const [colorBy, setColorBy] = useState<'type' | 'community' | 'trust'>('type');
   const [sizeBy, setSizeBy] = useState<'pagerank' | 'connections' | 'uniform'>('pagerank');
+
+  // NLP Query
+  const [showNlpQuery, setShowNlpQuery] = useState(false);
+  const [nlpQuery, setNlpQuery] = useState('');
+  const [nlpResults, setNlpResults] = useState<Array<Record<string, unknown>> | null>(null);
+  const [nlpLoading, setNlpLoading] = useState(false);
+  const [nlpError, setNlpError] = useState<string | null>(null);
+  const [nlpMetadata, setNlpMetadata] = useState<{ query_type?: string; execution_time_ms?: number; cached?: boolean } | null>(null);
+
+  // Execute NLP query
+  const executeNlpQuery = async () => {
+    if (!nlpQuery.trim()) return;
+    setNlpLoading(true);
+    setNlpError(null);
+    try {
+      const result = await api.executeKnowledgeQuery(nlpQuery);
+      setNlpResults(result.results);
+      setNlpMetadata({
+        query_type: result.query_type,
+        execution_time_ms: result.execution_time_ms,
+        cached: result.cached,
+      });
+    } catch (err) {
+      setNlpError(err instanceof Error ? err.message : 'Query failed');
+      setNlpResults(null);
+    } finally {
+      setNlpLoading(false);
+    }
+  };
 
   // Fetch graph data
   const { data: graphData, isLoading, refetch } = useQuery<GraphData>({
@@ -270,6 +302,11 @@ export default function GraphExplorerPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => setShowNlpQuery(!showNlpQuery)}>
+            <Sparkles className="w-4 h-4 mr-2" />
+            AI Query
+            {showNlpQuery ? <ChevronUp className="w-4 h-4 ml-1" /> : <ChevronDown className="w-4 h-4 ml-1" />}
+          </Button>
           <Button variant="outline" size="sm" onClick={() => setShowFilters(!showFilters)}>
             <Filter className="w-4 h-4 mr-2" />
             Filters
@@ -280,6 +317,106 @@ export default function GraphExplorerPage() {
           </Button>
         </div>
       </div>
+
+      {/* NLP Query Panel */}
+      {showNlpQuery && (
+        <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-violet-50 to-indigo-50 dark:from-violet-900/20 dark:to-indigo-900/20">
+          <div className="flex items-center gap-2 mb-3">
+            <Sparkles className="w-5 h-5 text-violet-600 dark:text-violet-400" />
+            <h3 className="font-semibold text-slate-800 dark:text-white">Natural Language Query</h3>
+            <span className="text-xs text-slate-500 dark:text-slate-400">Ask questions about the knowledge graph</span>
+          </div>
+          <div className="flex gap-3">
+            <div className="flex-1 relative">
+              <input
+                type="text"
+                value={nlpQuery}
+                onChange={(e) => setNlpQuery(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && executeNlpQuery()}
+                placeholder="e.g., What capsules mention authentication? Find connections between security and governance..."
+                className="w-full pl-10 pr-4 py-2.5 border border-violet-200 dark:border-violet-800 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-violet-500 focus:border-violet-500"
+              />
+              <MessageSquare className="w-5 h-5 text-violet-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            </div>
+            <Button onClick={executeNlpQuery} disabled={nlpLoading || !nlpQuery.trim()}>
+              {nlpLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              <span className="ml-2">Query</span>
+            </Button>
+          </div>
+
+          {/* Query Results */}
+          {nlpError && (
+            <div className="mt-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-600 dark:text-red-400 text-sm">
+              {nlpError}
+            </div>
+          )}
+
+          {nlpResults !== null && (
+            <div className="mt-3">
+              {nlpMetadata && (
+                <div className="flex items-center gap-4 mb-2 text-xs text-slate-500 dark:text-slate-400">
+                  <span>Type: <strong>{nlpMetadata.query_type}</strong></span>
+                  <span>Time: <strong>{nlpMetadata.execution_time_ms}ms</strong></span>
+                  {nlpMetadata.cached && <Badge variant="secondary">Cached</Badge>}
+                </div>
+              )}
+              {nlpResults.length === 0 ? (
+                <div className="p-4 bg-white dark:bg-gray-800 rounded-lg border border-slate-200 dark:border-slate-700 text-center text-slate-500">
+                  No results found for your query
+                </div>
+              ) : (
+                <div className="max-h-48 overflow-y-auto bg-white dark:bg-gray-800 rounded-lg border border-slate-200 dark:border-slate-700">
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-50 dark:bg-slate-700/50 sticky top-0">
+                      <tr>
+                        {Object.keys(nlpResults[0] || {}).slice(0, 5).map((key) => (
+                          <th key={key} className="px-3 py-2 text-left font-medium text-slate-600 dark:text-slate-300">
+                            {key}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {nlpResults.slice(0, 10).map((row, i) => (
+                        <tr key={i} className="border-t border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/30">
+                          {Object.entries(row).slice(0, 5).map(([key, value]) => (
+                            <td key={key} className="px-3 py-2 text-slate-700 dark:text-slate-300 truncate max-w-xs">
+                              {typeof value === 'object' ? JSON.stringify(value) : String(value ?? '')}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {nlpResults.length > 10 && (
+                    <div className="px-3 py-2 bg-slate-50 dark:bg-slate-700/50 text-xs text-slate-500 border-t">
+                      Showing 10 of {nlpResults.length} results
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Example Queries */}
+          <div className="mt-3 flex flex-wrap gap-2">
+            <span className="text-xs text-slate-500 dark:text-slate-400">Try:</span>
+            {[
+              'Find all capsules about security',
+              'What decisions were made recently?',
+              'Show capsules with high trust',
+            ].map((example) => (
+              <button
+                key={example}
+                onClick={() => setNlpQuery(example)}
+                className="text-xs px-2 py-1 bg-white dark:bg-gray-800 border border-violet-200 dark:border-violet-800 rounded-full text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-colors"
+              >
+                {example}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Filters Panel */}
       {showFilters && (

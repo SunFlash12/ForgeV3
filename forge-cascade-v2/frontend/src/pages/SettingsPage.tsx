@@ -15,7 +15,13 @@ import {
   RefreshCw,
   Sun,
   Moon,
-  Monitor
+  Monitor,
+  Smartphone,
+  Key,
+  Copy,
+  Check,
+  X,
+  Loader2
 } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import { Card, Button, TrustBadge, Modal } from '../components/common';
@@ -128,6 +134,31 @@ export default function SettingsPage() {
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportFormat, setExportFormat] = useState<'json' | 'csv'>('json');
 
+  // MFA state
+  const [mfaStatus, setMfaStatus] = useState<{ enabled: boolean; backup_codes_remaining?: number } | null>(null);
+  const [mfaLoading, setMfaLoading] = useState(false);
+  const [showMfaSetup, setShowMfaSetup] = useState(false);
+  const [mfaSetupData, setMfaSetupData] = useState<{ secret: string; qr_code: string; backup_codes: string[] } | null>(null);
+  const [mfaVerifyCode, setMfaVerifyCode] = useState('');
+  const [showBackupCodes, setShowBackupCodes] = useState(false);
+  const [showDisableMfa, setShowDisableMfa] = useState(false);
+  const [disableMfaCode, setDisableMfaCode] = useState('');
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
+
+  // Fetch MFA status on mount
+  useEffect(() => {
+    const fetchMfaStatus = async () => {
+      try {
+        const status = await api.getMfaStatus();
+        setMfaStatus(status);
+      } catch {
+        // MFA status fetch failed - user may not have MFA enabled
+        setMfaStatus({ enabled: false });
+      }
+    };
+    fetchMfaStatus();
+  }, []);
+
   const tabs = [
     { id: 'profile' as const, label: 'Profile', icon: User },
     { id: 'security' as const, label: 'Security', icon: Lock },
@@ -205,6 +236,72 @@ export default function SettingsPage() {
       showMessage('success', 'Trust information refreshed');
     } catch {
       showMessage('error', 'Failed to refresh trust information');
+    }
+  };
+
+  // MFA Handlers
+  const handleStartMfaSetup = async () => {
+    setMfaLoading(true);
+    try {
+      const data = await api.setupMfa();
+      setMfaSetupData(data);
+      setShowMfaSetup(true);
+    } catch (err) {
+      const errorMessage = getErrorMessage(err, 'Failed to start MFA setup');
+      showMessage('error', errorMessage);
+    } finally {
+      setMfaLoading(false);
+    }
+  };
+
+  const handleVerifyMfa = async () => {
+    if (mfaVerifyCode.length !== 6) {
+      showMessage('error', 'Please enter a 6-digit code');
+      return;
+    }
+    setMfaLoading(true);
+    try {
+      await api.verifyMfa(mfaVerifyCode);
+      setMfaStatus({ enabled: true, backup_codes_remaining: mfaSetupData?.backup_codes.length });
+      setShowMfaSetup(false);
+      setShowBackupCodes(true);
+      showMessage('success', 'Two-factor authentication enabled successfully');
+    } catch (err) {
+      const errorMessage = getErrorMessage(err, 'Invalid verification code');
+      showMessage('error', errorMessage);
+    } finally {
+      setMfaLoading(false);
+      setMfaVerifyCode('');
+    }
+  };
+
+  const handleDisableMfa = async () => {
+    if (disableMfaCode.length !== 6) {
+      showMessage('error', 'Please enter a 6-digit code');
+      return;
+    }
+    setMfaLoading(true);
+    try {
+      await api.disableMfa(disableMfaCode);
+      setMfaStatus({ enabled: false });
+      setShowDisableMfa(false);
+      showMessage('success', 'Two-factor authentication disabled');
+    } catch (err) {
+      const errorMessage = getErrorMessage(err, 'Invalid verification code');
+      showMessage('error', errorMessage);
+    } finally {
+      setMfaLoading(false);
+      setDisableMfaCode('');
+    }
+  };
+
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedCode(text);
+      setTimeout(() => setCopiedCode(null), 2000);
+    } catch {
+      showMessage('error', 'Failed to copy to clipboard');
     }
   };
 
@@ -510,6 +607,55 @@ export default function SettingsPage() {
                   </div>
                 </div>
               </Card>
+
+              {/* Two-Factor Authentication */}
+              <Card className="p-6">
+                <h2 className="text-lg font-semibold text-slate-800 mb-6 flex items-center gap-2">
+                  <Smartphone className="w-5 h-5 text-sky-400" />
+                  Two-Factor Authentication
+                </h2>
+
+                <div className="p-4 bg-slate-100/30 rounded-lg">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-3 h-3 rounded-full ${mfaStatus?.enabled ? 'bg-green-500' : 'bg-slate-400'}`} />
+                      <div>
+                        <div className="text-slate-800 font-medium">
+                          {mfaStatus?.enabled ? 'Enabled' : 'Disabled'}
+                        </div>
+                        {mfaStatus?.enabled && mfaStatus.backup_codes_remaining !== undefined && (
+                          <div className="text-xs text-slate-500">
+                            {mfaStatus.backup_codes_remaining} backup codes remaining
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    {mfaStatus?.enabled ? (
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        onClick={() => setShowDisableMfa(true)}
+                        icon={<X className="w-4 h-4" />}
+                      >
+                        Disable 2FA
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        onClick={handleStartMfaSetup}
+                        loading={mfaLoading}
+                        icon={<Key className="w-4 h-4" />}
+                      >
+                        Enable 2FA
+                      </Button>
+                    )}
+                  </div>
+
+                  <p className="text-sm text-slate-500">
+                    Two-factor authentication adds an extra layer of security to your account by requiring a code from your authenticator app in addition to your password.
+                  </p>
+                </div>
+              </Card>
             </div>
           )}
 
@@ -724,6 +870,195 @@ export default function SettingsPage() {
             </Button>
             <Button onClick={handleExportData}>
               Download Export
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* MFA Setup Modal */}
+      <Modal
+        isOpen={showMfaSetup}
+        onClose={() => {
+          setShowMfaSetup(false);
+          setMfaSetupData(null);
+          setMfaVerifyCode('');
+        }}
+        title="Set Up Two-Factor Authentication"
+        size="md"
+      >
+        <div className="space-y-6">
+          <div className="text-center">
+            <p className="text-slate-500 mb-4">
+              Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.)
+            </p>
+            {mfaSetupData?.qr_code && (
+              <div className="inline-block p-4 bg-white rounded-lg shadow-sm">
+                <img
+                  src={mfaSetupData.qr_code}
+                  alt="MFA QR Code"
+                  className="w-48 h-48"
+                />
+              </div>
+            )}
+          </div>
+
+          <div className="p-4 bg-slate-100/50 rounded-lg">
+            <p className="text-sm text-slate-500 mb-2">Or enter this code manually:</p>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 px-3 py-2 bg-slate-200/50 rounded font-mono text-sm text-slate-800 break-all">
+                {mfaSetupData?.secret}
+              </code>
+              <button
+                onClick={() => mfaSetupData?.secret && copyToClipboard(mfaSetupData.secret)}
+                className="p-2 hover:bg-slate-200 rounded transition-colors"
+                title="Copy to clipboard"
+              >
+                {copiedCode === mfaSetupData?.secret ? (
+                  <Check className="w-4 h-4 text-green-500" />
+                ) : (
+                  <Copy className="w-4 h-4 text-slate-400" />
+                )}
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label className="label">Enter the 6-digit code from your app</label>
+            <input
+              type="text"
+              value={mfaVerifyCode}
+              onChange={(e) => setMfaVerifyCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              className="input text-center text-2xl tracking-widest font-mono"
+              placeholder="000000"
+              maxLength={6}
+              autoComplete="one-time-code"
+            />
+          </div>
+
+          <div className="flex justify-end gap-3">
+            <Button variant="ghost" onClick={() => {
+              setShowMfaSetup(false);
+              setMfaSetupData(null);
+              setMfaVerifyCode('');
+            }}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleVerifyMfa}
+              loading={mfaLoading}
+              disabled={mfaVerifyCode.length !== 6}
+            >
+              Verify & Enable
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Backup Codes Modal */}
+      <Modal
+        isOpen={showBackupCodes}
+        onClose={() => setShowBackupCodes(false)}
+        title="Save Your Backup Codes"
+        size="md"
+      >
+        <div className="space-y-4">
+          <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+            <p className="text-amber-600 text-sm">
+              Save these backup codes in a safe place. You can use them to sign in if you lose access to your authenticator app. Each code can only be used once.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 p-4 bg-slate-100/50 rounded-lg">
+            {mfaSetupData?.backup_codes.map((code, index) => (
+              <div
+                key={index}
+                className="flex items-center justify-between px-3 py-2 bg-white rounded font-mono text-sm"
+              >
+                <span>{code}</span>
+                <button
+                  onClick={() => copyToClipboard(code)}
+                  className="p-1 hover:bg-slate-100 rounded transition-colors"
+                >
+                  {copiedCode === code ? (
+                    <Check className="w-3 h-3 text-green-500" />
+                  ) : (
+                    <Copy className="w-3 h-3 text-slate-400" />
+                  )}
+                </button>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex justify-between">
+            <Button
+              variant="secondary"
+              onClick={() => {
+                const codes = mfaSetupData?.backup_codes.join('\n') || '';
+                const blob = new Blob([codes], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'forge-backup-codes.txt';
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+            >
+              Download Codes
+            </Button>
+            <Button onClick={() => {
+              setShowBackupCodes(false);
+              setMfaSetupData(null);
+            }}>
+              I've Saved My Codes
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Disable MFA Modal */}
+      <Modal
+        isOpen={showDisableMfa}
+        onClose={() => {
+          setShowDisableMfa(false);
+          setDisableMfaCode('');
+        }}
+        title="Disable Two-Factor Authentication"
+        size="sm"
+      >
+        <div className="space-y-4">
+          <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-lg">
+            <p className="text-red-500 text-sm">
+              Disabling two-factor authentication will make your account less secure. Are you sure you want to continue?
+            </p>
+          </div>
+
+          <div>
+            <label className="label">Enter a code from your authenticator app to confirm</label>
+            <input
+              type="text"
+              value={disableMfaCode}
+              onChange={(e) => setDisableMfaCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              className="input text-center text-2xl tracking-widest font-mono"
+              placeholder="000000"
+              maxLength={6}
+              autoComplete="one-time-code"
+            />
+          </div>
+
+          <div className="flex justify-end gap-3">
+            <Button variant="ghost" onClick={() => {
+              setShowDisableMfa(false);
+              setDisableMfaCode('');
+            }}>
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={handleDisableMfa}
+              loading={mfaLoading}
+              disabled={disableMfaCode.length !== 6}
+            >
+              Disable 2FA
             </Button>
           </div>
         </div>

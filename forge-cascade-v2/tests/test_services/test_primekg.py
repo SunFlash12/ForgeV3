@@ -9,20 +9,19 @@ Tests cover:
 - Clinical data structure validation
 """
 
-import pytest
 from datetime import datetime
 
 from forge.services.primekg.models import (
-    PrimeKGNodeType,
-    PrimeKGEdgeType,
-    PrimeKGNode,
-    PrimeKGEdge,
-    PrimeKGDisease,
-    PrimeKGGene,
-    PrimeKGDrug,
-    PrimeKGPhenotype,
     PrimeKGAnatomy,
+    PrimeKGDisease,
+    PrimeKGDrug,
+    PrimeKGEdge,
+    PrimeKGEdgeType,
+    PrimeKGGene,
+    PrimeKGNode,
+    PrimeKGNodeType,
     PrimeKGPathway,
+    PrimeKGPhenotype,
     PrimeKGStats,
 )
 

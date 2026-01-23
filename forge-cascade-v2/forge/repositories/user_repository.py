@@ -54,6 +54,31 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
     def model_class(self) -> type[User]:
         return User
 
+    def _to_model(self, record: dict[str, Any]) -> User | None:
+        """
+        Convert a Neo4j record to a User model.
+
+        Overrides base implementation to handle None values for optional
+        fields that have defaults (like metadata), which Neo4j returns
+        as None when the property doesn't exist on the node.
+        """
+        if not record:
+            return None
+
+        # Handle None metadata - Neo4j returns None if property doesn't exist
+        if record.get("metadata") is None:
+            record["metadata"] = {}
+
+        try:
+            return User.model_validate(record)
+        except Exception as e:
+            self.logger.error(
+                "Failed to convert record to model",
+                error=str(e),
+                record_keys=list(record.keys()),
+            )
+            return None
+
     async def create(
         self,
         data: UserCreate,

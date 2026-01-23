@@ -15,7 +15,7 @@ from __future__ import annotations
 import hashlib
 import time
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, ClassVar
 from uuid import uuid4
 
 import structlog
@@ -282,7 +282,7 @@ class SearchRequest(BaseModel):
     filters: dict[str, Any] = Field(default_factory=dict)
 
     # SECURITY FIX: Whitelist allowed filter keys to prevent injection
-    ALLOWED_FILTER_KEYS = {"owner_id", "type", "tag", "min_trust", "max_trust", "created_after", "created_before"}
+    ALLOWED_FILTER_KEYS: ClassVar[set[str]] = {"owner_id", "type", "tag", "min_trust", "max_trust", "created_after", "created_before"}
 
     @field_validator("filters")
     @classmethod
