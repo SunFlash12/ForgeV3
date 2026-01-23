@@ -293,6 +293,30 @@ class ForgeApiClient {
   }
 
   // ============================================================================
+  // Google OAuth
+  // ============================================================================
+
+  async googleAuth(idToken: string, source: 'cascade' | 'shop' = 'cascade'): Promise<LoginResponse> {
+    const response = await this.client.post<LoginResponse>('/auth/google', {
+      id_token: idToken,
+      source,
+    });
+
+    // Store CSRF token in memory (NOT localStorage!)
+    setCSRFToken(response.data.csrf_token);
+
+    return response.data;
+  }
+
+  async linkGoogleAccount(idToken: string): Promise<void> {
+    await this.client.post('/auth/google/link', { id_token: idToken });
+  }
+
+  async unlinkGoogleAccount(): Promise<void> {
+    await this.client.delete('/auth/google/unlink');
+  }
+
+  // ============================================================================
   // Capsule Endpoints
   // ============================================================================
 

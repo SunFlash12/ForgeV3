@@ -18,7 +18,7 @@ Security Features:
 from __future__ import annotations
 
 import secrets
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Cookie, HTTPException, Request, Response, status
 from pydantic import BaseModel, EmailStr, Field, field_validator
@@ -700,6 +700,7 @@ class MFASetupResponse(BaseModel):
     """Response for MFA setup."""
     secret: str
     provisioning_uri: str
+    qr_code: str  # Alias for provisioning_uri (frontend compatibility)
     backup_codes: list[str]
 
 
@@ -749,6 +750,7 @@ async def setup_mfa(
     return MFASetupResponse(
         secret=result.secret,
         provisioning_uri=result.provisioning_uri,
+        qr_code=result.provisioning_uri,  # Alias for frontend compatibility
         backup_codes=result.backup_codes,
     )
 
@@ -874,3 +876,238 @@ async def regenerate_backup_codes(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="MFA is not enabled for this account"
         )
+
+
+# =============================================================================
+# GOOGLE OAUTH Endpoints
+# =============================================================================
+
+from forge.security.google_oauth import (
+    GoogleOAuthError,
+    GoogleUserInfo,
+    get_google_oauth_service,
+)
+
+
+class GoogleAuthRequest(BaseModel):
+    """Request for Google OAuth authentication."""
+    credential: str = Field(..., description="Google ID token from Sign-In")
+    client_type: Literal["cascade", "shop"] = Field(
+        default="cascade",
+        description="Client type for redirect URI selection"
+    )
+
+
+class GoogleAuthResponse(BaseModel):
+    """Response after Google OAuth authentication."""
+    csrf_token: str
+    expires_in: int
+    user: UserResponse
+    is_new_user: bool
+
+
+class GoogleLinkResponse(BaseModel):
+    """Response after linking Google account."""
+    linked: bool
+    google_email: str
+
+
+@router.post("/google", response_model=GoogleAuthResponse)
+async def google_auth(
+    request: GoogleAuthRequest,
+    response: Response,
+    user_repo: UserRepoDep,
+    audit_repo: AuditRepoDep,
+) -> GoogleAuthResponse:
+    """
+    Authenticate via Google OAuth.
+
+    Accepts a Google ID token from the frontend Sign-In.
+    Creates a new user account if one doesn't exist,
+    or logs in the existing user linked to this Google account.
+    """
+    google_service = get_google_oauth_service()
+
+    if not google_service.is_configured:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Google Sign-In is not configured"
+        )
+
+    try:
+        # Verify the Google token
+        google_user = await google_service.verify_id_token(request.credential)
+
+        # Get or create user
+        user, is_new_user = await google_service.get_or_create_user(
+            google_user, user_repo
+        )
+
+        # Generate tokens
+        from forge.security.tokens import create_access_token, create_refresh_token, create_csrf_token
+        from forge.config import get_settings
+
+        settings = get_settings()
+
+        access_token = create_access_token(
+            user_id=user.id,
+            username=user.username,
+            role=user.role,
+            trust_flame=user.trust_flame,
+        )
+        refresh_token = create_refresh_token(user_id=user.id)
+        csrf_token = create_csrf_token()
+
+        # Store refresh token hash
+        await user_repo.update_refresh_token(user.id, refresh_token)
+
+        # Record login
+        await user_repo.record_login(user.id)
+
+        # Audit log
+        await audit_repo.log_security_event(
+            actor_id=user.id,
+            event_name="google_auth_success",
+            details={"is_new_user": is_new_user, "client_type": request.client_type},
+        )
+
+        # Set cookies
+        _set_auth_cookies(
+            response=response,
+            access_token=access_token,
+            refresh_token=refresh_token,
+            csrf_token=csrf_token,
+            settings=settings,
+        )
+
+        return GoogleAuthResponse(
+            csrf_token=csrf_token,
+            expires_in=settings.access_token_expire_minutes * 60,
+            user=UserResponse.from_user(user_repo.to_safe_user(user)),
+            is_new_user=is_new_user,
+        )
+
+    except GoogleOAuthError as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=str(e)
+        )
+
+
+@router.post("/google/link", response_model=GoogleLinkResponse)
+async def link_google_account(
+    request: GoogleAuthRequest,
+    user: ActiveUserDep,
+    user_repo: UserRepoDep,
+    audit_repo: AuditRepoDep,
+) -> GoogleLinkResponse:
+    """
+    Link a Google account to the current user.
+
+    Allows users who signed up with email/password to add Google Sign-In.
+    """
+    google_service = get_google_oauth_service()
+
+    if not google_service.is_configured:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Google Sign-In is not configured"
+        )
+
+    try:
+        # Verify the Google token
+        google_user = await google_service.verify_id_token(request.credential)
+
+        # Check if this Google account is already linked to another user
+        existing = await user_repo.get_by_google_id(google_user.sub)
+        if existing and existing.id != user.id:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="This Google account is already linked to another user"
+            )
+
+        # Link the account
+        success = await user_repo.link_google_account(
+            user_id=user.id,
+            google_id=google_user.sub,
+            google_email=google_user.email,
+        )
+
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to link Google account"
+            )
+
+        # Audit log
+        await audit_repo.log_security_event(
+            actor_id=user.id,
+            event_name="google_account_linked",
+            details={"google_id": google_user.sub},
+        )
+
+        return GoogleLinkResponse(
+            linked=True,
+            google_email=google_user.email,
+        )
+
+    except GoogleOAuthError as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=str(e)
+        )
+
+
+@router.delete("/google/unlink", status_code=status.HTTP_204_NO_CONTENT)
+async def unlink_google_account(
+    user: ActiveUserDep,
+    user_repo: UserRepoDep,
+    audit_repo: AuditRepoDep,
+) -> Response:
+    """
+    Unlink Google account from the current user.
+
+    User must have a password set to unlink Google (to prevent lockout).
+    """
+    # Get full user data to check auth provider
+    full_user = await user_repo.get_by_id(user.id)
+
+    if not full_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+
+    # Check if user has Google linked
+    user_db = await user_repo.get_by_username(full_user.username)
+    if not user_db or not user_db.google_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No Google account is linked"
+        )
+
+    # Prevent lockout: if auth_provider is GOOGLE, user needs password
+    if user_db.auth_provider == AuthProvider.GOOGLE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot unlink Google - this is your only sign-in method. "
+                   "Please set a password first."
+        )
+
+    # Unlink
+    success = await user_repo.unlink_google_account(user.id)
+
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to unlink Google account"
+        )
+
+    # Audit log
+    await audit_repo.log_security_event(
+        actor_id=user.id,
+        event_name="google_account_unlinked",
+        details={},
+    )
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

@@ -9,9 +9,10 @@ interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
-  
+
   // Actions
   login: (username: string, password: string) => Promise<void>;
+  loginWithGoogle: (idToken: string) => Promise<void>;
   register: (username: string, email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   fetchCurrentUser: () => Promise<void>;
@@ -36,14 +37,33 @@ export const useAuthStore = create<AuthState>()(
           await api.login(username, password);
           const user = await api.getCurrentUser();
           const trustInfo = await api.getTrustInfo();
-          set({ 
-            user, 
-            trustInfo, 
-            isAuthenticated: true, 
-            isLoading: false 
+          set({
+            user,
+            trustInfo,
+            isAuthenticated: true,
+            isLoading: false
           });
         } catch (error) {
           const message = error instanceof Error ? error.message : 'Login failed';
+          set({ error: message, isLoading: false });
+          throw error;
+        }
+      },
+
+      loginWithGoogle: async (idToken: string) => {
+        set({ isLoading: true, error: null });
+        try {
+          await api.googleAuth(idToken, 'cascade');
+          const user = await api.getCurrentUser();
+          const trustInfo = await api.getTrustInfo();
+          set({
+            user,
+            trustInfo,
+            isAuthenticated: true,
+            isLoading: false
+          });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Google login failed';
           set({ error: message, isLoading: false });
           throw error;
         }

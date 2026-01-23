@@ -646,3 +646,235 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
         """
 
         await self.client.execute(query, {"id": user_id})
+
+    # =========================================================================
+    # Google OAuth Methods
+    # =========================================================================
+
+    async def get_by_google_id(self, google_id: str) -> UserInDB | None:
+        """Get user by Google OAuth ID."""
+        query = """
+        MATCH (u:User {google_id: $google_id})
+        RETURN u {.*} AS user
+        """
+
+        result = await self.client.execute_single(query, {"google_id": google_id})
+
+        if result and result.get("user"):
+            return UserInDB.model_validate(result["user"])
+        return None
+
+    async def link_google_account(
+        self,
+        user_id: str,
+        google_id: str,
+        google_email: str,
+    ) -> bool:
+        """Link a Google account to an existing user."""
+        query = """
+        MATCH (u:User {id: $id})
+        SET u.google_id = $google_id,
+            u.google_email = $google_email,
+            u.google_linked_at = $now,
+            u.updated_at = $now
+        RETURN u.id AS id
+        """
+
+        result = await self.client.execute_single(
+            query,
+            {
+                "id": user_id,
+                "google_id": google_id,
+                "google_email": google_email,
+                "now": self._now().isoformat(),
+            },
+        )
+
+        if result and result.get("id") == user_id:
+            self.logger.info(
+                "Linked Google account to user",
+                user_id=user_id,
+                google_id=google_id,
+            )
+            return True
+        return False
+
+    async def unlink_google_account(self, user_id: str) -> bool:
+        """Unlink Google account from a user."""
+        query = """
+        MATCH (u:User {id: $id})
+        SET u.google_id = null,
+            u.google_email = null,
+            u.google_linked_at = null,
+            u.updated_at = $now
+        RETURN u.id AS id
+        """
+
+        result = await self.client.execute_single(
+            query,
+            {"id": user_id, "now": self._now().isoformat()},
+        )
+
+        return result is not None and result.get("id") == user_id
+
+    async def create_google_user(
+        self,
+        username: str,
+        email: str,
+        display_name: str | None,
+        avatar_url: str | None,
+        google_id: str,
+        google_email: str,
+        is_verified: bool = True,
+    ) -> UserInDB:
+        """Create a new user from Google OAuth."""
+        user_id = self._generate_id()
+        now = self._now()
+
+        query = """
+        CREATE (u:User {
+            id: $id,
+            username: $username,
+            email: $email,
+            display_name: $display_name,
+            bio: null,
+            avatar_url: $avatar_url,
+            password_hash: $password_hash,
+            role: $role,
+            trust_flame: $trust_flame,
+            is_active: true,
+            is_verified: $is_verified,
+            auth_provider: $auth_provider,
+            google_id: $google_id,
+            google_email: $google_email,
+            google_linked_at: $now,
+            last_login: $now,
+            refresh_token: null,
+            failed_login_attempts: 0,
+            lockout_until: null,
+            created_at: $now,
+            updated_at: $now
+        })
+        RETURN u {.*} AS user
+        """
+
+        # Generate a random password hash (user won't use password login)
+        import secrets
+        random_password = secrets.token_urlsafe(32)
+        from forge.security.password import hash_password
+        password_hash = hash_password(random_password)
+
+        params = {
+            "id": user_id,
+            "username": username,
+            "email": email,
+            "display_name": display_name,
+            "avatar_url": avatar_url,
+            "password_hash": password_hash,
+            "role": UserRole.USER.value,
+            "trust_flame": TrustLevel.STANDARD.value,
+            "auth_provider": AuthProvider.GOOGLE.value,
+            "google_id": google_id,
+            "google_email": google_email,
+            "is_verified": is_verified,
+            "now": now.isoformat(),
+        }
+
+        result = await self.client.execute_single(query, params)
+
+        if result and result.get("user"):
+            self.logger.info(
+                "Created Google OAuth user",
+                user_id=user_id,
+                username=username,
+                google_id=google_id,
+            )
+            return UserInDB.model_validate(result["user"])
+
+        raise RuntimeError(f"Failed to create Google OAuth user: {username}")
+
+    # =========================================================================
+    # Stripe Methods
+    # =========================================================================
+
+    async def set_stripe_customer_id(self, user_id: str, stripe_customer_id: str) -> bool:
+        """Set Stripe customer ID for a user."""
+        query = """
+        MATCH (u:User {id: $id})
+        SET u.stripe_customer_id = $stripe_customer_id,
+            u.updated_at = $now
+        RETURN u.id AS id
+        """
+
+        result = await self.client.execute_single(
+            query,
+            {
+                "id": user_id,
+                "stripe_customer_id": stripe_customer_id,
+                "now": self._now().isoformat(),
+            },
+        )
+
+        return result is not None and result.get("id") == user_id
+
+    async def get_by_stripe_customer_id(self, stripe_customer_id: str) -> User | None:
+        """Get user by Stripe customer ID."""
+        query = f"""
+        MATCH (u:User {{stripe_customer_id: $stripe_customer_id}})
+        RETURN u {{{USER_SAFE_FIELDS}}} AS user
+        """
+
+        result = await self.client.execute_single(
+            query, {"stripe_customer_id": stripe_customer_id}
+        )
+
+        if result and result.get("user"):
+            return self._to_model(result["user"])
+        return None
+
+    async def search(
+        self,
+        query_str: str,
+        limit: int = 20,
+    ) -> list[User]:
+        """
+        Search users by username or display name.
+
+        Uses case-insensitive partial matching for user search functionality
+        (e.g., for delegation features).
+
+        Args:
+            query_str: Search query (min 1 char)
+            limit: Maximum results to return
+
+        Returns:
+            List of matching users (safe User model, no password hashes)
+        """
+        # Escape special regex characters for safe CONTAINS matching
+        safe_query = query_str.replace("\\", "\\\\").replace("'", "\\'")
+
+        query = f"""
+        MATCH (u:User)
+        WHERE u.is_active = true
+          AND (
+            toLower(u.username) CONTAINS toLower($query)
+            OR toLower(u.display_name) CONTAINS toLower($query)
+          )
+        RETURN u {{{USER_SAFE_FIELDS}}} AS user
+        ORDER BY
+            CASE WHEN toLower(u.username) STARTS WITH toLower($query) THEN 0 ELSE 1 END,
+            u.trust_flame DESC,
+            u.username
+        LIMIT $limit
+        """
+
+        results = await self.client.execute(
+            query,
+            {"query": safe_query, "limit": limit},
+        )
+
+        return [
+            self._to_model(r["user"])
+            for r in results
+            if r.get("user")
+        ]

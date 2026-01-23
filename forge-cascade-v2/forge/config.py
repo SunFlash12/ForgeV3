@@ -303,6 +303,24 @@ class Settings(BaseSettings):
     sentry_dsn: str | None = Field(default=None, description="Sentry DSN")
 
     # ═══════════════════════════════════════════════════════════════
+    # GOOGLE OAUTH
+    # ═══════════════════════════════════════════════════════════════
+    google_client_id: str | None = Field(
+        default=None, description="Google OAuth Client ID"
+    )
+    google_client_secret: str | None = Field(
+        default=None, description="Google OAuth Client Secret"
+    )
+    google_redirect_uri_cascade: str = Field(
+        default="http://localhost:3000/auth/google/callback",
+        description="OAuth callback URI for Forge Cascade"
+    )
+    google_redirect_uri_shop: str = Field(
+        default="http://localhost:3001/auth/google/callback",
+        description="OAuth callback URI for Forge Shop"
+    )
+
+    # ═══════════════════════════════════════════════════════════════
     # SCHEDULER
     # ═══════════════════════════════════════════════════════════════
     scheduler_enabled: bool = Field(

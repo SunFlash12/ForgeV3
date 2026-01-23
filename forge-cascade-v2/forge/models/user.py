@@ -260,6 +260,42 @@ class UserInDB(User):
         description="When signing keys were set up",
     )
 
+    # ═══════════════════════════════════════════════════════════════
+    # GOOGLE OAUTH FIELDS
+    # ═══════════════════════════════════════════════════════════════
+    google_id: str | None = Field(
+        default=None,
+        description="Google account ID for OAuth",
+    )
+    google_email: str | None = Field(
+        default=None,
+        description="Google account email (may differ from primary email)",
+    )
+    google_linked_at: datetime | None = Field(
+        default=None,
+        description="When Google account was linked",
+    )
+
+    # ═══════════════════════════════════════════════════════════════
+    # WEB3 WALLET FIELDS (Virtuals Protocol / Base L2)
+    # ═══════════════════════════════════════════════════════════════
+    wallet_address: str | None = Field(
+        default=None,
+        description="Primary EVM wallet address (Base L2)",
+    )
+    wallet_linked_at: datetime | None = Field(
+        default=None,
+        description="When wallet was linked to account",
+    )
+    solana_wallet_address: str | None = Field(
+        default=None,
+        description="Solana wallet address (for cross-chain ACP)",
+    )
+    virtuals_agent_id: str | None = Field(
+        default=None,
+        description="Virtuals Protocol Agent ID (if user is an agent)",
+    )
+
 
 class UserPublic(ForgeModel):
     """Public user profile (no sensitive data)."""

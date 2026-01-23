@@ -1,8 +1,11 @@
 import { useState, useMemo } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { Eye, EyeOff, Loader2, Sparkles, Check, X } from 'lucide-react';
+import { GoogleLogin, type CredentialResponse } from '@react-oauth/google';
 import { useAuthStore } from '../stores/authStore';
 import { Logo, LogoIcon } from '../components/common';
+
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
 type AuthMode = 'login' | 'register';
 
@@ -51,8 +54,9 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
 
-  const { login, register, isAuthenticated, isLoading, error, clearError } = useAuthStore();
+  const { login, loginWithGoogle, register, isAuthenticated, isLoading, error, clearError } = useAuthStore();
   const navigate = useNavigate();
+  const [googleLoading, setGoogleLoading] = useState(false);
 
   // Calculate password strength in register mode
   const passwordStrength = useMemo(() => {
@@ -92,6 +96,30 @@ export default function LoginPage() {
     } catch {
       // Error is handled by the store
     }
+  };
+
+  const handleGoogleSuccess = async (credentialResponse: CredentialResponse) => {
+    if (!credentialResponse.credential) {
+      setLocalError('Google authentication failed - no credential received');
+      return;
+    }
+
+    setGoogleLoading(true);
+    setLocalError(null);
+    clearError();
+
+    try {
+      await loginWithGoogle(credentialResponse.credential);
+      navigate('/');
+    } catch {
+      setLocalError('Google authentication failed. Please try again.');
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
+  const handleGoogleError = () => {
+    setLocalError('Google Sign-In was cancelled or failed');
   };
 
   const displayError = localError || error;
@@ -308,7 +336,7 @@ export default function LoginPage() {
 
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={isLoading || googleLoading}
               className="w-full btn-primary btn-lg mt-2"
             >
               {isLoading ? (
@@ -321,6 +349,39 @@ export default function LoginPage() {
               )}
             </button>
           </form>
+
+          {/* Google Sign-In */}
+          {GOOGLE_CLIENT_ID && (
+            <div className="mt-6">
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-slate-200" />
+                </div>
+                <div className="relative flex justify-center text-sm">
+                  <span className="px-4 bg-white text-slate-500">Or continue with</span>
+                </div>
+              </div>
+
+              <div className="mt-4 flex justify-center">
+                {googleLoading ? (
+                  <div className="flex items-center justify-center gap-2 py-3 text-slate-600">
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>Signing in with Google...</span>
+                  </div>
+                ) : (
+                  <GoogleLogin
+                    onSuccess={handleGoogleSuccess}
+                    onError={handleGoogleError}
+                    theme="outline"
+                    size="large"
+                    text={mode === 'login' ? 'signin_with' : 'signup_with'}
+                    shape="rectangular"
+                    width="100%"
+                  />
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Footer Info */}
           <div className="mt-8 p-4 bg-slate-50 rounded-xl border border-slate-100">
