@@ -242,23 +242,41 @@ When creating capsules, ensure they are well-structured with appropriate tags an
                 "use_stdio": self.config.use_stdio,
                 "log_level": self.config.log_level,
                 "auto_restart": self.config.auto_restart,
+                "auto_start": True,
             }
-            if self.config.cli_path:
-                client_config["cli_path"] = self.config.cli_path
 
-            self._client = CopilotClient(**client_config)
+            # Set CLI path - use config, env var, or auto-discover
+            cli_path = self.config.cli_path
+            if not cli_path:
+                import os
+                cli_path = os.environ.get("COPILOT_CLI_PATH")
+            if not cli_path:
+                # Auto-discover common installation paths
+                import shutil
+                cli_path = shutil.which("copilot")
+                if not cli_path:
+                    # Check npm global install location on Windows
+                    npm_path = os.path.expandvars(
+                        r"%APPDATA%\npm\copilot.cmd"
+                    )
+                    if os.path.exists(npm_path):
+                        cli_path = npm_path
+
+            if cli_path:
+                client_config["cli_path"] = cli_path
+                logger.info(f"Using Copilot CLI at: {cli_path}")
+
+            self._client = CopilotClient(client_config)
             await self._client.start()
 
             # Create session with Forge tools
+            system_prompt = self.config.system_prompt or self.DEFAULT_SYSTEM_PROMPT
             session_config = {
                 "model": self.config.model,
                 "streaming": self.config.streaming,
                 "tools": self._tool_registry.get_copilot_tools(),
+                "system_message": {"content": system_prompt},
             }
-
-            # Add system prompt
-            system_prompt = self.config.system_prompt or self.DEFAULT_SYSTEM_PROMPT
-            session_config["system"] = system_prompt
 
             self._session = await self._client.create_session(session_config)
 
