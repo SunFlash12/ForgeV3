@@ -81,7 +81,7 @@ export default function GovernancePage() {
     enabled: !!user,
   });
 
-  const { data: receivedDelegations } = useQuery({
+  const { data: _receivedDelegations } = useQuery({
     queryKey: ['received-delegations'],
     queryFn: () => api.getDelegations(), // This would need a different endpoint for received delegations
     enabled: !!user,

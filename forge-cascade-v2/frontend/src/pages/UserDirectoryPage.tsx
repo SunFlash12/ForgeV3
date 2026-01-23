@@ -6,18 +6,15 @@ import {
   ChevronDown,
   Shield,
   User,
-  Mail,
   Calendar,
   Award,
   TrendingUp,
   Filter,
-  Loader2,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { api } from '../api/client';
 import {
   Card,
-  Button,
   LoadingSpinner,
   EmptyState,
   Modal,

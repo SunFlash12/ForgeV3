@@ -26,7 +26,6 @@ import {
   RefreshCw,
   Sparkles,
   GitFork,
-  Link,
   Shield,
   ChevronRight,
   ExternalLink,

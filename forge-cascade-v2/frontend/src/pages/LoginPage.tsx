@@ -3,7 +3,7 @@ import { useNavigate, Navigate } from 'react-router-dom';
 import { Eye, EyeOff, Loader2, Sparkles, Check, X } from 'lucide-react';
 import { GoogleLogin, type CredentialResponse } from '@react-oauth/google';
 import { useAuthStore } from '../stores/authStore';
-import { Logo, LogoIcon } from '../components/common';
+import { LogoIcon } from '../components/common';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 

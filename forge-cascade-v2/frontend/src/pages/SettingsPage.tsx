@@ -21,7 +21,6 @@ import {
   Copy,
   Check,
   X,
-  Loader2
 } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import { Card, Button, TrustBadge, Modal } from '../components/common';
