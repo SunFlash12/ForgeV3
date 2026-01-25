@@ -283,6 +283,122 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
         return "unknown"
 
 
+class SessionBindingMiddleware(BaseHTTPMiddleware):
+    """
+    SECURITY FIX (Audit 6 - Session 2): Session binding validation middleware.
+
+    Validates session binding (IP/User-Agent) for authenticated requests.
+    This middleware should be placed AFTER AuthenticationMiddleware.
+
+    Features:
+    - Validates session exists and is active
+    - Detects IP and User-Agent changes
+    - Logs warnings based on binding mode (disabled/log_only/warn/flexible/strict)
+    - Updates session activity on each request
+    """
+
+    # Paths that skip session binding validation
+    SKIP_PATHS = {
+        "/",
+        "/health",
+        "/ready",
+        "/docs",
+        "/redoc",
+        "/openapi.json",
+        "/api/v1/auth/login",
+        "/api/v1/auth/register",
+        "/api/v1/auth/refresh",
+    }
+
+    def __init__(self, app, session_service=None):
+        """
+        Initialize SessionBindingMiddleware.
+
+        Args:
+            app: ASGI application
+            session_service: SessionBindingService instance (can be set later via app.state)
+        """
+        super().__init__(app)
+        self._session_service = session_service
+
+    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+        # Skip public/auth paths
+        if request.url.path in self.SKIP_PATHS:
+            return await call_next(request)
+
+        # Skip if no token payload (unauthenticated request)
+        token_payload = getattr(request.state, 'token_payload', None)
+        if not token_payload:
+            return await call_next(request)
+
+        # Get session service from request app state if not set
+        session_service = self._session_service
+        if not session_service:
+            session_service = getattr(request.app.state, 'session_service', None)
+
+        # Skip if session service not available
+        if not session_service:
+            return await call_next(request)
+
+        # Get token JTI
+        jti = getattr(token_payload, 'jti', None)
+        if not jti:
+            return await call_next(request)
+
+        # Get client info
+        ip_address = self._get_client_ip(request)
+        user_agent = request.headers.get("User-Agent")
+
+        try:
+            # Validate and update session
+            is_allowed, session, block_reason = await session_service.validate_and_update(
+                token_jti=jti,
+                ip_address=ip_address,
+                user_agent=user_agent,
+            )
+
+            # Store session in request state for later use
+            request.state.session = session
+
+            if not is_allowed:
+                logger.warning(
+                    "session_binding_blocked",
+                    user_id=token_payload.sub,
+                    reason=block_reason,
+                    path=request.url.path,
+                )
+                return JSONResponse(
+                    status_code=401,
+                    content={
+                        "error": "Session binding validation failed",
+                        "detail": block_reason,
+                        "code": "SESSION_BINDING_FAILED",
+                    },
+                )
+
+        except Exception as e:
+            # Don't block requests on session validation errors
+            logger.warning(
+                "session_binding_error",
+                error=str(e)[:100],
+                path=request.url.path,
+            )
+
+        return await call_next(request)
+
+    def _get_client_ip(self, request: Request) -> str:
+        """Extract client IP, handling proxies."""
+        forwarded_for = request.headers.get("X-Forwarded-For")
+        if forwarded_for:
+            return forwarded_for.split(",")[0].strip()
+        real_ip = request.headers.get("X-Real-IP")
+        if real_ip:
+            return real_ip
+        if request.client:
+            return request.client.host
+        return "unknown"
+
+
 @dataclass
 class RateLimitEntry:
     """Tracks rate limit for a key."""
@@ -1077,6 +1193,7 @@ __all__ = [
     "CorrelationIdMiddleware",
     "RequestLoggingMiddleware",
     "AuthenticationMiddleware",
+    "SessionBindingMiddleware",
     "RateLimitMiddleware",
     "SecurityHeadersMiddleware",
     "CSRFProtectionMiddleware",

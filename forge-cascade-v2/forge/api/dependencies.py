@@ -35,6 +35,7 @@ from forge.repositories.capsule_repository import CapsuleRepository
 from forge.repositories.governance_repository import GovernanceRepository
 from forge.repositories.graph_repository import GraphRepository
 from forge.repositories.overlay_repository import OverlayRepository
+from forge.repositories.session_repository import SessionRepository
 from forge.repositories.temporal_repository import TemporalRepository
 from forge.repositories.user_repository import UserRepository
 from forge.security.auth_service import AuthService
@@ -43,6 +44,7 @@ from forge.security.authorization import (
     RoleAuthorizer,
     TrustAuthorizer,
 )
+from forge.security.session_binding import SessionBindingService
 from forge.security.tokens import TokenPayload, verify_token
 from forge.services.embedding import EmbeddingService, get_embedding_service
 
@@ -133,6 +135,11 @@ async def get_temporal_repository(db: DbClientDep) -> TemporalRepository:
     return TemporalRepository(db)
 
 
+async def get_session_repository(db: DbClientDep) -> SessionRepository:
+    """Get session repository for session tracking with IP/User-Agent binding."""
+    return SessionRepository(db)
+
+
 CapsuleRepoDep = Annotated[CapsuleRepository, Depends(get_capsule_repository)]
 UserRepoDep = Annotated[UserRepository, Depends(get_user_repository)]
 GovernanceRepoDep = Annotated[GovernanceRepository, Depends(get_governance_repository)]
@@ -140,6 +147,7 @@ OverlayRepoDep = Annotated[OverlayRepository, Depends(get_overlay_repository)]
 AuditRepoDep = Annotated[AuditRepository, Depends(get_audit_repository)]
 GraphRepoDep = Annotated[GraphRepository, Depends(get_graph_repository)]
 TemporalRepoDep = Annotated[TemporalRepository, Depends(get_temporal_repository)]
+SessionRepoDep = Annotated[SessionRepository, Depends(get_session_repository)]
 
 
 # =============================================================================
@@ -424,7 +432,15 @@ async def get_auth_service(
     return AuthService(user_repo, audit_repo)
 
 
+async def get_session_service(
+    session_repo: SessionRepoDep,
+) -> SessionBindingService:
+    """Get session binding service for IP/User-Agent tracking."""
+    return SessionBindingService(session_repo)
+
+
 AuthServiceDep = Annotated[AuthService, Depends(get_auth_service)]
+SessionServiceDep = Annotated[SessionBindingService, Depends(get_session_service)]
 
 
 # =============================================================================
@@ -600,6 +616,7 @@ __all__ = [
     "AuditRepoDep",
     "GraphRepoDep",
     "TemporalRepoDep",
+    "SessionRepoDep",
 
     # Kernel
     "EventSystemDep",
@@ -630,6 +647,7 @@ __all__ = [
 
     # Services
     "AuthServiceDep",
+    "SessionServiceDep",
 
     # Pagination
     "PaginationParams",

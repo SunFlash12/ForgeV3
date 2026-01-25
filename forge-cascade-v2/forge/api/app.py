@@ -564,6 +564,10 @@ def create_app(
                 "description": "System health and metrics",
             },
             {
+                "name": "sessions",
+                "description": "Session management - view and revoke active sessions with IP/User-Agent tracking",
+            },
+            {
                 "name": "graph",
                 "description": "Graph analysis, queries, and temporal operations",
             },
@@ -640,6 +644,7 @@ def create_app(
         RequestSizeLimitMiddleware,
         RequestTimeoutMiddleware,
         SecurityHeadersMiddleware,
+        SessionBindingMiddleware,  # SECURITY FIX (Audit 6 - Session 2)
     )
 
     # Order matters: outer middleware runs first
@@ -662,6 +667,9 @@ def create_app(
     app.add_middleware(CSRFProtectionMiddleware, enabled=(settings.app_env != "development"))  # CSRF protection
     app.add_middleware(IdempotencyMiddleware)  # Idempotency support
     app.add_middleware(AuthenticationMiddleware)
+    # SECURITY FIX (Audit 6 - Session 2): Session binding validation middleware
+    # Placed after AuthenticationMiddleware to have access to token_payload
+    app.add_middleware(SessionBindingMiddleware)
     # Rate limiting - use environment-based configuration
     # Production: stricter limits. Development: relaxed for testing
     is_dev = settings.app_env == "development"
@@ -791,6 +799,7 @@ def create_app(
         notifications,
         overlays,
         primekg,
+        sessions,
         system,
         tipping,
     )
@@ -801,6 +810,7 @@ def create_app(
     app.include_router(diagnosis.router, prefix="/api/v1/diagnosis", tags=["diagnosis"])
     app.include_router(governance.router, prefix="/api/v1/governance", tags=["governance"])
     app.include_router(overlays.router, prefix="/api/v1/overlays", tags=["overlays"])
+    app.include_router(sessions.router, prefix="/api/v1", tags=["sessions"])  # Session management (Audit 6 - Session 2)
     app.include_router(system.router, prefix="/api/v1/system", tags=["system"])
     app.include_router(graph.router, prefix="/api/v1/graph", tags=["graph"])
     app.include_router(primekg.router, prefix="/api/v1/primekg", tags=["primekg"])

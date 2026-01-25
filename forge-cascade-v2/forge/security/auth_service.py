@@ -9,7 +9,17 @@ credential stuffing attacks across multiple accounts.
 
 SECURITY FIX (Audit 5): IP rate limiting now uses Redis for distributed
 deployments, falling back to in-memory when Redis unavailable.
+
+SECURITY FIX (Audit 6 - Session 2): Session binding service integration
+for IP and User-Agent tracking.
 """
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .session_binding import SessionBindingService
 
 import hashlib
 import secrets
@@ -46,6 +56,7 @@ from .tokens import (
     TokenInvalidError,
     TokenVersionCache,
     create_token_pair,
+    decode_token,
     get_token_claims,
     verify_access_token,
     verify_refresh_token,
@@ -341,6 +352,9 @@ class AuthService:
 
     SECURITY FIX (Audit 4 - M2): Now includes IP-based rate limiting to prevent
     credential stuffing attacks across multiple accounts.
+
+    SECURITY FIX (Audit 6 - Session 2): Now creates sessions on login for
+    IP and User-Agent binding.
     """
 
     # Lockout settings
@@ -352,11 +366,14 @@ class AuthService:
         user_repo: UserRepository,
         audit_repo: AuditRepository,
         ip_rate_limiter: IPRateLimiter | None = None,
+        session_service: "SessionBindingService | None" = None,
     ):
         self.user_repo = user_repo
         self.audit_repo = audit_repo
         # SECURITY FIX (Audit 4 - M2): IP-based rate limiting
         self._ip_rate_limiter = ip_rate_limiter or get_ip_rate_limiter()
+        # SECURITY FIX (Audit 6 - Session 2): Session binding service
+        self._session_service = session_service
 
     # =========================================================================
     # Registration
@@ -606,6 +623,27 @@ class AuthService:
 
         # Store refresh token for validation
         await self.user_repo.update_refresh_token(user.id, token.refresh_token)
+
+        # SECURITY FIX (Audit 6 - Session 2): Create session for IP/User-Agent tracking
+        if self._session_service:
+            try:
+                # Decode token to get JTI and expiration
+                access_payload = decode_token(token.access_token, verify_exp=False)
+                await self._session_service.create_session(
+                    user_id=user.id,
+                    token_jti=access_payload.jti,
+                    token_type="access",
+                    ip_address=ip_address or "unknown",
+                    user_agent=user_agent,
+                    expires_at=datetime.fromtimestamp(access_payload.exp, tz=UTC),
+                )
+            except Exception as e:
+                # Don't fail login if session creation fails
+                logger.warning(
+                    "session_creation_failed",
+                    user_id=user.id,
+                    error=str(e)[:100],
+                )
 
         # Log successful login
         await self.audit_repo.log_user_action(

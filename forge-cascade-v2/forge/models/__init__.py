@@ -47,6 +47,19 @@ from forge.models.user import (
     UserPublic,
     UserUpdate,
 )
+from forge.models.session import (
+    Session,
+    SessionBindingMode,
+    SessionBindingWarning,
+    SessionCreate,
+    SessionInDB,
+    SessionListResponse,
+    SessionPublic,
+    SessionRevokeAllRequest,
+    SessionRevokeRequest,
+    SessionStatus,
+    SessionUpdate,
+)
 
 __all__ = [
     # Base
@@ -86,4 +99,16 @@ __all__ = [
     "Event",
     "EventType",
     "CascadeEvent",
+    # Session
+    "Session",
+    "SessionBindingMode",
+    "SessionBindingWarning",
+    "SessionCreate",
+    "SessionInDB",
+    "SessionListResponse",
+    "SessionPublic",
+    "SessionRevokeAllRequest",
+    "SessionRevokeRequest",
+    "SessionStatus",
+    "SessionUpdate",
 ]

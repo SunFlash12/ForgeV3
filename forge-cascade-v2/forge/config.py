@@ -159,6 +159,32 @@ class Settings(BaseSettings):
         default=60, ge=10, le=300, description="TTL for token version cache (Redis/in-memory)"
     )
 
+    # SECURITY FIX (Audit 6 - Session 2): Session binding settings for IP/User-Agent tracking
+    session_ip_binding_mode: Literal["disabled", "log_only", "warn", "flexible", "strict"] = Field(
+        default="warn",
+        description="IP binding mode: warn=log suspicious changes but allow access"
+    )
+    session_ip_change_threshold: int = Field(
+        default=3, ge=1, le=10,
+        description="Number of IP changes before flagging as suspicious"
+    )
+    session_user_agent_binding_mode: Literal["disabled", "log_only", "warn", "flexible", "strict"] = Field(
+        default="log_only",
+        description="User-Agent binding mode: log_only=audit trail only"
+    )
+    session_cache_ttl_seconds: int = Field(
+        default=300, ge=60, le=3600,
+        description="Redis cache TTL for session data"
+    )
+    session_cache_enabled: bool = Field(
+        default=True,
+        description="Enable Redis caching for session lookups"
+    )
+    max_ip_history_per_session: int = Field(
+        default=10, ge=1, le=50,
+        description="Maximum number of IPs to track per session for forensics"
+    )
+
     @field_validator("jwt_secret_key")
     @classmethod
     def validate_jwt_secret(cls, v: str) -> str:
