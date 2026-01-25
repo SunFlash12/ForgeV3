@@ -299,20 +299,17 @@ async def websocket_chat(websocket: WebSocket):
     try:
         # 1. PREFERRED: Try to get token from httpOnly cookie (most secure)
         token = websocket.cookies.get("access_token")
-        token_source = "cookie" if token else None
 
         # 2. SECURE: Try Authorization header
         if not token:
             auth_header = websocket.headers.get("authorization", "")
             if auth_header.startswith("Bearer "):
                 token = auth_header[7:]
-                token_source = "header"
 
         # 3. DEPRECATED: Query params (for backwards compatibility)
         if not token:
             token = websocket.query_params.get("token")
             if token:
-                token_source = "query_param"
                 logger.warning(
                     "websocket_token_in_query_param",
                     path="/copilot/ws",
