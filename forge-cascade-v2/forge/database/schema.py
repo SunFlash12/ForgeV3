@@ -199,6 +199,29 @@ class SchemaManager:
                 "CREATE CONSTRAINT semanticedge_id_unique IF NOT EXISTS "
                 "FOR (s:SemanticEdge) REQUIRE s.id IS UNIQUE"
             ),
+
+            # ═══════════════════════════════════════════════════════════════
+            # CHAT ROOM ACCESS CONTROL (Audit 6 - Session 4)
+            # ═══════════════════════════════════════════════════════════════
+
+            # ChatRoom constraints
+            (
+                "chatroom_id_unique",
+                "CREATE CONSTRAINT chatroom_id_unique IF NOT EXISTS "
+                "FOR (r:ChatRoom) REQUIRE r.id IS UNIQUE"
+            ),
+            (
+                "chatroom_invite_code_unique",
+                "CREATE CONSTRAINT chatroom_invite_code_unique IF NOT EXISTS "
+                "FOR (r:ChatRoom) REQUIRE r.invite_code IS UNIQUE"
+            ),
+
+            # ChatMessage constraints
+            (
+                "chatmessage_id_unique",
+                "CREATE CONSTRAINT chatmessage_id_unique IF NOT EXISTS "
+                "FOR (m:ChatMessage) REQUIRE m.id IS UNIQUE"
+            ),
         ]
 
         results = {}
@@ -419,6 +442,61 @@ class SchemaManager:
                 "semanticedge_created_idx",
                 "CREATE INDEX semanticedge_created_idx IF NOT EXISTS "
                 "FOR (s:SemanticEdge) ON (s.created_at)"
+            ),
+
+            # ═══════════════════════════════════════════════════════════════
+            # CHAT ROOM ACCESS CONTROL (Audit 6 - Session 4)
+            # ═══════════════════════════════════════════════════════════════
+
+            # ChatRoom indexes
+            (
+                "chatroom_owner_idx",
+                "CREATE INDEX chatroom_owner_idx IF NOT EXISTS "
+                "FOR (r:ChatRoom) ON (r.owner_id)"
+            ),
+            (
+                "chatroom_visibility_idx",
+                "CREATE INDEX chatroom_visibility_idx IF NOT EXISTS "
+                "FOR (r:ChatRoom) ON (r.visibility)"
+            ),
+            (
+                "chatroom_created_idx",
+                "CREATE INDEX chatroom_created_idx IF NOT EXISTS "
+                "FOR (r:ChatRoom) ON (r.created_at)"
+            ),
+
+            # RoomMember indexes (stored as relationship properties or separate nodes)
+            (
+                "roommember_user_idx",
+                "CREATE INDEX roommember_user_idx IF NOT EXISTS "
+                "FOR (m:RoomMember) ON (m.user_id)"
+            ),
+            (
+                "roommember_room_idx",
+                "CREATE INDEX roommember_room_idx IF NOT EXISTS "
+                "FOR (m:RoomMember) ON (m.room_id)"
+            ),
+            (
+                "roommember_role_idx",
+                "CREATE INDEX roommember_role_idx IF NOT EXISTS "
+                "FOR (m:RoomMember) ON (m.role)"
+            ),
+
+            # ChatMessage indexes
+            (
+                "chatmessage_room_idx",
+                "CREATE INDEX chatmessage_room_idx IF NOT EXISTS "
+                "FOR (m:ChatMessage) ON (m.room_id)"
+            ),
+            (
+                "chatmessage_sender_idx",
+                "CREATE INDEX chatmessage_sender_idx IF NOT EXISTS "
+                "FOR (m:ChatMessage) ON (m.sender_id)"
+            ),
+            (
+                "chatmessage_created_idx",
+                "CREATE INDEX chatmessage_created_idx IF NOT EXISTS "
+                "FOR (m:ChatMessage) ON (m.created_at)"
             ),
         ]
 
@@ -642,6 +720,10 @@ class SchemaManager:
             "trustsnapshot_id_unique",
             "graphsnapshot_id_unique",
             "semanticedge_id_unique",
+            # Chat room access control (Audit 6 - Session 4)
+            "chatroom_id_unique",
+            "chatroom_invite_code_unique",
+            "chatmessage_id_unique",
         }
 
         expected_indexes = {
@@ -678,6 +760,16 @@ class SchemaManager:
             "semanticedge_type_idx",
             "semanticedge_confidence_idx",
             "semanticedge_created_idx",
+            # Chat room access control (Audit 6 - Session 4)
+            "chatroom_owner_idx",
+            "chatroom_visibility_idx",
+            "chatroom_created_idx",
+            "roommember_user_idx",
+            "roommember_room_idx",
+            "roommember_role_idx",
+            "chatmessage_room_idx",
+            "chatmessage_sender_idx",
+            "chatmessage_created_idx",
         }
 
         expected_vector_indexes = {

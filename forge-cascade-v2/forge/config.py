@@ -191,6 +191,32 @@ class Settings(BaseSettings):
         description="MFA pending token expiry in seconds (5 minutes default)"
     )
 
+    # SECURITY FIX (Audit 6 - Session 4): Chat room access control settings
+    chat_max_room_members: int = Field(
+        default=100, ge=2, le=1000,
+        description="Maximum number of members per chat room"
+    )
+    chat_message_max_length: int = Field(
+        default=4096, ge=1, le=65536,
+        description="Maximum chat message length in characters"
+    )
+    chat_history_default_limit: int = Field(
+        default=50, ge=1, le=500,
+        description="Default number of messages to return in history"
+    )
+    chat_invite_code_length: int = Field(
+        default=12, ge=8, le=32,
+        description="Length of generated invite codes"
+    )
+    chat_invite_expiry_hours: int = Field(
+        default=168, ge=1, le=720,
+        description="Default invite code expiry in hours (1 week default)"
+    )
+    chat_on_demand_room_visibility: Literal["public", "private", "invite_only"] = Field(
+        default="public",
+        description="Visibility for rooms created on-demand (first user becomes owner)"
+    )
+
     @field_validator("jwt_secret_key")
     @classmethod
     def validate_jwt_secret(cls, v: str) -> str:

@@ -14,10 +14,9 @@ Security Features:
 - Message size limits (DoS protection)
 """
 
-import asyncio
 import json
 from collections import defaultdict, deque
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import urlparse
 from uuid import uuid4
@@ -27,6 +26,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSock
 
 from forge.api.dependencies import get_current_user as get_current_user_ws
 from forge.config import get_settings
+from forge.models.chat import RoomRole, RoomVisibility
 from forge.models.user import User
 from forge.security.tokens import (
     TokenBlacklist,
@@ -34,6 +34,11 @@ from forge.security.tokens import (
     TokenInvalidError,
     decode_token,
     verify_token,
+)
+from forge.services.chat_service import (
+    ChatAccessDeniedError,
+    ChatPermissionError,
+    get_chat_service,
 )
 
 logger = structlog.get_logger(__name__)
@@ -1193,10 +1198,17 @@ async def websocket_chat(
     websocket: WebSocket,
     room_id: str,
     token: str | None = Query(default=None),
-    display_name: str | None = Query(default=None)
+    display_name: str | None = Query(default=None),
+    invite_code: str | None = Query(default=None),
 ):
     """
     WebSocket endpoint for chat rooms.
+
+    SECURITY FIX (Audit 6 - Session 4): Added room access control.
+    Users must have permission to access the room based on visibility:
+    - PUBLIC: Any authenticated user can join
+    - PRIVATE: Only existing members can connect
+    - INVITE_ONLY: Requires valid invite code or existing membership
 
     Path Parameters:
     - room_id: Unique identifier for the chat room
@@ -1204,18 +1216,22 @@ async def websocket_chat(
     Query Parameters:
     - token: JWT access token for authentication (required)
     - display_name: User's display name in the room
+    - invite_code: Invite code for invite-only rooms (optional)
 
     Message Format (incoming):
     - {"type": "message", "content": "..."} - Send a chat message
     - {"type": "typing"} - Indicate user is typing
+    - {"type": "delete_message", "message_id": "..."} - Delete a message (author/admin/owner)
     - {"type": "ping"}
 
     Message Format (outgoing):
-    - {"type": "message", "data": {"user_id": "...", "content": "...", "display_name": "..."}}
-    - {"type": "user_joined", "data": {"user_id": "...", "display_name": "..."}}
+    - {"type": "message", "data": {"message_id": "...", "user_id": "...", "content": "...", ...}}
+    - {"type": "user_joined", "data": {"user_id": "...", "display_name": "...", "role": "..."}}
     - {"type": "user_left", "data": {"user_id": "..."}}
+    - {"type": "message_deleted", "data": {"message_id": "...", "deleted_by": "..."}}
     - {"type": "typing", "data": {"user_id": "...", "display_name": "..."}}
     - {"type": "participants", "data": {"users": [...]}}
+    - {"type": "room_info", "data": {"room_id": "...", "name": "...", "visibility": "...", "role": "..."}}
     """
     # SECURITY FIX (Audit 6): Validate Origin header to prevent CSWSH attacks
     if not validate_websocket_origin(websocket):
@@ -1239,7 +1255,62 @@ async def websocket_chat(
         )
         return
 
-    # Accept connection
+    # ==========================================================================
+    # SECURITY FIX (Audit 6 - Session 4): Room Access Control
+    # ==========================================================================
+    chat_service = get_chat_service()
+    user_role: RoomRole | None = None
+
+    try:
+        # Get or create room (on-demand creation for backwards compatibility)
+        # First user to connect to a non-existent room becomes owner
+        room = await chat_service.get_or_create_room(room_id, user_id)
+
+        # Check access - this validates visibility and membership
+        # For invite-only rooms, invite_code can grant access
+        if room.visibility == RoomVisibility.INVITE_ONLY and invite_code:
+            # Try to join via invite code
+            member = await chat_service.join_room(room_id, user_id, invite_code=invite_code)
+            if member:
+                user_role = member.role
+            else:
+                # Invalid invite code
+                await websocket.close(code=4003, reason="Invalid or expired invite code")
+                return
+        else:
+            # Normal access check
+            user_role = await chat_service.verify_access(room_id, user_id)
+
+        logger.info(
+            "chat_access_granted",
+            room_id=room_id,
+            user_id=user_id,
+            role=user_role.value if user_role else "none",
+            visibility=room.visibility.value,
+        )
+
+    except ChatAccessDeniedError as e:
+        logger.warning(
+            "chat_access_denied",
+            room_id=room_id,
+            user_id=user_id,
+            reason=e.reason,
+        )
+        await websocket.close(code=4003, reason=f"Access denied: {e.reason}")
+        return
+    except Exception as e:
+        logger.error(
+            "chat_access_check_error",
+            room_id=room_id,
+            user_id=user_id,
+            error=str(e)[:200],
+        )
+        await websocket.close(code=4000, reason="Room access check failed")
+        return
+
+    # ==========================================================================
+    # Connection Accepted - User has permission to access the room
+    # ==========================================================================
     connection = await connection_manager.connect_chat(
         websocket=websocket,
         room_id=room_id,
@@ -1248,12 +1319,39 @@ async def websocket_chat(
         token=auth_token,  # SECURITY FIX (Audit 6): Pass token for expiry checks
     )
 
+    # Send room info to the connected user
+    await connection.send_json({
+        "type": "room_info",
+        "data": {
+            "room_id": room.id,
+            "name": room.name,
+            "description": room.description,
+            "visibility": room.visibility.value,
+            "role": user_role.value if user_role else None,
+            "owner_id": room.owner_id,
+            "member_count": room.member_count,
+            "is_archived": room.is_archived,
+        }
+    })
+
     # Send current participants
     participants = connection_manager.get_room_participants(room_id)
     await connection.send_json({
         "type": "participants",
         "data": {"users": participants}
     })
+
+    # Notify room of new participant with role
+    await connection_manager.broadcast_chat(
+        room_id=room_id,
+        message_type="user_joined",
+        data={
+            "user_id": user_id,
+            "display_name": display_name or user_id,
+            "role": user_role.value if user_role else "member",
+        },
+        exclude_connection=connection.connection_id
+    )
 
     try:
         while True:
@@ -1276,6 +1374,25 @@ async def websocket_chat(
                 except json.JSONDecodeError:
                     continue
 
+            # Rate limiting check
+            if not connection.check_rate_limit():
+                await connection.send_json({
+                    "type": "error",
+                    "code": "RATE_LIMITED",
+                    "message": f"Rate limit exceeded. Max {MAX_MESSAGES_PER_MINUTE} messages per minute."
+                })
+                continue
+
+            # SECURITY FIX (Audit 6): Message size limit
+            raw_data = json.dumps(data)
+            if len(raw_data) > MAX_WEBSOCKET_MESSAGE_SIZE:
+                await connection.send_json({
+                    "type": "error",
+                    "code": "MESSAGE_TOO_LARGE",
+                    "message": f"Message exceeds maximum size of {MAX_WEBSOCKET_MESSAGE_SIZE} bytes."
+                })
+                continue
+
             msg_type = data.get("type")
 
             if msg_type == "ping":
@@ -1285,17 +1402,80 @@ async def websocket_chat(
             elif msg_type == "message":
                 content = data.get("content", "").strip()
                 if content:
-                    # Broadcast message to room
-                    await connection_manager.broadcast_chat(
-                        room_id=room_id,
-                        message_type="message",
-                        data={
-                            "user_id": user_id,
-                            "display_name": display_name or user_id,
-                            "content": content,
-                            "message_id": str(uuid4())
-                        }
-                    )
+                    # Persist message to database
+                    try:
+                        saved_message = await chat_service.save_message(
+                            room_id=room_id,
+                            sender_id=user_id,
+                            content=content,
+                        )
+
+                        # Broadcast message to room with persisted message_id
+                        await connection_manager.broadcast_chat(
+                            room_id=room_id,
+                            message_type="message",
+                            data={
+                                "message_id": saved_message.id,
+                                "user_id": user_id,
+                                "display_name": display_name or user_id,
+                                "content": content,
+                                "created_at": saved_message.created_at.isoformat(),
+                            }
+                        )
+                    except Exception as e:
+                        logger.error(
+                            "chat_message_save_failed",
+                            room_id=room_id,
+                            user_id=user_id,
+                            error=str(e)[:100],
+                        )
+                        await connection.send_json({
+                            "type": "error",
+                            "code": "MESSAGE_FAILED",
+                            "message": "Failed to send message. Please try again."
+                        })
+
+            elif msg_type == "delete_message":
+                # SECURITY FIX (Audit 6 - Session 4): Permission-based message deletion
+                message_id = data.get("message_id")
+                if message_id:
+                    try:
+                        deleted = await chat_service.delete_message(message_id, user_id)
+                        if deleted:
+                            # Broadcast deletion to room
+                            await connection_manager.broadcast_chat(
+                                room_id=room_id,
+                                message_type="message_deleted",
+                                data={
+                                    "message_id": message_id,
+                                    "deleted_by": user_id,
+                                }
+                            )
+                        else:
+                            await connection.send_json({
+                                "type": "error",
+                                "code": "DELETE_FAILED",
+                                "message": "Message not found or already deleted."
+                            })
+                    except ChatPermissionError as e:
+                        await connection.send_json({
+                            "type": "error",
+                            "code": "PERMISSION_DENIED",
+                            "message": f"Cannot delete message: {e.action} requires {e.required_role} role."
+                        })
+                    except Exception as e:
+                        logger.error(
+                            "chat_message_delete_failed",
+                            room_id=room_id,
+                            user_id=user_id,
+                            message_id=message_id,
+                            error=str(e)[:100],
+                        )
+                        await connection.send_json({
+                            "type": "error",
+                            "code": "DELETE_FAILED",
+                            "message": "Failed to delete message."
+                        })
 
             elif msg_type == "typing":
                 # Broadcast typing indicator (exclude sender)

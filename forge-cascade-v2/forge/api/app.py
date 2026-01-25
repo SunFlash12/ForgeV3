@@ -552,6 +552,10 @@ def create_app(
                 "description": "Cascade Effect - insight propagation across overlays",
             },
             {
+                "name": "chat",
+                "description": "Chat rooms with role-based access control (Audit 6 - Session 4)",
+            },
+            {
                 "name": "governance",
                 "description": "Symbolic governance and voting",
             },
@@ -789,6 +793,7 @@ def create_app(
         auth,
         capsules,
         cascade,
+        chat,
         copilot,
         diagnosis,
         federation,
@@ -807,6 +812,7 @@ def create_app(
     app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
     app.include_router(capsules.router, prefix="/api/v1/capsules", tags=["capsules"])
     app.include_router(cascade.router, prefix="/api/v1/cascade", tags=["cascade"])
+    app.include_router(chat.router, prefix="/api/v1", tags=["chat"])  # Chat rooms (Audit 6 - Session 4)
     app.include_router(diagnosis.router, prefix="/api/v1/diagnosis", tags=["diagnosis"])
     app.include_router(governance.router, prefix="/api/v1/governance", tags=["governance"])
     app.include_router(overlays.router, prefix="/api/v1/overlays", tags=["overlays"])
