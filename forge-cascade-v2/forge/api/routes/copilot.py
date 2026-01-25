@@ -20,8 +20,9 @@ from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisco
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from forge.api.dependencies import ActiveUserDep, get_current_active_user
+from forge.api.dependencies import ActiveUserDep
 from forge.models.user import UserInDB
+from forge.security.tokens import TokenBlacklist, verify_token
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/copilot", tags=["copilot"])
@@ -291,22 +292,50 @@ async def websocket_chat(websocket: WebSocket):
 
     Requires authentication via token query parameter or cookie.
     """
-    # Authenticate WebSocket connection
+    # SECURITY FIX (Audit 6 - M1): Fix WebSocket authentication
+    # The previous code incorrectly called get_current_active_user(token) with a string,
+    # but that function expects a User object. This fix properly validates tokens.
+    user_id: str | None = None
     try:
-        # Try to get token from query params or cookies
-        token = websocket.query_params.get("token")
+        # 1. PREFERRED: Try to get token from httpOnly cookie (most secure)
+        token = websocket.cookies.get("access_token")
+        token_source = "cookie" if token else None
+
+        # 2. SECURE: Try Authorization header
         if not token:
-            token = websocket.cookies.get("access_token")
+            auth_header = websocket.headers.get("authorization", "")
+            if auth_header.startswith("Bearer "):
+                token = auth_header[7:]
+                token_source = "header"
+
+        # 3. DEPRECATED: Query params (for backwards compatibility)
+        if not token:
+            token = websocket.query_params.get("token")
+            if token:
+                token_source = "query_param"
+                logger.warning(
+                    "websocket_token_in_query_param",
+                    path="/copilot/ws",
+                    warning="Token via query param is insecure. Use cookies or Authorization header.",
+                )
 
         if not token:
             await websocket.close(code=4001, reason="Authentication required")
             return
 
-        # Validate token
-        current_user = await get_current_active_user(token)
-        if not current_user:
+        # Validate token properly using verify_token
+        payload = verify_token(token, expected_type="access")
+        if not payload or not payload.get("sub"):
             await websocket.close(code=4001, reason="Invalid or expired token")
             return
+
+        # Check if token is blacklisted (logged out)
+        jti = payload.get("jti")
+        if jti and await TokenBlacklist.is_blacklisted_async(jti):
+            await websocket.close(code=4001, reason="Token has been revoked")
+            return
+
+        user_id = payload.get("sub")
 
     except Exception as e:
         logger.warning(f"WebSocket authentication failed: {e}")
@@ -314,7 +343,7 @@ async def websocket_chat(websocket: WebSocket):
         return
 
     await websocket.accept()
-    logger.info(f"WebSocket connection established for user {current_user.id}")
+    logger.info(f"WebSocket connection established for user {user_id}")
 
     try:
         agent = await get_agent()

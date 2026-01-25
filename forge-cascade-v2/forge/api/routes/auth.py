@@ -24,6 +24,7 @@ from typing import Any, Literal
 logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Cookie, HTTPException, Request, Response, status
+from neo4j.exceptions import ConstraintError
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from forge.api.dependencies import (
@@ -589,7 +590,24 @@ async def update_profile(
     has_updates = request.display_name is not None or request.email is not None
 
     if has_updates:
-        updated_user = await user_repo.update(user.id, update_data)
+        # SECURITY FIX (Audit 6 - H1): Wrap update in try-except to handle race condition.
+        # The pre-check above provides a friendly error message, but the database
+        # constraint (user_email_unique) is the authoritative enforcement.
+        # Between the check and update, another request could insert the same email.
+        try:
+            updated_user = await user_repo.update(user.id, update_data)
+        except ConstraintError as e:
+            # Database constraint violated - email already taken by concurrent request
+            logger.warning(
+                "email_constraint_violation",
+                user_id=user.id,
+                email=request.email,
+                error=str(e),
+            )
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email already in use",
+            ) from None
 
         await audit_repo.log_user_action(
             actor_id=user.id,

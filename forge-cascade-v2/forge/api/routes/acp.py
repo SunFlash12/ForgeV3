@@ -337,7 +337,10 @@ async def create_job(
 
 
 @router.get("/jobs/{job_id}", response_model=JobResponse)
-async def get_job(job_id: str) -> JobResponse:
+async def get_job(
+    job_id: str,
+    current_user: ActiveUserDep,  # SECURITY FIX (Audit 6 - M2): Require authentication
+) -> JobResponse:
     """Get a job by ID."""
     try:
         service = get_virtuals_service()
@@ -577,6 +580,7 @@ async def file_dispute(
 @router.get("/jobs/buyer/{agent_id}", response_model=JobListResponse)
 async def get_buyer_jobs(
     agent_id: str,
+    current_user: ActiveUserDep,  # SECURITY FIX (Audit 6 - M2): Require authentication
     status: str | None = Query(None, description="Filter by status"),
     limit: int = Query(50, ge=1, le=100),
 ) -> JobListResponse:
@@ -606,6 +610,7 @@ async def get_buyer_jobs(
 @router.get("/jobs/provider/{agent_id}", response_model=JobListResponse)
 async def get_provider_jobs(
     agent_id: str,
+    current_user: ActiveUserDep,  # SECURITY FIX (Audit 6 - M2): Require authentication
     status: str | None = Query(None, description="Filter by status"),
     limit: int = Query(50, ge=1, le=100),
 ) -> JobListResponse:
