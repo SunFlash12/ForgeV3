@@ -41,8 +41,11 @@ RATE_LIMIT_WINDOW_SECONDS = 60  # Rate limiting window
 MAX_WEBSOCKET_MESSAGE_SIZE = 64 * 1024  # 64KB max message size
 # SECURITY FIX (Audit 6): Token expiry check interval for long-lived WebSocket sessions
 TOKEN_EXPIRY_CHECK_INTERVAL_SECONDS = 60  # Check token validity every minute
-# SECURITY FIX (Audit 6): Maximum WebSocket connections per user to prevent resource exhaustion
-MAX_WEBSOCKET_CONNECTIONS_PER_USER = 10  # Maximum concurrent WebSocket connections per user
+
+
+def get_max_connections_per_user() -> int:
+    """Get max WebSocket connections per user from settings."""
+    return settings.websocket_max_connections_per_user
 
 
 # ============================================================================
@@ -348,13 +351,14 @@ class ConnectionManager:
             # Anonymous connections are allowed but limited elsewhere
             return True
 
+        max_connections = get_max_connections_per_user()
         current_count = len(self._user_connections.get(user_id, set()))
-        if current_count >= MAX_WEBSOCKET_CONNECTIONS_PER_USER:
+        if current_count >= max_connections:
             logger.warning(
                 "websocket_connection_limit_reached",
                 user_id=user_id,
                 current_count=current_count,
-                max_allowed=MAX_WEBSOCKET_CONNECTIONS_PER_USER,
+                max_allowed=max_connections,
             )
             return False
         return True
@@ -765,9 +769,20 @@ async def authenticate_websocket(
 
     # 3. DEPRECATED: Fall back to query params (for backwards compatibility only)
     # SECURITY WARNING: Query params can leak tokens in logs, browser history, referers
+    # SECURITY FIX (Audit 6): This can be disabled via config in production
     if not token:
         query_token = websocket.query_params.get("token")
         if query_token:
+            # Check if query param auth is allowed
+            if not settings.websocket_allow_query_param_auth:
+                logger.warning(
+                    "websocket_query_param_auth_rejected",
+                    path=str(websocket.url.path),
+                    client=websocket.client.host if websocket.client else "unknown",
+                    reason="Query parameter authentication is disabled. Use cookies or Authorization header.",
+                )
+                return None, None
+
             token = query_token
             token_source = "query_param"
             # Log security warning for monitoring
@@ -846,9 +861,10 @@ async def websocket_events(
 
     # SECURITY FIX (Audit 6): Check connection limit per user
     if not connection_manager.can_user_connect(user_id):
+        max_conn = get_max_connections_per_user()
         await websocket.close(
             code=4029,
-            reason=f"Connection limit exceeded. Max {MAX_WEBSOCKET_CONNECTIONS_PER_USER} connections per user."
+            reason=f"Connection limit exceeded. Max {max_conn} connections per user."
         )
         return
 
@@ -981,9 +997,10 @@ async def websocket_dashboard(
 
     # SECURITY FIX (Audit 6): Check connection limit per user
     if not connection_manager.can_user_connect(user_id):
+        max_conn = get_max_connections_per_user()
         await websocket.close(
             code=4029,
-            reason=f"Connection limit exceeded. Max {MAX_WEBSOCKET_CONNECTIONS_PER_USER} connections per user."
+            reason=f"Connection limit exceeded. Max {max_conn} connections per user."
         )
         return
 
@@ -1084,9 +1101,10 @@ async def websocket_chat(
 
     # SECURITY FIX (Audit 6): Check connection limit per user
     if not connection_manager.can_user_connect(user_id):
+        max_conn = get_max_connections_per_user()
         await websocket.close(
             code=4029,
-            reason=f"Connection limit exceeded. Max {MAX_WEBSOCKET_CONNECTIONS_PER_USER} connections per user."
+            reason=f"Connection limit exceeded. Max {max_conn} connections per user."
         )
         return
 

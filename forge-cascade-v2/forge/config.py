@@ -142,6 +142,15 @@ class Settings(BaseSettings):
         default=True, description="Enforce concurrent session limit"
     )
 
+    # SECURITY FIX (Audit 6): WebSocket authentication settings
+    websocket_allow_query_param_auth: bool = Field(
+        default=True,
+        description="Allow WebSocket token in query params (DEPRECATED - disable in production)"
+    )
+    websocket_max_connections_per_user: int = Field(
+        default=10, ge=1, le=50, description="Max concurrent WebSocket connections per user"
+    )
+
     @field_validator("jwt_secret_key")
     @classmethod
     def validate_jwt_secret(cls, v: str) -> str:
