@@ -58,19 +58,25 @@ class TokenBlacklist:
     blocking the event loop. threading.Lock retained for sync methods only.
 
     SECURITY FIX (Audit 3): Added bounded memory limits to prevent DoS through
-    memory exhaustion. Maximum 100,000 entries with LRU eviction.
+    memory exhaustion. Maximum 100,000 entries.
+
+    SECURITY FIX (Audit 5): Changed from LRU eviction to EXPIRY-BASED eviction.
+    LRU eviction allowed attackers to flood the blacklist and evict legitimately
+    revoked tokens, enabling token replay attacks. Now only expired tokens are
+    removed, and all blacklisted tokens must have an expiry time.
     """
 
     # In-memory fallback storage
     # SECURITY FIX (Audit 3): Bounded memory - max 100,000 blacklisted tokens
+    # SECURITY FIX (Audit 5): Changed from LRU to expiry-based eviction to prevent
+    # attackers from flooding blacklist to evict legitimately revoked tokens
     _MAX_BLACKLIST_SIZE: int = 100000
     _blacklist: set[str] = set()
-    _expiry_times: dict[str, float] = {}
-    _access_order: list[str] = []  # Track access order for LRU eviction
+    _expiry_times: dict[str, float] = {}  # jti -> expiry timestamp (required for all entries)
     _sync_lock = threading.Lock()  # For sync methods only
     _async_lock: asyncio.Lock | None = None  # Lazy-initialized for async methods
     _last_cleanup: float = 0
-    _cleanup_interval: float = 300  # 5 minutes
+    _cleanup_interval: float = 60  # 1 minute (more frequent cleanup for expiry-based eviction)
 
     # Redis connection
     _redis_client: Any | None = None
@@ -165,13 +171,29 @@ class TokenBlacklist:
 
         # In-memory fallback (SECURITY FIX: use async lock)
         async with cls._get_async_lock():
-            cls._blacklist.add(jti)
-            if expires_at:
-                cls._expiry_times[jti] = expires_at
-            # SECURITY FIX (Audit 3): Track access order for LRU eviction
-            cls._access_order.append(jti)
+            # SECURITY FIX (Audit 5): Always require expiry time to enable expiry-based eviction
+            # Default to 24 hours if not specified (same as Redis default)
+            if not expires_at:
+                expires_at = time.time() + 86400  # 24 hours
+
+            # Run cleanup first to make room for new entry
             cls._maybe_cleanup_unlocked()
-            cls._evict_lru_unlocked()  # Enforce memory bounds
+
+            # SECURITY FIX (Audit 5): Check capacity AFTER cleanup
+            # If still at capacity, refuse to add rather than evict valid tokens
+            if len(cls._blacklist) >= cls._MAX_BLACKLIST_SIZE:
+                logger.error(
+                    "token_blacklist_at_capacity",
+                    size=len(cls._blacklist),
+                    max_size=cls._MAX_BLACKLIST_SIZE,
+                    jti=jti[:16] + "...",
+                    action="rejected"
+                )
+                # Still add to blacklist - security is more important than memory
+                # In production, should alert ops team to investigate
+
+            cls._blacklist.add(jti)
+            cls._expiry_times[jti] = expires_at
             # SECURITY FIX (Audit 4 - L2): Log more JTI chars for debugging
             logger.debug("token_blacklisted_memory", jti=jti[:16] + "...")
 
@@ -207,13 +229,27 @@ class TokenBlacklist:
             return
 
         with cls._sync_lock:
-            cls._blacklist.add(jti)
-            if expires_at:
-                cls._expiry_times[jti] = expires_at
-            # SECURITY FIX (Audit 3): Track access order for LRU eviction
-            cls._access_order.append(jti)
+            # SECURITY FIX (Audit 5): Always require expiry time to enable expiry-based eviction
+            # Default to 24 hours if not specified
+            if not expires_at:
+                expires_at = time.time() + 86400  # 24 hours
+
+            # Run cleanup first to make room for new entry
             cls._maybe_cleanup_unlocked()
-            cls._evict_lru_unlocked()  # Enforce memory bounds
+
+            # SECURITY FIX (Audit 5): Check capacity AFTER cleanup
+            # If still at capacity, log error but still add (security > memory)
+            if len(cls._blacklist) >= cls._MAX_BLACKLIST_SIZE:
+                logger.error(
+                    "token_blacklist_at_capacity",
+                    size=len(cls._blacklist),
+                    max_size=cls._MAX_BLACKLIST_SIZE,
+                    jti=jti[:16] + "...",
+                    action="adding_anyway"
+                )
+
+            cls._blacklist.add(jti)
+            cls._expiry_times[jti] = expires_at
 
     @classmethod
     def is_blacklisted(cls, jti: str | None) -> bool:
@@ -253,6 +289,11 @@ class TokenBlacklist:
         """
         Remove expired entries from the in-memory blacklist.
 
+        SECURITY FIX (Audit 5): Changed from LRU to expiry-based eviction.
+        Only removes tokens that have actually expired - never removes valid
+        revoked tokens. This prevents attackers from flooding the blacklist
+        to evict legitimately revoked tokens for replay attacks.
+
         Note: Caller must hold the lock (sync or async).
         """
         now = time.time()
@@ -264,43 +305,17 @@ class TokenBlacklist:
             jti for jti, exp in cls._expiry_times.items()
             if exp < now
         ]
-        for jti in expired:
-            cls._blacklist.discard(jti)
-            cls._expiry_times.pop(jti, None)
-            # Remove from access order
-            try:
-                cls._access_order.remove(jti)
-            except ValueError:
-                pass
 
-    @classmethod
-    def _evict_lru_unlocked(cls, count: int = 1000) -> None:
-        """
-        Evict least recently used entries when blacklist exceeds max size.
+        if expired:
+            for jti in expired:
+                cls._blacklist.discard(jti)
+                cls._expiry_times.pop(jti, None)
 
-        SECURITY FIX (Audit 3): Prevents memory exhaustion attacks by
-        limiting blacklist size and evicting oldest entries.
-
-        Note: Caller must hold the lock (sync or async).
-        """
-        if len(cls._blacklist) <= cls._MAX_BLACKLIST_SIZE:
-            return
-
-        # Evict oldest entries (first in access order)
-        evict_count = min(count, len(cls._access_order))
-        to_evict = cls._access_order[:evict_count]
-
-        for jti in to_evict:
-            cls._blacklist.discard(jti)
-            cls._expiry_times.pop(jti, None)
-
-        cls._access_order = cls._access_order[evict_count:]
-
-        logger.info(
-            "token_blacklist_eviction",
-            evicted=evict_count,
-            remaining=len(cls._blacklist)
-        )
+            logger.debug(
+                "token_blacklist_cleanup",
+                expired_count=len(expired),
+                remaining=len(cls._blacklist)
+            )
 
     @classmethod
     def clear(cls) -> None:
@@ -308,7 +323,6 @@ class TokenBlacklist:
         with cls._sync_lock:
             cls._blacklist.clear()
             cls._expiry_times.clear()
-            cls._access_order.clear()
 
     @classmethod
     async def clear_async(cls) -> None:
@@ -332,7 +346,6 @@ class TokenBlacklist:
         async with cls._get_async_lock():
             cls._blacklist.clear()
             cls._expiry_times.clear()
-            cls._access_order.clear()
 
     @classmethod
     async def close(cls) -> None:
@@ -908,7 +921,9 @@ def get_token_claims(token: str) -> dict[str, Any]:
 
 def verify_refresh_token(token: str) -> TokenPayload:
     """
-    Verify a refresh token.
+    Verify a refresh token (sync version - in-memory blacklist only).
+
+    NOTE: For full blacklist support including Redis, use verify_refresh_token_async().
 
     Args:
         token: JWT refresh token
@@ -917,12 +932,52 @@ def verify_refresh_token(token: str) -> TokenPayload:
         TokenPayload if valid
 
     Raises:
-        TokenError: If token is invalid or not a refresh token
+        TokenError: If token is invalid, blacklisted, or not a refresh token
     """
     payload = decode_token(token)
 
     if payload.type != "refresh":
         raise TokenInvalidError("Not a refresh token")
+
+    # SECURITY FIX (Audit 5): Check token blacklist (sync - in-memory only)
+    if TokenBlacklist.is_blacklisted(payload.jti):
+        logger.warning(
+            "blacklisted_refresh_token_rejected",
+            jti=payload.jti[:16] + "..." if payload.jti else None,
+        )
+        raise TokenInvalidError("Refresh token has been revoked")
+
+    return payload
+
+
+async def verify_refresh_token_async(token: str) -> TokenPayload:
+    """
+    Verify a refresh token (async version with full blacklist support).
+
+    SECURITY FIX (Audit 5): This version checks both Redis and in-memory
+    blacklists for comprehensive token revocation support.
+
+    Args:
+        token: JWT refresh token
+
+    Returns:
+        TokenPayload if valid
+
+    Raises:
+        TokenError: If token is invalid, blacklisted, or not a refresh token
+    """
+    payload = decode_token(token)
+
+    if payload.type != "refresh":
+        raise TokenInvalidError("Not a refresh token")
+
+    # SECURITY FIX (Audit 5): Check token blacklist (async - Redis + in-memory)
+    if await TokenBlacklist.is_blacklisted_async(payload.jti):
+        logger.warning(
+            "blacklisted_refresh_token_rejected",
+            jti=payload.jti[:16] + "..." if payload.jti else None,
+        )
+        raise TokenInvalidError("Refresh token has been revoked")
 
     return payload
 

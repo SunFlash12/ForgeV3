@@ -8,6 +8,7 @@ Handles periodic background tasks like:
 - Health monitoring
 
 Uses asyncio for lightweight scheduling without external dependencies.
+Includes circuit breaker protection for database-dependent tasks.
 """
 
 import asyncio
@@ -19,8 +20,12 @@ from typing import Any
 import structlog
 
 from forge.config import get_settings
+from forge.immune.circuit_breaker import CircuitBreakerError, ForgeCircuits
 
 logger = structlog.get_logger(__name__)
+
+# Maximum consecutive failures before auto-disabling a task
+MAX_CONSECUTIVE_FAILURES = 10
 
 
 @dataclass
@@ -34,7 +39,9 @@ class ScheduledTask:
     last_run: datetime | None = None
     run_count: int = 0
     error_count: int = 0
+    consecutive_failures: int = 0  # Track consecutive failures for auto-disable
     last_error: str | None = None
+    auto_disabled: bool = False  # Track if task was auto-disabled due to failures
 
 
 @dataclass
@@ -159,6 +166,7 @@ class BackgroundScheduler:
         Run a task in a loop with the specified interval.
 
         Handles errors gracefully and continues running.
+        Auto-disables task after MAX_CONSECUTIVE_FAILURES to prevent error spam.
         """
         self._logger.info(
             "task_loop_starting",
@@ -171,12 +179,22 @@ class BackgroundScheduler:
         await asyncio.sleep(initial_delay)
 
         while not self._shutdown_event.is_set():
+            # Check if task was auto-disabled
+            if task.auto_disabled:
+                self._logger.warning(
+                    "task_auto_disabled_skipping",
+                    name=task.name,
+                    consecutive_failures=task.consecutive_failures,
+                )
+                break
+
             try:
                 # Execute the task
                 await task.func()
                 task.last_run = datetime.now(UTC)
                 task.run_count += 1
                 self._stats.total_runs += 1
+                task.consecutive_failures = 0  # Reset on success
 
                 self._logger.debug(
                     "task_executed",
@@ -186,8 +204,16 @@ class BackgroundScheduler:
 
             except asyncio.CancelledError:
                 raise
+            except CircuitBreakerError as e:
+                # Circuit breaker is protecting us - log but don't count as new failure
+                self._logger.warning(
+                    "task_circuit_breaker_open",
+                    name=task.name,
+                    circuit=str(e),
+                )
             except Exception as e:
                 task.error_count += 1
+                task.consecutive_failures += 1
                 task.last_error = str(e)
                 self._stats.total_errors += 1
 
@@ -196,7 +222,21 @@ class BackgroundScheduler:
                     name=task.name,
                     error=str(e),
                     error_count=task.error_count,
+                    consecutive_failures=task.consecutive_failures,
                 )
+
+                # Auto-disable after too many consecutive failures
+                if task.consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
+                    task.auto_disabled = True
+                    task.enabled = False
+                    self._logger.critical(
+                        "task_auto_disabled",
+                        name=task.name,
+                        consecutive_failures=task.consecutive_failures,
+                        last_error=task.last_error,
+                        message="Task auto-disabled after repeated failures. Check service connectivity.",
+                    )
+                    break
 
             # Wait for the next interval
             try:
@@ -225,6 +265,8 @@ class BackgroundScheduler:
                     "last_run": task.last_run.isoformat() if task.last_run else None,
                     "run_count": task.run_count,
                     "error_count": task.error_count,
+                    "consecutive_failures": task.consecutive_failures,
+                    "auto_disabled": task.auto_disabled,
                     "last_error": task.last_error,
                 }
                 for name, task in self._tasks.items()
@@ -242,13 +284,52 @@ class BackgroundScheduler:
             task.last_run = datetime.now(UTC)
             task.run_count += 1
             self._stats.total_runs += 1
+            task.consecutive_failures = 0  # Reset on success
             return True
         except Exception as e:
             task.error_count += 1
+            task.consecutive_failures += 1
             task.last_error = str(e)
             self._stats.total_errors += 1
             self._logger.error("manual_task_error", name=name, error=str(e))
             return False
+
+    def reset_task(self, name: str) -> bool:
+        """
+        Reset a task's failure counters and re-enable if auto-disabled.
+
+        Use this to recover a task after fixing connectivity issues.
+        """
+        if name not in self._tasks:
+            return False
+
+        task = self._tasks[name]
+        task.consecutive_failures = 0
+        task.auto_disabled = False
+        task.enabled = True
+        task.last_error = None
+
+        self._logger.info(
+            "task_reset",
+            name=name,
+            message="Task reset and re-enabled",
+        )
+
+        # Restart the task loop if scheduler is running
+        if self._stats.is_running and name not in self._running_tasks:
+            self._running_tasks[name] = asyncio.create_task(
+                self._task_loop(task),
+                name=f"scheduler_{name}",
+            )
+
+        return True
+
+    def get_auto_disabled_tasks(self) -> list[str]:
+        """Get list of tasks that were auto-disabled due to failures."""
+        return [
+            name for name, task in self._tasks.items()
+            if task.auto_disabled
+        ]
 
 
 # Global scheduler instance
@@ -306,7 +387,7 @@ async def setup_scheduler() -> BackgroundScheduler:
 
 
 def _create_graph_snapshot_task() -> Callable[[], Coroutine[Any, Any, Any]]:
-    """Create the graph snapshot task function."""
+    """Create the graph snapshot task function with circuit breaker protection."""
 
     async def task():
         """Create a periodic graph snapshot."""
@@ -316,46 +397,54 @@ def _create_graph_snapshot_task() -> Callable[[], Coroutine[Any, Any, Any]]:
 
         logger.info("scheduled_graph_snapshot_starting")
 
-        # SECURITY FIX: Move client creation inside try block to prevent connection leak
-        client = None
-        try:
-            client = Neo4jClient()
-            await client.connect()
-            graph_repo = GraphRepository(client)
-            temporal_repo = TemporalRepository(client)
+        # Get circuit breaker for Neo4j operations
+        neo4j_circuit = await ForgeCircuits.neo4j()
 
-            # Get current metrics
-            metrics = await graph_repo.get_graph_metrics()
+        # Inner function for circuit breaker to wrap
+        async def do_snapshot():
+            client = None
+            try:
+                client = Neo4jClient()
+                await client.connect()
+                graph_repo = GraphRepository(client)
+                temporal_repo = TemporalRepository(client)
 
-            # Create snapshot
-            snapshot = await temporal_repo.create_graph_snapshot(
-                metrics={
-                    "total_nodes": metrics.total_nodes,
-                    "total_edges": metrics.total_edges,
-                    "density": metrics.density,
-                    "avg_degree": getattr(metrics, 'avg_degree', 0.0),
-                    "connected_components": metrics.connected_components,
-                    "nodes_by_type": metrics.node_distribution,
-                    "edges_by_type": metrics.edge_distribution,
-                },
-                created_by="scheduler",
-            )
+                # Get current metrics
+                metrics = await graph_repo.get_graph_metrics()
 
-            logger.info(
-                "scheduled_graph_snapshot_complete",
-                snapshot_id=snapshot.id,
-                total_nodes=metrics.total_nodes,
-            )
+                # Create snapshot
+                snapshot = await temporal_repo.create_graph_snapshot(
+                    metrics={
+                        "total_nodes": metrics.total_nodes,
+                        "total_edges": metrics.total_edges,
+                        "density": metrics.density,
+                        "avg_degree": getattr(metrics, 'avg_degree', 0.0),
+                        "connected_components": metrics.connected_components,
+                        "nodes_by_type": metrics.nodes_by_type,
+                        "edges_by_type": metrics.edges_by_type,
+                    },
+                    created_by="scheduler",
+                )
 
-        finally:
-            if client:
-                await client.close()
+                logger.info(
+                    "scheduled_graph_snapshot_complete",
+                    snapshot_id=snapshot.id,
+                    total_nodes=metrics.total_nodes,
+                )
+                return snapshot
+
+            finally:
+                if client:
+                    await client.close()
+
+        # Execute through circuit breaker
+        await neo4j_circuit.call(do_snapshot)
 
     return task
 
 
 def _create_version_compaction_task() -> Callable[[], Coroutine[Any, Any, Any]]:
-    """Create the version compaction task function."""
+    """Create the version compaction task function with circuit breaker protection."""
 
     async def task():
         """Compact old version diffs into full snapshots."""
@@ -364,39 +453,46 @@ def _create_version_compaction_task() -> Callable[[], Coroutine[Any, Any, Any]]:
 
         logger.info("scheduled_version_compaction_starting")
 
-        # SECURITY FIX: Move client creation inside try block to prevent connection leak
-        client = None
-        try:
-            client = Neo4jClient()
-            await client.connect()
-            temporal_repo = TemporalRepository(client)
+        # Get circuit breaker for Neo4j operations
+        neo4j_circuit = await ForgeCircuits.neo4j()
 
-            # Get capsules with old versions to compact
-            query = """
-            MATCH (c:Capsule)-[:HAS_VERSION]->(v:CapsuleVersion)
-            WHERE v.snapshot_type = 'diff'
-              AND v.created_at < datetime() - duration('P30D')
-            RETURN DISTINCT c.id AS capsule_id
-            LIMIT 100
-            """
-            results = await client.execute(query, {})
+        async def do_compaction():
+            client = None
+            try:
+                client = Neo4jClient()
+                await client.connect()
+                temporal_repo = TemporalRepository(client)
 
-            total_compacted = 0
-            for r in results:
-                capsule_id = r.get("capsule_id")
-                if capsule_id:
-                    compacted = await temporal_repo.compact_old_versions(capsule_id)
-                    total_compacted += compacted
+                # Get capsules with old versions to compact
+                query = """
+                MATCH (c:Capsule)-[:HAS_VERSION]->(v:CapsuleVersion)
+                WHERE v.snapshot_type = 'diff'
+                  AND v.created_at < datetime() - duration('P30D')
+                RETURN DISTINCT c.id AS capsule_id
+                LIMIT 100
+                """
+                results = await client.execute(query, {})
 
-            logger.info(
-                "scheduled_version_compaction_complete",
-                capsules_processed=len(results),
-                versions_compacted=total_compacted,
-            )
+                total_compacted = 0
+                for r in results:
+                    capsule_id = r.get("capsule_id")
+                    if capsule_id:
+                        compacted = await temporal_repo.compact_old_versions(capsule_id)
+                        total_compacted += compacted
 
-        finally:
-            if client:
-                await client.close()
+                logger.info(
+                    "scheduled_version_compaction_complete",
+                    capsules_processed=len(results),
+                    versions_compacted=total_compacted,
+                )
+                return total_compacted
+
+            finally:
+                if client:
+                    await client.close()
+
+        # Execute through circuit breaker
+        await neo4j_circuit.call(do_compaction)
 
     return task
 

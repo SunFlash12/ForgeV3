@@ -16,7 +16,7 @@ services:
       - no-new-privileges:true
     environment:
       - NEO4J_URI=${NEO4J_URI}
-      - NEO4J_USERNAME=${NEO4J_USERNAME}
+      - NEO4J_USER=${NEO4J_USERNAME}
       - NEO4J_PASSWORD=${NEO4J_PASSWORD}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
       - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
@@ -278,8 +278,9 @@ services:
     command: ["python", "scripts/setup_db.py"]
     environment:
       - NEO4J_URI=${NEO4J_URI}
-      - NEO4J_USERNAME=${NEO4J_USERNAME}
+      - NEO4J_USER=${NEO4J_USERNAME}
       - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
     networks:
       - forge-network
     profiles:
@@ -293,9 +294,10 @@ services:
     command: ["python", "scripts/seed_data.py"]
     environment:
       - NEO4J_URI=${NEO4J_URI}
-      - NEO4J_USERNAME=${NEO4J_USERNAME}
+      - NEO4J_USER=${NEO4J_USERNAME}
       - NEO4J_PASSWORD=${NEO4J_PASSWORD}
-      - SEED_ADMIN_PASSWORD=${SEED_ADMIN_PASSWORD}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - SEED_ADMIN_PASSWORD=${SEED_ADMIN_PASSWORD:-ForgeAdmin2024!}
     networks:
       - forge-network
     profiles:

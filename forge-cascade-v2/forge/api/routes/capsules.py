@@ -1286,9 +1286,10 @@ async def sign_capsule(
             )
 
     except KeyNotFoundError as e:
+        logger.warning(f"Key not found: {e}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
+            detail="Required key not found",
         ) from e
     except Exception as e:
         logger.warning("capsule_sign_failed", error=str(e), capsule_id=capsule_id)

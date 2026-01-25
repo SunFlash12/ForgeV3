@@ -694,23 +694,25 @@ class TemporalRepository:
         RETURN g {.*} AS snapshot
         """
 
+        # Neo4j can't store dicts as properties - serialize to JSON strings
+        import json
         params = {
             "id": snapshot_id,
             "total_nodes": metrics.get("total_nodes", 0),
             "total_edges": metrics.get("total_edges", 0),
-            "nodes_by_type": metrics.get("nodes_by_type", {}),
-            "edges_by_type": metrics.get("edges_by_type", {}),
+            "nodes_by_type": json.dumps(metrics.get("nodes_by_type", {})),
+            "edges_by_type": json.dumps(metrics.get("edges_by_type", {})),
             "density": metrics.get("density", 0.0),
             "avg_degree": metrics.get("avg_degree", 0.0),
             "connected_components": metrics.get("connected_components", 0),
             "avg_trust": metrics.get("avg_trust_level", 60.0),
-            "trust_distribution": metrics.get("trust_distribution", {}),
+            "trust_distribution": json.dumps(metrics.get("trust_distribution", {})),
             "community_count": metrics.get("community_count", 0),
             "modularity": metrics.get("modularity"),
-            "top_capsules": metrics.get("top_capsules_by_pagerank", []),
-            "top_users": metrics.get("top_users_by_influence", []),
+            "top_capsules": json.dumps(metrics.get("top_capsules_by_pagerank", [])),
+            "top_users": json.dumps(metrics.get("top_users_by_influence", [])),
             "active_anomalies": metrics.get("active_anomalies", 0),
-            "anomaly_types": metrics.get("anomaly_types", {}),
+            "anomaly_types": json.dumps(metrics.get("anomaly_types", {})),
             "created_by": created_by,
             "now": now.isoformat(),
         }

@@ -9,13 +9,14 @@ from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from forge.models.base import (
     ForgeModel,
     OverlayState,
     TimestampMixin,
     TrustLevel,
+    validate_dict_security,
 )
 
 
@@ -266,6 +267,15 @@ class OverlayExecution(ForgeModel):
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     correlation_id: str | None = None
 
+    # SECURITY FIX (Audit 5): Validate dict fields for security
+    @field_validator("input_payload")
+    @classmethod
+    def validate_input_payload(cls, v: dict[str, Any]) -> dict[str, Any]:
+        """Validate input payload for security concerns."""
+        if v:
+            return validate_dict_security(v)
+        return v
+
 
 class OverlayHealthCheck(ForgeModel):
     """Result of an overlay health check."""
@@ -290,3 +300,12 @@ class OverlayEvent(ForgeModel):
         default=None,
         description="Specific targets, or None for broadcast",
     )
+
+    # SECURITY FIX (Audit 5): Validate dict fields for security
+    @field_validator("payload")
+    @classmethod
+    def validate_payload(cls, v: dict[str, Any]) -> dict[str, Any]:
+        """Validate payload for security concerns."""
+        if v:
+            return validate_dict_security(v)
+        return v

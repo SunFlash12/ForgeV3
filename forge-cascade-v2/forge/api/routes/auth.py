@@ -947,7 +947,6 @@ async def google_auth(
         from forge.config import get_settings
         from forge.security.tokens import (
             create_access_token,
-            create_csrf_token,
             create_refresh_token,
         )
 
@@ -960,7 +959,7 @@ async def google_auth(
             trust_flame=user.trust_flame,
         )
         refresh_token = create_refresh_token(user_id=user.id)
-        csrf_token = create_csrf_token()
+        csrf_token = generate_csrf_token()
 
         # Store refresh token hash
         await user_repo.update_refresh_token(user.id, refresh_token)
@@ -980,8 +979,8 @@ async def google_auth(
             response=response,
             access_token=access_token,
             refresh_token=refresh_token,
+            access_expires_seconds=settings.access_token_expire_minutes * 60,
             csrf_token=csrf_token,
-            settings=settings,
         )
 
         return GoogleAuthResponse(
@@ -992,9 +991,10 @@ async def google_auth(
         )
 
     except GoogleOAuthError as e:
+        logger.warning(f"Google OAuth error: {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=str(e)
+            detail="Google authentication failed"
         )
 
 
@@ -1056,9 +1056,10 @@ async def link_google_account(
         )
 
     except GoogleOAuthError as e:
+        logger.warning(f"Google OAuth error: {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=str(e)
+            detail="Google authentication failed"
         )
 
 

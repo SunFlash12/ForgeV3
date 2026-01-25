@@ -470,8 +470,9 @@ async def close_query_cache() -> None:
     if isinstance(_query_cache, QueryCache) and _query_cache._redis:
         try:
             await _query_cache._redis.close()
-        except Exception:
-            pass
+        except Exception as e:
+            # SECURITY FIX (Audit 5): Log Redis close errors instead of silently ignoring
+            logger.warning("query_cache_redis_close_error", error=str(e))
 
     _query_cache = None
     logger.info("query_cache_closed")

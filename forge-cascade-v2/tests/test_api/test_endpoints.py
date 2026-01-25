@@ -4,6 +4,7 @@ API Integration Tests
 Tests for REST API endpoints.
 """
 
+import pytest
 from fastapi.testclient import TestClient
 
 
@@ -54,10 +55,10 @@ class TestCapsuleEndpoints:
 
     def test_list_capsules_authorized(self, client: TestClient, auth_headers: dict):
         response = client.get("/api/v1/capsules", headers=auth_headers)
-        # TODO: MEDIUM - Fix test to not accept 500 as valid
-        # Tests should use a mock database or skip if DB unavailable.
-        # Accepting 500 masks real server errors and makes tests meaningless.
-        assert response.status_code in [200, 500]  # 500 if DB not connected
+        # Skip if DB unavailable instead of masking errors
+        if response.status_code == 500:
+            pytest.skip("Database unavailable - use mock_db_client fixture for reliable tests")
+        assert response.status_code == 200
 
     def test_create_capsule_unauthorized(self, client: TestClient):
         response = client.post("/api/v1/capsules", json={
@@ -72,8 +73,9 @@ class TestCapsuleEndpoints:
             "type": "knowledge",
             "title": "Test Capsule",
         }, headers=auth_headers)
-        # TODO: MEDIUM - Use mock DB instead of accepting 500
-        assert response.status_code in [201, 500]
+        if response.status_code == 500:
+            pytest.skip("Database unavailable - use mock_db_client fixture for reliable tests")
+        assert response.status_code == 201
 
 
 class TestGovernanceEndpoints:
@@ -85,8 +87,9 @@ class TestGovernanceEndpoints:
 
     def test_list_proposals_authorized(self, client: TestClient, auth_headers: dict):
         response = client.get("/api/v1/governance/proposals", headers=auth_headers)
-        # TODO: MEDIUM - Use mock DB instead of accepting 500
-        assert response.status_code in [200, 500]
+        if response.status_code == 500:
+            pytest.skip("Database unavailable - use mock_db_client fixture for reliable tests")
+        assert response.status_code == 200
 
 
 class TestOverlayEndpoints:
@@ -98,8 +101,9 @@ class TestOverlayEndpoints:
 
     def test_list_overlays_authorized(self, client: TestClient, auth_headers: dict):
         response = client.get("/api/v1/overlays", headers=auth_headers)
-        # TODO: MEDIUM - Use mock DB instead of accepting 500
-        assert response.status_code in [200, 500]
+        if response.status_code == 500:
+            pytest.skip("Database unavailable - use mock_db_client fixture for reliable tests")
+        assert response.status_code == 200
 
 
 class TestSystemEndpoints:

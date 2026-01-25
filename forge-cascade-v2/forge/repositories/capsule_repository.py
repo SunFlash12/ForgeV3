@@ -1274,9 +1274,11 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
         conditions = ["(c1.id = $id OR c2.id = $id)"]
         params: dict[str, Any] = {"id": capsule_id, "limit": limit}
 
+        # SECURITY FIX (Audit 6): Use parameterized query instead of string interpolation
         if rel_types:
             type_values = [rt.value for rt in rel_types]
-            conditions.append(f"r.relationship_type IN {type_values}")
+            conditions.append("r.relationship_type IN $type_values")
+            params["type_values"] = type_values
 
         if not include_auto_detected:
             conditions.append("r.auto_detected = false")

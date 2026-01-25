@@ -853,6 +853,17 @@ Respond with a JSON object:
                 "parse_error": True,
             }
 
+    async def close(self) -> None:
+        """
+        SECURITY FIX (Audit 5): Properly close HTTP client to prevent resource leaks.
+
+        Close the LLM service and release resources.
+        This should be called during application shutdown.
+        """
+        if hasattr(self._provider, 'close'):
+            await self._provider.close()
+        logger.info("llm_service_closed")
+
 
 # =============================================================================
 # Global Instance
@@ -877,16 +888,19 @@ def init_llm_service(config: LLMConfig) -> LLMService:
 
 
 async def shutdown_llm_service() -> None:
-    """Shutdown the global LLM service and close HTTP clients."""
+    """
+    SECURITY FIX (Audit 5): Properly shutdown the LLM service.
+
+    This async version properly closes the HTTP client to prevent resource leaks.
+    Should be called during application shutdown in async contexts.
+    """
     global _llm_service
     if _llm_service is not None:
-        # FIX: Close the HTTP client before discarding the service
-        if hasattr(_llm_service, '_provider') and hasattr(_llm_service._provider, 'close'):
-            try:
-                await _llm_service._provider.close()
-            except Exception as e:
-                logger.warning("llm_service_close_error", error=str(e))
-    _llm_service = None
+        try:
+            await _llm_service.close()
+        except Exception as e:
+            logger.warning("llm_service_close_error", error=str(e))
+        _llm_service = None
 
 
 __all__ = [

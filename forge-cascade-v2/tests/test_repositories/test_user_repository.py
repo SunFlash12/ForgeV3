@@ -663,5 +663,203 @@ class TestUserRepositorySearch:
         assert params["limit"] == 5
 
 
+# =============================================================================
+# Cypher Injection Prevention Tests
+# =============================================================================
+
+class TestCypherInjectionPrevention:
+    """
+    SECURITY TESTS: Verify that user input is properly parameterized
+    to prevent Cypher injection attacks.
+
+    These tests ensure that malicious input cannot escape parameter context
+    and execute arbitrary Cypher queries.
+    """
+
+    # Common injection payloads
+    INJECTION_PAYLOADS = [
+        # Basic injection attempts
+        "'; DROP (n) //",
+        "' OR '1'='1",
+        "admin'--",
+        "' UNION MATCH (n) RETURN n //",
+
+        # Cypher-specific attacks
+        "}) RETURN n // ",
+        "', injection: 'value'}) RETURN n //",
+        "test' OR 1=1 //",
+        "'] MATCH (m) DETACH DELETE m //",
+
+        # Property access attacks
+        "test']})-[r]-() DELETE r //",
+        "{{injection}}",
+        "${injection}",
+
+        # Unicode and encoding attacks
+        "test\u0027; DROP (n)",
+        "test%27; DROP (n)",
+
+        # Comment attacks
+        "test /* comment */ OR '1'='1",
+        "test // comment",
+    ]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("payload", INJECTION_PAYLOADS)
+    async def test_get_by_username_injection(self, user_repository, mock_db_client, payload):
+        """
+        Verify get_by_username uses parameterized queries for username input.
+        Injection payloads should be treated as literal string values, not Cypher.
+        """
+        mock_db_client.execute_single.return_value = None
+
+        # This should NOT raise an error - payload should be safely parameterized
+        result = await user_repository.get_by_username(payload)
+
+        # Verify the call was made (not blocked/errored)
+        mock_db_client.execute_single.assert_called_once()
+
+        # Verify payload is passed as a parameter, not embedded in query
+        call_args = mock_db_client.execute_single.call_args
+        query = call_args[0][0]
+        params = call_args[0][1]
+
+        # The payload should be in params, not directly in the query string
+        assert payload not in query, f"Payload '{payload[:20]}...' should not appear directly in query"
+        assert params.get("username") == payload, "Payload should be passed as a parameter"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("payload", INJECTION_PAYLOADS)
+    async def test_get_by_email_injection(self, user_repository, mock_db_client, payload):
+        """
+        Verify get_by_email uses parameterized queries for email input.
+        """
+        mock_db_client.execute_single.return_value = None
+
+        # Convert payload to look like an email if it doesn't contain @
+        email_payload = f"{payload}@test.com" if "@" not in payload else payload
+
+        result = await user_repository.get_by_email(email_payload)
+
+        mock_db_client.execute_single.assert_called_once()
+        call_args = mock_db_client.execute_single.call_args
+        query = call_args[0][0]
+        params = call_args[0][1]
+
+        # Injection payload should be parameterized, not in query
+        assert payload not in query, f"Payload should not appear directly in query"
+        assert email_payload in str(params.values()), "Email should be passed as a parameter"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("payload", INJECTION_PAYLOADS)
+    async def test_search_injection(self, user_repository, mock_db_client, payload):
+        """
+        Verify search uses parameterized queries for search term.
+        """
+        mock_db_client.execute.return_value = []
+
+        result = await user_repository.search(payload)
+
+        mock_db_client.execute.assert_called_once()
+        call_args = mock_db_client.execute.call_args
+        query = call_args[0][0]
+        params = call_args[0][1]
+
+        # Payload should not appear directly in query
+        # Note: CONTAINS is used with parameter, not string interpolation
+        assert payload not in query, "Search term should not be embedded in query"
+
+    @pytest.mark.asyncio
+    async def test_create_user_injection_in_username(self, user_repository, mock_db_client, sample_user_in_db_data):
+        """
+        Verify user creation sanitizes username input.
+        """
+        mock_db_client.execute_single.return_value = {"user": sample_user_in_db_data}
+
+        malicious_username = "admin'--; DROP (n)"
+
+        user_create = UserCreate(
+            username=malicious_username,
+            email="test@example.com",
+            password="SecureP@ss123!",
+        )
+
+        try:
+            result = await user_repository.create(user_create, password_hash="$2b$12$hash")
+        except Exception:
+            pass  # Validation might reject the username, which is fine
+
+        # If called, verify parameterization
+        if mock_db_client.execute_single.called:
+            call_args = mock_db_client.execute_single.call_args
+            query = call_args[0][0]
+
+            # Malicious payload should not be in query
+            assert "DROP" not in query.upper() or "DROP" in str(mock_db_client.execute_single.call_args[0][1].values())
+
+    @pytest.mark.asyncio
+    async def test_adjust_trust_flame_injection_in_reason(self, user_repository, mock_db_client):
+        """
+        Verify trust flame adjustment sanitizes reason parameter.
+        """
+        mock_db_client.execute_single.return_value = {
+            "old_value": 60,
+            "new_value": 70,
+            "user_id": "user123",
+        }
+
+        malicious_reason = "Good behavior'); MATCH (n) DETACH DELETE n //"
+
+        result = await user_repository.adjust_trust_flame(
+            user_id="user123",
+            adjustment=10,
+            reason=malicious_reason,
+        )
+
+        call_args = mock_db_client.execute_single.call_args
+        query = call_args[0][0]
+
+        # DELETE should not appear in query (it should be in params)
+        assert "DETACH DELETE" not in query, "Injection attempt should be parameterized"
+
+    @pytest.mark.asyncio
+    async def test_get_by_id_uuid_injection(self, user_repository, mock_db_client):
+        """
+        Verify get_by_id handles malicious ID input safely.
+        """
+        mock_db_client.execute_single.return_value = None
+
+        malicious_id = "user123'}) MATCH (n) DETACH DELETE n //"
+
+        result = await user_repository.get_by_id(malicious_id)
+
+        call_args = mock_db_client.execute_single.call_args
+        query = call_args[0][0]
+        params = call_args[0][1]
+
+        # Verify ID is parameterized
+        assert "DETACH DELETE" not in query
+        assert params.get("id") == malicious_id or params.get("user_id") == malicious_id
+
+    @pytest.mark.asyncio
+    async def test_update_user_injection_in_display_name(self, user_repository, mock_db_client, sample_user_data):
+        """
+        Verify update sanitizes display_name input.
+        """
+        sample_user_data["display_name"] = "Injected Name"
+        mock_db_client.execute_single.return_value = {"user": sample_user_data}
+
+        malicious_name = "Name'}) MATCH (n) SET n.role='admin' //"
+
+        update = UserUpdate(display_name=malicious_name)
+        result = await user_repository.update("user123", update)
+
+        call_args = mock_db_client.execute_single.call_args
+        query = call_args[0][0]
+
+        # SET n.role='admin' should not appear in query
+        assert "n.role='admin'" not in query
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

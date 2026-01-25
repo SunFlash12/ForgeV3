@@ -849,6 +849,8 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
     IDEMPOTENT_PATHS_PREFIX = {"/api/v1/capsules", "/api/v1/governance/proposals"}
     # SECURITY FIX (Audit 4 - M): Add cache size limit to prevent memory exhaustion
     MAX_CACHE_SIZE = 10000  # Max cached idempotency entries
+    # SECURITY FIX (Audit 6): Limit response body size to prevent memory exhaustion
+    MAX_RESPONSE_SIZE = 1024 * 1024  # 1MB max response size for caching
 
     def __init__(self, app, ttl_seconds: int = 86400):  # 24 hour default
         super().__init__(app)
@@ -915,25 +917,27 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
             async for chunk in response.body_iterator:
                 body += chunk
 
-            # Store in cache
-            with self._lock:
-                # SECURITY FIX (Audit 4 - M): Evict oldest entries if cache is full
-                if len(self._cache) >= self.MAX_CACHE_SIZE:
-                    # Evict 10% of oldest entries
-                    evict_count = self.MAX_CACHE_SIZE // 10
-                    oldest_keys = sorted(
-                        self._cache.keys(),
-                        key=lambda k: self._cache[k].created_at
-                    )[:evict_count]
-                    for key in oldest_keys:
-                        del self._cache[key]
+            # SECURITY FIX (Audit 6): Only cache responses under size limit
+            if len(body) <= self.MAX_RESPONSE_SIZE:
+                # Store in cache
+                with self._lock:
+                    # SECURITY FIX (Audit 4 - M): Evict oldest entries if cache is full
+                    if len(self._cache) >= self.MAX_CACHE_SIZE:
+                        # Evict 10% of oldest entries
+                        evict_count = self.MAX_CACHE_SIZE // 10
+                        oldest_keys = sorted(
+                            self._cache.keys(),
+                            key=lambda k: self._cache[k].created_at
+                        )[:evict_count]
+                        for key in oldest_keys:
+                            del self._cache[key]
 
-                self._cache[cache_key] = IdempotencyEntry(
-                    status_code=response.status_code,
-                    body=body,
-                    headers=dict(response.headers),
-                    created_at=time.time(),
-                )
+                    self._cache[cache_key] = IdempotencyEntry(
+                        status_code=response.status_code,
+                        body=body,
+                        headers=dict(response.headers),
+                        created_at=time.time(),
+                    )
 
             # Return new response with body
             return Response(

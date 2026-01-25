@@ -1399,6 +1399,10 @@ class GraphRepository:
         """Get comprehensive graph metrics."""
         return await self.provider.get_graph_metrics()
 
+    async def get_graph_metrics(self) -> GraphMetrics:
+        """Alias for get_metrics() - used by scheduler."""
+        return await self.provider.get_graph_metrics()
+
     async def find_similar_nodes(
         self,
         source_id: str | None = None,

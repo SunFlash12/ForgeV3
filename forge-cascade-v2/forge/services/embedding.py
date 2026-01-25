@@ -630,6 +630,19 @@ class EmbeddingService:
         if self._cache:
             await self._cache.clear()
 
+    async def close(self) -> None:
+        """
+        SECURITY FIX (Audit 5): Properly close HTTP client to prevent resource leaks.
+
+        Close the embedding service and release resources.
+        This should be called during application shutdown.
+        """
+        if hasattr(self._provider, 'close'):
+            await self._provider.close()
+        if self._cache:
+            await self._cache.clear()
+        logger.info("embedding_service_closed")
+
 
 # =============================================================================
 # Global Instance
@@ -654,9 +667,27 @@ def init_embedding_service(config: EmbeddingConfig) -> EmbeddingService:
 
 
 def shutdown_embedding_service() -> None:
-    """Shutdown the global embedding service."""
+    """
+    Shutdown the global embedding service (sync version).
+
+    NOTE: This doesn't properly close async resources.
+    Use shutdown_embedding_service_async() in async contexts.
+    """
     global _embedding_service
     _embedding_service = None
+
+
+async def shutdown_embedding_service_async() -> None:
+    """
+    SECURITY FIX (Audit 5): Properly shutdown the embedding service.
+
+    This async version properly closes the HTTP client to prevent resource leaks.
+    Should be called during application shutdown in async contexts.
+    """
+    global _embedding_service
+    if _embedding_service is not None:
+        await _embedding_service.close()
+        _embedding_service = None
 
 
 # =============================================================================
@@ -695,6 +726,7 @@ __all__ = [
     "get_embedding_service",
     "init_embedding_service",
     "shutdown_embedding_service",
+    "shutdown_embedding_service_async",
     "cosine_similarity",
     "euclidean_distance",
 ]

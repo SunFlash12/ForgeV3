@@ -152,13 +152,36 @@ class NotificationService:
         logger.info("Notification service started")
 
     async def stop(self) -> None:
-        """Stop the notification service."""
+        """
+        Stop the notification service.
+
+        SECURITY FIX (Audit 5): Properly wait for background tasks to complete
+        before closing the HTTP client. This prevents resource leaks and ensures
+        pending webhook deliveries are properly handled.
+        """
+        # Cancel background workers
         if self._webhook_worker_task:
             self._webhook_worker_task.cancel()
+            try:
+                await self._webhook_worker_task
+            except asyncio.CancelledError:
+                pass  # Expected when cancelling
+
         if self._retry_worker_task:
             self._retry_worker_task.cancel()
+            try:
+                await self._retry_worker_task
+            except asyncio.CancelledError:
+                pass  # Expected when cancelling
+
+        # Clear task references
+        self._webhook_worker_task = None
+        self._retry_worker_task = None
+
+        # Close HTTP client after tasks are done
         if self._http_client:
             await self._http_client.aclose()
+            self._http_client = None
 
         logger.info("Notification service stopped")
 

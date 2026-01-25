@@ -6,6 +6,9 @@ registration, token refresh, and session management.
 
 SECURITY FIX (Audit 4 - M2): Added IP-based rate limiting to prevent
 credential stuffing attacks across multiple accounts.
+
+SECURITY FIX (Audit 5): IP rate limiting now uses Redis for distributed
+deployments, falling back to in-memory when Redis unavailable.
 """
 
 import hashlib
@@ -14,7 +17,19 @@ import threading
 from collections import OrderedDict
 from datetime import UTC, datetime, timedelta
 
+import structlog
+
 from ..config import get_settings
+
+logger = structlog.get_logger(__name__)
+
+# Try to import redis for distributed rate limiting
+try:
+    import redis.asyncio as aioredis
+    REDIS_AVAILABLE = True
+except ImportError:
+    aioredis = None
+    REDIS_AVAILABLE = False
 from ..models.user import Token, User, UserCreate
 from ..repositories.audit_repository import AuditRepository
 from ..repositories.user_repository import UserRepository
@@ -27,6 +42,7 @@ from .tokens import (
     get_token_claims,
     verify_access_token,
     verify_refresh_token,
+    verify_refresh_token_async,
 )
 
 settings = get_settings()
@@ -76,21 +92,67 @@ class IPRateLimiter:
 
     This complements per-account lockout by also limiting the total number of
     failed attempts from a single IP address across ALL accounts.
+
+    SECURITY FIX (Audit 5): Now uses Redis for distributed deployments.
+    In multi-instance deployments, all instances share rate limit data via Redis.
+    Falls back to in-memory storage when Redis is unavailable.
     """
 
     # Rate limit settings
     MAX_ATTEMPTS_PER_WINDOW = 20  # Max failed attempts per IP per window
     WINDOW_SECONDS = 300  # 5 minute window
     LOCKOUT_SECONDS = 900  # 15 minute lockout after exceeding limit
-    MAX_IPS = 50000  # Max tracked IPs (memory limit)
+    MAX_IPS = 50000  # Max tracked IPs (memory limit for fallback)
+
+    # Redis key prefixes
+    _REDIS_ATTEMPTS_PREFIX = "forge:ratelimit:ip:attempts:"
+    _REDIS_LOCKOUT_PREFIX = "forge:ratelimit:ip:lockout:"
 
     def __init__(self):
+        # In-memory fallback storage
         self._attempts: OrderedDict[str, list[datetime]] = OrderedDict()
         self._lockouts: dict[str, datetime] = {}
         self._lock = threading.Lock()
+        # Redis client (initialized lazily)
+        self._redis_client = None
+        self._redis_initialized = False
+
+    async def _get_redis(self):
+        """Get or initialize Redis client."""
+        if self._redis_initialized:
+            return self._redis_client
+
+        if not REDIS_AVAILABLE:
+            logger.info("ip_rate_limiter_memory_mode", reason="redis library not installed")
+            self._redis_initialized = True
+            return None
+
+        redis_url = settings.redis_url
+        if not redis_url:
+            logger.info("ip_rate_limiter_memory_mode", reason="no redis URL configured")
+            self._redis_initialized = True
+            return None
+
+        try:
+            self._redis_client = aioredis.from_url(
+                redis_url,
+                encoding="utf-8",
+                decode_responses=True,
+                socket_timeout=5.0,
+                socket_connect_timeout=5.0,
+            )
+            await self._redis_client.ping()
+            self._redis_initialized = True
+            logger.info("ip_rate_limiter_redis_connected")
+            return self._redis_client
+        except Exception as e:
+            logger.warning("ip_rate_limiter_redis_failed", error=str(e))
+            self._redis_client = None
+            self._redis_initialized = True
+            return None
 
     def _cleanup_old_entries(self) -> None:
-        """Remove expired entries (must hold lock)."""
+        """Remove expired entries (must hold lock). For in-memory fallback only."""
         now = datetime.now(UTC)
         cutoff = now - timedelta(seconds=self.WINDOW_SECONDS)
 
@@ -110,9 +172,57 @@ class IPRateLimiter:
         for ip in expired_lockouts:
             del self._lockouts[ip]
 
+    async def check_rate_limit_async(self, ip_address: str) -> tuple[bool, int]:
+        """
+        Check if IP is rate limited (async version with Redis support).
+
+        SECURITY FIX (Audit 5): Now checks Redis for distributed rate limiting.
+
+        Returns:
+            Tuple of (is_allowed, seconds_until_allowed)
+        """
+        if not ip_address:
+            return (True, 0)
+
+        redis = await self._get_redis()
+        if redis:
+            try:
+                # Check lockout in Redis
+                lockout_key = f"{self._REDIS_LOCKOUT_PREFIX}{ip_address}"
+                lockout_ttl = await redis.ttl(lockout_key)
+                if lockout_ttl > 0:
+                    return (False, lockout_ttl)
+
+                # Count attempts in Redis using a sorted set with timestamps
+                attempts_key = f"{self._REDIS_ATTEMPTS_PREFIX}{ip_address}"
+                now = datetime.now(UTC).timestamp()
+                cutoff = now - self.WINDOW_SECONDS
+
+                # Remove old entries and count remaining
+                await redis.zremrangebyscore(attempts_key, "-inf", cutoff)
+                attempt_count = await redis.zcard(attempts_key)
+
+                if attempt_count >= self.MAX_ATTEMPTS_PER_WINDOW:
+                    # Trigger lockout
+                    await redis.setex(lockout_key, self.LOCKOUT_SECONDS, "1")
+                    logger.warning(
+                        "ip_rate_limit_triggered",
+                        ip_hash=hashlib.sha256(ip_address.encode()).hexdigest()[:16],
+                        attempts=attempt_count
+                    )
+                    return (False, self.LOCKOUT_SECONDS)
+
+                return (True, 0)
+            except Exception as e:
+                logger.warning("ip_rate_limiter_redis_error", error=str(e), operation="check")
+                # Fall through to in-memory
+
+        # In-memory fallback
+        return self.check_rate_limit(ip_address)
+
     def check_rate_limit(self, ip_address: str) -> tuple[bool, int]:
         """
-        Check if IP is rate limited.
+        Check if IP is rate limited (sync version, in-memory only).
 
         Returns:
             Tuple of (is_allowed, seconds_until_allowed)
@@ -141,9 +251,44 @@ class IPRateLimiter:
 
             return (True, 0)
 
+    async def record_attempt_async(self, ip_address: str, success: bool) -> None:
+        """
+        Record a login attempt (async version with Redis support).
+
+        SECURITY FIX (Audit 5): Now records to Redis for distributed rate limiting.
+
+        Only failed attempts count against the rate limit.
+        Successful logins reset the counter for that IP.
+        """
+        if not ip_address:
+            return
+
+        redis = await self._get_redis()
+        if redis:
+            try:
+                attempts_key = f"{self._REDIS_ATTEMPTS_PREFIX}{ip_address}"
+                lockout_key = f"{self._REDIS_LOCKOUT_PREFIX}{ip_address}"
+
+                if success:
+                    # Successful login - clear failed attempts for this IP
+                    await redis.delete(attempts_key, lockout_key)
+                else:
+                    # Failed login - record attempt with timestamp as score
+                    now = datetime.now(UTC).timestamp()
+                    await redis.zadd(attempts_key, {str(now): now})
+                    # Set expiry on the attempts set
+                    await redis.expire(attempts_key, self.WINDOW_SECONDS + 60)
+                return
+            except Exception as e:
+                logger.warning("ip_rate_limiter_redis_error", error=str(e), operation="record")
+                # Fall through to in-memory
+
+        # In-memory fallback
+        self.record_attempt(ip_address, success)
+
     def record_attempt(self, ip_address: str, success: bool) -> None:
         """
-        Record a login attempt.
+        Record a login attempt (sync version, in-memory only).
 
         Only failed attempts count against the rate limit.
         Successful logins reset the counter for that IP.
@@ -234,11 +379,11 @@ class AuthService:
         Raises:
             RegistrationError: If username or email already exists
         """
-        # Check for existing username
+        # Pre-check for better error messages (user-friendly)
+        # Note: Database unique constraints are the authoritative check
         if await self.user_repo.username_exists(username):
             raise RegistrationError(f"Username '{username}' is already taken")
 
-        # Check for existing email
         if await self.user_repo.email_exists(email):
             raise RegistrationError(f"Email '{email}' is already registered")
 
@@ -254,7 +399,19 @@ class AuthService:
             display_name=display_name or username
         )
 
-        user = await self.user_repo.create(user_create, password_hash)
+        # SECURITY FIX (Audit 6): Handle TOCTOU race condition with DB constraints
+        # The pre-checks above are for user-friendly errors; DB constraints are authoritative
+        try:
+            user = await self.user_repo.create(user_create, password_hash)
+        except Exception as e:
+            # Handle database constraint violations from race conditions
+            error_msg = str(e).lower()
+            if "username" in error_msg and ("unique" in error_msg or "duplicate" in error_msg or "exists" in error_msg):
+                raise RegistrationError(f"Username '{username}' is already taken")
+            if "email" in error_msg and ("unique" in error_msg or "duplicate" in error_msg or "exists" in error_msg):
+                raise RegistrationError(f"Email '{email}' is already registered")
+            # Re-raise unexpected errors
+            raise
 
         # Log registration
         # SECURITY FIX (Audit 3): Hash email in audit logs to prevent PII exposure
@@ -304,8 +461,9 @@ class AuthService:
         """
         # SECURITY FIX (Audit 4 - M2): Check IP-based rate limit FIRST
         # This prevents credential stuffing across multiple accounts
+        # SECURITY FIX (Audit 5): Now uses Redis for distributed rate limiting
         if ip_address:
-            is_allowed, seconds_remaining = self._ip_rate_limiter.check_rate_limit(ip_address)
+            is_allowed, seconds_remaining = await self._ip_rate_limiter.check_rate_limit_async(ip_address)
             if not is_allowed:
                 await self.audit_repo.log_user_action(
                     actor_id="unknown",
@@ -327,8 +485,9 @@ class AuthService:
 
         if not user:
             # SECURITY FIX (Audit 4 - M2): Record failed attempt for IP rate limiting
+            # SECURITY FIX (Audit 5): Now uses Redis for distributed rate limiting
             if ip_address:
-                self._ip_rate_limiter.record_attempt(ip_address, success=False)
+                await self._ip_rate_limiter.record_attempt_async(ip_address, success=False)
 
             # SECURITY FIX (Audit 3): Don't log the attempted username/email to prevent
             # user enumeration via log analysis. Hash it for correlation if needed.
@@ -374,8 +533,9 @@ class AuthService:
         # Verify password
         if not verify_password(password, user.password_hash):
             # SECURITY FIX (Audit 4 - M2): Record failed attempt for IP rate limiting
+            # SECURITY FIX (Audit 5): Now uses Redis for distributed rate limiting
             if ip_address:
-                self._ip_rate_limiter.record_attempt(ip_address, success=False)
+                await self._ip_rate_limiter.record_attempt_async(ip_address, success=False)
 
             # Record failed attempt
             await self.user_repo.record_failed_login(user.id)
@@ -420,8 +580,9 @@ class AuthService:
         await self.user_repo.record_login(user.id)
 
         # SECURITY FIX (Audit 4 - M2): Record successful login to clear IP rate limit
+        # SECURITY FIX (Audit 5): Now uses Redis for distributed rate limiting
         if ip_address:
-            self._ip_rate_limiter.record_attempt(ip_address, success=True)
+            await self._ip_rate_limiter.record_attempt_async(ip_address, success=True)
 
         # Create tokens
         role_value = user.role.value if hasattr(user.role, 'value') else user.role
@@ -472,8 +633,8 @@ class AuthService:
         Raises:
             TokenError: If refresh token is invalid or doesn't match stored token
         """
-        # Verify refresh token signature and expiry
-        payload = verify_refresh_token(refresh_token)
+        # SECURITY FIX (Audit 5): Use async version for full Redis blacklist support
+        payload = await verify_refresh_token_async(refresh_token)
 
         # Get user
         user = await self.user_repo.get_by_id(payload.sub)
@@ -501,6 +662,18 @@ class AuthService:
 
         if not user.is_active:
             raise AccountDeactivatedError("Account has been deactivated")
+
+        # SECURITY FIX (Audit 5): Blacklist the old refresh token before issuing new one
+        # This prevents token replay even if the stored token validation is bypassed
+        await TokenBlacklist.add_async(
+            jti=payload.jti,
+            expires_at=payload.exp  # Use original expiry time - FIXED: was 'exp='
+        )
+        logger.debug(
+            "refresh_token_blacklisted",
+            user_id=user.id,
+            old_jti=payload.jti[:16] + "..." if payload.jti else None,
+        )
 
         # Create new token pair (token rotation)
         role_value = user.role.value if hasattr(user.role, 'value') else user.role

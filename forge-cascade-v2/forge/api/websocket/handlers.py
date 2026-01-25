@@ -13,7 +13,7 @@ Security Features:
 """
 
 import json
-from collections import defaultdict
+from collections import defaultdict, deque
 from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
@@ -58,22 +58,23 @@ class WebSocketConnection:
         self.connected_at = datetime.now(UTC)
         self.last_ping = datetime.now(UTC)
         self.message_count = 0
-        # Rate limiting
-        self._message_timestamps: list[datetime] = []
+        # SECURITY FIX (Audit 5): Use deque with maxlen to bound memory growth
+        # maxlen is 2x the rate limit to allow room for cleanup
+        self._message_timestamps: deque[datetime] = deque(maxlen=MAX_MESSAGES_PER_MINUTE * 2)
 
     def check_rate_limit(self) -> bool:
         """
         Check if connection is within rate limits.
         Returns True if allowed, False if rate limited.
+
+        SECURITY FIX (Audit 5): Uses deque for bounded memory growth.
         """
         now = datetime.now(UTC)
         cutoff = now.timestamp() - RATE_LIMIT_WINDOW_SECONDS
 
-        # Remove old timestamps
-        self._message_timestamps = [
-            ts for ts in self._message_timestamps
-            if ts.timestamp() > cutoff
-        ]
+        # Remove old timestamps from the front
+        while self._message_timestamps and self._message_timestamps[0].timestamp() <= cutoff:
+            self._message_timestamps.popleft()
 
         # Check if under limit
         if len(self._message_timestamps) >= MAX_MESSAGES_PER_MINUTE:

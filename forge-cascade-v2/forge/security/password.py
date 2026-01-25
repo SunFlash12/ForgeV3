@@ -6,14 +6,27 @@ Includes:
 - Secure password hashing
 - Timing-safe password verification
 - Password strength validation
+- Entropy-based validation with zxcvbn (optional)
 """
 
 import hmac
 import re
 
 import bcrypt
+import structlog
 
 from ..config import get_settings
+
+logger = structlog.get_logger(__name__)
+
+# SECURITY FIX (Audit 5): Optional zxcvbn integration for entropy-based validation
+try:
+    from zxcvbn import zxcvbn as zxcvbn_check
+    ZXCVBN_AVAILABLE = True
+except ImportError:
+    zxcvbn_check = None
+    ZXCVBN_AVAILABLE = False
+    logger.info("zxcvbn not installed - using pattern-based password validation only")
 
 settings = get_settings()
 
@@ -177,6 +190,34 @@ def validate_password_strength(password: str, username: str | None = None, email
     if _has_repeated_pattern(password_lower):
         raise PasswordValidationError("Password contains a repetitive pattern")
 
+    # SECURITY FIX (Audit 5): Entropy-based validation with zxcvbn
+    if ZXCVBN_AVAILABLE and zxcvbn_check is not None:
+        user_inputs = []
+        if username:
+            user_inputs.append(username)
+        if email:
+            user_inputs.append(email)
+            # Also add email local part
+            if "@" in email:
+                user_inputs.append(email.split("@")[0])
+
+        result = zxcvbn_check(password, user_inputs=user_inputs)
+        # zxcvbn score: 0=very weak, 1=weak, 2=fair, 3=strong, 4=very strong
+        # Require minimum score of 2 (fair)
+        if result["score"] < 2:
+            feedback = result.get("feedback", {})
+            warning = feedback.get("warning", "")
+            suggestions = feedback.get("suggestions", [])
+
+            # Build helpful error message
+            error_parts = ["Password is too weak"]
+            if warning:
+                error_parts.append(f": {warning}")
+            if suggestions:
+                error_parts.append(f". Suggestions: {'; '.join(suggestions[:2])}")
+
+            raise PasswordValidationError("".join(error_parts))
+
 
 def _has_repeated_pattern(password: str) -> bool:
     """
@@ -291,13 +332,58 @@ def needs_rehash(hashed_password: str) -> bool:
     return False
 
 
-def get_password_strength(password: str) -> dict:
+def get_password_strength(password: str, username: str | None = None, email: str | None = None) -> dict:
     """
     Evaluate password strength.
 
-    Returns a dict with strength indicators.
-    This is a simple implementation - consider using zxcvbn for production.
+    SECURITY FIX (Audit 5): Now uses zxcvbn when available for true entropy-based
+    strength evaluation. Falls back to pattern-based evaluation if zxcvbn unavailable.
+
+    Args:
+        password: Password to evaluate
+        username: Optional username for context-aware evaluation
+        email: Optional email for context-aware evaluation
+
+    Returns:
+        Dict with strength indicators including score, label, and feedback
     """
+    # SECURITY FIX (Audit 5): Use zxcvbn for accurate entropy-based evaluation
+    if ZXCVBN_AVAILABLE and zxcvbn_check is not None:
+        user_inputs = []
+        if username:
+            user_inputs.append(username)
+        if email:
+            user_inputs.append(email)
+            if "@" in email:
+                user_inputs.append(email.split("@")[0])
+
+        result = zxcvbn_check(password, user_inputs=user_inputs)
+        feedback_obj = result.get("feedback", {})
+
+        # Map zxcvbn score (0-4) to labels
+        score_labels = {
+            0: "very_weak",
+            1: "weak",
+            2: "fair",
+            3: "strong",
+            4: "very_strong"
+        }
+
+        return {
+            "length": len(password),
+            "has_uppercase": any(c.isupper() for c in password),
+            "has_lowercase": any(c.islower() for c in password),
+            "has_digit": any(c.isdigit() for c in password),
+            "has_special": any(not c.isalnum() for c in password),
+            "score": result["score"],
+            "label": score_labels.get(result["score"], "unknown"),
+            "feedback": feedback_obj.get("suggestions", []),
+            "warning": feedback_obj.get("warning", ""),
+            "crack_time_display": result.get("crack_times_display", {}).get("offline_slow_hashing_1e4_per_second", ""),
+            "entropy_based": True,
+        }
+
+    # Fallback: Pattern-based evaluation
     strength = {
         "length": len(password),
         "has_uppercase": any(c.isupper() for c in password),
@@ -305,7 +391,8 @@ def get_password_strength(password: str) -> dict:
         "has_digit": any(c.isdigit() for c in password),
         "has_special": any(not c.isalnum() for c in password),
         "score": 0,
-        "feedback": []
+        "feedback": [],
+        "entropy_based": False,
     }
 
     # Calculate score (0-5)
@@ -334,7 +421,7 @@ def get_password_strength(password: str) -> dict:
     if not strength["has_special"]:
         strength["feedback"].append("Add special characters for extra security")
 
-    # Strength label
+    # Strength label (map 0-6 score to labels)
     if strength["score"] <= 2:
         strength["label"] = "weak"
     elif strength["score"] <= 4:

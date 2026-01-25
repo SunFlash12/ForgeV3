@@ -530,6 +530,7 @@ async def register_peer(
 
 @router.get("/peers", response_model=list[PeerResponse])
 async def list_peers(
+    current_user: AdminUserDep,  # SECURITY FIX: Require authentication
     status: PeerStatus | None = None,
     sync_service: SyncService = Depends(get_sync_service),
     trust_manager: PeerTrustManager = Depends(get_trust_manager),
@@ -574,6 +575,7 @@ async def list_peers(
 @router.get("/peers/{peer_id}", response_model=PeerResponse)
 async def get_peer(
     peer_id: str,
+    current_user: AdminUserDep,  # SECURITY FIX: Require authentication
     sync_service: SyncService = Depends(get_sync_service),
     trust_manager: PeerTrustManager = Depends(get_trust_manager),
 ):
@@ -731,6 +733,7 @@ async def adjust_peer_trust(
 @router.get("/peers/{peer_id}/trust/history")
 async def get_peer_trust_history(
     peer_id: str,
+    current_user: AdminUserDep,  # SECURITY FIX: Require authentication
     limit: int = Query(default=50, le=200),
     trust_manager: PeerTrustManager = Depends(get_trust_manager),
 ):
@@ -754,6 +757,7 @@ async def get_peer_trust_history(
 @router.get("/peers/{peer_id}/trust/permissions")
 async def get_peer_permissions(
     peer_id: str,
+    current_user: AdminUserDep,  # SECURITY FIX: Require authentication
     sync_service: SyncService = Depends(get_sync_service),
     trust_manager: PeerTrustManager = Depends(get_trust_manager),
 ):
@@ -822,6 +826,7 @@ async def trigger_sync_all(
 
 @router.get("/sync/status")
 async def get_sync_status(
+    current_user: AdminUserDep,  # SECURITY FIX: Require authentication
     peer_id: str | None = None,
     limit: int = Query(default=20, le=100),
     sync_service: SyncService = Depends(get_sync_service),
@@ -850,6 +855,7 @@ async def get_sync_status(
 @router.get("/sync/{sync_id}", response_model=SyncStateResponse)
 async def get_sync_details(
     sync_id: str,
+    current_user: AdminUserDep,  # SECURITY FIX: Require authentication
     sync_service: SyncService = Depends(get_sync_service),
 ):
     """Get details for a specific sync operation."""
@@ -887,6 +893,7 @@ async def get_sync_details(
 
 @router.get("/stats", response_model=FederationStatsResponse)
 async def get_federation_stats(
+    current_user: AdminUserDep,  # SECURITY FIX: Require authentication
     sync_service: SyncService = Depends(get_sync_service),
     trust_manager: PeerTrustManager = Depends(get_trust_manager),
 ):
@@ -948,7 +955,7 @@ async def federation_health():
 async def get_changes(
     since: datetime | None = None,
     types: str | None = None,
-    limit: int = Query(default=100, le=1000),
+    limit: int = Query(default=100, ge=1, le=100),  # SECURITY FIX (Audit 5): Reduced from 1000
     x_forge_signature: str = Header(None),
     x_forge_public_key: str = Header(None),
     protocol: FederationProtocol = Depends(get_protocol),

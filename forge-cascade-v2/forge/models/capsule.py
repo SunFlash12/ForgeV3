@@ -23,6 +23,7 @@ from forge.models.base import (
     ForgeModel,
     TimestampMixin,
     TrustLevel,
+    validate_dict_security,
 )
 
 
@@ -85,6 +86,15 @@ class CapsuleBase(ForgeModel):
     def validate_tags(cls, v: list[str]) -> list[str]:
         """Normalize and validate tags."""
         return [tag.lower().strip() for tag in v if tag.strip()][:20]
+
+    # SECURITY FIX (Audit 5): Validate metadata dict for security
+    @field_validator("metadata")
+    @classmethod
+    def validate_metadata(cls, v: dict[str, Any]) -> dict[str, Any]:
+        """Validate metadata dict for security concerns."""
+        if v:
+            return validate_dict_security(v)
+        return v
 
 
 # SHA-256 hash pattern: 64 lowercase hex characters

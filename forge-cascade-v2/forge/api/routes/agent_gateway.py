@@ -477,9 +477,10 @@ async def create_capsule(
 
 @router.get("/stats", response_model=StatsResponse)
 async def get_gateway_stats(
+    user: ActiveUserDep,  # SECURITY FIX (Audit 6): Require authentication for stats
     gateway: AgentGatewayService = GatewayDep,
 ) -> StatsResponse:
-    """Get gateway usage statistics."""
+    """Get gateway usage statistics. Requires authentication."""
     stats = await gateway.get_stats()
 
     return StatsResponse(
@@ -500,7 +501,7 @@ async def get_gateway_stats(
 async def get_access_logs(
     session_id: str,
     user: ActiveUserDep,
-    limit: int = Query(default=100, ge=1, le=1000),
+    limit: int = Query(default=100, ge=1, le=100),  # SECURITY FIX (Audit 5): Reduced from 1000
     gateway: AgentGatewayService = GatewayDep,
 ) -> list[dict[str, Any]]:
     """Get access logs for a session."""
@@ -597,8 +598,10 @@ async def websocket_stream(
 # ============================================================================
 
 @router.get("/capabilities")
-async def list_capabilities() -> dict[str, Any]:
-    """Get available capabilities and query types."""
+async def list_capabilities(
+    user: ActiveUserDep,  # SECURITY FIX (Audit 6): Require authentication
+) -> dict[str, Any]:
+    """Get available capabilities and query types. Requires authentication."""
     return {
         "capabilities": [
             {

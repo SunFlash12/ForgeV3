@@ -101,12 +101,12 @@ class TestUserSearchRoute:
             headers=auth_headers,
         )
 
-        # May succeed or fail DB connection
-        assert response.status_code in [200, 500]
+        if response.status_code == 500:
+            pytest.skip("Database unavailable - use mock fixtures for reliable tests")
+        assert response.status_code == 200
 
-        if response.status_code == 200:
-            data = response.json()
-            assert "users" in data
+        data = response.json()
+        assert "users" in data
 
     def test_search_with_limit(self, client: TestClient, auth_headers: dict):
         """Search with custom limit."""
@@ -116,7 +116,9 @@ class TestUserSearchRoute:
             headers=auth_headers,
         )
 
-        assert response.status_code in [200, 500]
+        if response.status_code == 500:
+            pytest.skip("Database unavailable - use mock fixtures for reliable tests")
+        assert response.status_code == 200
 
     def test_search_limit_too_high(self, client: TestClient, auth_headers: dict):
         """Search with limit exceeding max fails."""
@@ -146,8 +148,10 @@ class TestUserListRoute:
         """List users as non-admin fails."""
         response = client.get("/api/v1/users/", headers=auth_headers)
 
+        if response.status_code == 500:
+            pytest.skip("Database unavailable - use mock fixtures for reliable tests")
         # Should fail if user is not admin
-        assert response.status_code in [200, 403, 500]
+        assert response.status_code in [200, 403]
 
     def test_list_pagination(self, client: TestClient, auth_headers: dict):
         """List users with pagination."""
@@ -157,7 +161,9 @@ class TestUserListRoute:
             headers=auth_headers,
         )
 
-        assert response.status_code in [200, 403, 500]
+        if response.status_code == 500:
+            pytest.skip("Database unavailable - use mock fixtures for reliable tests")
+        assert response.status_code in [200, 403]
 
     def test_list_page_too_high(self, client: TestClient, auth_headers: dict):
         """List users with page exceeding max fails."""
@@ -187,7 +193,9 @@ class TestUserListRoute:
             headers=auth_headers,
         )
 
-        assert response.status_code in [200, 403, 500]
+        if response.status_code == 500:
+            pytest.skip("Database unavailable - use mock fixtures for reliable tests")
+        assert response.status_code in [200, 403]
 
 
 # =============================================================================
@@ -210,7 +218,9 @@ class TestGetUserRoute:
             headers=auth_headers,
         )
 
-        assert response.status_code in [403, 404, 500]
+        if response.status_code == 500:
+            pytest.skip("Database unavailable - use mock fixtures for reliable tests")
+        assert response.status_code in [403, 404]
 
     def test_get_other_user_as_regular(self, client: TestClient, auth_headers: dict):
         """Regular user cannot view other user's profile."""
@@ -221,7 +231,9 @@ class TestGetUserRoute:
             headers=auth_headers,
         )
 
-        assert response.status_code in [403, 404, 500]
+        if response.status_code == 500:
+            pytest.skip("Database unavailable - use mock fixtures for reliable tests")
+        assert response.status_code in [403, 404]
 
 
 # =============================================================================
@@ -244,7 +256,9 @@ class TestUserCapsulesRoute:
             headers=auth_headers,
         )
 
-        assert response.status_code in [403, 404, 500]
+        if response.status_code == 500:
+            pytest.skip("Database unavailable - use mock fixtures for reliable tests")
+        assert response.status_code in [403, 404]
 
     def test_get_capsules_with_limit(self, client: TestClient, auth_headers: dict):
         """Get capsules with custom limit."""
@@ -254,7 +268,9 @@ class TestUserCapsulesRoute:
             headers=auth_headers,
         )
 
-        assert response.status_code in [200, 403, 404, 500]
+        if response.status_code == 500:
+            pytest.skip("Database unavailable - use mock fixtures for reliable tests")
+        assert response.status_code in [200, 403, 404]
 
     def test_get_capsules_limit_too_high(self, client: TestClient, auth_headers: dict):
         """Get capsules with limit exceeding max fails."""
@@ -287,7 +303,9 @@ class TestUserActivityRoute:
             headers=auth_headers,
         )
 
-        assert response.status_code in [403, 404, 500]
+        if response.status_code == 500:
+            pytest.skip("Database unavailable - use mock fixtures for reliable tests")
+        assert response.status_code in [403, 404]
 
     def test_get_activity_with_limit(self, client: TestClient, auth_headers: dict):
         """Get activity with custom limit."""
@@ -297,7 +315,9 @@ class TestUserActivityRoute:
             headers=auth_headers,
         )
 
-        assert response.status_code in [200, 403, 404, 500]
+        if response.status_code == 500:
+            pytest.skip("Database unavailable - use mock fixtures for reliable tests")
+        assert response.status_code in [200, 403, 404]
 
 
 # =============================================================================
@@ -320,7 +340,9 @@ class TestUserGovernanceRoute:
             headers=auth_headers,
         )
 
-        assert response.status_code in [403, 404, 500]
+        if response.status_code == 500:
+            pytest.skip("Database unavailable - use mock fixtures for reliable tests")
+        assert response.status_code in [403, 404]
 
 
 # =============================================================================
@@ -346,7 +368,9 @@ class TestAdminUpdateUserRoute:
             headers=auth_headers,
         )
 
-        assert response.status_code in [403, 500]
+        if response.status_code == 500:
+            pytest.skip("Database unavailable - use mock fixtures for reliable tests")
+        assert response.status_code == 403
 
     def test_update_no_changes(self, client: TestClient, auth_headers: dict):
         """Update user with no changes fails."""
@@ -356,7 +380,9 @@ class TestAdminUpdateUserRoute:
             headers=auth_headers,
         )
 
-        assert response.status_code in [400, 403, 500]
+        if response.status_code == 500:
+            pytest.skip("Database unavailable - use mock fixtures for reliable tests")
+        assert response.status_code in [400, 403]
 
     def test_update_invalid_trust_flame(self, client: TestClient, auth_headers: dict):
         """Update user with invalid trust_flame fails."""
@@ -393,7 +419,9 @@ class TestUpdateTrustRoute:
             headers=auth_headers,
         )
 
-        assert response.status_code in [403, 500]
+        if response.status_code == 500:
+            pytest.skip("Database unavailable - use mock fixtures for reliable tests")
+        assert response.status_code == 403
 
     def test_update_trust_missing_reason(self, client: TestClient, auth_headers: dict):
         """Update trust without reason fails."""
@@ -440,8 +468,10 @@ class TestIDORProtection:
             headers=auth_headers,
         )
 
+        if response.status_code == 500:
+            pytest.skip("Database unavailable - use mock fixtures for reliable tests")
         # Should be 403 (forbidden) not 200 or 404
-        assert response.status_code in [403, 404, 500]
+        assert response.status_code in [403, 404]
 
     def test_cannot_access_other_user_activity(self, client: TestClient, auth_headers: dict):
         """User cannot access another user's activity."""
@@ -450,7 +480,9 @@ class TestIDORProtection:
             headers=auth_headers,
         )
 
-        assert response.status_code in [403, 404, 500]
+        if response.status_code == 500:
+            pytest.skip("Database unavailable - use mock fixtures for reliable tests")
+        assert response.status_code in [403, 404]
 
     def test_cannot_access_other_user_governance(self, client: TestClient, auth_headers: dict):
         """User cannot access another user's governance data."""
@@ -459,7 +491,9 @@ class TestIDORProtection:
             headers=auth_headers,
         )
 
-        assert response.status_code in [403, 404, 500]
+        if response.status_code == 500:
+            pytest.skip("Database unavailable - use mock fixtures for reliable tests")
+        assert response.status_code in [403, 404]
 
 
 if __name__ == "__main__":

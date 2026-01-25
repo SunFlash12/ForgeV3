@@ -230,7 +230,7 @@ async def explore_graph(
     type: str | None = Query(default=None, description="Filter by capsule type"),
     community: int | None = Query(default=None, description="Filter by community ID"),
     min_trust: int = Query(default=0, ge=0, le=100, description="Minimum trust level"),
-    limit: int = Query(default=200, ge=10, le=1000, description="Max nodes to return"),
+    limit: int = Query(default=100, ge=10, le=100, description="Max nodes to return"),  # SECURITY FIX (Audit 5): Reduced from 1000
 ) -> GraphExplorerResponse:
     """
     Get graph data for interactive visualization.

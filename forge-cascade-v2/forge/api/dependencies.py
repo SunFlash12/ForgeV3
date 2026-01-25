@@ -411,13 +411,17 @@ AuthServiceDep = Annotated[AuthService, Depends(get_auth_service)]
 class PaginationParams:
     """Standard pagination parameters."""
 
+    # SECURITY FIX (Audit 6): Upper bound on page to prevent DoS via huge SKIP values
+    MAX_PAGE = 10000
+
     def __init__(
         self,
         page: int = 1,
         per_page: int = 20,
         max_per_page: int = 100,
     ):
-        self.page = max(1, page)
+        # Bound page between 1 and MAX_PAGE to prevent expensive DB queries
+        self.page = max(1, min(page, self.MAX_PAGE))
         self.per_page = min(max(1, per_page), max_per_page)
         self.offset = (self.page - 1) * self.per_page
 

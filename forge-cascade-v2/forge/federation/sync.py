@@ -959,13 +959,20 @@ class SyncService:
                 for record in records:
                     peer_data = record["peer"]
                     try:
+                        # SECURITY FIX (Audit 6): Bound trust_score to valid range [0.0, 1.0]
+                        raw_trust = peer_data.get("trust_score", 0.3)
+                        try:
+                            bounded_trust = max(0.0, min(1.0, float(raw_trust)))
+                        except (ValueError, TypeError):
+                            bounded_trust = 0.3  # Default on invalid value
+
                         peer = FederatedPeer(
                             id=peer_data["id"],
                             name=peer_data["name"],
                             endpoint=peer_data["endpoint"],
                             public_key=peer_data.get("public_key", ""),
                             status=PeerStatus(peer_data.get("status", "pending")),
-                            trust_score=float(peer_data.get("trust_score", 0.3)),
+                            trust_score=bounded_trust,
                             sync_direction=SyncDirection(peer_data.get("sync_direction", "bidirectional")),
                             conflict_resolution=ConflictResolution(peer_data.get("conflict_resolution", "local_wins")),
                             last_sync_at=datetime.fromisoformat(peer_data["last_sync_at"]) if peer_data.get("last_sync_at") else None,

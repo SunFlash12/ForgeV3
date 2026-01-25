@@ -15,6 +15,7 @@ Phases:
 """
 
 import asyncio
+from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -253,8 +254,10 @@ class Pipeline:
 
         # Pipeline instances tracking
         self._active_pipelines: dict[str, PipelineContext] = {}
-        self._pipeline_history: list[PipelineResult] = []
+        # SECURITY FIX (Audit 5): Use deque with maxlen for automatic bounding
+        # instead of list slicing which is inefficient
         self._max_history = 100
+        self._pipeline_history: deque[PipelineResult] = deque(maxlen=self._max_history)
 
         # Hooks for extensibility
         self._pre_phase_hooks: list[Callable] = []
@@ -511,10 +514,8 @@ class Pipeline:
                     error=str(e)
                 )
 
-        # Record history
+        # Record history (deque automatically drops oldest items when maxlen exceeded)
         self._pipeline_history.append(result)
-        if len(self._pipeline_history) > self._max_history:
-            self._pipeline_history = self._pipeline_history[-self._max_history:]
 
         self._logger.info(
             "pipeline_completed",

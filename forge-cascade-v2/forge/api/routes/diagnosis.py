@@ -299,7 +299,8 @@ async def start_diagnosis(
         )
 
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        logger.warning(f"Resource not found: {e}")
+        raise HTTPException(status_code=404, detail="Resource not found")
     except Exception as e:
         raise _handle_internal_error(e, "starting diagnosis")
 
@@ -365,7 +366,8 @@ async def answer_questions(
         )
 
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        logger.warning(f"Resource not found: {e}")
+        raise HTTPException(status_code=404, detail="Resource not found")
     except Exception as e:
         raise _handle_internal_error(e, "answering questions")
 
@@ -398,7 +400,8 @@ async def skip_questions(
         )
 
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        logger.warning(f"Resource not found: {e}")
+        raise HTTPException(status_code=404, detail="Resource not found")
     except Exception as e:
         raise _handle_internal_error(e, "skipping questions")
 
@@ -428,7 +431,8 @@ async def pause_session(
             answered_questions_count=len(session.answered_questions),
         )
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        logger.warning(f"Resource not found: {e}")
+        raise HTTPException(status_code=404, detail="Resource not found")
 
 
 @router.post(
@@ -456,7 +460,8 @@ async def resume_session(
             answered_questions_count=len(session.answered_questions),
         )
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        logger.warning(f"Resource not found: {e}")
+        raise HTTPException(status_code=404, detail="Resource not found")
 
 
 @router.get(
@@ -486,7 +491,8 @@ async def get_result(
         )
 
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        logger.warning(f"Resource not found: {e}")
+        raise HTTPException(status_code=404, detail="Resource not found")
     except Exception as e:
         raise _handle_internal_error(e, "getting result")
 

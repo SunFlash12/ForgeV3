@@ -8,9 +8,12 @@ All endpoints are public and optional - tipping doesn't gate any features.
 """
 
 
+import structlog
 from fastapi import APIRouter, HTTPException, Query
 
 from forge.services.tipping_service import get_tipping_service
+
+logger = structlog.get_logger(__name__)
 from forge.virtuals.models.tipping import (
     FROWG_TOKEN_MINT,
     Tip,
@@ -79,7 +82,8 @@ async def create_tip(
             message=f"Tip of {request.amount_frowg} $FROWG recorded successfully!",
         )
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.error(f"Tip creation failed: {e}")
+        raise HTTPException(status_code=400, detail="Failed to process tip")
 
 
 @router.post("/{tip_id}/confirm", response_model=TipResponse)

@@ -192,7 +192,8 @@ class QueryIntent(ForgeModel):
 
     # How to order/limit
     order_by: list[OrderBy] = Field(default_factory=list)
-    limit: int | None = Field(default=None, ge=1, le=1000)
+    # SECURITY FIX (Audit 5): Reduce pagination limit from 1000 to 100
+    limit: int | None = Field(default=None, ge=1, le=100)
     skip: int | None = Field(default=None, ge=0)
 
     # Query classification
@@ -413,7 +414,8 @@ class NaturalLanguageQueryRequest(ForgeModel):
         default=True,
         description="Generate human-readable answer",
     )
-    max_results: int = Field(default=100, ge=1, le=1000)
+    # SECURITY FIX (Audit 5): Reduce pagination limit from 1000 to 100
+    max_results: int = Field(default=100, ge=1, le=100)
 
 
 class DirectCypherRequest(ForgeModel):

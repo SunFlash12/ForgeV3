@@ -8,9 +8,9 @@ from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
-from forge.models.base import ForgeModel, generate_id
+from forge.models.base import ForgeModel, generate_id, validate_dict_security
 
 
 class AgentCapability(str, Enum):
@@ -124,6 +124,15 @@ class AgentQuery(ForgeModel):
     submitted_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     timeout_seconds: int = Field(default=30, ge=1, le=300)
 
+    # SECURITY FIX (Audit 5): Validate dict fields for security
+    @field_validator("context", "filters")
+    @classmethod
+    def validate_dict_fields(cls, v: dict[str, Any]) -> dict[str, Any]:
+        """Validate dict fields for security concerns."""
+        if v:
+            return validate_dict_security(v)
+        return v
+
 
 class QueryResult(ForgeModel):
     """
@@ -228,6 +237,15 @@ class AgentCapsuleCreation(ForgeModel):
         default=True,
         description="Whether capsule needs human approval"
     )
+
+    # SECURITY FIX (Audit 6): Validate metadata dict for security concerns
+    @field_validator("metadata")
+    @classmethod
+    def validate_metadata(cls, v: dict[str, Any]) -> dict[str, Any]:
+        """Validate metadata dict for security concerns."""
+        if v:
+            return validate_dict_security(v)
+        return v
 
 
 class GatewayStats(ForgeModel):

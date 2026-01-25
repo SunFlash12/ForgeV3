@@ -605,19 +605,28 @@ def create_app(
     # Store forge_app reference
     app.state.forge = forge_app
 
-    # CORS - Use explicit origins, never allow wildcard with credentials
+    # CORS - Use explicit origins from config, never allow wildcard with credentials
+    # SECURITY FIX (Audit 5): Remove hardcoded fallback, rely on config with proper validation
     cors_origins = settings.CORS_ORIGINS
     if not cors_origins:
-        # Default to localhost only, never wildcard
-        cors_origins = ["http://localhost:3000", "http://localhost:8000"]
+        # Config should always provide defaults, but warn if somehow empty
+        logger.warning(
+            "cors_origins_empty",
+            detail="CORS_ORIGINS not configured, using minimal localhost defaults"
+        )
+        # Minimal fallback for development safety only
+        cors_origins = ["http://localhost:3000"] if settings.app_env == "development" else []
 
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=cors_origins,
-        allow_credentials=True,
-        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-        allow_headers=["Authorization", "Content-Type", "X-Correlation-ID", "X-Idempotency-Key", "X-CSRF-Token"],
-    )
+    if cors_origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=cors_origins,
+            allow_credentials=True,
+            allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+            allow_headers=["Authorization", "Content-Type", "X-Correlation-ID", "X-Idempotency-Key", "X-CSRF-Token"],
+        )
+    else:
+        logger.error("cors_not_configured", detail="No CORS origins configured for non-development environment")
 
     # Add custom middleware
     from forge.api.middleware import (
@@ -634,7 +643,9 @@ def create_app(
     )
 
     # Order matters: outer middleware runs first
-    app.add_middleware(SecurityHeadersMiddleware, enable_hsts=(settings.app_env == "production"))
+    # SECURITY FIX (Audit 5): Enable HSTS in all environments except development
+    # Development may not have HTTPS, but staging/production should always have HSTS
+    app.add_middleware(SecurityHeadersMiddleware, enable_hsts=(settings.app_env != "development"))
     app.add_middleware(RequestTimeoutMiddleware, default_timeout=30.0, extended_timeout=120.0)  # Request timeout (Audit 2)
     app.add_middleware(CorrelationIdMiddleware)
     app.add_middleware(RequestLoggingMiddleware)

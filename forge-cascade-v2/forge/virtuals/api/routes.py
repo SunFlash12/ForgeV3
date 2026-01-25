@@ -16,6 +16,7 @@ Routes are organized by feature area:
 - /revenue: Revenue tracking and analytics
 """
 
+import logging
 import os
 from datetime import UTC, datetime
 from typing import Any
@@ -23,6 +24,20 @@ from typing import Any
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
+
+
+def _sanitized_error(context: str, e: Exception) -> HTTPException:
+    """
+    SECURITY FIX (Audit 6): Return sanitized error without exposing internal details.
+    Logs the actual error for debugging while returning a safe message to clients.
+    """
+    logger.error(f"virtuals_api_error: {context}", exc_info=True)
+    return HTTPException(
+        status_code=500,
+        detail=f"Internal error during {context}. Please try again or contact support."
+    )
 
 # Import models (these would be the actual Forge/Virtuals models)
 from ..models import (
@@ -165,7 +180,7 @@ async def create_agent(
         return APIResponse(data=agent.model_dump())
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise _sanitized_error("agent creation", e)
 
 
 @agent_router.get("/", response_model=PaginatedResponse)
@@ -216,7 +231,7 @@ async def get_agent(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise _sanitized_error("agent retrieval", e)
 
 
 @agent_router.post("/{agent_id}/run", response_model=APIResponse)
@@ -255,7 +270,7 @@ async def run_agent(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise _sanitized_error("agent execution", e)
 
 
 # ==================== Tokenization Routes ====================
@@ -289,7 +304,7 @@ async def request_tokenization(
         return APIResponse(data=entity.model_dump())
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise _sanitized_error("tokenization request", e)
 
 
 @tokenization_router.get("/{entity_id}", response_model=APIResponse)
@@ -336,7 +351,7 @@ async def contribute_to_bonding_curve(
         })
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise _sanitized_error("bonding curve contribution", e)
 
 
 @tokenization_router.post("/{entity_id}/proposals", response_model=APIResponse)
@@ -371,7 +386,7 @@ async def create_governance_proposal(
         return APIResponse(data=proposal.model_dump())
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise _sanitized_error("governance proposal creation", e)
 
 
 @tokenization_router.post("/proposals/{proposal_id}/vote", response_model=APIResponse)
@@ -399,7 +414,7 @@ async def vote_on_proposal(
         return APIResponse(data=vote_record.model_dump())
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise _sanitized_error("governance vote", e)
 
 
 # ==================== ACP Routes ====================
@@ -433,7 +448,7 @@ async def register_offering(
         return APIResponse(data=registered.model_dump())
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise _sanitized_error("offering registration", e)
 
 
 @acp_router.get("/offerings", response_model=PaginatedResponse)
@@ -470,7 +485,7 @@ async def search_offerings(
         )
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise _sanitized_error("offering search", e)
 
 
 @acp_router.post("/jobs", response_model=APIResponse)
@@ -496,7 +511,7 @@ async def create_job(
         return APIResponse(data=job.model_dump())
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise _sanitized_error("job creation", e)
 
 
 @acp_router.get("/jobs/{job_id}", response_model=APIResponse)
@@ -539,7 +554,7 @@ async def respond_to_job(
         return APIResponse(data=job.model_dump())
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise _sanitized_error("job response", e)
 
 
 @acp_router.post("/jobs/{job_id}/accept", response_model=APIResponse)
@@ -565,7 +580,7 @@ async def accept_job_terms(
         return APIResponse(data=job.model_dump())
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise _sanitized_error("terms acceptance", e)
 
 
 @acp_router.post("/jobs/{job_id}/deliver", response_model=APIResponse)
@@ -593,7 +608,7 @@ async def submit_deliverable(
         return APIResponse(data=job.model_dump())
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise _sanitized_error("deliverable submission", e)
 
 
 @acp_router.post("/jobs/{job_id}/evaluate", response_model=APIResponse)
@@ -621,7 +636,7 @@ async def evaluate_deliverable(
         return APIResponse(data=job.model_dump())
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise _sanitized_error("deliverable evaluation", e)
 
 
 # ==================== Revenue Routes ====================
@@ -657,7 +672,7 @@ async def get_revenue_summary(
         return APIResponse(data=summary)
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise _sanitized_error("revenue summary retrieval", e)
 
 
 @revenue_router.get("/entities/{entity_id}", response_model=APIResponse)
@@ -684,7 +699,7 @@ async def get_entity_revenue(
         return APIResponse(data=revenue)
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise _sanitized_error("entity revenue retrieval", e)
 
 
 @revenue_router.get("/entities/{entity_id}/valuation", response_model=APIResponse)
@@ -715,7 +730,7 @@ async def get_entity_valuation(
         return APIResponse(data=valuation)
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise _sanitized_error("entity valuation", e)
 
 
 # ==================== Router Aggregation ====================

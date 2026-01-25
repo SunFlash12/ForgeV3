@@ -9,7 +9,7 @@ to survive server restarts. Active chains are loaded on startup.
 """
 
 import asyncio
-from collections import defaultdict
+from collections import defaultdict, deque
 from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -58,21 +58,26 @@ class Subscription:
 
 @dataclass
 class EventMetrics:
-    """Metrics for event system monitoring."""
+    """
+    Metrics for event system monitoring.
+
+    SECURITY FIX (Audit 5): Uses deque with maxlen instead of list slicing
+    to prevent memory growth and improve performance.
+    """
     events_published: int = 0
     events_delivered: int = 0
     events_failed: int = 0
     cascade_chains: int = 0
     avg_delivery_time_ms: float = 0.0
-    delivery_times: list = field(default_factory=list)
+    # SECURITY FIX (Audit 5): Use deque with maxlen for automatic bounding
+    delivery_times: Any = field(default_factory=lambda: deque(maxlen=1000))
 
     def record_delivery(self, duration_ms: float):
         """Record a delivery time."""
         self.delivery_times.append(duration_ms)
-        # Keep only last 1000 samples
-        if len(self.delivery_times) > 1000:
-            self.delivery_times = self.delivery_times[-1000:]
-        self.avg_delivery_time_ms = sum(self.delivery_times) / len(self.delivery_times)
+        # deque automatically drops oldest items when maxlen is exceeded
+        if self.delivery_times:
+            self.avg_delivery_time_ms = sum(self.delivery_times) / len(self.delivery_times)
 
 
 class EventBus:

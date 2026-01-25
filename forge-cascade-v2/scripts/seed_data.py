@@ -115,7 +115,8 @@ async def seed_users(client: Neo4jClient) -> dict[str, str]:
     
     for user in user_data:
         user_id = str(uuid4())
-        password_hash = hash_password(user["password"])
+        # Skip validation for seed users - passwords are cryptographically generated
+        password_hash = hash_password(user["password"], validate=False)
         
         query = """
         MERGE (u:User {username: $username})

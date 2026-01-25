@@ -157,7 +157,7 @@ class BaseRepository(ABC, Generic[T, CreateT, UpdateT]):
 
         Args:
             skip: Number of records to skip
-            limit: Maximum records to return (capped at 1000)
+            limit: Maximum records to return (capped at 100)
             order_by: Field to order by (validated for safety)
             order_dir: Order direction (ASC or DESC)
 
@@ -172,8 +172,8 @@ class BaseRepository(ABC, Generic[T, CreateT, UpdateT]):
         if order_dir not in ("ASC", "DESC"):
             order_dir = "DESC"
 
-        # Cap limit to prevent memory exhaustion
-        limit = min(max(1, limit), 1000)
+        # SECURITY FIX (Audit 5): Cap limit to prevent memory exhaustion (reduced from 1000)
+        limit = min(max(1, limit), 100)
         skip = max(0, skip)
 
         query = f"""
@@ -299,7 +299,7 @@ class BaseRepository(ABC, Generic[T, CreateT, UpdateT]):
         Args:
             field: Field name to search (validated for safety)
             value: Value to match
-            limit: Maximum results (capped at 1000)
+            limit: Maximum results (capped at 100)
 
         Returns:
             List of matching entities
@@ -307,8 +307,8 @@ class BaseRepository(ABC, Generic[T, CreateT, UpdateT]):
         # Validate field name to prevent Cypher injection
         field = validate_identifier(field, "field")
 
-        # Cap limit
-        limit = min(max(1, limit), 1000)
+        # SECURITY FIX (Audit 5): Cap limit (reduced from 1000)
+        limit = min(max(1, limit), 100)
 
         query = f"""
         MATCH (n:{self.node_label} {{{field}: $value}})

@@ -353,7 +353,8 @@ class SemanticEdgeQuery(ForgeModel):
     created_by: str | None = None
     created_after: datetime | None = None
     created_before: datetime | None = None
-    limit: int = Field(default=100, ge=1, le=1000)
+    # SECURITY FIX (Audit 5): Reduce pagination limit from 1000 to 100
+    limit: int = Field(default=100, ge=1, le=100)
     offset: int = Field(default=0, ge=0)
 
 

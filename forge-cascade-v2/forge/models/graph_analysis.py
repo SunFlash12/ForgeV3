@@ -304,7 +304,8 @@ class PageRankRequest(ForgeModel):
     )
     max_iterations: int = Field(default=20, ge=1, le=100)
     tolerance: float = Field(default=1e-7, gt=0.0)
-    limit: int = Field(default=100, ge=1, le=1000, description="Max results")
+    # SECURITY FIX (Audit 5): Reduce pagination limit from 1000 to 100
+    limit: int = Field(default=100, ge=1, le=100, description="Max results")
     include_trust_weighting: bool = Field(
         default=True,
         description="Weight edges by trust level",
@@ -318,7 +319,8 @@ class CentralityRequest(ForgeModel):
     node_label: str = Field(default="Capsule")
     relationship_type: str | None = Field(default=None, description="All if None")
     normalized: bool = Field(default=True)
-    limit: int = Field(default=100, ge=1, le=1000)
+    # SECURITY FIX (Audit 5): Reduce pagination limit from 1000 to 100
+    limit: int = Field(default=100, ge=1, le=100)
 
 
 class CommunityDetectionRequest(ForgeModel):

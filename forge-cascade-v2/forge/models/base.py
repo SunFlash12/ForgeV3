@@ -234,3 +234,101 @@ def generate_id() -> str:
 def generate_uuid() -> UUID:
     """Generate a new UUID."""
     return uuid4()
+
+
+# ═══════════════════════════════════════════════════════════════
+# SECURITY: DICT VALIDATORS
+# ═══════════════════════════════════════════════════════════════
+
+# SECURITY FIX (Audit 5): Dangerous keys that could indicate injection attempts
+FORBIDDEN_DICT_KEYS = frozenset({
+    "__proto__", "__prototype__", "__class__", "__bases__",
+    "__mro__", "__subclasses__", "__init__", "__new__",
+    "__reduce__", "__reduce_ex__", "__getstate__", "__setstate__",
+    "constructor", "prototype",
+})
+
+# Default limits for dict validation
+DEFAULT_MAX_DICT_DEPTH = 5
+DEFAULT_MAX_DICT_SIZE = 10000  # bytes when serialized
+DEFAULT_MAX_DICT_KEYS = 100
+
+
+def validate_dict_security(
+    value: dict[str, Any],
+    max_depth: int = DEFAULT_MAX_DICT_DEPTH,
+    max_size: int = DEFAULT_MAX_DICT_SIZE,
+    max_keys: int = DEFAULT_MAX_DICT_KEYS,
+    current_depth: int = 0,
+) -> dict[str, Any]:
+    """
+    Validate a dict for security concerns.
+
+    SECURITY FIX (Audit 5): Prevents:
+    - Prototype pollution attacks
+    - Deeply nested structures (DoS)
+    - Excessively large payloads (DoS)
+
+    Args:
+        value: Dictionary to validate
+        max_depth: Maximum nesting depth allowed
+        max_size: Maximum serialized size in bytes
+        max_keys: Maximum number of keys at any level
+        current_depth: Current nesting depth (internal use)
+
+    Returns:
+        The validated dictionary
+
+    Raises:
+        ValueError: If validation fails
+    """
+    import json
+
+    if not isinstance(value, dict):
+        raise ValueError("Expected a dictionary")
+
+    if current_depth > max_depth:
+        raise ValueError(f"Dictionary nesting too deep (max {max_depth} levels)")
+
+    if len(value) > max_keys:
+        raise ValueError(f"Too many keys (max {max_keys})")
+
+    # Check for forbidden keys at this level
+    forbidden_found = FORBIDDEN_DICT_KEYS.intersection(value.keys())
+    if forbidden_found:
+        raise ValueError(f"Forbidden keys detected: {', '.join(forbidden_found)}")
+
+    # Check for forbidden keys in nested dicts and validate recursively
+    for key, val in value.items():
+        if isinstance(val, dict):
+            validate_dict_security(
+                val,
+                max_depth=max_depth,
+                max_size=max_size,
+                max_keys=max_keys,
+                current_depth=current_depth + 1,
+            )
+        elif isinstance(val, list):
+            for item in val:
+                if isinstance(item, dict):
+                    validate_dict_security(
+                        item,
+                        max_depth=max_depth,
+                        max_size=max_size,
+                        max_keys=max_keys,
+                        current_depth=current_depth + 1,
+                    )
+
+    # Only check size at the root level to avoid redundant computation
+    if current_depth == 0:
+        try:
+            serialized = json.dumps(value)
+            if len(serialized) > max_size:
+                raise ValueError(f"Dictionary too large (max {max_size} bytes)")
+        except (TypeError, ValueError) as e:
+            # If it can't be serialized, that's also a problem
+            if "too large" in str(e):
+                raise
+            raise ValueError(f"Dictionary contains non-serializable values: {e}")
+
+    return value

@@ -106,8 +106,11 @@ class TestRegistrationRoute:
             "display_name": "New User",
         })
 
-        # May succeed or conflict (user exists) or fail DB connection
-        assert response.status_code in [201, 409, 500]
+        # Skip if DB unavailable instead of masking errors
+        if response.status_code == 500:
+            pytest.skip("Database unavailable - use mock fixtures for reliable tests")
+        # May succeed or conflict (user exists)
+        assert response.status_code in [201, 409]
 
     def test_register_invalid_username(self, client: TestClient):
         """Registration with invalid username fails validation."""
@@ -250,8 +253,10 @@ class TestLogoutRoute:
         """Logout with auth succeeds."""
         response = client.post("/api/v1/auth/logout", headers=auth_headers)
 
+        if response.status_code == 500:
+            pytest.skip("Database unavailable - use mock fixtures for reliable tests")
         # May succeed or fail depending on token validity
-        assert response.status_code in [204, 401, 500]
+        assert response.status_code in [204, 401]
 
 
 # =============================================================================
@@ -271,8 +276,10 @@ class TestProfileRoutes:
         """Get profile with auth returns user data."""
         response = client.get("/api/v1/auth/me", headers=auth_headers)
 
+        if response.status_code == 500:
+            pytest.skip("Database unavailable - use mock fixtures for reliable tests")
         # May succeed or fail depending on token
-        assert response.status_code in [200, 401, 500]
+        assert response.status_code in [200, 401]
 
         if response.status_code == 200:
             data = response.json()
@@ -296,8 +303,10 @@ class TestProfileRoutes:
             },
         }, headers=auth_headers)
 
+        if response.status_code == 500:
+            pytest.skip("Database unavailable - use mock fixtures for reliable tests")
         # Should fail validation or return error
-        assert response.status_code in [400, 422, 401, 500]
+        assert response.status_code in [400, 422, 401]
 
     def test_update_profile_metadata_too_many_keys(self, client: TestClient, auth_headers: dict):
         """Update profile with too many metadata keys fails."""
@@ -305,7 +314,9 @@ class TestProfileRoutes:
             "metadata": {f"key{i}": f"value{i}" for i in range(15)},  # Over 10 max
         }, headers=auth_headers)
 
-        assert response.status_code in [400, 422, 401, 500]
+        if response.status_code == 500:
+            pytest.skip("Database unavailable - use mock fixtures for reliable tests")
+        assert response.status_code in [400, 422, 401]
 
 
 # =============================================================================
@@ -360,7 +371,9 @@ class TestTrustInfoRoute:
         """Get trust info with auth returns trust data."""
         response = client.get("/api/v1/auth/me/trust", headers=auth_headers)
 
-        assert response.status_code in [200, 401, 500]
+        if response.status_code == 500:
+            pytest.skip("Database unavailable - use mock fixtures for reliable tests")
+        assert response.status_code in [200, 401]
 
         if response.status_code == 200:
             data = response.json()
@@ -394,8 +407,10 @@ class TestMFARoutes:
             "code": "000000",
         }, headers=auth_headers)
 
+        if response.status_code == 500:
+            pytest.skip("Database unavailable - use mock fixtures for reliable tests")
         # May fail validation or return MFA error
-        assert response.status_code in [400, 401, 500]
+        assert response.status_code in [400, 401]
 
     def test_mfa_verify_code_too_short(self, client: TestClient, auth_headers: dict):
         """MFA verify with too short code fails validation."""
