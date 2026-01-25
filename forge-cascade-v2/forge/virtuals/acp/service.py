@@ -17,6 +17,7 @@ ACP Phases:
 4. Evaluation - Deliverables verified, funds released
 """
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -924,7 +925,17 @@ class ACPService:
 
 
 # Global service instance
+# SECURITY FIX (Audit 6): Use asyncio.Lock for thread-safe initialization
 _acp_service: ACPService | None = None
+_acp_service_lock: asyncio.Lock | None = None
+
+
+def _get_acp_service_lock() -> asyncio.Lock:
+    """Get or create the ACP service lock (lazy initialization for event loop safety)."""
+    global _acp_service_lock
+    if _acp_service_lock is None:
+        _acp_service_lock = asyncio.Lock()
+    return _acp_service_lock
 
 
 async def get_acp_service(
@@ -934,14 +945,28 @@ async def get_acp_service(
     """
     Get the global ACP service instance.
 
+    SECURITY FIX (Audit 6): Uses asyncio.Lock to prevent race conditions
+    during concurrent initialization requests.
+
     Initializes the service if not already done.
     """
     global _acp_service
-    if _acp_service is None:
+
+    # Fast path: if already initialized, return immediately
+    if _acp_service is not None:
+        return _acp_service
+
+    # Slow path: acquire lock and check again (double-check locking pattern)
+    async with _get_acp_service_lock():
+        # Check again after acquiring lock
+        if _acp_service is not None:
+            return _acp_service
+
         if job_repository is None or offering_repository is None:
             raise ACPServiceError(
                 "Repositories required for first initialization"
             )
         _acp_service = ACPService(job_repository, offering_repository)
         await _acp_service.initialize()
+
     return _acp_service

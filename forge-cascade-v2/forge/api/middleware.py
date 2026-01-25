@@ -309,6 +309,15 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         "/api/v1/auth/password",
     }
 
+    # SECURITY FIX (Audit 6): Very strict rate limits for expensive LLM/Copilot endpoints
+    # These endpoints consume significant compute resources and should be heavily rate limited
+    LLM_PATHS = {
+        "/api/v1/copilot/chat",
+        "/api/v1/copilot/stream",
+        "/copilot/chat",
+        "/copilot/stream",
+    }
+
     # Paths exempt from rate limiting
     EXEMPT_PATHS = {"/health", "/ready"}
 
@@ -320,6 +329,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         burst_allowance: int = 30,
         auth_requests_per_minute: int = 30,  # More lenient for development
         auth_requests_per_hour: int = 200,
+        # SECURITY FIX (Audit 6): Strict limits for LLM/Copilot endpoints
+        llm_requests_per_minute: int = 10,
+        llm_requests_per_hour: int = 100,
         redis_url: str | None = None,
     ):
         super().__init__(app)
@@ -328,6 +340,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self.burst_allowance = burst_allowance
         self.auth_requests_per_minute = auth_requests_per_minute
         self.auth_requests_per_hour = auth_requests_per_hour
+        # SECURITY FIX (Audit 6): LLM/Copilot rate limits
+        self.llm_requests_per_minute = llm_requests_per_minute
+        self.llm_requests_per_hour = llm_requests_per_hour
 
         # Redis client for distributed rate limiting
         self._redis: redis.Redis | None = None
@@ -356,11 +371,23 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         # Get rate limit key (IP or user ID)
         key = self._get_rate_limit_key(request)
         is_auth_path = request.url.path in self.AUTH_PATHS
+        # SECURITY FIX (Audit 6): Check for LLM/Copilot endpoints
+        is_llm_path = request.url.path in self.LLM_PATHS
 
-        # Use stricter limits for auth endpoints
-        minute_limit = self.auth_requests_per_minute if is_auth_path else self.requests_per_minute
-        hour_limit = self.auth_requests_per_hour if is_auth_path else self.requests_per_hour
-        burst = 0 if is_auth_path else self.burst_allowance  # No burst for auth
+        # Use stricter limits for auth and LLM endpoints
+        if is_llm_path:
+            # SECURITY FIX (Audit 6): Very strict limits for expensive LLM operations
+            minute_limit = self.llm_requests_per_minute
+            hour_limit = self.llm_requests_per_hour
+            burst = 0  # No burst for LLM
+        elif is_auth_path:
+            minute_limit = self.auth_requests_per_minute
+            hour_limit = self.auth_requests_per_hour
+            burst = 0  # No burst for auth
+        else:
+            minute_limit = self.requests_per_minute
+            hour_limit = self.requests_per_hour
+            burst = self.burst_allowance
 
         # Check rate limits
         if self._use_redis and self._redis:
@@ -377,6 +404,14 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             if is_auth_path:
                 logger.warning(
                     "auth_rate_limit_exceeded",
+                    path=request.url.path,
+                    client_ip=self._get_client_ip(request),
+                    key=key,
+                )
+            # SECURITY FIX (Audit 6): Log LLM rate limit hits (resource abuse)
+            elif is_llm_path:
+                logger.warning(
+                    "llm_rate_limit_exceeded",
                     path=request.url.path,
                     client_ip=self._get_client_ip(request),
                     key=key,

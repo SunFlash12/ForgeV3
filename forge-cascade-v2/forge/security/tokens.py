@@ -377,6 +377,42 @@ class TokenInvalidError(TokenError):
 # SECURITY FIX: Hardcoded allowed algorithms to prevent algorithm confusion attacks
 ALLOWED_JWT_ALGORITHMS = ["HS256", "HS384", "HS512"]
 
+# SECURITY FIX (Audit 6): Maximum token size to prevent DoS through oversized tokens
+# A typical JWT is ~500-1000 bytes. We set a generous limit of 16KB.
+MAX_TOKEN_SIZE_BYTES = 16 * 1024  # 16KB max token size
+
+
+class TokenTooLargeError(TokenError):
+    """Token exceeds maximum allowed size."""
+    pass
+
+
+def validate_token_size(token: str) -> None:
+    """
+    SECURITY FIX (Audit 6): Validate token size to prevent DoS attacks.
+
+    Oversized tokens can:
+    - Consume excessive memory during decoding
+    - Slow down signature verification
+    - Fill up logs and caches
+
+    Args:
+        token: JWT token string
+
+    Raises:
+        TokenTooLargeError: If token exceeds maximum size
+    """
+    token_size = len(token.encode("utf-8"))
+    if token_size > MAX_TOKEN_SIZE_BYTES:
+        logger.warning(
+            "token_too_large",
+            size=token_size,
+            max_size=MAX_TOKEN_SIZE_BYTES,
+        )
+        raise TokenTooLargeError(
+            f"Token size ({token_size} bytes) exceeds maximum allowed ({MAX_TOKEN_SIZE_BYTES} bytes)"
+        )
+
 
 # =============================================================================
 # SECURITY FIX (Audit 4): Refresh Token Hashing
@@ -774,6 +810,8 @@ def decode_token(token: str, verify_exp: bool = True) -> TokenPayload:
     SECURITY FIX (Audit 6): Added issuer and audience validation to prevent
     token confusion attacks where tokens from one system are accepted by another.
 
+    SECURITY FIX (Audit 6): Added token size validation to prevent DoS attacks.
+
     Args:
         token: JWT token string
         verify_exp: Whether to verify expiration (default True)
@@ -784,8 +822,12 @@ def decode_token(token: str, verify_exp: bool = True) -> TokenPayload:
     Raises:
         TokenExpiredError: If token has expired
         TokenInvalidError: If token is invalid
+        TokenTooLargeError: If token exceeds maximum size
     """
     try:
+        # SECURITY FIX (Audit 6): Validate token size before processing
+        validate_token_size(token)
+
         # SECURITY FIX: Use PyJWT with hardcoded algorithm whitelist
         # This prevents algorithm confusion attacks (CVE-2022-29217)
         algorithm = settings.jwt_algorithm

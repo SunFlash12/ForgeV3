@@ -14,9 +14,10 @@ Security Features:
 - Message size limits (DoS protection)
 """
 
+import asyncio
 import json
 from collections import defaultdict, deque
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import urlparse
 from uuid import uuid4
@@ -27,7 +28,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSock
 from forge.api.dependencies import get_current_user as get_current_user_ws
 from forge.config import get_settings
 from forge.models.user import User
-from forge.security.tokens import verify_token
+from forge.security.tokens import TokenBlacklist, verify_token, decode_token, TokenExpiredError, TokenInvalidError
 
 logger = structlog.get_logger(__name__)
 settings = get_settings()
@@ -38,6 +39,10 @@ MAX_MESSAGES_PER_MINUTE = 60  # Rate limit: messages per minute per connection
 RATE_LIMIT_WINDOW_SECONDS = 60  # Rate limiting window
 # SECURITY FIX (Audit 6): Maximum WebSocket message size to prevent DoS
 MAX_WEBSOCKET_MESSAGE_SIZE = 64 * 1024  # 64KB max message size
+# SECURITY FIX (Audit 6): Token expiry check interval for long-lived WebSocket sessions
+TOKEN_EXPIRY_CHECK_INTERVAL_SECONDS = 60  # Check token validity every minute
+# SECURITY FIX (Audit 6): Maximum WebSocket connections per user to prevent resource exhaustion
+MAX_WEBSOCKET_CONNECTIONS_PER_USER = 10  # Maximum concurrent WebSocket connections per user
 
 
 # ============================================================================
@@ -162,7 +167,8 @@ class WebSocketConnection:
         websocket: WebSocket,
         connection_id: str,
         user_id: str | None = None,
-        subscriptions: set[str] | None = None
+        subscriptions: set[str] | None = None,
+        token: str | None = None,  # SECURITY FIX (Audit 6): Store token for periodic validation
     ):
         self.websocket = websocket
         self.connection_id = connection_id
@@ -174,6 +180,10 @@ class WebSocketConnection:
         # SECURITY FIX (Audit 5): Use deque with maxlen to bound memory growth
         # maxlen is 2x the rate limit to allow room for cleanup
         self._message_timestamps: deque[datetime] = deque(maxlen=MAX_MESSAGES_PER_MINUTE * 2)
+        # SECURITY FIX (Audit 6): Store token for periodic validation
+        self._token = token
+        self._last_token_check = datetime.now(UTC)
+        self._token_valid = True
 
     def check_rate_limit(self) -> bool:
         """
@@ -200,6 +210,77 @@ class WebSocketConnection:
     def can_add_subscription(self) -> bool:
         """Check if connection can add more subscriptions."""
         return len(self.subscriptions) < MAX_SUBSCRIPTIONS_PER_CONNECTION
+
+    async def check_token_expiry(self) -> bool:
+        """
+        SECURITY FIX (Audit 6): Check if the token is still valid.
+
+        For long-lived WebSocket sessions, the initial authentication token
+        may expire while the connection is still active. This method periodically
+        validates the token to ensure the session is still authorized.
+
+        Returns:
+            True if token is valid, False if expired/revoked/invalid
+        """
+        if not self._token:
+            # No token stored - connection was not authenticated with persistent token
+            return True
+
+        now = datetime.now(UTC)
+
+        # Only check periodically to avoid performance overhead
+        if (now - self._last_token_check).total_seconds() < TOKEN_EXPIRY_CHECK_INTERVAL_SECONDS:
+            return self._token_valid
+
+        self._last_token_check = now
+
+        try:
+            # Validate the token - this checks expiry, signature, and claims
+            payload = decode_token(self._token, verify_exp=True)
+
+            # Check if token has been blacklisted (e.g., user logged out)
+            jti = payload.jti
+            if jti and await TokenBlacklist.is_blacklisted_async(jti):
+                logger.warning(
+                    "websocket_token_revoked",
+                    connection_id=self.connection_id,
+                    user_id=self.user_id,
+                    jti=jti[:8] + "..." if jti else None,
+                )
+                self._token_valid = False
+                return False
+
+            self._token_valid = True
+            return True
+
+        except TokenExpiredError:
+            logger.info(
+                "websocket_token_expired",
+                connection_id=self.connection_id,
+                user_id=self.user_id,
+            )
+            self._token_valid = False
+            return False
+
+        except TokenInvalidError as e:
+            logger.warning(
+                "websocket_token_invalid",
+                connection_id=self.connection_id,
+                user_id=self.user_id,
+                error=str(e)[:100],
+            )
+            self._token_valid = False
+            return False
+
+        except Exception as e:
+            logger.error(
+                "websocket_token_check_error",
+                connection_id=self.connection_id,
+                error=str(e)[:100],
+            )
+            # On error, be conservative and keep connection alive
+            # but log for investigation
+            return True
 
     async def send_json(self, data: dict[str, Any]) -> bool:
         """Send JSON data to the client."""
@@ -250,6 +331,38 @@ class ConnectionManager:
         self._total_connections = 0
         self._total_messages_sent = 0
 
+    def can_user_connect(self, user_id: str | None) -> bool:
+        """
+        SECURITY FIX (Audit 6): Check if user can open another WebSocket connection.
+
+        Prevents resource exhaustion by limiting the number of concurrent
+        WebSocket connections per user.
+
+        Args:
+            user_id: The user attempting to connect
+
+        Returns:
+            True if user can connect, False if at limit
+        """
+        if not user_id:
+            # Anonymous connections are allowed but limited elsewhere
+            return True
+
+        current_count = len(self._user_connections.get(user_id, set()))
+        if current_count >= MAX_WEBSOCKET_CONNECTIONS_PER_USER:
+            logger.warning(
+                "websocket_connection_limit_reached",
+                user_id=user_id,
+                current_count=current_count,
+                max_allowed=MAX_WEBSOCKET_CONNECTIONS_PER_USER,
+            )
+            return False
+        return True
+
+    def get_user_connection_count(self, user_id: str) -> int:
+        """Get the current number of connections for a user."""
+        return len(self._user_connections.get(user_id, set()))
+
     # -------------------------------------------------------------------------
     # Event Stream Connections
     # -------------------------------------------------------------------------
@@ -258,7 +371,8 @@ class ConnectionManager:
         self,
         websocket: WebSocket,
         user_id: str | None = None,
-        subscriptions: list[str] | None = None
+        subscriptions: list[str] | None = None,
+        token: str | None = None,  # SECURITY FIX (Audit 6): Store token for expiry checks
     ) -> WebSocketConnection:
         """Accept a new event stream connection."""
 
@@ -269,7 +383,8 @@ class ConnectionManager:
             websocket=websocket,
             connection_id=connection_id,
             user_id=user_id,
-            subscriptions=set(subscriptions or [])
+            subscriptions=set(subscriptions or []),
+            token=token,  # SECURITY FIX (Audit 6): Pass token for expiry checks
         )
 
         self._event_connections[connection_id] = connection
@@ -362,7 +477,8 @@ class ConnectionManager:
     async def connect_dashboard(
         self,
         websocket: WebSocket,
-        user_id: str | None = None
+        user_id: str | None = None,
+        token: str | None = None,  # SECURITY FIX (Audit 6): Store token for expiry checks
     ) -> WebSocketConnection:
         """Accept a new dashboard connection."""
 
@@ -372,7 +488,8 @@ class ConnectionManager:
         connection = WebSocketConnection(
             websocket=websocket,
             connection_id=connection_id,
-            user_id=user_id
+            user_id=user_id,
+            token=token,  # SECURITY FIX (Audit 6): Pass token for expiry checks
         )
 
         self._dashboard_connections[connection_id] = connection
@@ -436,7 +553,8 @@ class ConnectionManager:
         websocket: WebSocket,
         room_id: str,
         user_id: str,
-        display_name: str | None = None
+        display_name: str | None = None,
+        token: str | None = None,  # SECURITY FIX (Audit 6): Store token for expiry checks
     ) -> WebSocketConnection:
         """Accept a new chat room connection."""
 
@@ -446,7 +564,8 @@ class ConnectionManager:
         connection = WebSocketConnection(
             websocket=websocket,
             connection_id=connection_id,
-            user_id=user_id
+            user_id=user_id,
+            token=token,  # SECURITY FIX (Audit 6): Pass token for expiry checks
         )
 
         self._chat_connections[room_id][connection_id] = connection
@@ -614,7 +733,7 @@ connection_manager = ConnectionManager()
 async def authenticate_websocket(
     websocket: WebSocket,
     token: str | None = None
-) -> str | None:
+) -> tuple[str | None, str | None]:
     """
     Authenticate a WebSocket connection.
 
@@ -623,9 +742,10 @@ async def authenticate_websocket(
     2. Authorization header - Secure for programmatic clients
     3. Query parameter - DEPRECATED, logged for security monitoring
 
-    Returns user_id if authenticated, None otherwise.
+    Returns tuple of (user_id, token) if authenticated, (None, None) otherwise.
 
     SECURITY FIX (Audit 2): Prioritize secure auth methods, warn on query param usage
+    SECURITY FIX (Audit 6): Return token for periodic expiry validation
     """
     token_source = None
 
@@ -659,11 +779,11 @@ async def authenticate_websocket(
             )
 
     if not token:
-        return None
+        return None, None
 
     try:
         payload = verify_token(token, expected_type="access")
-        user_id = payload.get("sub")
+        user_id = payload.sub  # Use attribute access since it's a TokenPayload
 
         if user_id:
             logger.debug(
@@ -672,14 +792,15 @@ async def authenticate_websocket(
                 auth_method=token_source,
             )
 
-        return user_id
+        # SECURITY FIX (Audit 6): Return token for periodic validation
+        return user_id, token
     except Exception as e:
         logger.warning(
             "websocket_auth_failed",
             auth_method=token_source,
             error=str(e)[:100],
         )
-        return None
+        return None, None
 
 
 # ============================================================================
@@ -716,10 +837,19 @@ async def websocket_events(
         return
 
     # SECURITY FIX (Audit 3): Require authentication for all WebSocket endpoints
-    user_id = await authenticate_websocket(websocket, token)
+    # SECURITY FIX (Audit 6): Get token for periodic expiry validation
+    user_id, auth_token = await authenticate_websocket(websocket, token)
 
     if not user_id:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+
+    # SECURITY FIX (Audit 6): Check connection limit per user
+    if not connection_manager.can_user_connect(user_id):
+        await websocket.close(
+            code=4029,
+            reason=f"Connection limit exceeded. Max {MAX_WEBSOCKET_CONNECTIONS_PER_USER} connections per user."
+        )
         return
 
     # Parse initial subscriptions
@@ -731,11 +861,22 @@ async def websocket_events(
     connection = await connection_manager.connect_events(
         websocket=websocket,
         user_id=user_id,
-        subscriptions=subscriptions
+        subscriptions=subscriptions,
+        token=auth_token,  # SECURITY FIX (Audit 6): Pass token for expiry checks
     )
 
     try:
         while True:
+            # SECURITY FIX (Audit 6): Check token expiry periodically
+            if not await connection.check_token_expiry():
+                await connection.send_json({
+                    "type": "error",
+                    "code": "TOKEN_EXPIRED",
+                    "message": "Your session has expired. Please reconnect with a new token."
+                })
+                await websocket.close(code=4001, reason="Token expired")
+                break
+
             # Receive message
             try:
                 data = await websocket.receive_json()
@@ -831,20 +972,40 @@ async def websocket_dashboard(
         return
 
     # SECURITY FIX (Audit 3): Require authentication for all WebSocket endpoints
-    user_id = await authenticate_websocket(websocket, token)
+    # SECURITY FIX (Audit 6): Get token for periodic expiry validation
+    user_id, auth_token = await authenticate_websocket(websocket, token)
 
     if not user_id:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
+    # SECURITY FIX (Audit 6): Check connection limit per user
+    if not connection_manager.can_user_connect(user_id):
+        await websocket.close(
+            code=4029,
+            reason=f"Connection limit exceeded. Max {MAX_WEBSOCKET_CONNECTIONS_PER_USER} connections per user."
+        )
+        return
+
     # Accept connection
     connection = await connection_manager.connect_dashboard(
         websocket=websocket,
-        user_id=user_id
+        user_id=user_id,
+        token=auth_token,  # SECURITY FIX (Audit 6): Pass token for expiry checks
     )
 
     try:
         while True:
+            # SECURITY FIX (Audit 6): Check token expiry periodically
+            if not await connection.check_token_expiry():
+                await connection.send_json({
+                    "type": "error",
+                    "code": "TOKEN_EXPIRED",
+                    "message": "Your session has expired. Please reconnect with a new token."
+                })
+                await websocket.close(code=4001, reason="Token expired")
+                break
+
             try:
                 data = await websocket.receive_json()
             except Exception:
@@ -914,10 +1075,19 @@ async def websocket_chat(
         return
 
     # Authenticate - required for chat
-    user_id = await authenticate_websocket(websocket, token)
+    # SECURITY FIX (Audit 6): Get token for periodic expiry validation
+    user_id, auth_token = await authenticate_websocket(websocket, token)
 
     if not user_id:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+
+    # SECURITY FIX (Audit 6): Check connection limit per user
+    if not connection_manager.can_user_connect(user_id):
+        await websocket.close(
+            code=4029,
+            reason=f"Connection limit exceeded. Max {MAX_WEBSOCKET_CONNECTIONS_PER_USER} connections per user."
+        )
         return
 
     # Accept connection
@@ -925,7 +1095,8 @@ async def websocket_chat(
         websocket=websocket,
         room_id=room_id,
         user_id=user_id,
-        display_name=display_name
+        display_name=display_name,
+        token=auth_token,  # SECURITY FIX (Audit 6): Pass token for expiry checks
     )
 
     # Send current participants
@@ -937,6 +1108,16 @@ async def websocket_chat(
 
     try:
         while True:
+            # SECURITY FIX (Audit 6): Check token expiry periodically
+            if not await connection.check_token_expiry():
+                await connection.send_json({
+                    "type": "error",
+                    "code": "TOKEN_EXPIRED",
+                    "message": "Your session has expired. Please reconnect with a new token."
+                })
+                await websocket.close(code=4001, reason="Token expired")
+                break
+
             try:
                 data = await websocket.receive_json()
             except Exception:
