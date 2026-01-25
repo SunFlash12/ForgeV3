@@ -235,6 +235,12 @@ class UserInDB(User):
         default=None,
         description="When password was last changed",
     )
+    # SECURITY FIX (Audit 6): Token version for immediate token invalidation on privilege changes
+    token_version: int = Field(
+        default=1,
+        ge=1,
+        description="Token version - incremented on privilege changes to invalidate all tokens",
+    )
     failed_login_attempts: int = Field(
         default=0,
         ge=0,
@@ -355,6 +361,8 @@ class TokenPayload(ForgeModel):
     iat: datetime | None = Field(default=None, description="Issued at timestamp")
     jti: str | None = Field(default=None, description="JWT ID for token blacklisting")
     type: str = Field(default="access", description="Token type: access or refresh")
+    # SECURITY FIX (Audit 6): Token version for privilege change invalidation
+    tv: int | None = Field(default=None, description="Token version - for privilege change invalidation")
 
     @model_validator(mode="after")
     def validate_access_token_claims(self) -> "TokenPayload":

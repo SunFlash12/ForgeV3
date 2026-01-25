@@ -150,6 +150,14 @@ class Settings(BaseSettings):
     websocket_max_connections_per_user: int = Field(
         default=10, ge=1, le=50, description="Max concurrent WebSocket connections per user"
     )
+    websocket_token_check_interval_seconds: int = Field(
+        default=60, ge=10, le=300, description="How often to check token validity in WebSocket sessions"
+    )
+
+    # SECURITY FIX (Audit 6): Token version settings for privilege change invalidation
+    token_version_cache_ttl_seconds: int = Field(
+        default=60, ge=10, le=300, description="TTL for token version cache (Redis/in-memory)"
+    )
 
     @field_validator("jwt_secret_key")
     @classmethod

@@ -117,6 +117,7 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
             refresh_token: null,
             failed_login_attempts: 0,
             lockout_until: null,
+            token_version: 1,
             created_at: $now,
             updated_at: $now
         })
@@ -469,6 +470,9 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
         """
         Adjust user's trust flame score.
 
+        SECURITY FIX (Audit 6): Automatically invalidates all existing tokens
+        when trust flame changes by incrementing token version.
+
         Args:
             user_id: User ID
             adjustment: Amount to adjust (+/-)
@@ -513,6 +517,12 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
             reason=reason,
         )
 
+        # SECURITY FIX (Audit 6): Invalidate tokens on privilege change
+        # Trust flame affects what actions users can perform, so existing
+        # tokens with old trust_flame claims must be invalidated
+        if adjustment_record.old_value != adjustment_record.new_value:
+            await self.increment_token_version(user_id)
+
         return adjustment_record
 
     async def get_by_trust_level(
@@ -544,14 +554,32 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
         ]
 
     async def deactivate(self, user_id: str) -> bool:
-        """Deactivate a user account."""
+        """
+        Deactivate a user account.
+
+        SECURITY FIX (Audit 6): Automatically invalidates all existing tokens
+        when account is deactivated by incrementing token version.
+        """
         result = await self.update_field(user_id, "is_active", False)
-        return result is not None
+        if result is not None:
+            # Invalidate all tokens when account is deactivated
+            await self.increment_token_version(user_id)
+            return True
+        return False
 
     async def activate(self, user_id: str) -> bool:
-        """Activate a user account."""
+        """
+        Activate a user account.
+
+        SECURITY FIX (Audit 6): Automatically invalidates all existing tokens
+        when account is reactivated by incrementing token version.
+        """
         result = await self.update_field(user_id, "is_active", True)
-        return result is not None
+        if result is not None:
+            # Invalidate any old tokens when account is reactivated
+            await self.increment_token_version(user_id)
+            return True
+        return False
 
     async def username_exists(self, username: str) -> bool:
         """Check if username is taken."""
@@ -603,6 +631,78 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
 
         # SECURITY FIX: Compare hash of incoming token with stored hash
         return verify_refresh_token_hash(token, stored_hash)
+
+    # =========================================================================
+    # Token Version Management (SECURITY FIX - Audit 6)
+    # =========================================================================
+
+    async def increment_token_version(self, user_id: str) -> int:
+        """
+        Increment user's token version to invalidate all existing tokens.
+
+        SECURITY FIX (Audit 6): When privileges change (role, trust_flame,
+        is_active), all existing tokens should be immediately invalidated.
+        By incrementing the token version, any JWT with an older version
+        will be rejected during validation.
+
+        Args:
+            user_id: User ID
+
+        Returns:
+            New token version
+
+        Raises:
+            RuntimeError: If user not found
+        """
+        query = """
+        MATCH (u:User {id: $id})
+        SET u.token_version = COALESCE(u.token_version, 1) + 1,
+            u.updated_at = $now
+        RETURN u.token_version AS token_version
+        """
+
+        result = await self.client.execute_single(
+            query,
+            {"id": user_id, "now": self._now().isoformat()},
+        )
+
+        if result is None:
+            raise RuntimeError(f"Failed to increment token version: user {user_id} not found")
+
+        new_version = result.get("token_version", 2)
+        self.logger.info(
+            "Token version incremented",
+            user_id=user_id,
+            new_version=new_version,
+        )
+        return new_version
+
+    async def get_token_version(self, user_id: str) -> int:
+        """
+        Get user's current token version.
+
+        SECURITY FIX (Audit 6): Used during token validation to check
+        if the JWT's token version matches the current version.
+
+        Args:
+            user_id: User ID
+
+        Returns:
+            Current token version (defaults to 1 for users without version set)
+        """
+        query = """
+        MATCH (u:User {id: $id})
+        RETURN COALESCE(u.token_version, 1) AS token_version
+        """
+
+        result = await self.client.execute_single(query, {"id": user_id})
+
+        if result is None:
+            # User not found - return default version
+            # Token validation will fail anyway when user lookup fails
+            return 1
+
+        return result.get("token_version", 1)
 
     # =========================================================================
     # Password Reset Token Management
@@ -793,6 +893,7 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
             refresh_token: null,
             failed_login_attempts: 0,
             lockout_until: null,
+            token_version: 1,
             created_at: $now,
             updated_at: $now
         })

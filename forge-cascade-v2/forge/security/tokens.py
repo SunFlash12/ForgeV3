@@ -387,6 +387,164 @@ class TokenTooLargeError(TokenError):
     pass
 
 
+class TokenVersionOutdatedError(TokenError):
+    """Token version is outdated due to privilege change."""
+    pass
+
+
+# =============================================================================
+# SECURITY FIX (Audit 6): Token Version Caching
+# =============================================================================
+
+class TokenVersionCache:
+    """
+    Cache for user token versions to optimize validation performance.
+
+    SECURITY FIX (Audit 6): When user privileges change, their token version
+    is incremented. This cache allows fast validation of token versions
+    without hitting the database on every request.
+
+    Uses Redis when available, falls back to in-memory cache.
+    """
+
+    _cache: dict[str, tuple[int, float]] = {}  # user_id -> (version, expiry_timestamp)
+    _redis_prefix: str = "forge:token_version:"
+    _async_lock: asyncio.Lock | None = None
+
+    @classmethod
+    def _get_cache_ttl(cls) -> float:
+        """Get cache TTL from settings."""
+        return float(settings.token_version_cache_ttl_seconds)
+
+    @classmethod
+    def _get_async_lock(cls) -> asyncio.Lock:
+        """Get or create the async lock."""
+        if cls._async_lock is None:
+            cls._async_lock = asyncio.Lock()
+        return cls._async_lock
+
+    @classmethod
+    async def get_version(cls, user_id: str, db_fallback: Any = None) -> int:
+        """
+        Get cached token version for a user.
+
+        Args:
+            user_id: User ID
+            db_fallback: Async function to get version from DB if cache miss
+
+        Returns:
+            Token version (defaults to 1 if not found)
+        """
+        now = time.time()
+
+        # Try Redis first if available
+        if TokenBlacklist._redis_client:
+            try:
+                key = f"{cls._redis_prefix}{user_id}"
+                cached = await TokenBlacklist._redis_client.get(key)
+                if cached is not None:
+                    return int(cached)
+            except Exception as e:
+                logger.warning("token_version_cache_redis_error", error=str(e))
+
+        # Try in-memory cache
+        async with cls._get_async_lock():
+            if user_id in cls._cache:
+                version, expiry = cls._cache[user_id]
+                if now < expiry:
+                    return version
+                # Expired, remove from cache
+                cls._cache.pop(user_id, None)
+
+        # Cache miss - fetch from database
+        if db_fallback:
+            try:
+                version = await db_fallback(user_id)
+                await cls.set_version(user_id, version)
+                return version
+            except Exception as e:
+                logger.warning(
+                    "token_version_db_fetch_error",
+                    user_id=user_id,
+                    error=str(e)
+                )
+
+        # Default to version 1 (will be valid for legacy users)
+        return 1
+
+    @classmethod
+    async def set_version(cls, user_id: str, version: int) -> None:
+        """
+        Cache a token version.
+
+        Args:
+            user_id: User ID
+            version: Token version to cache
+        """
+        now = time.time()
+        cache_ttl = cls._get_cache_ttl()
+        ttl_seconds = int(cache_ttl)
+
+        # Try Redis first
+        if TokenBlacklist._redis_client:
+            try:
+                key = f"{cls._redis_prefix}{user_id}"
+                await TokenBlacklist._redis_client.setex(key, ttl_seconds, str(version))
+                return
+            except Exception as e:
+                logger.warning("token_version_cache_redis_error", error=str(e))
+
+        # Fall back to in-memory cache
+        async with cls._get_async_lock():
+            cls._cache[user_id] = (version, now + cache_ttl)
+
+    @classmethod
+    async def invalidate(cls, user_id: str) -> None:
+        """
+        Invalidate cached token version for a user.
+
+        Call this when incrementing a user's token version.
+
+        Args:
+            user_id: User ID
+        """
+        # Invalidate Redis cache
+        if TokenBlacklist._redis_client:
+            try:
+                key = f"{cls._redis_prefix}{user_id}"
+                await TokenBlacklist._redis_client.delete(key)
+            except Exception as e:
+                logger.warning("token_version_cache_redis_error", error=str(e))
+
+        # Invalidate in-memory cache
+        async with cls._get_async_lock():
+            cls._cache.pop(user_id, None)
+
+        logger.debug("token_version_cache_invalidated", user_id=user_id)
+
+    @classmethod
+    async def clear(cls) -> None:
+        """Clear entire cache (for testing)."""
+        # Clear Redis
+        if TokenBlacklist._redis_client:
+            try:
+                cursor = 0
+                while True:
+                    cursor, keys = await TokenBlacklist._redis_client.scan(
+                        cursor, match=f"{cls._redis_prefix}*", count=100
+                    )
+                    if keys:
+                        await TokenBlacklist._redis_client.delete(*keys)
+                    if cursor == 0:
+                        break
+            except Exception:
+                pass
+
+        # Clear in-memory
+        async with cls._get_async_lock():
+            cls._cache.clear()
+
+
 def validate_token_size(token: str) -> None:
     """
     SECURITY FIX (Audit 6): Validate token size to prevent DoS attacks.
@@ -681,6 +839,7 @@ def create_access_token(
     username: str,
     role: str,
     trust_flame: int,
+    token_version: int = 1,
     additional_claims: dict[str, Any] | None = None
 ) -> str:
     """
@@ -691,6 +850,7 @@ def create_access_token(
         username: User's username
         role: User's role (user, moderator, admin, system)
         trust_flame: User's trust score (0-100)
+        token_version: User's token version for privilege change invalidation
         additional_claims: Extra claims to include in token
 
     Returns:
@@ -706,6 +866,7 @@ def create_access_token(
         "username": username,
         "role": role,
         "trust_flame": trust_flame,
+        "tv": token_version,  # SECURITY FIX (Audit 6): Token version for privilege change invalidation
         "exp": expire,
         "iat": now,
         "nbf": not_before,  # SECURITY FIX (Audit 6): Not valid before this time
@@ -775,7 +936,8 @@ def create_token_pair(
     user_id: str,
     username: str,
     role: str,
-    trust_flame: int
+    trust_flame: int,
+    token_version: int = 1
 ) -> Token:
     """
     Create both access and refresh tokens.
@@ -785,11 +947,14 @@ def create_token_pair(
         username: User's username
         role: User's role
         trust_flame: User's trust score
+        token_version: User's token version for privilege change invalidation
 
     Returns:
         Token model with both access and refresh tokens
     """
-    access_token = create_access_token(user_id, username, role, trust_flame)
+    access_token = create_access_token(
+        user_id, username, role, trust_flame, token_version
+    )
     refresh_token = create_refresh_token(user_id, username)
 
     return Token(
@@ -858,7 +1023,8 @@ def decode_token(token: str, verify_exp: bool = True) -> TokenPayload:
             exp=payload.get("exp"),
             iat=payload.get("iat"),
             jti=payload.get("jti"),
-            type=payload.get("type", "access")
+            type=payload.get("type", "access"),
+            tv=payload.get("tv"),  # SECURITY FIX (Audit 6): Token version for privilege change validation
         )
 
     except ExpiredSignatureError:
@@ -918,21 +1084,31 @@ def verify_access_token(token: str) -> TokenPayload:
     return payload
 
 
-async def verify_access_token_async(token: str) -> TokenPayload:
+async def verify_access_token_async(
+    token: str,
+    token_version_getter: Any | None = None
+) -> TokenPayload:
     """
     Verify an access token (async version with full blacklist support).
 
     This version checks both Redis and in-memory blacklists for
     token revocation. Use this in async API endpoints.
 
+    SECURITY FIX (Audit 6): Added token version validation to immediately
+    invalidate tokens when user privileges change.
+
     Args:
         token: JWT access token
+        token_version_getter: Optional async function(user_id) -> int to get
+            current token version from database. If provided, validates that
+            token's version matches current version.
 
     Returns:
         TokenPayload if valid
 
     Raises:
         TokenError: If token is invalid, blacklisted, or not an access token
+        TokenVersionOutdatedError: If token version is outdated
     """
     payload = decode_token(token)
 
@@ -962,6 +1138,27 @@ async def verify_access_token_async(token: str) -> TokenPayload:
     # Validate trust_flame is within valid range
     if not (0 <= payload.trust_flame <= 100):
         raise TokenInvalidError("Invalid trust_flame value in token")
+
+    # SECURITY FIX (Audit 6): Validate token version
+    # If token version getter is provided, check that token's version
+    # matches the current version in database (via cache)
+    if token_version_getter is not None:
+        token_version = payload.tv or 1  # Default to 1 for legacy tokens
+        current_version = await TokenVersionCache.get_version(
+            payload.sub,
+            db_fallback=token_version_getter
+        )
+
+        if token_version < current_version:
+            logger.warning(
+                "token_version_outdated",
+                user_id=payload.sub,
+                token_version=token_version,
+                current_version=current_version,
+            )
+            raise TokenVersionOutdatedError(
+                f"Token version {token_version} is outdated (current: {current_version})"
+            )
 
     return payload
 

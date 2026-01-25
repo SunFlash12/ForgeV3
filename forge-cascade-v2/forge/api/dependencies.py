@@ -278,7 +278,12 @@ async def get_current_user_optional(
     token: Annotated[TokenPayload | None, Depends(get_token_payload)],
     user_repo: UserRepoDep,
 ) -> User | None:
-    """Get current user if authenticated, None otherwise."""
+    """
+    Get current user if authenticated, None otherwise.
+
+    SECURITY FIX (Audit 6): Validates token version to ensure tokens
+    are invalidated immediately when user privileges change.
+    """
     import structlog
     logger = structlog.get_logger(__name__)
 
@@ -287,6 +292,24 @@ async def get_current_user_optional(
 
     try:
         user = await user_repo.get_by_id(token.sub)
+        if not user:
+            return None
+
+        # SECURITY FIX (Audit 6): Validate token version
+        # If user's token_version is higher than the token's version,
+        # the token was issued before a privilege change and is invalid
+        token_version = token.tv or 1  # Default to 1 for legacy tokens
+        current_version = await user_repo.get_token_version(token.sub)
+
+        if token_version < current_version:
+            logger.warning(
+                "token_version_outdated",
+                user_id=token.sub,
+                token_version=token_version,
+                current_version=current_version,
+            )
+            return None
+
         return user
     except ValueError:
         # User not found - this is expected for deleted/invalid users

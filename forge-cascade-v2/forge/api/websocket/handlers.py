@@ -39,8 +39,11 @@ MAX_MESSAGES_PER_MINUTE = 60  # Rate limit: messages per minute per connection
 RATE_LIMIT_WINDOW_SECONDS = 60  # Rate limiting window
 # SECURITY FIX (Audit 6): Maximum WebSocket message size to prevent DoS
 MAX_WEBSOCKET_MESSAGE_SIZE = 64 * 1024  # 64KB max message size
-# SECURITY FIX (Audit 6): Token expiry check interval for long-lived WebSocket sessions
-TOKEN_EXPIRY_CHECK_INTERVAL_SECONDS = 60  # Check token validity every minute
+
+
+def get_token_expiry_check_interval() -> int:
+    """Get token expiry check interval from settings."""
+    return settings.websocket_token_check_interval_seconds
 
 
 def get_max_connections_per_user() -> int:
@@ -232,7 +235,8 @@ class WebSocketConnection:
         now = datetime.now(UTC)
 
         # Only check periodically to avoid performance overhead
-        if (now - self._last_token_check).total_seconds() < TOKEN_EXPIRY_CHECK_INTERVAL_SECONDS:
+        check_interval = get_token_expiry_check_interval()
+        if (now - self._last_token_check).total_seconds() < check_interval:
             return self._token_valid
 
         self._last_token_check = now
@@ -722,6 +726,127 @@ class ConnectionManager:
             conn.user_id
             for conn in self._chat_connections[room_id].values()
             if conn.user_id
+        })
+
+    # -------------------------------------------------------------------------
+    # SECURITY FIX (Audit 6): Force Disconnect for Privilege Changes
+    # -------------------------------------------------------------------------
+
+    async def force_disconnect_user(
+        self,
+        user_id: str,
+        reason: str = "privilege_change",
+        close_code: int = 4001
+    ) -> int:
+        """
+        SECURITY FIX (Audit 6): Force-disconnect all WebSocket connections for a user.
+
+        Used when user privileges change to ensure they re-authenticate with
+        fresh tokens containing the updated claims.
+
+        Args:
+            user_id: User ID to disconnect
+            reason: Reason for disconnection (sent to client)
+            close_code: WebSocket close code (4001 = privilege change)
+
+        Returns:
+            Number of connections closed
+        """
+        if not user_id:
+            return 0
+
+        connection_ids = list(self._user_connections.get(user_id, set()))
+        if not connection_ids:
+            return 0
+
+        closed_count = 0
+
+        for conn_id in connection_ids:
+            try:
+                # Find connection in any connection pool
+                connection = (
+                    self._event_connections.get(conn_id) or
+                    self._dashboard_connections.get(conn_id) or
+                    self._find_chat_connection(conn_id)
+                )
+
+                if connection:
+                    # Send notification to client before closing
+                    try:
+                        await connection.send_json({
+                            "type": "session_terminated",
+                            "reason": reason,
+                            "action_required": "reauthenticate",
+                            "timestamp": datetime.now(UTC).isoformat()
+                        })
+                    except Exception:
+                        pass  # Client may already be disconnected
+
+                    # Close the WebSocket connection
+                    try:
+                        await connection.websocket.close(
+                            code=close_code,
+                            reason=f"Session terminated: {reason}"
+                        )
+                    except Exception:
+                        pass  # Already closed
+
+                    closed_count += 1
+
+                # Clean up connection from all pools
+                if conn_id in self._event_connections:
+                    await self.disconnect_events(conn_id)
+                elif conn_id in self._dashboard_connections:
+                    await self.disconnect_dashboard(conn_id)
+                else:
+                    # Try to find and disconnect from chat rooms
+                    for room_id in list(self._chat_connections.keys()):
+                        if conn_id in self._chat_connections.get(room_id, {}):
+                            await self.disconnect_chat(room_id, conn_id)
+                            break
+
+            except Exception as e:
+                logger.warning(
+                    "force_disconnect_error",
+                    user_id=user_id,
+                    connection_id=conn_id,
+                    error=str(e)[:100],
+                )
+
+        logger.info(
+            "user_force_disconnected",
+            user_id=user_id,
+            reason=reason,
+            connections_closed=closed_count,
+        )
+
+        return closed_count
+
+    async def notify_privilege_change(
+        self,
+        user_id: str,
+        change_type: str,
+        message: str | None = None
+    ) -> int:
+        """
+        SECURITY FIX (Audit 6): Notify user of privilege change without disconnecting.
+
+        Use this when you want to inform the user but allow them to continue
+        their session (e.g., for minor permission changes).
+
+        Args:
+            user_id: User ID to notify
+            change_type: Type of change (role, trust_flame, etc.)
+            message: Optional custom message
+
+        Returns:
+            Number of connections notified
+        """
+        return await self.send_to_user(user_id, {
+            "type": "privilege_change",
+            "change_type": change_type,
+            "message": message or "Your permissions have changed. Some actions may require re-authentication.",
+            "timestamp": datetime.now(UTC).isoformat()
         })
 
 

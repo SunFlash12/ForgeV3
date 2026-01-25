@@ -44,6 +44,7 @@ from .password import (
 from .tokens import (
     TokenBlacklist,
     TokenInvalidError,
+    TokenVersionCache,
     create_token_pair,
     get_token_claims,
     verify_access_token,
@@ -590,13 +591,17 @@ class AuthService:
         if ip_address:
             await self._ip_rate_limiter.record_attempt_async(ip_address, success=True)
 
-        # Create tokens
+        # SECURITY FIX (Audit 6): Get token version for token claims
+        token_version = await self.user_repo.get_token_version(user.id)
+
+        # Create tokens with token version for privilege change invalidation
         role_value = user.role.value if hasattr(user.role, 'value') else user.role
         token = create_token_pair(
             user_id=user.id,
             username=user.username,
             role=role_value,
-            trust_flame=user.trust_flame
+            trust_flame=user.trust_flame,
+            token_version=token_version
         )
 
         # Store refresh token for validation
@@ -681,13 +686,17 @@ class AuthService:
             old_jti=payload.jti[:16] + "..." if payload.jti else None,
         )
 
-        # Create new token pair (token rotation)
+        # SECURITY FIX (Audit 6): Get current token version for new tokens
+        token_version = await self.user_repo.get_token_version(user.id)
+
+        # Create new token pair (token rotation) with current token version
         role_value = user.role.value if hasattr(user.role, 'value') else user.role
         new_token = create_token_pair(
             user_id=user.id,
             username=user.username,
             role=role_value,
-            trust_flame=user.trust_flame
+            trust_flame=user.trust_flame,
+            token_version=token_version
         )
 
         # Update stored refresh token (old token is now invalid)
@@ -1105,14 +1114,16 @@ class AuthService:
         """
         Deactivate a user account.
 
+        SECURITY FIX (Audit 6): Automatically invalidates tokens when deactivated.
+
         Args:
             user_id: User to deactivate
             deactivated_by: ID of user performing deactivation
             reason: Reason for deactivation
             ip_address: Client IP
         """
+        # Note: deactivate() already increments token_version
         await self.user_repo.deactivate(user_id)
-        await self.user_repo.update_refresh_token(user_id, None)
 
         await self.audit_repo.log_user_action(
             actor_id=deactivated_by,
@@ -1121,13 +1132,29 @@ class AuthService:
             details={"reason": reason}
         )
 
+        # SECURITY FIX (Audit 6): Handle privilege change side effects
+        await self._on_privilege_change(
+            user_id=user_id,
+            change_type="is_active",
+            old_value=True,
+            new_value=False,
+            reason=reason,
+            ip_address=ip_address,
+            changed_by=deactivated_by
+        )
+
     async def reactivate_account(
         self,
         user_id: str,
         reactivated_by: str,
         ip_address: str | None = None
     ) -> None:
-        """Reactivate a deactivated account."""
+        """
+        Reactivate a deactivated account.
+
+        SECURITY FIX (Audit 6): Automatically invalidates old tokens when reactivated.
+        """
+        # Note: activate() already increments token_version
         await self.user_repo.activate(user_id)
 
         await self.audit_repo.log_user_action(
@@ -1135,6 +1162,98 @@ class AuthService:
             target_user_id=user_id,
             action="reactivated",
             ip_address=ip_address
+        )
+
+        # SECURITY FIX (Audit 6): Handle privilege change side effects
+        await self._on_privilege_change(
+            user_id=user_id,
+            change_type="is_active",
+            old_value=False,
+            new_value=True,
+            reason="account_reactivated",
+            ip_address=ip_address,
+            changed_by=reactivated_by
+        )
+
+    # =========================================================================
+    # Privilege Change Handling (SECURITY FIX - Audit 6)
+    # =========================================================================
+
+    async def _on_privilege_change(
+        self,
+        user_id: str,
+        change_type: str,
+        old_value: str | int | bool | None = None,
+        new_value: str | int | bool | None = None,
+        reason: str | None = None,
+        ip_address: str | None = None,
+        changed_by: str | None = None
+    ) -> None:
+        """
+        Handle privilege change to invalidate tokens and notify clients.
+
+        SECURITY FIX (Audit 6): When a user's privileges change (role, trust_flame,
+        is_active), all existing tokens should be immediately invalidated.
+        This method coordinates the cache invalidation and client notification.
+
+        Note: Token version increment is handled by the repository methods
+        (adjust_trust_flame, activate, deactivate).
+
+        Args:
+            user_id: User whose privileges changed
+            change_type: Type of change (role, trust_flame, is_active)
+            old_value: Previous value
+            new_value: New value
+            reason: Reason for change
+            ip_address: Client IP
+            changed_by: ID of user who made the change
+        """
+        # 1. Invalidate token version cache to force DB lookup
+        await TokenVersionCache.invalidate(user_id)
+
+        # 2. Revoke all refresh tokens (force re-authentication)
+        await self.user_repo.update_refresh_token(user_id, None)
+
+        # 3. Log security event for audit trail
+        await self.audit_repo.log_security_event(
+            actor_id=changed_by or "system",
+            event_name="privilege_change",
+            details={
+                "user_id": user_id,
+                "change_type": change_type,
+                "old_value": str(old_value) if old_value is not None else None,
+                "new_value": str(new_value) if new_value is not None else None,
+                "reason": reason,
+                "tokens_invalidated": True,
+            },
+            ip_address=ip_address
+        )
+
+        # 4. Force disconnect WebSocket connections
+        # Uses lazy import to avoid circular dependency
+        try:
+            from forge.api.websocket.handlers import connection_manager
+            await connection_manager.force_disconnect_user(
+                user_id=user_id,
+                reason=f"privilege_change:{change_type}"
+            )
+        except ImportError:
+            # WebSocket handlers not available (e.g., in tests)
+            pass
+        except Exception as e:
+            # Don't fail privilege change if WebSocket disconnect fails
+            logger.warning(
+                "websocket_disconnect_failed",
+                user_id=user_id,
+                error=str(e)[:100],
+            )
+
+        logger.info(
+            "privilege_change_processed",
+            user_id=user_id,
+            change_type=change_type,
+            old_value=old_value,
+            new_value=new_value,
         )
 
     # =========================================================================
@@ -1152,6 +1271,8 @@ class AuthService:
         """
         Adjust a user's trust flame score.
 
+        SECURITY FIX (Audit 6): Automatically invalidates tokens when trust changes.
+
         Args:
             user_id: User to adjust
             adjusted_by: ID of user making adjustment
@@ -1167,12 +1288,16 @@ class AuthService:
             raise AuthenticationError("User not found")
 
         old_trust = user.trust_flame
-        new_trust = await self.user_repo.adjust_trust_flame(
+        # Note: adjust_trust_flame already increments token_version
+        result = await self.user_repo.adjust_trust_flame(
             user_id=user_id,
             adjustment=adjustment,
             reason=reason,
             adjusted_by=adjusted_by
         )
+
+        # Handle case where result is TrustFlameAdjustment or int
+        new_trust = result.new_value if hasattr(result, 'new_value') else result
 
         old_level = get_trust_level_from_score(old_trust)
         new_level = get_trust_level_from_score(new_trust)
@@ -1191,6 +1316,19 @@ class AuthService:
             },
             ip_address=ip_address
         )
+
+        # SECURITY FIX (Audit 6): Handle privilege change side effects
+        # (cache invalidation, WebSocket disconnect)
+        if old_trust != new_trust:
+            await self._on_privilege_change(
+                user_id=user_id,
+                change_type="trust_flame",
+                old_value=old_trust,
+                new_value=new_trust,
+                reason=reason,
+                ip_address=ip_address,
+                changed_by=adjusted_by
+            )
 
         return new_trust
 
