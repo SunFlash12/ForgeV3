@@ -332,6 +332,92 @@ def needs_rehash(hashed_password: str) -> bool:
     return False
 
 
+def check_password_history(
+    new_password: str,
+    password_history: list[str],
+    history_count: int | None = None
+) -> bool:
+    """
+    SECURITY FIX (Audit 6): Check if a password was recently used.
+
+    Prevents password reuse by checking against stored password history.
+    Uses constant-time comparison for each check to prevent timing attacks.
+
+    Args:
+        new_password: The new password to check
+        password_history: List of previous password hashes (most recent first)
+        history_count: Number of previous passwords to check (from settings if None)
+
+    Returns:
+        True if password matches any in history (reused), False if new
+
+    Raises:
+        PasswordValidationError: If password was recently used
+    """
+    if not password_history:
+        return False
+
+    # Get history count from settings if not specified
+    if history_count is None:
+        history_count = settings.password_history_count
+
+    # Only check up to history_count passwords
+    passwords_to_check = password_history[:history_count]
+
+    # Apply same normalization as verify_password
+    import unicodedata
+    normalized_password = unicodedata.normalize('NFKC', new_password)
+
+    for old_hash in passwords_to_check:
+        try:
+            if bcrypt.checkpw(
+                normalized_password.encode('utf-8'),
+                old_hash.encode('utf-8')
+            ):
+                logger.warning(
+                    "password_reuse_detected",
+                    history_position=passwords_to_check.index(old_hash) + 1,
+                )
+                raise PasswordValidationError(
+                    f"Password was used recently. Please choose a password you haven't used in the last {history_count} password changes."
+                )
+        except PasswordValidationError:
+            raise
+        except Exception:
+            # Skip invalid hashes but continue checking
+            continue
+
+    return False
+
+
+def update_password_history(
+    current_hash: str,
+    password_history: list[str],
+    max_history: int | None = None
+) -> list[str]:
+    """
+    SECURITY FIX (Audit 6): Update password history with new hash.
+
+    Prepends the current password hash to history and trims to max size.
+
+    Args:
+        current_hash: The current password hash to add to history
+        password_history: Existing password history list
+        max_history: Maximum passwords to retain (from settings if None)
+
+    Returns:
+        Updated password history list (new list, doesn't modify original)
+    """
+    if max_history is None:
+        max_history = settings.password_history_count
+
+    # Create new list with current hash at front
+    new_history = [current_hash] + (password_history or [])
+
+    # Trim to max size
+    return new_history[:max_history]
+
+
 def get_password_strength(password: str, username: str | None = None, email: str | None = None) -> dict:
     """
     Evaluate password strength.

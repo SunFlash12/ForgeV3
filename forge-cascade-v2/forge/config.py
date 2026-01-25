@@ -106,6 +106,16 @@ class Settings(BaseSettings):
     # ═══════════════════════════════════════════════════════════════
     jwt_secret_key: str = Field(description="JWT secret key")
     jwt_algorithm: str = Field(default="HS256", description="JWT algorithm")
+    # SECURITY FIX (Audit 6): Added JWT issuer and audience for token validation
+    jwt_issuer: str = Field(
+        default="forge-cascade", description="JWT issuer (iss claim)"
+    )
+    jwt_audience: str = Field(
+        default="forge-api", description="JWT audience (aud claim)"
+    )
+    jwt_clock_skew_seconds: int = Field(
+        default=30, ge=0, le=300, description="Allowed clock skew for nbf/exp validation"
+    )
     # SECURITY FIX (Audit 3): Reduced default access token expiry from 60 to 30 minutes
     jwt_access_token_expire_minutes: int = Field(
         default=30, ge=1, le=60, description="Access token expiry (max 60 min)"
@@ -115,6 +125,10 @@ class Settings(BaseSettings):
     )
     password_bcrypt_rounds: int = Field(
         default=12, ge=4, le=31, description="Bcrypt rounds"
+    )
+    # SECURITY FIX (Audit 6): Password history to prevent password reuse
+    password_history_count: int = Field(
+        default=5, ge=1, le=24, description="Number of previous passwords to remember"
     )
 
     # SECURITY FIX (Audit 3): Session management settings

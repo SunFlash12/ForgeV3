@@ -542,6 +542,12 @@ async def websocket_stream(
     Connect with API key, then send JSON query messages.
     Receives streaming chunks as results become available.
     """
+    # SECURITY FIX (Audit 6): Validate Origin header to prevent CSWSH attacks
+    from forge.api.websocket.handlers import validate_websocket_origin
+    if not validate_websocket_origin(websocket):
+        await websocket.close(code=4003, reason="Origin not allowed")
+        return
+
     # Authenticate
     session = await gateway.authenticate(api_key)
     if not session:

@@ -34,7 +34,13 @@ from ..models.user import Token, User, UserCreate
 from ..repositories.audit_repository import AuditRepository
 from ..repositories.user_repository import UserRepository
 from .authorization import AuthorizationContext, create_auth_context, get_trust_level_from_score
-from .password import hash_password, needs_rehash, verify_password
+from .password import (
+    check_password_history,
+    hash_password,
+    needs_rehash,
+    update_password_history,
+    verify_password,
+)
 from .tokens import (
     TokenBlacklist,
     TokenInvalidError,
@@ -795,6 +801,9 @@ class AuthService:
         """
         Change user's password.
 
+        SECURITY FIX (Audit 6): Added password history check to prevent
+        reusing recently used passwords.
+
         Args:
             user_id: User ID
             current_password: Current password for verification
@@ -803,6 +812,7 @@ class AuthService:
 
         Raises:
             InvalidCredentialsError: If current password is incorrect
+            PasswordValidationError: If new password was recently used
         """
         user = await self.user_repo.get_by_id(user_id)
 
@@ -818,10 +828,20 @@ class AuthService:
             )
             raise InvalidCredentialsError("Current password is incorrect")
 
+        # SECURITY FIX (Audit 6): Check password history to prevent reuse
+        # Get password history from user (may be empty for older accounts)
+        password_history = getattr(user, 'password_history', []) or []
+        # Also check against current password hash
+        all_history = [user.password_hash] + password_history
+        check_password_history(new_password, all_history)
+
         # Hash and update new password (with context-aware validation)
         # SECURITY FIX (Audit 3): Pass username/email for context-aware password validation
         new_hash = hash_password(new_password, username=user.username, email=user.email)
-        await self.user_repo.update_password(user_id, new_hash)
+
+        # SECURITY FIX (Audit 6): Update password history before changing password
+        new_history = update_password_history(user.password_hash, password_history)
+        await self.user_repo.update_password_with_history(user_id, new_hash, new_history)
 
         # Revoke all existing sessions for security
         await self.user_repo.update_refresh_token(user_id, None)
@@ -829,7 +849,7 @@ class AuthService:
         await self.audit_repo.log_security_event(
             actor_id=user_id,
             event_name="password_changed",
-            details={"sessions_revoked": True},
+            details={"sessions_revoked": True, "history_updated": True},
             ip_address=ip_address
         )
 
@@ -906,6 +926,9 @@ class AuthService:
         The token is validated against the stored hash and checked for expiry.
         After successful reset, the token is invalidated (one-time use).
 
+        SECURITY FIX (Audit 6): Added password history check to prevent
+        reusing recently used passwords.
+
         Args:
             user_id: User ID
             new_password: New password to set
@@ -914,6 +937,7 @@ class AuthService:
 
         Raises:
             AuthenticationError: If user not found or token invalid
+            PasswordValidationError: If new password was recently used
         """
         user = await self.user_repo.get_by_id(user_id)
 
@@ -936,10 +960,18 @@ class AuthService:
             )
             raise AuthenticationError("Invalid or expired reset token")
 
+        # SECURITY FIX (Audit 6): Check password history to prevent reuse
+        password_history = getattr(user, 'password_history', []) or []
+        all_history = [user.password_hash] + password_history
+        check_password_history(new_password, all_history)
+
         # Hash and update password (with context-aware validation)
         # SECURITY FIX (Audit 3): Pass username/email for context-aware password validation
         new_hash = hash_password(new_password, username=user.username, email=user.email)
-        await self.user_repo.update_password(user_id, new_hash)
+
+        # SECURITY FIX (Audit 6): Update password history
+        new_history = update_password_history(user.password_hash, password_history)
+        await self.user_repo.update_password_with_history(user_id, new_hash, new_history)
 
         # Clear the reset token (one-time use)
         await self.user_repo.clear_password_reset_token(user_id)
@@ -953,7 +985,7 @@ class AuthService:
         await self.audit_repo.log_security_event(
             actor_id=user_id,
             event_name="password_reset",
-            details={"method": "reset_token"},
+            details={"method": "reset_token", "history_updated": True},
             ip_address=ip_address
         )
 

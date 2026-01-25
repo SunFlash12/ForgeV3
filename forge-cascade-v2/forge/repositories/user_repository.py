@@ -329,6 +329,47 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
 
         return result is not None and result.get("id") == user_id
 
+    async def update_password_with_history(
+        self,
+        user_id: str,
+        password_hash: str,
+        password_history: list[str],
+    ) -> bool:
+        """
+        SECURITY FIX (Audit 6): Update user's password hash and history.
+
+        Updates both the current password hash and the password history list
+        to prevent password reuse.
+
+        Args:
+            user_id: User ID
+            password_hash: New password hash
+            password_history: Updated list of previous password hashes
+
+        Returns:
+            True if update succeeded
+        """
+        query = """
+        MATCH (u:User {id: $id})
+        SET u.password_hash = $password_hash,
+            u.password_history = $password_history,
+            u.password_changed_at = $now,
+            u.updated_at = $now
+        RETURN u.id AS id
+        """
+
+        result = await self.client.execute_single(
+            query,
+            {
+                "id": user_id,
+                "password_hash": password_hash,
+                "password_history": password_history,
+                "now": self._now().isoformat(),
+            },
+        )
+
+        return result is not None and result.get("id") == user_id
+
     async def update_refresh_token(
         self,
         user_id: str,

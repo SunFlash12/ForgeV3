@@ -548,15 +548,23 @@ class KeyRotationManager:
         cls,
         token: str,
         algorithms: list[str],
-        options: dict | None = None
+        options: dict | None = None,
+        issuer: str | None = None,
+        audience: str | None = None,
+        leeway: int = 0,
     ) -> dict:
         """
         Decode a token, trying all valid keys.
+
+        SECURITY FIX (Audit 6): Added issuer and audience validation.
 
         Args:
             token: The JWT token
             algorithms: Allowed algorithms
             options: PyJWT decode options
+            issuer: Expected issuer (iss claim) - validated if provided
+            audience: Expected audience (aud claim) - validated if provided
+            leeway: Clock skew tolerance in seconds for exp/nbf validation
 
         Returns:
             Decoded payload
@@ -565,6 +573,17 @@ class KeyRotationManager:
             InvalidTokenError: If token cannot be decoded with any key
         """
         cls.initialize()
+
+        # Build decode kwargs with optional issuer/audience validation
+        decode_kwargs: dict[str, Any] = {
+            "algorithms": algorithms,
+            "options": options or {},
+            "leeway": timedelta(seconds=leeway),
+        }
+        if issuer:
+            decode_kwargs["issuer"] = issuer
+        if audience:
+            decode_kwargs["audience"] = audience
 
         # Try to get key ID from header
         try:
@@ -576,8 +595,7 @@ class KeyRotationManager:
                     return pyjwt.decode(
                         token,
                         cls._keys[kid],
-                        algorithms=algorithms,
-                        options=options or {}
+                        **decode_kwargs
                     )
                 except (InvalidTokenError, DecodeError):
                     pass  # Fall through to try all keys
@@ -591,8 +609,7 @@ class KeyRotationManager:
                 return pyjwt.decode(
                     token,
                     key,
-                    algorithms=algorithms,
-                    options=options or {}
+                    **decode_kwargs
                 )
             except ExpiredSignatureError:
                 raise  # Don't try other keys for expired tokens
@@ -645,6 +662,8 @@ def create_access_token(
     """
     now = datetime.now(UTC)
     expire = now + timedelta(minutes=settings.jwt_access_token_expire_minutes)
+    # SECURITY FIX (Audit 6): Add nbf (not before) claim with clock skew tolerance
+    not_before = now - timedelta(seconds=settings.jwt_clock_skew_seconds)
 
     payload = {
         "sub": user_id,
@@ -653,6 +672,9 @@ def create_access_token(
         "trust_flame": trust_flame,
         "exp": expire,
         "iat": now,
+        "nbf": not_before,  # SECURITY FIX (Audit 6): Not valid before this time
+        "iss": settings.jwt_issuer,  # SECURITY FIX (Audit 6): Issuer claim
+        "aud": settings.jwt_audience,  # SECURITY FIX (Audit 6): Audience claim
         "jti": str(uuid4()),  # JWT ID for token revocation
         "type": "access"
     }
@@ -688,12 +710,17 @@ def create_refresh_token(
     """
     now = datetime.now(UTC)
     expire = now + timedelta(days=settings.jwt_refresh_token_expire_days)
+    # SECURITY FIX (Audit 6): Add nbf (not before) claim with clock skew tolerance
+    not_before = now - timedelta(seconds=settings.jwt_clock_skew_seconds)
 
     payload = {
         "sub": user_id,
         "username": username,
         "exp": expire,
         "iat": now,
+        "nbf": not_before,  # SECURITY FIX (Audit 6): Not valid before this time
+        "iss": settings.jwt_issuer,  # SECURITY FIX (Audit 6): Issuer claim
+        "aud": settings.jwt_audience,  # SECURITY FIX (Audit 6): Audience claim
         "jti": str(uuid4()),
         "type": "refresh"
     }
@@ -744,6 +771,9 @@ def decode_token(token: str, verify_exp: bool = True) -> TokenPayload:
     SECURITY FIX (Audit 3): Now uses KeyRotationManager to support key rotation.
     Tokens signed with any valid key (current or previous) will be accepted.
 
+    SECURITY FIX (Audit 6): Added issuer and audience validation to prevent
+    token confusion attacks where tokens from one system are accepted by another.
+
     Args:
         token: JWT token string
         verify_exp: Whether to verify expiration (default True)
@@ -768,10 +798,14 @@ def decode_token(token: str, verify_exp: bool = True) -> TokenPayload:
 
         # SECURITY FIX (Audit 3): Use KeyRotationManager for decoding
         # This allows tokens signed with any valid key to be verified
+        # SECURITY FIX (Audit 6): Validate issuer and audience claims
         payload = KeyRotationManager.decode_with_rotation(
             token,
             algorithms=ALLOWED_JWT_ALGORITHMS,
-            options=options
+            options=options,
+            issuer=settings.jwt_issuer,
+            audience=settings.jwt_audience,
+            leeway=settings.jwt_clock_skew_seconds,
         )
 
         return TokenPayload(
@@ -897,6 +931,10 @@ def get_token_claims(token: str) -> dict[str, Any]:
     Used for blacklisting/logging purposes where we need JTI even from
     potentially invalid tokens.
 
+    NOTE: This function intentionally skips issuer/audience validation
+    because it's used for extracting claims from tokens that may be
+    from different sources (e.g., during migration or for blacklisting).
+
     Args:
         token: JWT token string
 
@@ -908,11 +946,16 @@ def get_token_claims(token: str) -> dict[str, Any]:
     """
     try:
         # SECURITY FIX: Use PyJWT with algorithm whitelist even for extraction
+        # NOTE: Intentionally skip iss/aud validation for claim extraction
         payload = pyjwt.decode(
             token,
             settings.jwt_secret_key,
             algorithms=ALLOWED_JWT_ALGORITHMS,
-            options={"verify_exp": False}
+            options={
+                "verify_exp": False,
+                "verify_iss": False,
+                "verify_aud": False,
+            }
         )
         return payload
     except (InvalidTokenError, DecodeError) as e:

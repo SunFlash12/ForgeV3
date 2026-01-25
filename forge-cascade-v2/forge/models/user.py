@@ -226,6 +226,15 @@ class UserInDB(User):
         default=None,
         description="SHA-256 hash of refresh token (not raw token)",
     )
+    # SECURITY FIX (Audit 6): Password history to prevent password reuse
+    password_history: list[str] = Field(
+        default_factory=list,
+        description="List of previous password hashes (most recent first)",
+    )
+    password_changed_at: datetime | None = Field(
+        default=None,
+        description="When password was last changed",
+    )
     failed_login_attempts: int = Field(
         default=0,
         ge=0,

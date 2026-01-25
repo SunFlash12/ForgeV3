@@ -8,30 +8,143 @@ Provides WebSocket endpoints for:
 
 Security Features:
 - Authentication required for all endpoints
+- SECURITY FIX (Audit 6): Origin header validation to prevent CSWSH attacks
 - Subscription limits per connection (DoS protection)
 - Message rate limiting (spam protection)
+- Message size limits (DoS protection)
 """
 
 import json
 from collections import defaultdict, deque
 from datetime import UTC, datetime
 from typing import Any
+from urllib.parse import urlparse
 from uuid import uuid4
 
 import structlog
+from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, status
+
+from forge.api.dependencies import get_current_user as get_current_user_ws
+from forge.config import get_settings
+from forge.models.user import User
+from forge.security.tokens import verify_token
+
+logger = structlog.get_logger(__name__)
+settings = get_settings()
 
 # Security limits
 MAX_SUBSCRIPTIONS_PER_CONNECTION = 50  # Maximum topics a single connection can subscribe to
 MAX_MESSAGES_PER_MINUTE = 60  # Rate limit: messages per minute per connection
 RATE_LIMIT_WINDOW_SECONDS = 60  # Rate limiting window
+# SECURITY FIX (Audit 6): Maximum WebSocket message size to prevent DoS
+MAX_WEBSOCKET_MESSAGE_SIZE = 64 * 1024  # 64KB max message size
 
-from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, status
 
-from forge.api.dependencies import get_current_user as get_current_user_ws
-from forge.models.user import User
-from forge.security.tokens import verify_token
+# ============================================================================
+# SECURITY FIX (Audit 6): Origin Validation for WebSocket
+# ============================================================================
 
-logger = structlog.get_logger(__name__)
+def validate_websocket_origin(websocket: WebSocket) -> bool:
+    """
+    SECURITY FIX (Audit 6): Validate WebSocket Origin header to prevent CSWSH attacks.
+
+    Cross-Site WebSocket Hijacking (CSWSH) occurs when a malicious website
+    establishes a WebSocket connection to your server using the victim's
+    authenticated session. Origin validation prevents this by rejecting
+    connections from unauthorized origins.
+
+    Args:
+        websocket: The WebSocket connection to validate
+
+    Returns:
+        True if origin is valid, False otherwise
+    """
+    origin = websocket.headers.get("origin")
+
+    # No origin header - could be a same-origin request or a tool like wscat
+    # In production, you may want to reject connections without Origin
+    if not origin:
+        # Allow in development, log warning in production
+        if settings.app_env == "production":
+            logger.warning(
+                "websocket_no_origin_header",
+                client=websocket.client,
+                path=websocket.url.path,
+            )
+            # Still allow for backwards compatibility, but log
+        return True
+
+    # Parse the origin
+    try:
+        parsed_origin = urlparse(origin)
+        origin_host = parsed_origin.netloc.lower()
+    except Exception:
+        logger.warning(
+            "websocket_invalid_origin",
+            origin=origin,
+            client=websocket.client,
+        )
+        return False
+
+    # Get allowed origins from settings
+    allowed_origins = settings.cors_origins_list
+
+    # Check if origin matches any allowed origin
+    for allowed in allowed_origins:
+        if allowed == "*":
+            # Wildcard - allow all (not recommended in production)
+            return True
+
+        try:
+            parsed_allowed = urlparse(allowed)
+            allowed_host = parsed_allowed.netloc.lower()
+
+            # Compare hosts (including port if specified)
+            if origin_host == allowed_host:
+                return True
+
+            # Also check if origin matches without port
+            origin_host_no_port = origin_host.split(":")[0]
+            allowed_host_no_port = allowed_host.split(":")[0]
+            if origin_host_no_port == allowed_host_no_port:
+                # Same host, different port - may be allowed in development
+                if settings.app_env != "production":
+                    return True
+        except Exception:
+            continue
+
+    # Origin not in allowed list
+    logger.warning(
+        "websocket_origin_rejected",
+        origin=origin,
+        allowed_origins=allowed_origins,
+        client=websocket.client,
+    )
+    return False
+
+
+async def validate_and_accept_websocket(
+    websocket: WebSocket,
+    close_code: int = 4003,
+    close_reason: str = "Origin not allowed",
+) -> bool:
+    """
+    SECURITY FIX (Audit 6): Validate origin and accept WebSocket connection.
+
+    Args:
+        websocket: The WebSocket connection
+        close_code: Close code to use if origin is invalid
+        close_reason: Close reason message
+
+    Returns:
+        True if connection was accepted, False if rejected
+    """
+    if not validate_websocket_origin(websocket):
+        await websocket.close(code=close_code, reason=close_reason)
+        return False
+
+    await websocket.accept()
+    return True
 
 websocket_router = APIRouter()
 
@@ -597,6 +710,10 @@ async def websocket_events(
     - {"type": "connected", "connection_id": "...", "subscriptions": [...]}
     - {"type": "pong"}
     """
+    # SECURITY FIX (Audit 6): Validate Origin header to prevent CSWSH attacks
+    if not validate_websocket_origin(websocket):
+        await websocket.close(code=4003, reason="Origin not allowed")
+        return
 
     # SECURITY FIX (Audit 3): Require authentication for all WebSocket endpoints
     user_id = await authenticate_websocket(websocket, token)
@@ -708,6 +825,10 @@ async def websocket_dashboard(
     - {"type": "metrics_update", "metrics": {...}, "timestamp": "..."}
     - {"type": "connected", "connection_id": "..."}
     """
+    # SECURITY FIX (Audit 6): Validate Origin header to prevent CSWSH attacks
+    if not validate_websocket_origin(websocket):
+        await websocket.close(code=4003, reason="Origin not allowed")
+        return
 
     # SECURITY FIX (Audit 3): Require authentication for all WebSocket endpoints
     user_id = await authenticate_websocket(websocket, token)
@@ -787,6 +908,10 @@ async def websocket_chat(
     - {"type": "typing", "data": {"user_id": "...", "display_name": "..."}}
     - {"type": "participants", "data": {"users": [...]}}
     """
+    # SECURITY FIX (Audit 6): Validate Origin header to prevent CSWSH attacks
+    if not validate_websocket_origin(websocket):
+        await websocket.close(code=4003, reason="Origin not allowed")
+        return
 
     # Authenticate - required for chat
     user_id = await authenticate_websocket(websocket, token)

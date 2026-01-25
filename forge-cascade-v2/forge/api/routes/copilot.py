@@ -13,15 +13,15 @@ Endpoints:
 - WebSocket /copilot/ws - Real-time chat interface
 """
 
+import asyncio
 import logging
-from typing import Annotated, Any
+from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from forge.api.dependencies import ActiveUserDep
-from forge.models.user import UserInDB
 from forge.security.tokens import TokenBlacklist, verify_token
 
 logger = logging.getLogger(__name__)
@@ -85,14 +85,38 @@ class StatusResponse(BaseModel):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 # Global agent instance (initialized on startup)
+# SECURITY FIX (Audit 6): Use asyncio.Lock for thread-safe initialization
 _agent = None
+_agent_lock: asyncio.Lock | None = None
+
+
+def _get_agent_lock() -> asyncio.Lock:
+    """Get or create the agent lock (lazy initialization for event loop safety)."""
+    global _agent_lock
+    if _agent_lock is None:
+        _agent_lock = asyncio.Lock()
+    return _agent_lock
 
 
 async def get_agent():
-    """Get or create the Copilot agent."""
+    """
+    Get or create the Copilot agent.
+
+    SECURITY FIX (Audit 6): Uses asyncio.Lock to prevent race conditions
+    during concurrent initialization requests.
+    """
     global _agent
 
-    if _agent is None:
+    # Fast path: if already initialized, return immediately
+    if _agent is not None:
+        return _agent
+
+    # Slow path: acquire lock and check again (double-check locking pattern)
+    async with _get_agent_lock():
+        # Check again after acquiring lock (another coroutine may have initialized)
+        if _agent is not None:
+            return _agent
+
         try:
             from forge.copilot import CopilotForgeAgent
 
@@ -118,9 +142,10 @@ async def get_agent():
 async def shutdown_agent():
     """Shutdown the Copilot agent on app shutdown."""
     global _agent
-    if _agent:
-        await _agent.stop()
-        _agent = None
+    async with _get_agent_lock():
+        if _agent:
+            await _agent.stop()
+            _agent = None
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -292,6 +317,12 @@ async def websocket_chat(websocket: WebSocket):
 
     Requires authentication via token query parameter or cookie.
     """
+    # SECURITY FIX (Audit 6): Validate Origin header to prevent CSWSH attacks
+    from forge.api.websocket.handlers import validate_websocket_origin
+    if not validate_websocket_origin(websocket):
+        await websocket.close(code=4003, reason="Origin not allowed")
+        return
+
     # SECURITY FIX (Audit 6 - M1): Fix WebSocket authentication
     # The previous code incorrectly called get_current_active_user(token) with a string,
     # but that function expects a User object. This fix properly validates tokens.
