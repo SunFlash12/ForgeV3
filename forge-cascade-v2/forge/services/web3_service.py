@@ -66,7 +66,7 @@ def _validate_rpc_url(rpc_url: str) -> None:
         # Resolve hostname and check for private IPs
         try:
             resolved_ips = socket.getaddrinfo(hostname, parsed.port or 443, socket.AF_UNSPEC)
-            for family, _, _, _, addr in resolved_ips:
+            for _family, _, _, _, addr in resolved_ips:
                 ip_str = addr[0]
                 ip = ipaddress.ip_address(ip_str)
                 if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:

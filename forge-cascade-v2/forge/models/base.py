@@ -299,7 +299,7 @@ def validate_dict_security(
         raise ValueError(f"Forbidden keys detected: {', '.join(forbidden_found)}")
 
     # Check for forbidden keys in nested dicts and validate recursively
-    for key, val in value.items():
+    for _key, val in value.items():
         if isinstance(val, dict):
             validate_dict_security(
                 val,

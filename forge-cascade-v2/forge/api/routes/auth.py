@@ -17,8 +17,11 @@ Security Features:
 
 from __future__ import annotations
 
+import logging
 import secrets
 from typing import Any, Literal
+
+logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Cookie, HTTPException, Request, Response, status
 from pydantic import BaseModel, EmailStr, Field, field_validator
