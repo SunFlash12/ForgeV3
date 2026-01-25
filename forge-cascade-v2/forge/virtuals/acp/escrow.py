@@ -20,6 +20,7 @@ Escrow Lifecycle:
    - Timeout: Auto-release to provider after deadline
 """
 
+import asyncio
 import logging
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -233,6 +234,9 @@ class EscrowService:
         self._config = get_virtuals_config()
         self._initialized = False
         self._escrows: dict[str, EscrowRecord] = {}
+        # SECURITY FIX (Audit 5 - C2): Add lock to prevent race conditions
+        self._escrow_locks: dict[str, asyncio.Lock] = {}
+        self._global_lock = asyncio.Lock()
 
     async def initialize(self) -> None:
         """Initialize the escrow service."""
@@ -320,6 +324,17 @@ class EscrowService:
         self._escrows[escrow.id] = escrow
         return escrow
 
+    async def _get_escrow_lock(self, escrow_id: str) -> asyncio.Lock:
+        """
+        Get or create a lock for a specific escrow.
+
+        SECURITY FIX (Audit 5 - C2): Prevents race conditions on escrow operations.
+        """
+        async with self._global_lock:
+            if escrow_id not in self._escrow_locks:
+                self._escrow_locks[escrow_id] = asyncio.Lock()
+            return self._escrow_locks[escrow_id]
+
     async def _create_onchain_escrow(self, escrow: EscrowRecord) -> TransactionRecord:
         """Create escrow on blockchain."""
         import hashlib
@@ -369,38 +384,43 @@ class EscrowService:
 
         Returns:
             Updated EscrowRecord
+
+        SECURITY FIX (Audit 5 - C2): Uses per-escrow locking to prevent race conditions
         """
         if not self._initialized:
             await self.initialize()
 
-        escrow = self._escrows.get(escrow_id)
-        if not escrow:
-            raise EscrowError(f"Escrow not found: {escrow_id}")
+        # SECURITY FIX (Audit 5 - C2): Acquire lock before check-then-act
+        lock = await self._get_escrow_lock(escrow_id)
+        async with lock:
+            escrow = self._escrows.get(escrow_id)
+            if not escrow:
+                raise EscrowError(f"Escrow not found: {escrow_id}")
 
-        if escrow.status != EscrowStatus.FUNDED:
-            raise EscrowError(f"Cannot release escrow in status: {escrow.status}")
+            if escrow.status != EscrowStatus.FUNDED:
+                raise EscrowError(f"Cannot release escrow in status: {escrow.status}")
 
-        try:
-            if self._escrow_contract and escrow.escrow_id_onchain:
-                client = self._chain_manager.get_client(ChainNetwork.BASE)
-                tx_record = await client.execute_contract(
-                    contract_address=self._escrow_contract,
-                    function_name="releaseToProvider",
-                    args=[escrow.escrow_id_onchain],
-                    abi=ESCROW_ABI,
-                )
-                escrow.release_tx_hash = tx_record.tx_hash
+            try:
+                if self._escrow_contract and escrow.escrow_id_onchain:
+                    client = self._chain_manager.get_client(ChainNetwork.BASE)
+                    tx_record = await client.execute_contract(
+                        contract_address=self._escrow_contract,
+                        function_name="releaseToProvider",
+                        args=[escrow.escrow_id_onchain],
+                        abi=ESCROW_ABI,
+                    )
+                    escrow.release_tx_hash = tx_record.tx_hash
 
-            escrow.status = EscrowStatus.RELEASED
-            escrow.resolved_at = datetime.now(UTC)
-            logger.info(f"Escrow {escrow_id} released to provider")
+                escrow.status = EscrowStatus.RELEASED
+                escrow.resolved_at = datetime.now(UTC)
+                logger.info(f"Escrow {escrow_id} released to provider")
 
-        except Exception as e:
-            escrow.metadata["release_error"] = str(e)
-            logger.error(f"Failed to release escrow: {e}")
-            raise EscrowError(f"Escrow release failed: {e}") from e
+            except Exception as e:
+                escrow.metadata["release_error"] = str(e)
+                logger.error(f"Failed to release escrow: {e}")
+                raise EscrowError(f"Escrow release failed: {e}") from e
 
-        return escrow
+            return escrow
 
     async def refund_escrow(self, escrow_id: str, reason: str = "") -> EscrowRecord:
         """
@@ -412,39 +432,44 @@ class EscrowService:
 
         Returns:
             Updated EscrowRecord
+
+        SECURITY FIX (Audit 5 - C2): Uses per-escrow locking to prevent race conditions
         """
         if not self._initialized:
             await self.initialize()
 
-        escrow = self._escrows.get(escrow_id)
-        if not escrow:
-            raise EscrowError(f"Escrow not found: {escrow_id}")
+        # SECURITY FIX (Audit 5 - C2): Acquire lock before check-then-act
+        lock = await self._get_escrow_lock(escrow_id)
+        async with lock:
+            escrow = self._escrows.get(escrow_id)
+            if not escrow:
+                raise EscrowError(f"Escrow not found: {escrow_id}")
 
-        if escrow.status not in [EscrowStatus.FUNDED, EscrowStatus.DISPUTED]:
-            raise EscrowError(f"Cannot refund escrow in status: {escrow.status}")
+            if escrow.status not in [EscrowStatus.FUNDED, EscrowStatus.DISPUTED]:
+                raise EscrowError(f"Cannot refund escrow in status: {escrow.status}")
 
-        try:
-            if self._escrow_contract and escrow.escrow_id_onchain:
-                client = self._chain_manager.get_client(ChainNetwork.BASE)
-                tx_record = await client.execute_contract(
-                    contract_address=self._escrow_contract,
-                    function_name="refundToBuyer",
-                    args=[escrow.escrow_id_onchain],
-                    abi=ESCROW_ABI,
-                )
-                escrow.release_tx_hash = tx_record.tx_hash
+            try:
+                if self._escrow_contract and escrow.escrow_id_onchain:
+                    client = self._chain_manager.get_client(ChainNetwork.BASE)
+                    tx_record = await client.execute_contract(
+                        contract_address=self._escrow_contract,
+                        function_name="refundToBuyer",
+                        args=[escrow.escrow_id_onchain],
+                        abi=ESCROW_ABI,
+                    )
+                    escrow.release_tx_hash = tx_record.tx_hash
 
-            escrow.status = EscrowStatus.REFUNDED
-            escrow.resolved_at = datetime.now(UTC)
-            escrow.metadata["refund_reason"] = reason
-            logger.info(f"Escrow {escrow_id} refunded to buyer: {reason}")
+                escrow.status = EscrowStatus.REFUNDED
+                escrow.resolved_at = datetime.now(UTC)
+                escrow.metadata["refund_reason"] = reason
+                logger.info(f"Escrow {escrow_id} refunded to buyer: {reason}")
 
-        except Exception as e:
-            escrow.metadata["refund_error"] = str(e)
-            logger.error(f"Failed to refund escrow: {e}")
-            raise EscrowError(f"Escrow refund failed: {e}") from e
+            except Exception as e:
+                escrow.metadata["refund_error"] = str(e)
+                logger.error(f"Failed to refund escrow: {e}")
+                raise EscrowError(f"Escrow refund failed: {e}") from e
 
-        return escrow
+            return escrow
 
     async def initiate_dispute(self, escrow_id: str, reason: str) -> EscrowRecord:
         """
@@ -456,20 +481,25 @@ class EscrowService:
 
         Returns:
             Updated EscrowRecord
+
+        SECURITY FIX (Audit 5 - C2): Uses per-escrow locking to prevent race conditions
         """
-        escrow = self._escrows.get(escrow_id)
-        if not escrow:
-            raise EscrowError(f"Escrow not found: {escrow_id}")
+        # SECURITY FIX (Audit 5 - C2): Acquire lock before check-then-act
+        lock = await self._get_escrow_lock(escrow_id)
+        async with lock:
+            escrow = self._escrows.get(escrow_id)
+            if not escrow:
+                raise EscrowError(f"Escrow not found: {escrow_id}")
 
-        if escrow.status != EscrowStatus.FUNDED:
-            raise EscrowError(f"Cannot dispute escrow in status: {escrow.status}")
+            if escrow.status != EscrowStatus.FUNDED:
+                raise EscrowError(f"Cannot dispute escrow in status: {escrow.status}")
 
-        escrow.status = EscrowStatus.DISPUTED
-        escrow.metadata["dispute_reason"] = reason
-        escrow.metadata["disputed_at"] = datetime.now(UTC).isoformat()
+            escrow.status = EscrowStatus.DISPUTED
+            escrow.metadata["dispute_reason"] = reason
+            escrow.metadata["disputed_at"] = datetime.now(UTC).isoformat()
 
-        logger.info(f"Dispute initiated for escrow {escrow_id}: {reason}")
-        return escrow
+            logger.info(f"Dispute initiated for escrow {escrow_id}: {reason}")
+            return escrow
 
     async def resolve_dispute(
         self,
@@ -487,48 +517,54 @@ class EscrowService:
 
         Returns:
             Updated EscrowRecord
+
+        SECURITY FIX (Audit 5 - C2): Uses per-escrow locking to prevent race conditions
         """
-        escrow = self._escrows.get(escrow_id)
-        if not escrow:
-            raise EscrowError(f"Escrow not found: {escrow_id}")
-
-        if escrow.status != EscrowStatus.DISPUTED:
-            raise EscrowError("Cannot resolve non-disputed escrow")
-
+        # Validate input before acquiring lock
         if not 0 <= buyer_share_pct <= 100:
             raise ValueError("buyer_share_pct must be between 0 and 100")
 
-        try:
-            if self._escrow_contract and escrow.escrow_id_onchain:
-                client = self._chain_manager.get_client(ChainNetwork.BASE)
-                # Convert percentage to basis points
-                buyer_share_bps = buyer_share_pct * 100
-                tx_record = await client.execute_contract(
-                    contract_address=self._escrow_contract,
-                    function_name="resolveDispute",
-                    args=[escrow.escrow_id_onchain, buyer_share_bps],
-                    abi=ESCROW_ABI,
+        # SECURITY FIX (Audit 5 - C2): Acquire lock before check-then-act
+        lock = await self._get_escrow_lock(escrow_id)
+        async with lock:
+            escrow = self._escrows.get(escrow_id)
+            if not escrow:
+                raise EscrowError(f"Escrow not found: {escrow_id}")
+
+            if escrow.status != EscrowStatus.DISPUTED:
+                raise EscrowError("Cannot resolve non-disputed escrow")
+
+            try:
+                if self._escrow_contract and escrow.escrow_id_onchain:
+                    client = self._chain_manager.get_client(ChainNetwork.BASE)
+                    # Convert percentage to basis points
+                    buyer_share_bps = buyer_share_pct * 100
+                    tx_record = await client.execute_contract(
+                        contract_address=self._escrow_contract,
+                        function_name="resolveDispute",
+                        args=[escrow.escrow_id_onchain, buyer_share_bps],
+                        abi=ESCROW_ABI,
+                    )
+                    escrow.release_tx_hash = tx_record.tx_hash
+
+                escrow.status = EscrowStatus.RELEASED
+                escrow.resolved_at = datetime.now(UTC)
+                escrow.metadata["resolution"] = {
+                    "buyer_share_pct": buyer_share_pct,
+                    "provider_share_pct": 100 - buyer_share_pct,
+                    "notes": resolution_notes,
+                }
+                logger.info(
+                    f"Dispute resolved for escrow {escrow_id}: "
+                    f"buyer={buyer_share_pct}%, provider={100-buyer_share_pct}%"
                 )
-                escrow.release_tx_hash = tx_record.tx_hash
 
-            escrow.status = EscrowStatus.RELEASED
-            escrow.resolved_at = datetime.now(UTC)
-            escrow.metadata["resolution"] = {
-                "buyer_share_pct": buyer_share_pct,
-                "provider_share_pct": 100 - buyer_share_pct,
-                "notes": resolution_notes,
-            }
-            logger.info(
-                f"Dispute resolved for escrow {escrow_id}: "
-                f"buyer={buyer_share_pct}%, provider={100-buyer_share_pct}%"
-            )
+            except Exception as e:
+                escrow.metadata["resolution_error"] = str(e)
+                logger.error(f"Failed to resolve dispute: {e}")
+                raise EscrowError(f"Dispute resolution failed: {e}") from e
 
-        except Exception as e:
-            escrow.metadata["resolution_error"] = str(e)
-            logger.error(f"Failed to resolve dispute: {e}")
-            raise EscrowError(f"Dispute resolution failed: {e}") from e
-
-        return escrow
+            return escrow
 
     def get_escrow(self, escrow_id: str) -> EscrowRecord | None:
         """Get escrow by ID."""

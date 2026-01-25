@@ -5,13 +5,83 @@ Provides verification of $VIRTUAL token transactions on Base L2
 for the Forge Marketplace.
 """
 
+import ipaddress
 import logging
+import socket
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 
 logger = logging.getLogger(__name__)
+
+# SECURITY: Allowed RPC URL patterns for SSRF protection
+# Only allow known blockchain RPC endpoints
+ALLOWED_RPC_HOSTS = frozenset({
+    "mainnet.base.org",
+    "base-mainnet.g.alchemy.com",
+    "base.llamarpc.com",
+    "base-mainnet.infura.io",
+    "rpc.ankr.com",
+    "base.blockpi.network",
+    "base.drpc.org",
+    "base.meowrpc.com",
+    "base.publicnode.com",
+    "1rpc.io",
+})
+
+
+def _validate_rpc_url(rpc_url: str) -> None:
+    """
+    Validate RPC URL to prevent SSRF attacks.
+
+    SECURITY FIX (Audit 5 - C1): Validate RPC URLs before making requests
+    to prevent SSRF attacks against internal services or cloud metadata.
+
+    Raises:
+        ValueError: If the URL is not a valid RPC endpoint
+    """
+    try:
+        parsed = urlparse(rpc_url)
+    except Exception as e:
+        raise ValueError(f"Invalid RPC URL format: {e}")
+
+    # Must be HTTPS in production
+    if parsed.scheme not in ("http", "https"):
+        raise ValueError(f"Invalid RPC URL scheme: {parsed.scheme}")
+
+    hostname = parsed.hostname
+    if not hostname:
+        raise ValueError("RPC URL missing hostname")
+
+    # Check against allowlist
+    hostname_lower = hostname.lower()
+    is_allowed = any(
+        hostname_lower == allowed or hostname_lower.endswith(f".{allowed}")
+        for allowed in ALLOWED_RPC_HOSTS
+    )
+
+    if not is_allowed:
+        # Resolve hostname and check for private IPs
+        try:
+            resolved_ips = socket.getaddrinfo(hostname, parsed.port or 443, socket.AF_UNSPEC)
+            for family, _, _, _, addr in resolved_ips:
+                ip_str = addr[0]
+                ip = ipaddress.ip_address(ip_str)
+                if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+                    raise ValueError(f"RPC URL resolves to private IP: {ip_str}")
+                # Block cloud metadata endpoints
+                if ip_str.startswith("169.254."):
+                    raise ValueError("RPC URL resolves to cloud metadata endpoint")
+        except socket.gaierror as e:
+            raise ValueError(f"Cannot resolve RPC hostname: {e}")
+
+        logger.warning(
+            "rpc_url_not_in_allowlist",
+            extra={"hostname": hostname, "url": rpc_url},
+        )
+        # Allow but warn - could add strict mode that raises instead
 
 
 @dataclass
@@ -60,6 +130,9 @@ async def verify_purchase_transaction(
     Returns:
         TransactionVerification with validation result
     """
+    # SECURITY FIX (Audit 5 - C1): Validate RPC URL before making requests
+    _validate_rpc_url(rpc_url)
+
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             # Get transaction receipt
@@ -185,6 +258,9 @@ async def get_transaction_info(
     Returns:
         TransactionInfo with current status and details
     """
+    # SECURITY FIX (Audit 5 - C1): Validate RPC URL before making requests
+    _validate_rpc_url(rpc_url)
+
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             # Get transaction receipt
@@ -290,6 +366,9 @@ async def get_token_balance(
     Returns:
         Token balance as string (in wei)
     """
+    # SECURITY FIX (Audit 5 - C1): Validate RPC URL before making requests
+    _validate_rpc_url(rpc_url)
+
     # ERC20 balanceOf(address) function signature
     balance_of_selector = "0x70a08231"
     # Pad wallet address to 32 bytes
