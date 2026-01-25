@@ -28,7 +28,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSock
 from forge.api.dependencies import get_current_user as get_current_user_ws
 from forge.config import get_settings
 from forge.models.user import User
-from forge.security.tokens import TokenBlacklist, verify_token, decode_token, TokenExpiredError, TokenInvalidError
+from forge.security.tokens import (
+    TokenBlacklist,
+    TokenExpiredError,
+    TokenInvalidError,
+    decode_token,
+    verify_token,
+)
 
 logger = structlog.get_logger(__name__)
 settings = get_settings()

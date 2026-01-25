@@ -38,15 +38,6 @@ from forge.models.overlay import (
     OverlayManifest,
     OverlayMetrics,
 )
-from forge.models.user import (
-    Token,
-    TokenPayload,
-    User,
-    UserCreate,
-    UserInDB,
-    UserPublic,
-    UserUpdate,
-)
 from forge.models.session import (
     Session,
     SessionBindingMode,
@@ -59,6 +50,15 @@ from forge.models.session import (
     SessionRevokeRequest,
     SessionStatus,
     SessionUpdate,
+)
+from forge.models.user import (
+    Token,
+    TokenPayload,
+    User,
+    UserCreate,
+    UserInDB,
+    UserPublic,
+    UserUpdate,
 )
 
 __all__ = [

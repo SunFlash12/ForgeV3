@@ -184,20 +184,6 @@ class SessionBindingService:
         Returns:
             Tuple of (is_blocked, block_reason)
         """
-        warning = SessionBindingWarning(
-            session_id=session.id,
-            user_id=session.user_id,
-            warning_type="ip_change",
-            old_value=old_ip,
-            new_value=new_ip,
-            binding_mode=self._ip_binding_mode,
-            request_count=session.request_count,
-            additional_info={
-                "ip_change_count": session.ip_change_count,
-                "initial_ip": session.initial_ip,
-            },
-        )
-
         # Handle based on binding mode
         if self._ip_binding_mode == SessionBindingMode.DISABLED:
             return False, None

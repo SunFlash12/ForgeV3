@@ -366,7 +366,7 @@ class AuthService:
         user_repo: UserRepository,
         audit_repo: AuditRepository,
         ip_rate_limiter: IPRateLimiter | None = None,
-        session_service: "SessionBindingService | None" = None,
+        session_service: SessionBindingService | None = None,
     ):
         self.user_repo = user_repo
         self.audit_repo = audit_repo
