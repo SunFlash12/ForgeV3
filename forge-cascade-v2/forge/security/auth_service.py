@@ -59,7 +59,6 @@ from .tokens import (
     decode_token,
     get_token_claims,
     verify_access_token,
-    verify_refresh_token,
     verify_refresh_token_async,
 )
 
@@ -99,6 +98,20 @@ class RegistrationError(AuthenticationError):
 class IPRateLimitExceededError(AuthenticationError):
     """Too many login attempts from this IP address."""
     pass
+
+
+class MFARequiredError(AuthenticationError):
+    """
+    MFA verification required to complete login.
+
+    SECURITY FIX (Audit 6 - Session 3): Raised when a user with MFA enabled
+    logs in successfully with password. Caller should return an MFA pending
+    token and prompt for TOTP/backup code verification.
+    """
+    def __init__(self, user_id: str, username: str):
+        self.user_id = user_id
+        self.username = username
+        super().__init__("MFA verification required")
 
 
 class IPRateLimiter:
@@ -608,6 +621,25 @@ class AuthService:
         if ip_address:
             await self._ip_rate_limiter.record_attempt_async(ip_address, success=True)
 
+        # SECURITY FIX (Audit 6 - Session 3): Check if MFA is enabled
+        # If MFA is enabled, raise MFARequiredError to signal caller to
+        # return an MFA pending token instead of full authentication tokens.
+        # Lazy import to avoid circular dependency
+        from .mfa import get_mfa_service
+        mfa_service = get_mfa_service()
+        if await mfa_service.is_enabled(user.id):
+            # Log that password was correct but MFA is required
+            await self.audit_repo.log_user_action(
+                actor_id=user.id,
+                target_user_id=user.id,
+                action="login_mfa_required",
+                details={"method": "password", "mfa_pending": True},
+                ip_address=ip_address,
+                user_agent=user_agent
+            )
+            # Raise MFA required - caller handles creating MFA pending token
+            raise MFARequiredError(user_id=user.id, username=user.username)
+
         # SECURITY FIX (Audit 6): Get token version for token claims
         token_version = await self.user_repo.get_token_version(user.id)
 
@@ -651,6 +683,134 @@ class AuthService:
             target_user_id=user.id,
             action="login",
             details={"method": "password"},
+            ip_address=ip_address,
+            user_agent=user_agent
+        )
+
+        return user, token
+
+    async def verify_mfa_login(
+        self,
+        user_id: str,
+        code: str,
+        ip_address: str | None = None,
+        user_agent: str | None = None
+    ) -> tuple[User, Token]:
+        """
+        Complete MFA login verification.
+
+        SECURITY FIX (Audit 6 - Session 3): Called after user has provided
+        a valid MFA pending token. Verifies the TOTP code or backup code
+        and returns full authentication tokens.
+
+        Args:
+            user_id: User ID from the MFA pending token
+            code: TOTP code (6 digits) or backup code (XXXX-XXXX format)
+            ip_address: Client IP for audit logging
+            user_agent: Client user agent
+
+        Returns:
+            Tuple of (User, Token) with full authentication tokens
+
+        Raises:
+            InvalidCredentialsError: If MFA code is invalid
+            AuthenticationError: If user not found or not active
+        """
+        # Get user
+        user = await self.user_repo.get_by_id(user_id)
+
+        if not user:
+            await self.audit_repo.log_user_action(
+                actor_id=user_id,
+                target_user_id=user_id,
+                action="login_mfa_failed",
+                details={"reason": "user_not_found"},
+                ip_address=ip_address,
+                user_agent=user_agent
+            )
+            raise AuthenticationError("User not found")
+
+        if not user.is_active:
+            await self.audit_repo.log_user_action(
+                actor_id=user_id,
+                target_user_id=user_id,
+                action="login_mfa_failed",
+                details={"reason": "account_deactivated"},
+                ip_address=ip_address,
+                user_agent=user_agent
+            )
+            raise AccountDeactivatedError("Account has been deactivated")
+
+        # Verify MFA code using MFA service
+        # Lazy import to avoid circular dependency
+        from .mfa import get_mfa_service
+        mfa_service = get_mfa_service()
+
+        # Try TOTP verification first
+        totp_valid = await mfa_service.verify_totp(user_id, code)
+
+        if not totp_valid:
+            # Try backup code if TOTP fails
+            backup_valid = await mfa_service.use_backup_code(user_id, code)
+
+            if not backup_valid:
+                # Both failed - log and reject
+                await self.audit_repo.log_user_action(
+                    actor_id=user_id,
+                    target_user_id=user_id,
+                    action="login_mfa_failed",
+                    details={"reason": "invalid_mfa_code"},
+                    ip_address=ip_address,
+                    user_agent=user_agent
+                )
+                raise InvalidCredentialsError("Invalid MFA code")
+
+            # Log backup code usage for audit
+            logger.info(
+                "mfa_backup_code_used_for_login",
+                user_id=user_id,
+            )
+
+        # MFA verification successful - create full tokens
+        token_version = await self.user_repo.get_token_version(user.id)
+
+        role_value = user.role.value if hasattr(user.role, 'value') else user.role
+        token = create_token_pair(
+            user_id=user.id,
+            username=user.username,
+            role=role_value,
+            trust_flame=user.trust_flame,
+            token_version=token_version
+        )
+
+        # Store refresh token
+        await self.user_repo.update_refresh_token(user.id, token.refresh_token)
+
+        # Create session for IP/User-Agent tracking
+        if self._session_service:
+            try:
+                access_payload = decode_token(token.access_token, verify_exp=False)
+                await self._session_service.create_session(
+                    user_id=user.id,
+                    token_jti=access_payload.jti,
+                    token_type="access",
+                    ip_address=ip_address or "unknown",
+                    user_agent=user_agent,
+                    expires_at=datetime.fromtimestamp(access_payload.exp, tz=UTC),
+                )
+            except Exception as e:
+                logger.warning(
+                    "session_creation_failed",
+                    user_id=user.id,
+                    error=str(e)[:100],
+                )
+
+        # Log successful MFA login
+        await self.audit_repo.log_user_action(
+            actor_id=user.id,
+            target_user_id=user.id,
+            action="login",
+            details={"method": "password_mfa"},
             ip_address=ip_address,
             user_agent=user_agent
         )

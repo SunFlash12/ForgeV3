@@ -185,6 +185,12 @@ class Settings(BaseSettings):
         description="Maximum number of IPs to track per session for forensics"
     )
 
+    # SECURITY FIX (Audit 6 - Session 3): MFA login flow settings
+    mfa_pending_token_expire_seconds: int = Field(
+        default=300, ge=60, le=600,
+        description="MFA pending token expiry in seconds (5 minutes default)"
+    )
+
     @field_validator("jwt_secret_key")
     @classmethod
     def validate_jwt_secret(cls, v: str) -> str:

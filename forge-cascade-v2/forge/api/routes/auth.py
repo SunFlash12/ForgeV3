@@ -356,7 +356,26 @@ class LoginResponse(BaseModel):
     user: UserResponse
 
 
-@router.post("/login", response_model=LoginResponse)
+class LoginMFARequiredResponse(BaseModel):
+    """
+    Response when MFA verification is required to complete login.
+
+    SECURITY FIX (Audit 6 - Session 3): Two-step login flow for MFA users.
+    Password was verified, but user must now provide TOTP/backup code.
+    """
+    mfa_required: Literal[True] = True
+    mfa_token: str  # Temporary token for MFA verification (5 min expiry)
+    expires_in: int  # Token expiry in seconds
+    message: str = "MFA verification required"
+
+
+class MFALoginVerifyRequest(BaseModel):
+    """Request to complete MFA login verification."""
+    mfa_token: str = Field(..., max_length=2048, description="MFA pending token from login response")
+    code: str = Field(..., min_length=6, max_length=12, description="TOTP code (6 digits) or backup code (XXXX-XXXX)")
+
+
+@router.post("/login", response_model=LoginResponse | LoginMFARequiredResponse)
 async def login(
     request: LoginRequest,
     response: Response,
@@ -365,14 +384,21 @@ async def login(
     settings: SettingsDep,
     correlation_id: CorrelationIdDep,
     client_info: ClientInfoDep,
-) -> LoginResponse:
+) -> LoginResponse | LoginMFARequiredResponse:
     """
     Authenticate and receive JWT tokens.
 
     Tokens are set as httpOnly cookies for security.
     Returns a CSRF token that must be included in X-CSRF-Token header
     for all state-changing requests (POST, PUT, PATCH, DELETE).
+
+    SECURITY FIX (Audit 6 - Session 3): If MFA is enabled for the user,
+    returns LoginMFARequiredResponse with an mfa_token instead of full
+    authentication. User must then call /auth/mfa/verify with the code.
     """
+    from forge.security.auth_service import MFARequiredError
+    from forge.security.tokens import create_mfa_pending_token
+
     try:
         user, tokens = await auth_service.login(
             username_or_email=request.username,
@@ -414,12 +440,138 @@ async def login(
             user=UserResponse.from_user(user),
         )
 
+    except MFARequiredError as e:
+        # SECURITY FIX (Audit 6 - Session 3): MFA enabled, return pending token
+        # Password was correct but user needs to verify with TOTP/backup code
+        mfa_token = create_mfa_pending_token(
+            user_id=e.user_id,
+            username=e.username,
+            ip_address=client_info.ip_address,
+        )
+
+        return LoginMFARequiredResponse(
+            mfa_required=True,
+            mfa_token=mfa_token,
+            expires_in=settings.mfa_pending_token_expire_seconds,
+            message="MFA verification required",
+        )
+
     except Exception:
         # Resilience: Record failed login
         record_login_attempt(success=False, reason="invalid_credentials")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+
+@router.post("/mfa/verify", response_model=LoginResponse)
+async def verify_mfa_login(
+    request: MFALoginVerifyRequest,
+    response: Response,
+    auth_service: AuthServiceDep,
+    audit_repo: AuditRepoDep,
+    settings: SettingsDep,
+    correlation_id: CorrelationIdDep,
+    client_info: ClientInfoDep,
+) -> LoginResponse:
+    """
+    Complete MFA login verification.
+
+    SECURITY FIX (Audit 6 - Session 3): Second step of two-step login flow.
+    Exchanges an MFA pending token + TOTP/backup code for full authentication.
+
+    Args:
+        mfa_token: Temporary token from /login response (5 min expiry)
+        code: TOTP code (6 digits) or backup code (XXXX-XXXX format)
+
+    Returns:
+        LoginResponse with full authentication (tokens in cookies)
+    """
+    from forge.security.auth_service import (
+        AccountDeactivatedError,
+        AuthenticationError,
+        InvalidCredentialsError,
+    )
+    from forge.security.tokens import TokenInvalidError, verify_mfa_pending_token
+
+    try:
+        # Step 1: Verify the MFA pending token
+        payload = verify_mfa_pending_token(
+            request.mfa_token,
+            ip_address=client_info.ip_address,
+        )
+
+        # Step 2: Complete MFA verification and get full tokens
+        user, tokens = await auth_service.verify_mfa_login(
+            user_id=payload.sub,
+            code=request.code,
+            ip_address=client_info.ip_address,
+            user_agent=client_info.user_agent,
+        )
+
+        # Resilience: Record successful MFA login
+        record_login_attempt(success=True)
+
+        # Generate CSRF token
+        csrf_token = generate_csrf_token()
+        expires_in = settings.jwt_access_token_expire_minutes * 60
+
+        # Set secure httpOnly cookies
+        set_auth_cookies(
+            response=response,
+            access_token=tokens.access_token,
+            refresh_token=tokens.refresh_token,
+            access_expires_seconds=expires_in,
+            refresh_expires_days=settings.jwt_refresh_token_expire_days,
+            csrf_token=csrf_token,
+        )
+
+        return LoginResponse(
+            csrf_token=csrf_token,
+            expires_in=expires_in,
+            user=UserResponse.from_user(user),
+        )
+
+    except TokenInvalidError as e:
+        # MFA pending token is invalid or expired
+        logger.warning(
+            "mfa_verify_token_invalid",
+            error=str(e),
+            ip=client_info.ip_address,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="MFA token is invalid or expired. Please login again.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    except InvalidCredentialsError:
+        # Invalid MFA code
+        record_login_attempt(success=False, reason="invalid_mfa_code")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid MFA code",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    except AccountDeactivatedError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Account has been deactivated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    except AuthenticationError as e:
+        logger.warning(
+            "mfa_verify_auth_error",
+            error=str(e),
+            ip=client_info.ip_address,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication failed",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -905,7 +1057,6 @@ async def regenerate_backup_codes(
 
 from forge.security.google_oauth import (
     GoogleOAuthError,
-    GoogleUserInfo,
     get_google_oauth_service,
 )
 

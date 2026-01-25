@@ -932,6 +932,114 @@ def create_refresh_token(
     )
 
 
+def create_mfa_pending_token(
+    user_id: str,
+    username: str,
+    ip_address: str | None = None,
+) -> str:
+    """
+    Create a short-lived token for MFA verification step.
+
+    SECURITY FIX (Audit 6 - Session 3): This token is used during two-step login
+    when MFA is enabled. It:
+    - Has a short expiry (5 minutes default)
+    - Contains 'mfa_pending' type to prevent use as access token
+    - Can only be exchanged for full tokens via /auth/mfa/verify
+
+    Args:
+        user_id: User's unique identifier
+        username: User's username
+        ip_address: Client IP (stored as hash for audit logging)
+
+    Returns:
+        Encoded JWT MFA pending token
+    """
+    now = datetime.now(UTC)
+    expire = now + timedelta(seconds=settings.mfa_pending_token_expire_seconds)
+    not_before = now - timedelta(seconds=settings.jwt_clock_skew_seconds)
+
+    payload = {
+        "sub": user_id,
+        "username": username,
+        "exp": expire,
+        "iat": now,
+        "nbf": not_before,
+        "iss": settings.jwt_issuer,
+        "aud": settings.jwt_audience,
+        "jti": str(uuid4()),
+        "type": "mfa_pending",  # Distinct type - cannot be used as access token
+    }
+
+    # Store IP hash for audit logging (not for strict validation)
+    if ip_address:
+        payload["ip_hash"] = hashlib.sha256(ip_address.encode()).hexdigest()[:16]
+
+    key_id, secret = KeyRotationManager.get_current_key()
+    return pyjwt.encode(
+        payload,
+        secret,
+        algorithm=settings.jwt_algorithm,
+        headers={"kid": key_id}
+    )
+
+
+def verify_mfa_pending_token(
+    token: str,
+    ip_address: str | None = None,
+) -> TokenPayload:
+    """
+    Verify an MFA pending token.
+
+    SECURITY FIX (Audit 6 - Session 3): Validates that token is an MFA pending
+    token and not an access/refresh token. This prevents token type confusion.
+
+    Args:
+        token: JWT MFA pending token
+        ip_address: Client IP to log if different from token's bound IP
+
+    Returns:
+        TokenPayload if valid
+
+    Raises:
+        TokenExpiredError: If token has expired
+        TokenInvalidError: If token is invalid or not an MFA pending token
+    """
+    # Use standard decode with verification
+    payload = decode_token(token, verify_exp=True)
+
+    # Verify token type
+    if payload.type != "mfa_pending":
+        logger.warning(
+            "mfa_pending_token_type_mismatch",
+            expected="mfa_pending",
+            actual=payload.type,
+            user_id=payload.sub,
+        )
+        raise TokenInvalidError("Not an MFA pending token")
+
+    # Log IP mismatch for audit (but don't reject - IP can change legitimately)
+    if ip_address:
+        try:
+            # Decode without validation to get ip_hash claim
+            raw_payload = pyjwt.decode(
+                token,
+                options={"verify_signature": False}
+            )
+            token_ip_hash = raw_payload.get("ip_hash")
+            if token_ip_hash:
+                current_ip_hash = hashlib.sha256(ip_address.encode()).hexdigest()[:16]
+                if token_ip_hash != current_ip_hash:
+                    logger.info(
+                        "mfa_pending_token_ip_changed",
+                        user_id=payload.sub,
+                        note="IP changed during MFA verification (logged for audit)",
+                    )
+        except Exception:
+            pass  # Don't fail on IP logging errors
+
+    return payload
+
+
 def create_token_pair(
     user_id: str,
     username: str,
