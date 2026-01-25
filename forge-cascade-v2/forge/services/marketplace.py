@@ -12,7 +12,7 @@ import logging
 import math
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, TypedDict
 
 from forge.models.marketplace import (
     CapsuleListing,
@@ -31,7 +31,19 @@ from forge.models.marketplace import (
 )
 
 if TYPE_CHECKING:
+    from forge.database.client import Neo4jClient
+    from forge.repositories.capsule_repository import CapsuleRepository
     from forge.repositories.marketplace_repository import MarketplaceRepository
+
+
+class ListingUpdateFields(TypedDict, total=False):
+    """Fields that can be updated on a listing."""
+    price: Decimal
+    description: str | None
+    tags: list[str]
+    preview_content: str | None
+    license_terms: str | None
+    visibility: str
 
 logger = logging.getLogger(__name__)
 
@@ -52,10 +64,10 @@ class MarketplaceService:
 
     def __init__(
         self,
-        capsule_repository=None,
-        neo4j_client=None,
+        capsule_repository: "CapsuleRepository | None" = None,
+        neo4j_client: "Neo4jClient | None" = None,
         marketplace_repository: "MarketplaceRepository | None" = None,
-    ):
+    ) -> None:
         self.capsule_repo = capsule_repository
         self.neo4j = neo4j_client
         self._repository = marketplace_repository
@@ -173,7 +185,7 @@ class MarketplaceService:
         self,
         listing_id: str,
         seller_id: str,
-        updates: dict[str, Any],
+        updates: ListingUpdateFields,
     ) -> CapsuleListing:
         """Update a listing."""
         listing = self._listings.get(listing_id)
@@ -1004,8 +1016,8 @@ _marketplace_initialized: bool = False
 
 
 async def get_marketplace_service(
-    neo4j_client=None,
-    capsule_repo=None,
+    neo4j_client: "Neo4jClient | None" = None,
+    capsule_repo: "CapsuleRepository | None" = None,
 ) -> MarketplaceService:
     """
     Get the global marketplace service instance.

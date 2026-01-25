@@ -8,13 +8,17 @@ and Neo4j query patterns.
 import re
 from abc import ABC, abstractmethod
 from datetime import UTC, datetime
-from typing import Any, Generic, TypeVar
+from typing import Generic, TypeVar
 from uuid import uuid4
 
 import structlog
 from pydantic import BaseModel
 
 from forge.database.client import Neo4jClient
+
+# Type for values that can be stored in Neo4j
+Neo4jValue = str | int | float | bool | list[str] | None
+Neo4jRecord = dict[str, Neo4jValue | dict[str, "Neo4jValue"]]
 
 logger = structlog.get_logger(__name__)
 
@@ -90,7 +94,7 @@ class BaseRepository(ABC, Generic[T, CreateT, UpdateT]):
         """Get current UTC timestamp (timezone-aware)."""
         return datetime.now(UTC)
 
-    def _to_model(self, record: dict[str, Any]) -> T | None:
+    def _to_model(self, record: Neo4jRecord) -> T | None:
         """
         Convert a Neo4j record to a Pydantic model.
 
@@ -112,7 +116,7 @@ class BaseRepository(ABC, Generic[T, CreateT, UpdateT]):
             )
             return None
 
-    def _to_models(self, records: list[dict[str, Any]]) -> list[T]:
+    def _to_models(self, records: list[Neo4jRecord]) -> list[T]:
         """
         Convert multiple Neo4j records to Pydantic models.
 
@@ -252,7 +256,7 @@ class BaseRepository(ABC, Generic[T, CreateT, UpdateT]):
         self,
         entity_id: str,
         field: str,
-        value: Any,
+        value: Neo4jValue,
     ) -> T | None:
         """
         Update a single field on an entity.
@@ -290,7 +294,7 @@ class BaseRepository(ABC, Generic[T, CreateT, UpdateT]):
     async def find_by_field(
         self,
         field: str,
-        value: Any,
+        value: Neo4jValue,
         limit: int = 100,
     ) -> list[T]:
         """
@@ -324,7 +328,7 @@ class BaseRepository(ABC, Generic[T, CreateT, UpdateT]):
         return self._to_models([r["entity"] for r in results if r.get("entity")])
 
     @abstractmethod
-    async def create(self, data: CreateT, **kwargs: Any) -> T:
+    async def create(self, data: CreateT, **kwargs: object) -> T:
         """
         Create a new entity.
 

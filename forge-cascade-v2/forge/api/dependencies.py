@@ -13,9 +13,13 @@ Provides:
 from __future__ import annotations
 
 import ipaddress
-from typing import Annotated
+from collections.abc import Callable, Coroutine
+from typing import TYPE_CHECKING, Annotated
 
 from fastapi import Depends, HTTPException, Request, status
+
+if TYPE_CHECKING:
+    from forge.api.app import ForgeApp
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from forge.config import Settings, get_settings
@@ -68,7 +72,7 @@ SettingsDep = Annotated[Settings, Depends(get_app_settings)]
 # Forge App Access
 # =============================================================================
 
-def get_forge_app(request: Request):
+def get_forge_app(request: Request) -> ForgeApp:
     """Get the ForgeApp instance from request state."""
     if not hasattr(request.app.state, 'forge'):
         raise HTTPException(
@@ -368,7 +372,7 @@ ActiveUserDep = Annotated[User, Depends(get_current_active_user)]
 # Authorization
 # =============================================================================
 
-def require_trust_level(min_level: TrustLevel):
+def require_trust_level(min_level: TrustLevel) -> Callable[[ActiveUserDep], Coroutine[object, object, User]]:
     """Dependency factory to require minimum trust level."""
     async def dependency(user: ActiveUserDep) -> User:
         authorizer = TrustAuthorizer(min_level)
@@ -381,7 +385,7 @@ def require_trust_level(min_level: TrustLevel):
     return dependency
 
 
-def require_roles(*roles: str):
+def require_roles(*roles: str) -> Callable[[ActiveUserDep], Coroutine[object, object, User]]:
     """Dependency factory to require specific roles."""
     async def dependency(user: ActiveUserDep) -> User:
         authorizer = RoleAuthorizer(set(roles))
@@ -394,7 +398,7 @@ def require_roles(*roles: str):
     return dependency
 
 
-def require_capabilities(*capabilities: str):
+def require_capabilities(*capabilities: str) -> Callable[[ActiveUserDep], Coroutine[object, object, User]]:
     """Dependency factory to require specific capabilities."""
     async def dependency(user: ActiveUserDep) -> User:
         from forge.models.user import Capability

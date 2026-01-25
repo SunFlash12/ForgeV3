@@ -73,9 +73,21 @@ jobs:
       - name: Run Black formatter check
         run: black --check forge/ tests/
 
-      - name: Run MyPy type checker
-        run: mypy forge/ --ignore-missing-imports --no-error-summary
-        continue-on-error: true  # Type errors are warnings for now
+      - name: Run MyPy type checker (strict-mode modules)
+        run: |
+          # SECURITY FIX (Audit 6 - Session 5): Strict mode for core security modules
+          # This checks ONLY the modules configured as strict in pyproject.toml
+          mypy forge/types.py forge/api/schemas/validation.py forge/virtuals/game/protocols.py \
+               forge/repositories/base.py forge/services/marketplace.py \
+               forge/virtuals/game/forge_functions.py forge/immune/health_checker.py \
+               forge/api/dependencies.py \
+               --strict --show-error-codes --config-file=pyproject.toml
+
+      - name: Run MyPy full codebase (informational)
+        run: |
+          # Full codebase check - informational only, doesn't fail build
+          # As more modules are migrated to strict, they'll be added above
+          mypy forge/ --show-error-codes --config-file=pyproject.toml || true
 
   # ===========================================================================
   # UNIT TESTS

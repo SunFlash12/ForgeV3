@@ -22,9 +22,38 @@ from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import Enum
-from typing import Any
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 import structlog
+
+if TYPE_CHECKING:
+    from forge.database.client import Neo4jClient
+
+
+# =============================================================================
+# Protocol Definitions for External Dependencies
+# =============================================================================
+
+
+@runtime_checkable
+class OverlayManagerProtocol(Protocol):
+    """Protocol for overlay manager health checks."""
+
+    async def get_system_status(self) -> dict[str, int | str]: ...
+
+
+@runtime_checkable
+class EventSystemProtocol(Protocol):
+    """Protocol for event system health checks."""
+
+    def get_metrics(self) -> dict[str, int]: ...
+
+
+@runtime_checkable
+class CircuitBreakerRegistryProtocol(Protocol):
+    """Protocol for circuit breaker registry health checks."""
+
+    def get_health_summary(self) -> dict[str, int | float | list[str]]: ...
 
 logger = structlog.get_logger(__name__)
 
@@ -50,7 +79,7 @@ class HealthCheckResult:
     message: str = ""
     latency_ms: float | None = None
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
-    details: dict[str, Any] = field(default_factory=dict)
+    details: dict[str, object] = field(default_factory=dict)
     children: list[HealthCheckResult] = field(default_factory=list)
 
     @property
@@ -63,9 +92,9 @@ class HealthCheckResult:
         """Check if status is degraded or worse."""
         return self.status in (HealthStatus.DEGRADED, HealthStatus.UNHEALTHY)
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> dict[str, object]:
         """Convert to dictionary for API responses."""
-        result = {
+        result: dict[str, object] = {
             "name": self.name,
             "status": self.status.value,
             "message": self.message,
@@ -232,14 +261,14 @@ class CompositeHealthCheck(HealthCheck):
         statuses: list[HealthStatus] = []
 
         for result in child_results:
-            if isinstance(result, Exception):
+            if isinstance(result, BaseException):
                 children.append(HealthCheckResult(
                     name="unknown",
                     status=HealthStatus.UNHEALTHY,
                     message=str(result),
                 ))
                 statuses.append(HealthStatus.UNHEALTHY)
-            else:
+            elif isinstance(result, HealthCheckResult):
                 children.append(result)
                 statuses.append(result.status)
 
@@ -280,7 +309,7 @@ class FunctionHealthCheck(HealthCheck):
     def __init__(
         self,
         name: str,
-        check_fn: Callable[[], Coroutine[Any, Any, tuple[bool, str]]],
+        check_fn: Callable[[], Coroutine[object, object, tuple[bool, str]]],
         config: HealthCheckConfig | None = None,
     ):
         super().__init__(name, config)
@@ -308,7 +337,7 @@ class Neo4jHealthCheck(HealthCheck):
 
     def __init__(
         self,
-        client: Any,  # Neo4jClient
+        client: Neo4jClient,
         config: HealthCheckConfig | None = None,
     ):
         super().__init__("neo4j", config)
@@ -350,7 +379,7 @@ class OverlayHealthCheck(HealthCheck):
 
     def __init__(
         self,
-        overlay_manager: Any,  # OverlayManager
+        overlay_manager: OverlayManagerProtocol,
         config: HealthCheckConfig | None = None,
     ):
         super().__init__("overlays", config)
@@ -394,7 +423,7 @@ class EventSystemHealthCheck(HealthCheck):
 
     def __init__(
         self,
-        event_system: Any,  # EventSystem
+        event_system: EventSystemProtocol,
         config: HealthCheckConfig | None = None,
     ):
         super().__init__("events", config)
@@ -443,7 +472,7 @@ class CircuitBreakerHealthCheck(HealthCheck):
 
     def __init__(
         self,
-        registry: Any,  # CircuitBreakerRegistry
+        registry: CircuitBreakerRegistryProtocol,
         config: HealthCheckConfig | None = None,
     ):
         super().__init__("circuit_breakers", config)
@@ -607,10 +636,10 @@ class ForgeHealthChecker:
       - Infrastructure Health (memory, disk, circuits)
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.root = CompositeHealthCheck("forge_system")
         self._checks: dict[str, HealthCheck] = {}
-        self._background_task: asyncio.Task | None = None
+        self._background_task: asyncio.Task[None] | None = None
         self._running = False
 
     def add_check(
@@ -633,7 +662,7 @@ class ForgeHealthChecker:
         self,
         category: str,
         name: str,
-        check_fn: Callable[[], Coroutine[Any, Any, tuple[bool, str]]],
+        check_fn: Callable[[], Coroutine[object, object, tuple[bool, str]]],
     ) -> None:
         """Add a simple function-based health check."""
         self.add_check(category, FunctionHealthCheck(name, check_fn))
@@ -649,7 +678,7 @@ class ForgeHealthChecker:
             return await check.execute()
         return None
 
-    async def get_quick_status(self) -> dict[str, Any]:
+    async def get_quick_status(self) -> dict[str, object]:
         """Get quick status (uses cache)."""
         result = await self.root.execute(use_cache=True)
         return {
@@ -661,7 +690,7 @@ class ForgeHealthChecker:
     async def start_background_monitoring(
         self,
         interval_seconds: float = 30.0,
-        callback: Callable[[HealthCheckResult], Coroutine[Any, Any, None]] | None = None,
+        callback: Callable[[HealthCheckResult], Coroutine[object, object, None]] | None = None,
     ) -> None:
         """Start background health monitoring."""
         if self._running:
@@ -669,7 +698,7 @@ class ForgeHealthChecker:
 
         self._running = True
 
-        async def monitor_loop():
+        async def monitor_loop() -> None:
             while self._running:
                 try:
                     result = await self.check_health()
@@ -724,10 +753,10 @@ class ForgeHealthChecker:
 
 # Factory function for creating standard Forge health checker
 def create_forge_health_checker(
-    neo4j_client: Any | None = None,
-    overlay_manager: Any | None = None,
-    event_system: Any | None = None,
-    circuit_registry: Any | None = None,
+    neo4j_client: Neo4jClient | None = None,
+    overlay_manager: OverlayManagerProtocol | None = None,
+    event_system: EventSystemProtocol | None = None,
+    circuit_registry: CircuitBreakerRegistryProtocol | None = None,
 ) -> ForgeHealthChecker:
     """
     Create a pre-configured Forge health checker.

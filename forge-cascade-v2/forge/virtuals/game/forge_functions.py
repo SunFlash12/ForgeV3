@@ -23,8 +23,12 @@ Usage:
 
 import logging
 from datetime import UTC, datetime
-from typing import Any
 
+from .protocols import (
+    CapsuleRepositoryProtocol,
+    GovernanceServiceProtocol,
+    OverlayManagerProtocol,
+)
 from .sdk_client import FunctionDefinition, GAMEWorker
 
 logger = logging.getLogger(__name__)
@@ -41,7 +45,7 @@ STATUS_PENDING = "PENDING"  # Function started async operation
 # ==================== Knowledge Capsule Functions ====================
 
 def create_search_capsules_function(
-    capsule_repository: Any,  # Type hint would be CapsuleRepository from Forge
+    capsule_repository: CapsuleRepositoryProtocol,
 ) -> FunctionDefinition:
     """
     Create a function for searching knowledge capsules.
@@ -61,7 +65,7 @@ def create_search_capsules_function(
         capsule_types: str | None = None,
         limit: int = 10,
         min_trust_level: float = 0.0,
-    ) -> tuple[str, Any, dict]:
+    ) -> tuple[str, object, dict[str, object]]:
         """
         Search knowledge capsules by semantic similarity.
 
@@ -142,7 +146,7 @@ def create_search_capsules_function(
 
 
 def create_get_capsule_function(
-    capsule_repository: Any,
+    capsule_repository: CapsuleRepositoryProtocol,
 ) -> FunctionDefinition:
     """
     Create a function for retrieving a specific capsule's full content.
@@ -150,7 +154,7 @@ def create_get_capsule_function(
     This function allows agents to fetch the complete content of a capsule
     when they need more detail than the search preview provides.
     """
-    async def get_capsule(capsule_id: str) -> tuple[str, Any, dict]:
+    async def get_capsule(capsule_id: str) -> tuple[str, object, dict[str, object]]:
         """Retrieve the full content and metadata of a specific capsule."""
         try:
             capsule = await capsule_repository.get_by_id(capsule_id)
@@ -200,7 +204,7 @@ def create_get_capsule_function(
 
 
 def create_create_capsule_function(
-    capsule_repository: Any,
+    capsule_repository: CapsuleRepositoryProtocol,
 ) -> FunctionDefinition:
     """
     Create a function for creating new knowledge capsules.
@@ -214,11 +218,11 @@ def create_create_capsule_function(
         capsule_type: str,
         tags: str | None = None,
         parent_capsule_id: str | None = None,
-    ) -> tuple[str, Any, dict]:
+    ) -> tuple[str, object, dict[str, object]]:
         """Create a new knowledge capsule in Forge."""
         try:
             # Parse tags if provided
-            tags_list = []
+            tags_list: list[str] = []
             if tags:
                 tags_list = [t.strip() for t in tags.split(",")]
 
@@ -289,7 +293,7 @@ def create_create_capsule_function(
 # ==================== Overlay Analysis Functions ====================
 
 def create_run_overlay_function(
-    overlay_manager: Any,  # Would be Forge's OverlayManager
+    overlay_manager: OverlayManagerProtocol,
 ) -> FunctionDefinition:
     """
     Create a function for running Forge overlays.
@@ -302,7 +306,7 @@ def create_run_overlay_function(
         overlay_id: str,
         input_data: str,
         parameters: str | None = None,
-    ) -> tuple[str, Any, dict]:
+    ) -> tuple[str, object, dict[str, object]]:
         """
         Execute a Forge overlay with given input data.
 
@@ -371,12 +375,12 @@ def create_run_overlay_function(
 
 
 def create_list_overlays_function(
-    overlay_manager: Any,
+    overlay_manager: OverlayManagerProtocol,
 ) -> FunctionDefinition:
     """Create a function for listing available overlays."""
     async def list_overlays(
         status_filter: str | None = None,
-    ) -> tuple[str, Any, dict]:
+    ) -> tuple[str, object, dict[str, object]]:
         """List all available Forge overlays with their status and capabilities."""
         try:
             overlays = await overlay_manager.list_overlays(
@@ -421,13 +425,13 @@ def create_list_overlays_function(
 # ==================== Governance Functions ====================
 
 def create_get_proposals_function(
-    governance_service: Any,  # Would be Forge's GovernanceService
+    governance_service: GovernanceServiceProtocol,
 ) -> FunctionDefinition:
     """Create a function for retrieving governance proposals."""
     async def get_proposals(
         status_filter: str | None = None,
         limit: int = 10,
-    ) -> tuple[str, Any, dict]:
+    ) -> tuple[str, object, dict[str, object]]:
         """Get current governance proposals requiring attention."""
         try:
             proposals = await governance_service.list_proposals(
@@ -481,7 +485,7 @@ def create_get_proposals_function(
 
 
 def create_cast_vote_function(
-    governance_service: Any,
+    governance_service: GovernanceServiceProtocol,
     agent_wallet: str,
 ) -> FunctionDefinition:
     """
@@ -494,7 +498,7 @@ def create_cast_vote_function(
         proposal_id: str,
         vote: str,
         reasoning: str,
-    ) -> tuple[str, Any, dict]:
+    ) -> tuple[str, object, dict[str, object]]:
         """
         Cast a vote on a governance proposal.
 
@@ -561,7 +565,7 @@ def create_cast_vote_function(
 # ==================== Worker Factory Functions ====================
 
 def create_knowledge_worker(
-    capsule_repository: Any,
+    capsule_repository: CapsuleRepositoryProtocol,
     worker_id: str = "knowledge_worker",
 ) -> GAMEWorker:
     """
@@ -584,7 +588,7 @@ def create_knowledge_worker(
         create_create_capsule_function(capsule_repository),
     ]
 
-    def get_state(function_result: Any, current_state: dict) -> dict:
+    def get_state(function_result: object, current_state: dict[str, object]) -> dict[str, object]:
         """Track knowledge worker state across function calls."""
         state = current_state.copy()
 
@@ -615,7 +619,7 @@ def create_knowledge_worker(
 
 
 def create_analysis_worker(
-    overlay_manager: Any,
+    overlay_manager: OverlayManagerProtocol,
     worker_id: str = "analysis_worker",
 ) -> GAMEWorker:
     """
@@ -641,7 +645,7 @@ def create_analysis_worker(
 
 
 def create_governance_worker(
-    governance_service: Any,
+    governance_service: GovernanceServiceProtocol,
     agent_wallet: str,
     worker_id: str = "governance_worker",
 ) -> GAMEWorker:
