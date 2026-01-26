@@ -231,8 +231,10 @@ When creating capsules, ensure they are well-structured with appropriate tags an
         try:
             # Try to import Copilot SDK
             try:
-                from copilot import CopilotClient
-                from copilot.types import CopilotClientOptions
+                from copilot import CopilotClient  # type: ignore[import-not-found,unused-ignore]
+                from copilot.types import (
+                    CopilotClientOptions,  # type: ignore[import-not-found,unused-ignore]
+                )
             except ImportError:
                 raise RuntimeError(
                     "GitHub Copilot SDK not installed. "
@@ -252,7 +254,7 @@ When creating capsules, ensure they are well-structured with appropriate tags an
             # Create Copilot client
             client_config = CopilotClientOptions(
                 use_stdio=self.config.use_stdio,
-                log_level=self.config.log_level,  # type: ignore[typeddict-item]
+                log_level=self.config.log_level,  # type: ignore[typeddict-item,unused-ignore]
                 auto_restart=self.config.auto_restart,
                 auto_start=True,
             )

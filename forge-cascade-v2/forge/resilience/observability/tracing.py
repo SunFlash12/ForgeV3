@@ -38,14 +38,14 @@ try:
     OTEL_AVAILABLE = True
 except ImportError:
     OTEL_AVAILABLE = False
-    otel_trace = None
-    TracerProvider = None
-    BatchSpanProcessor = None
-    Resource = None
-    OTLPSpanExporter = None
-    Status = None
-    StatusCode = None
-    SpanKind = None
+    otel_trace = None  # type: ignore[assignment,unused-ignore]
+    TracerProvider = None  # type: ignore[assignment,misc,unused-ignore]
+    BatchSpanProcessor = None  # type: ignore[assignment,misc,unused-ignore]
+    Resource = None  # type: ignore[assignment,misc,unused-ignore]
+    OTLPSpanExporter = None  # type: ignore[assignment,misc,unused-ignore]
+    Status = None  # type: ignore[assignment,misc,unused-ignore]
+    StatusCode = None  # type: ignore[assignment,misc,unused-ignore]
+    SpanKind = None  # type: ignore[assignment,misc,unused-ignore]
 
 
 class OperationType(Enum):

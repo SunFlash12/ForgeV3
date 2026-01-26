@@ -683,7 +683,7 @@ class AuthService:
                 exp_ts: float = (
                     float(exp_value.timestamp())
                     if isinstance(exp_value, datetime)
-                    else (float(exp_value) if exp_value is not None else 0.0)
+                    else (float(exp_value) if exp_value is not None else 0.0)  # type: ignore[arg-type,unused-ignore]
                 )
                 await self._session_service.create_session(
                     user_id=user.id,
@@ -816,7 +816,7 @@ class AuthService:
                 exp_ts2: float = (
                     float(exp_value.timestamp())
                     if isinstance(exp_value, datetime)
-                    else (float(exp_value) if exp_value is not None else 0.0)
+                    else (float(exp_value) if exp_value is not None else 0.0)  # type: ignore[arg-type,unused-ignore]
                 )
                 await self._session_service.create_session(
                     user_id=user.id,
@@ -903,7 +903,7 @@ class AuthService:
         payload_exp_float: float | None = (
             float(payload.exp.timestamp())
             if isinstance(payload.exp, datetime)
-            else (float(payload.exp) if payload.exp is not None else None)
+            else (float(payload.exp) if payload.exp is not None else None)  # type: ignore[arg-type,unused-ignore]
         )
         await TokenBlacklist.add_async(
             jti=payload_jti,

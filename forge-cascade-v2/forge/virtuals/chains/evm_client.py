@@ -18,9 +18,9 @@ from datetime import UTC, datetime
 from typing import Any
 
 from eth_account import Account
-from eth_account.signers.local import LocalAccount
+from eth_account.signers.local import LocalAccount  # type: ignore[import-not-found,unused-ignore]
 from web3 import AsyncHTTPProvider, AsyncWeb3
-from web3.exceptions import TransactionNotFound
+from web3.exceptions import TransactionNotFound  # type: ignore[import-not-found,unused-ignore]
 
 from ..config import ChainNetwork
 from ..models import TokenInfo, TransactionRecord, WalletInfo
@@ -162,7 +162,7 @@ class EVMChainClient(BaseChainClient):
         if self.config.operator_private_key:
             try:
                 account = Account.from_key(self.config.operator_private_key)
-                self._operator_account = account  # type: ignore[assignment]
+                self._operator_account = account  # type: ignore[assignment,unused-ignore]
                 logger.info(f"Operator account loaded: {account.address}")
             except (ValueError, TypeError, RuntimeError) as e:
                 logger.warning(f"Failed to load operator account: {e}")

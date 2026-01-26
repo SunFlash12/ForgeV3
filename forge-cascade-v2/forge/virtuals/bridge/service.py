@@ -386,7 +386,7 @@ class BridgeService:
         # Convert recipient address to bytes32 format
         if dest_chain == ChainNetwork.SOLANA:
             # Solana addresses need base58 -> bytes32 conversion
-            import base58
+            import base58  # type: ignore[import-not-found,unused-ignore]
 
             recipient_bytes = base58.b58decode(request.recipient_address)
             recipient_bytes32 = recipient_bytes.rjust(32, b"\x00")

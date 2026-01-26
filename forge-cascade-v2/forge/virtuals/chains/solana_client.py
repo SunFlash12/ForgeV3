@@ -16,7 +16,7 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
-import base58
+import base58  # type: ignore[import-not-found,unused-ignore]
 
 from ..config import ChainNetwork
 from ..models import TokenInfo, TransactionRecord, WalletInfo
@@ -73,8 +73,10 @@ class SolanaChainClient(BaseChainClient):
         """
         try:
             # Import Solana libraries (lazy import to handle optional dependency)
-            from solana.rpc.async_api import AsyncClient
-            from solders.keypair import Keypair
+            from solana.rpc.async_api import (
+                AsyncClient,  # type: ignore[import-not-found,unused-ignore]
+            )
+            from solders.keypair import Keypair  # type: ignore[import-not-found,unused-ignore]
 
             # Create async client with the configured RPC endpoint
             self._client = AsyncClient(self._rpc_endpoint)
@@ -127,7 +129,7 @@ class SolanaChainClient(BaseChainClient):
         """
         self._ensure_initialized()
         client: Any = self._get_client()
-        from solders.pubkey import Pubkey
+        from solders.pubkey import Pubkey  # type: ignore[import-not-found,unused-ignore]
 
         pubkey: Any = Pubkey.from_string(address)
 
@@ -254,9 +256,9 @@ class SolanaChainClient(BaseChainClient):
 
         keypair: Any = self._keypair
 
-        from solana.transaction import Transaction  # type: ignore[import-not-found]
+        from solana.transaction import Transaction  # type: ignore[import-not-found,unused-ignore]
         from solders.pubkey import Pubkey
-        from solders.system_program import (
+        from solders.system_program import (  # type: ignore[import-not-found,unused-ignore]
             TransferParams,
             transfer,
         )
@@ -315,7 +317,7 @@ class SolanaChainClient(BaseChainClient):
         """
         self._ensure_initialized()
         client: Any = self._get_client()
-        from solders.signature import Signature
+        from solders.signature import Signature  # type: ignore[import-not-found,unused-ignore]
 
         signature: Any = Signature.from_string(tx_hash)
 
@@ -442,8 +444,10 @@ class SolanaChainClient(BaseChainClient):
 
         from solana.transaction import Transaction
         from solders.pubkey import Pubkey
-        from spl.token.constants import TOKEN_PROGRAM_ID
-        from spl.token.instructions import (
+        from spl.token.constants import (
+            TOKEN_PROGRAM_ID,  # type: ignore[import-not-found,unused-ignore]
+        )
+        from spl.token.instructions import (  # type: ignore[import-not-found,unused-ignore]
             TransferCheckedParams,
             transfer_checked,
         )
@@ -782,7 +786,10 @@ class SolanaChainClient(BaseChainClient):
         keypair: Any = self._keypair
 
         from solana.transaction import Transaction
-        from solders.instruction import AccountMeta, Instruction
+        from solders.instruction import (  # type: ignore[import-not-found,unused-ignore]
+            AccountMeta,
+            Instruction,
+        )
         from solders.pubkey import Pubkey
 
         program_id: Any = Pubkey.from_string(contract_address)

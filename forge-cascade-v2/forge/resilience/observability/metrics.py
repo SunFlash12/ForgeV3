@@ -36,10 +36,10 @@ try:
     OTEL_METRICS_AVAILABLE = True
 except ImportError:
     OTEL_METRICS_AVAILABLE = False
-    otel_metrics = None
-    MeterProvider = None
-    PeriodicExportingMetricReader = None
-    OTLPMetricExporter = None
+    otel_metrics = None  # type: ignore[assignment,unused-ignore]
+    MeterProvider = None  # type: ignore[assignment,misc,unused-ignore]
+    PeriodicExportingMetricReader = None  # type: ignore[assignment,misc,unused-ignore]
+    OTLPMetricExporter = None  # type: ignore[assignment,misc,unused-ignore]
 
 
 class MetricType(Enum):

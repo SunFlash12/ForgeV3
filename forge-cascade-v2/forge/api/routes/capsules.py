@@ -514,10 +514,10 @@ async def search_capsules(
         latency = time.perf_counter() - start_time
         record_search(latency, len(cached))
         cached_results: list[dict[str, Any]] = (
-            cached.get("results", []) if isinstance(cached, dict) else []
+            cached.get("results", []) if isinstance(cached, dict) else []  # type: ignore[attr-defined,unused-ignore]
         )
-        cached_scores: list[float] = cached.get("scores", []) if isinstance(cached, dict) else []
-        cached_total: int = cached.get("total", 0) if isinstance(cached, dict) else 0
+        cached_scores: list[float] = cached.get("scores", []) if isinstance(cached, dict) else []  # type: ignore[attr-defined,unused-ignore]
+        cached_total: int = cached.get("total", 0) if isinstance(cached, dict) else 0  # type: ignore[attr-defined,unused-ignore]
         return SearchResponse(
             query=request.query,
             results=[CapsuleResponse(**c) for c in cached_results],

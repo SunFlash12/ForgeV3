@@ -708,7 +708,7 @@ def create_metrics_endpoint(app: Any) -> None:
     """Create /metrics endpoint for Prometheus scraping."""
     from fastapi import Response
 
-    @app.get("/metrics", include_in_schema=False)  # type: ignore[untyped-decorator]
+    @app.get("/metrics", include_in_schema=False)  # type: ignore[misc,untyped-decorator,unused-ignore]
     async def prometheus_metrics() -> Response:
         return Response(
             content=metrics.to_prometheus_format(),

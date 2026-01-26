@@ -1394,7 +1394,7 @@ class GraphAlgorithmProvider:
             titles = result.get("titles", [])
             trusts = result.get("trusts", [])
             types = result.get("types", [])
-            rel_types = result.get("relTypes", [])
+            path_rel_types: list[str] = result.get("relTypes", [])
 
             path_nodes = [
                 PathNode(
@@ -1421,7 +1421,7 @@ class GraphAlgorithmProvider:
                 path_found=True,
                 path_length=result.get("path_length", len(node_ids) - 1),
                 path_nodes=path_nodes,
-                path_relationships=rel_types,
+                path_relationships=path_rel_types,
                 total_trust=total_trust,
                 computation_time_ms=0.0,
                 backend_used=GraphBackend.CYPHER,

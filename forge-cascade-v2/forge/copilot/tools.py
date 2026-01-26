@@ -20,7 +20,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from copilot import Tool, ToolInvocation, ToolResult
+from copilot import Tool, ToolInvocation, ToolResult  # type: ignore[import-not-found,unused-ignore]
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
