@@ -57,6 +57,7 @@ site/
 .mypy_cache/
 .dmypy.json
 dmypy.json
+mypy_output.txt
 
 # Profiling
 *.prof
