@@ -89,6 +89,7 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectAttemptsRef = useRef(0);
   const intentionalCloseRef = useRef(false);
+  const connectWsRef = useRef<() => void>(() => {});
 
   // Store latest callbacks in refs to avoid reconnect on callback identity change
   const onMessageRef = useRef(onMessage);
@@ -138,9 +139,9 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
     reconnectAttemptsRef.current += 1;
 
     reconnectTimerRef.current = setTimeout(() => {
-      connectWs();
+      connectWsRef.current();
     }, delay);
-  }, [maxReconnectAttempts, reconnectDelay]); // connectWs added below
+  }, [maxReconnectAttempts, reconnectDelay]);
 
   const connectWs = useCallback(() => {
     // Close existing connection if any
@@ -209,6 +210,7 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
       onErrorRef.current?.(event);
     };
   }, [url, clearTimers, startPing, scheduleReconnect]);
+  connectWsRef.current = connectWs;
 
   const send = useCallback((message: WebSocketMessage) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
