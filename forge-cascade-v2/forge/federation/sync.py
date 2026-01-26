@@ -158,6 +158,16 @@ class SyncService:
             )
             self._sync_states[sync_id] = state
 
+            # SECURITY FIX (Audit 9): Trim old sync states to prevent unbounded memory growth
+            if len(self._sync_states) > self.MAX_SYNC_STATES:
+                # Keep newest entries
+                sorted_states = sorted(
+                    self._sync_states.items(),
+                    key=lambda x: x[1].started_at,
+                    reverse=True,
+                )
+                self._sync_states = dict(sorted_states[:self.MAX_SYNC_STATES])
+
             try:
                 # Execute sync based on direction
                 if sync_direction == SyncDirection.PULL:
@@ -193,6 +203,20 @@ class SyncService:
 
     # SECURITY FIX (Audit 4 - H6): Maximum iterations to prevent DoS via unbounded sync loop
     MAX_SYNC_ITERATIONS = 100  # Maximum pagination iterations per sync
+
+    # SECURITY FIX (Audit 9): Maximum sync states to prevent unbounded memory growth
+    MAX_SYNC_STATES = 1000
+
+    # SECURITY FIX (Audit 9): Whitelist of allowed relationship types to prevent Cypher injection.
+    # Remote peers supply relationship_type which is interpolated into Cypher queries;
+    # only known-safe identifiers are permitted.
+    ALLOWED_RELATIONSHIP_TYPES = frozenset({
+        "RELATED_TO", "DERIVED_FROM", "CONTRADICTS", "SUPPORTS",
+        "REFERENCES", "DEPENDS_ON", "PARENT_OF", "CHILD_OF",
+        "SIMILAR_TO", "CAUSED_BY", "PRECEDES", "FOLLOWS",
+        "PART_OF", "HAS_PART", "INSTANCE_OF", "TYPE_OF",
+        "ASSOCIATED_WITH", "LINKED_TO",
+    })
 
     async def _execute_pull(self, peer: FederatedPeer, state: SyncState) -> None:
         """Pull changes from a peer."""
@@ -691,6 +715,18 @@ class SyncService:
     ) -> None:
         """Create a local copy of a remote edge."""
         relationship_type = remote_edge.get("relationship_type", "RELATED_TO")
+
+        # SECURITY FIX (Audit 9): Validate relationship_type against whitelist
+        # to prevent Cypher injection. The relationship_type comes from remote peer
+        # data and is interpolated into a Cypher query via f-string; a malicious
+        # peer could send a crafted value to execute arbitrary Cypher.
+        if relationship_type not in self.ALLOWED_RELATIONSHIP_TYPES:
+            logger.warning(
+                "federation_invalid_relationship_type: type=%s, peer_id=%s",
+                relationship_type,
+                peer.id,
+            )
+            relationship_type = "RELATED_TO"
 
         fed_edge = FederatedEdge(
             peer_id=peer.id,

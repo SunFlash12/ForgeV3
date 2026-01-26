@@ -51,6 +51,10 @@ MAX_MESSAGES_PER_MINUTE = 60  # Rate limit: messages per minute per connection
 RATE_LIMIT_WINDOW_SECONDS = 60  # Rate limiting window
 # SECURITY FIX (Audit 6): Maximum WebSocket message size to prevent DoS
 MAX_WEBSOCKET_MESSAGE_SIZE = 64 * 1024  # 64KB max message size
+# SECURITY FIX (Audit 9): Global connection cap to prevent resource exhaustion
+MAX_TOTAL_CONNECTIONS = 10000
+# SECURITY FIX (Audit 9): Heartbeat idle timeout (seconds)
+HEARTBEAT_TIMEOUT_SECONDS = 300  # 5 minutes
 
 
 def get_token_expiry_check_interval() -> int:
@@ -85,16 +89,16 @@ def validate_websocket_origin(websocket: WebSocket) -> bool:
     origin = websocket.headers.get("origin")
 
     # No origin header - could be a same-origin request or a tool like wscat
-    # In production, you may want to reject connections without Origin
+    # SECURITY FIX (Audit 9): Reject missing Origin in production to prevent CSWSH
     if not origin:
-        # Allow in development, log warning in production
         if settings.app_env == "production":
             logger.warning(
-                "websocket_no_origin_header",
+                "websocket_no_origin_header_rejected",
                 client=websocket.client,
                 path=websocket.url.path,
             )
-            # Still allow for backwards compatibility, but log
+            return False
+        # Allow in non-production environments (dev tools like wscat)
         return True
 
     # Parse the origin
@@ -322,6 +326,16 @@ class WebSocketConnection:
         except (WebSocketDisconnect, ConnectionError, OSError, RuntimeError):
             return False
 
+    def is_idle(self) -> bool:
+        """
+        SECURITY FIX (Audit 9): Check if this connection has exceeded the heartbeat timeout.
+
+        Returns True if the connection is idle (no ping received within
+        HEARTBEAT_TIMEOUT_SECONDS), False otherwise.
+        """
+        now = datetime.now(UTC)
+        return (now - self.last_ping).total_seconds() > HEARTBEAT_TIMEOUT_SECONDS
+
 
 class ConnectionManager:
     """
@@ -349,6 +363,21 @@ class ConnectionManager:
         # Stats
         self._total_connections = 0
         self._total_messages_sent = 0
+
+    @property
+    def active_connections_count(self) -> int:
+        """Return the total number of currently active connections across all types."""
+        chat_count = sum(len(room) for room in self._chat_connections.values())
+        return len(self._event_connections) + len(self._dashboard_connections) + chat_count
+
+    def is_at_capacity(self) -> bool:
+        """
+        SECURITY FIX (Audit 9): Check if the server has reached the global connection limit.
+
+        Returns:
+            True if at or above MAX_TOTAL_CONNECTIONS, False otherwise
+        """
+        return self.active_connections_count >= MAX_TOTAL_CONNECTIONS
 
     def can_user_connect(self, user_id: str | None) -> bool:
         """
@@ -393,8 +422,18 @@ class ConnectionManager:
         user_id: str | None = None,
         subscriptions: list[str] | None = None,
         token: str | None = None,  # SECURITY FIX (Audit 6): Store token for expiry checks
-    ) -> WebSocketConnection:
+    ) -> WebSocketConnection | None:
         """Accept a new event stream connection."""
+
+        # SECURITY FIX (Audit 9): Enforce global connection limit
+        if self.is_at_capacity():
+            logger.warning(
+                "websocket_server_capacity_reached",
+                active_connections=self.active_connections_count,
+                max_total=MAX_TOTAL_CONNECTIONS,
+            )
+            await websocket.close(code=4029, reason="Server connection limit reached")
+            return None
 
         await websocket.accept()
 
@@ -499,8 +538,18 @@ class ConnectionManager:
         websocket: WebSocket,
         user_id: str | None = None,
         token: str | None = None,  # SECURITY FIX (Audit 6): Store token for expiry checks
-    ) -> WebSocketConnection:
+    ) -> WebSocketConnection | None:
         """Accept a new dashboard connection."""
+
+        # SECURITY FIX (Audit 9): Enforce global connection limit
+        if self.is_at_capacity():
+            logger.warning(
+                "websocket_server_capacity_reached",
+                active_connections=self.active_connections_count,
+                max_total=MAX_TOTAL_CONNECTIONS,
+            )
+            await websocket.close(code=4029, reason="Server connection limit reached")
+            return None
 
         await websocket.accept()
 
@@ -575,8 +624,18 @@ class ConnectionManager:
         user_id: str,
         display_name: str | None = None,
         token: str | None = None,  # SECURITY FIX (Audit 6): Store token for expiry checks
-    ) -> WebSocketConnection:
+    ) -> WebSocketConnection | None:
         """Accept a new chat room connection."""
+
+        # SECURITY FIX (Audit 9): Enforce global connection limit
+        if self.is_at_capacity():
+            logger.warning(
+                "websocket_server_capacity_reached",
+                active_connections=self.active_connections_count,
+                max_total=MAX_TOTAL_CONNECTIONS,
+            )
+            await websocket.close(code=4029, reason="Server connection limit reached")
+            return None
 
         await websocket.accept()
 
@@ -1018,6 +1077,10 @@ async def websocket_events(
         token=auth_token,  # SECURITY FIX (Audit 6): Pass token for expiry checks
     )
 
+    # SECURITY FIX (Audit 9): Connection rejected if server at capacity
+    if connection is None:
+        return
+
     try:
         while True:
             # SECURITY FIX (Audit 6): Check token expiry periodically
@@ -1040,6 +1103,15 @@ async def websocket_events(
                     data = json.loads(text)
                 except json.JSONDecodeError:
                     continue
+
+            # SECURITY FIX (Audit 9): Validate message structure
+            if not isinstance(data, dict) or "type" not in data:
+                await connection.send_json({
+                    "type": "error",
+                    "code": "INVALID_MESSAGE",
+                    "message": "Messages must be JSON objects with a 'type' field."
+                })
+                continue
 
             # Rate limiting check
             if not connection.check_rate_limit():
@@ -1148,6 +1220,10 @@ async def websocket_dashboard(
         token=auth_token,  # SECURITY FIX (Audit 6): Pass token for expiry checks
     )
 
+    # SECURITY FIX (Audit 9): Connection rejected if server at capacity
+    if connection is None:
+        return
+
     try:
         while True:
             # SECURITY FIX (Audit 6): Check token expiry periodically
@@ -1168,6 +1244,15 @@ async def websocket_dashboard(
                     data = json.loads(text)
                 except json.JSONDecodeError:
                     continue
+
+            # SECURITY FIX (Audit 9): Validate message structure
+            if not isinstance(data, dict) or "type" not in data:
+                await connection.send_json({
+                    "type": "error",
+                    "code": "INVALID_MESSAGE",
+                    "message": "Messages must be JSON objects with a 'type' field."
+                })
+                continue
 
             msg_type = data.get("type")
 
@@ -1320,6 +1405,10 @@ async def websocket_chat(
         token=auth_token,  # SECURITY FIX (Audit 6): Pass token for expiry checks
     )
 
+    # SECURITY FIX (Audit 9): Connection rejected if server at capacity
+    if connection is None:
+        return
+
     # Send room info to the connected user
     await connection.send_json({
         "type": "room_info",
@@ -1374,6 +1463,15 @@ async def websocket_chat(
                     data = json.loads(text)
                 except json.JSONDecodeError:
                     continue
+
+            # SECURITY FIX (Audit 9): Validate message structure
+            if not isinstance(data, dict) or "type" not in data:
+                await connection.send_json({
+                    "type": "error",
+                    "code": "INVALID_MESSAGE",
+                    "message": "Messages must be JSON objects with a 'type' field."
+                })
+                continue
 
             # Rate limiting check
             if not connection.check_rate_limit():

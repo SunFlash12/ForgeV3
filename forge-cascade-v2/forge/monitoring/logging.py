@@ -15,10 +15,11 @@ Features:
 from __future__ import annotations
 
 import logging
+import re
 import sys
 from collections.abc import Iterator
 from datetime import UTC, datetime
-from typing import Any, MutableMapping
+from typing import Any
 
 import structlog
 from structlog.typing import EventDict, WrappedLogger
@@ -26,6 +27,15 @@ from structlog.typing import EventDict, WrappedLogger
 # =============================================================================
 # Custom Processors
 # =============================================================================
+
+# Patterns to detect secrets embedded in string values
+_SECRET_VALUE_PATTERNS = re.compile(
+    r"(?i)"
+    r"(?:password|passwd|secret|token|api[_-]?key|private[_-]?key|bearer)"
+    r"\s*[=:]\s*"
+    r"['\"]?\S{8,}",
+)
+
 
 def add_timestamp(
     logger: WrappedLogger,
@@ -95,6 +105,21 @@ def sanitize_sensitive_data(
         "secretkey",
         "signing_key",
         "encryption_key",
+        # Blockchain/crypto keys
+        "mnemonic",
+        "seed_phrase",
+        "wallet_key",
+        "wallet_secret",
+        # JWT/tokens
+        "jwt",
+        "jwt_secret",
+        "jwt_key",
+        "nonce",
+        # OAuth
+        "client_secret",
+        "client_id",
+        "oauth_token",
+        "oauth_secret",
         # Personal data (PII)
         "cookie",
         "credit_card",
@@ -120,6 +145,9 @@ def sanitize_sensitive_data(
             }
         elif isinstance(obj, list):
             return [_sanitize(item, depth + 1) for item in obj]
+        elif isinstance(obj, str):
+            # SECURITY FIX (Audit 7 - Session 9): Scan string values for embedded secrets
+            return _SECRET_VALUE_PATTERNS.sub("[REDACTED_SECRET]", obj)
         return obj
 
     result: EventDict = _sanitize(event_dict)
@@ -187,6 +215,8 @@ def configure_logging(
 
     processors.append(add_log_level)
 
+    # SECURITY: sanitize_sensitive_data MUST run after StackInfoRenderer
+    # and before the final renderer to catch secrets in stack traces
     if sanitize_logs:
         processors.append(sanitize_sensitive_data)
 

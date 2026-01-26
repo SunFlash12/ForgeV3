@@ -45,6 +45,8 @@ from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
+from forge.security.prompt_sanitization import sanitize_for_prompt
+
 from .tools import ForgeToolRegistry
 
 logger = logging.getLogger(__name__)
@@ -140,6 +142,9 @@ class CopilotForgeAgent:
         await agent.stop()
         ```
     """
+
+    # SECURITY FIX (Audit 7 - Session 9): Bound chat history to prevent memory exhaustion
+    MAX_HISTORY_LENGTH = 200
 
     DEFAULT_SYSTEM_PROMPT = """You are Forge, an intelligent knowledge management assistant.
 
@@ -337,14 +342,21 @@ When creating capsules, ensure they are well-structured with appropriate tags an
         if not self.is_running:
             raise RuntimeError("Agent is not running. Call start() first.")
 
+        # SECURITY FIX (Audit 7 - Session 9): Sanitize user input to prevent prompt injection
+        sanitized_message = sanitize_for_prompt(message, field_name="user_message")
+
         start_time = datetime.now(UTC)
 
-        # Add user message to history
+        # Add user message to history (original for display)
         self._history.append(ChatMessage(
             role="user",
             content=message,
             metadata=metadata or {},
         ))
+        # SECURITY FIX (Audit 7 - Session 9): Bound chat history to prevent memory exhaustion
+        if len(self._history) > self.MAX_HISTORY_LENGTH:
+            # Keep system messages and last N messages
+            self._history = self._history[-self.MAX_HISTORY_LENGTH:]
 
         # Set up response collection
         response_content: list[str] = []
@@ -369,8 +381,8 @@ When creating capsules, ensure they are well-structured with appropriate tags an
         self._session.on(collect_response)
 
         try:
-            # Send the message
-            await self._session.send({"prompt": message})
+            # Send the sanitized message
+            await self._session.send({"prompt": sanitized_message})
 
             # Wait for completion with timeout
             await asyncio.wait_for(
@@ -402,6 +414,10 @@ When creating capsules, ensure they are well-structured with appropriate tags an
             content=content,
             tool_calls=tool_calls,
         ))
+        # SECURITY FIX (Audit 7 - Session 9): Bound chat history to prevent memory exhaustion
+        if len(self._history) > self.MAX_HISTORY_LENGTH:
+            # Keep system messages and last N messages
+            self._history = self._history[-self.MAX_HISTORY_LENGTH:]
 
         return response
 
@@ -426,18 +442,25 @@ When creating capsules, ensure they are well-structured with appropriate tags an
         if not self.is_running:
             raise RuntimeError("Agent is not running. Call start() first.")
 
+        # SECURITY FIX (Audit 7 - Session 9): Sanitize user input to prevent prompt injection
+        sanitized_message = sanitize_for_prompt(message, field_name="user_message")
+
         if not self.config.streaming:
             # Fall back to non-streaming
             response = await self.chat(message, metadata)
             yield response.content
             return
 
-        # Add user message to history
+        # Add user message to history (original for display)
         self._history.append(ChatMessage(
             role="user",
             content=message,
             metadata=metadata or {},
         ))
+        # SECURITY FIX (Audit 7 - Session 9): Bound chat history to prevent memory exhaustion
+        if len(self._history) > self.MAX_HISTORY_LENGTH:
+            # Keep system messages and last N messages
+            self._history = self._history[-self.MAX_HISTORY_LENGTH:]
 
         # Queue for streaming chunks
         chunk_queue: asyncio.Queue[str | None] = asyncio.Queue()
@@ -456,8 +479,8 @@ When creating capsules, ensure they are well-structured with appropriate tags an
 
         self._session.on(stream_collector)
 
-        # Send the message
-        await self._session.send({"prompt": message})
+        # Send the sanitized message
+        await self._session.send({"prompt": sanitized_message})
 
         # Yield chunks as they arrive
         while True:
@@ -478,6 +501,10 @@ When creating capsules, ensure they are well-structured with appropriate tags an
             role="assistant",
             content="".join(full_response),
         ))
+        # SECURITY FIX (Audit 7 - Session 9): Bound chat history to prevent memory exhaustion
+        if len(self._history) > self.MAX_HISTORY_LENGTH:
+            # Keep system messages and last N messages
+            self._history = self._history[-self.MAX_HISTORY_LENGTH:]
 
     def on_event(self, handler: Callable[..., Any]) -> None:
         """

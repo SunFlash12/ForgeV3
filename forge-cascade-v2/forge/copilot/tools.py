@@ -275,7 +275,8 @@ class ForgeToolRegistry:
             )
         except (RuntimeError, ConnectionError, TimeoutError, ValueError, OSError) as e:
             logger.error(f"Knowledge query failed: {e}")
-            return self._error_result(f"Query failed: {e}")
+            # SECURITY FIX (Audit 7 - Session 9): Don't leak internal error details to LLM
+            return self._error_result("Knowledge query failed. Please try again.")
 
     async def _handle_semantic_search(self, invocation: ToolInvocation) -> ToolResult:
         """Handle semantic search tool invocation."""
@@ -300,7 +301,8 @@ class ForgeToolRegistry:
             )
         except (RuntimeError, ConnectionError, TimeoutError, ValueError, OSError) as e:
             logger.error(f"Semantic search failed: {e}")
-            return self._error_result(f"Search failed: {e}")
+            # SECURITY FIX (Audit 7 - Session 9): Don't leak internal error details to LLM
+            return self._error_result("Semantic search failed. Please try again.")
 
     async def _handle_create_capsule(self, invocation: ToolInvocation) -> ToolResult:
         """Handle capsule creation tool invocation."""
@@ -326,7 +328,8 @@ class ForgeToolRegistry:
             )
         except (RuntimeError, ConnectionError, TimeoutError, ValueError, OSError) as e:
             logger.error(f"Capsule creation failed: {e}")
-            return self._error_result(f"Creation failed: {e}")
+            # SECURITY FIX (Audit 7 - Session 9): Don't leak internal error details to LLM
+            return self._error_result("Capsule creation failed. Please try again.")
 
     async def _handle_get_capsule(self, invocation: ToolInvocation) -> ToolResult:
         """Handle capsule retrieval tool invocation."""
@@ -353,7 +356,8 @@ class ForgeToolRegistry:
             )
         except (RuntimeError, ConnectionError, TimeoutError, ValueError, OSError) as e:
             logger.error(f"Capsule retrieval failed: {e}")
-            return self._error_result(f"Retrieval failed: {e}")
+            # SECURITY FIX (Audit 7 - Session 9): Don't leak internal error details to LLM
+            return self._error_result("Capsule retrieval failed. Please try again.")
 
     async def _handle_list_overlays(self, invocation: ToolInvocation) -> ToolResult:
         """Handle overlay listing tool invocation."""
@@ -376,7 +380,8 @@ class ForgeToolRegistry:
             )
         except (RuntimeError, ConnectionError, TimeoutError, ValueError, OSError) as e:
             logger.error(f"Overlay listing failed: {e}")
-            return self._error_result(f"Listing failed: {e}")
+            # SECURITY FIX (Audit 7 - Session 9): Don't leak internal error details to LLM
+            return self._error_result("Overlay listing failed. Please try again.")
 
     async def _handle_execute_overlay(self, invocation: ToolInvocation) -> ToolResult:
         """Handle overlay execution tool invocation."""
@@ -400,7 +405,8 @@ class ForgeToolRegistry:
             )
         except (RuntimeError, ConnectionError, TimeoutError, ValueError, OSError) as e:
             logger.error(f"Overlay execution failed: {e}")
-            return self._error_result(f"Execution failed: {e}")
+            # SECURITY FIX (Audit 7 - Session 9): Don't leak internal error details to LLM
+            return self._error_result("Overlay execution failed. Please try again.")
 
     async def _handle_governance_query(self, invocation: ToolInvocation) -> ToolResult:
         """Handle governance query tool invocation."""
