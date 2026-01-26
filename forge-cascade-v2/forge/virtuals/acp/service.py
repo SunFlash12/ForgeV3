@@ -735,7 +735,7 @@ class ACPService:
         """Sign using EVM ECDSA (secp256k1)."""
         try:
             from eth_account import Account
-            from eth_account.messages import encode_defunct  # type: ignore[import-not-found]
+            from eth_account.messages import encode_defunct
 
             # Create signable message
             signable = encode_defunct(primitive=message_bytes)
@@ -753,8 +753,8 @@ class ACPService:
     async def _sign_solana(self, message_bytes: bytes, private_key_base58: str) -> str:
         """Sign using Solana Ed25519."""
         try:
-            import base58  # type: ignore[import-not-found]
-            from solders.keypair import Keypair  # type: ignore[import-not-found]
+            import base58
+            from solders.keypair import Keypair
 
             # Decode private key
             secret_bytes = base58.b58decode(private_key_base58)
@@ -815,7 +815,8 @@ class ACPService:
 
             signable = encode_defunct(primitive=message_bytes)
             recovered_address: str = Account.recover_message(
-                signable, signature=bytes.fromhex(signature_hex.removeprefix("0x"))
+                signable,  # type: ignore[arg-type]
+                signature=bytes.fromhex(signature_hex.removeprefix("0x")),
             )
 
             return recovered_address.lower() == expected_address.lower()
@@ -833,8 +834,8 @@ class ACPService:
         """Verify Solana Ed25519 signature."""
         try:
             import base58
-            from solders.pubkey import Pubkey  # type: ignore[import-not-found]
-            from solders.signature import Signature  # type: ignore[import-not-found]
+            from solders.pubkey import Pubkey
+            from solders.signature import Signature
 
             pubkey = Pubkey.from_string(expected_pubkey)
             sig_bytes = base58.b58decode(signature_base58)

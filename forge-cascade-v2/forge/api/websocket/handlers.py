@@ -1110,7 +1110,8 @@ async def _receive_json_with_timeout(
     """
     try:
         data = await asyncio.wait_for(websocket.receive_json(), timeout=timeout)
-        return data  # type: ignore[return-value]
+        result: dict[str, Any] | None = data
+        return result
     except TimeoutError:
         return None
     except (json.JSONDecodeError, ValueError, KeyError):
@@ -1118,7 +1119,8 @@ async def _receive_json_with_timeout(
         # the underlying data may already be buffered
         try:
             text = await asyncio.wait_for(websocket.receive_text(), timeout=2.0)
-            return json.loads(text)  # type: ignore[return-value]
+            parsed: dict[str, Any] | None = json.loads(text)
+            return parsed
         except (TimeoutError, json.JSONDecodeError, ValueError, KeyError):
             return None
 

@@ -18,9 +18,9 @@ from datetime import UTC, datetime
 from typing import Any
 
 from eth_account import Account
-from eth_account.signers.local import LocalAccount  # type: ignore[import-not-found]
+from eth_account.signers.local import LocalAccount
 from web3 import AsyncHTTPProvider, AsyncWeb3
-from web3.exceptions import TransactionNotFound  # type: ignore[import-not-found]
+from web3.exceptions import TransactionNotFound
 
 from ..config import ChainNetwork
 from ..models import TokenInfo, TransactionRecord, WalletInfo
@@ -161,8 +161,9 @@ class EVMChainClient(BaseChainClient):
         # account is the wallet that signs transactions for Forge operations.
         if self.config.operator_private_key:
             try:
-                self._operator_account = Account.from_key(self.config.operator_private_key)
-                logger.info(f"Operator account loaded: {self._operator_account.address}")
+                account = Account.from_key(self.config.operator_private_key)
+                self._operator_account = account  # type: ignore[assignment]
+                logger.info(f"Operator account loaded: {account.address}")
             except (ValueError, TypeError, RuntimeError) as e:
                 logger.warning(f"Failed to load operator account: {e}")
 
