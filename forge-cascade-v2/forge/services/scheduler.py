@@ -67,6 +67,7 @@ class BackgroundScheduler:
         self._running_tasks: dict[str, asyncio.Task[None]] = {}
         self._stats = SchedulerStats()
         self._shutdown_event = asyncio.Event()
+        self._task_state_lock = asyncio.Lock()  # Protects task state mutations
         self._logger = logger.bind(service="scheduler")
 
     def register(
@@ -281,20 +282,22 @@ class BackgroundScheduler:
         task = self._tasks[name]
         try:
             await task.func()
-            task.last_run = datetime.now(UTC)
-            task.run_count += 1
-            self._stats.total_runs += 1
-            task.consecutive_failures = 0  # Reset on success
+            async with self._task_state_lock:
+                task.last_run = datetime.now(UTC)
+                task.run_count += 1
+                self._stats.total_runs += 1
+                task.consecutive_failures = 0  # Reset on success
             return True
         except Exception as e:  # Intentional broad catch: prevents background task death
-            task.error_count += 1
-            task.consecutive_failures += 1
-            task.last_error = str(e)
-            self._stats.total_errors += 1
+            async with self._task_state_lock:
+                task.error_count += 1
+                task.consecutive_failures += 1
+                task.last_error = str(e)
+                self._stats.total_errors += 1
             self._logger.error("manual_task_error", name=name, error=str(e))
             return False
 
-    def reset_task(self, name: str) -> bool:
+    async def reset_task(self, name: str) -> bool:
         """
         Reset a task's failure counters and re-enable if auto-disabled.
 
@@ -303,11 +306,12 @@ class BackgroundScheduler:
         if name not in self._tasks:
             return False
 
-        task = self._tasks[name]
-        task.consecutive_failures = 0
-        task.auto_disabled = False
-        task.enabled = True
-        task.last_error = None
+        async with self._task_state_lock:
+            task = self._tasks[name]
+            task.consecutive_failures = 0
+            task.auto_disabled = False
+            task.enabled = True
+            task.last_error = None
 
         self._logger.info(
             "task_reset",

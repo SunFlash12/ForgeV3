@@ -8,6 +8,7 @@ persisted to Neo4j via MarketplaceRepository. Data is loaded from the database
 on service initialization and synchronized on every modification.
 """
 
+import asyncio
 import logging
 import math
 from datetime import UTC, datetime, timedelta
@@ -77,6 +78,9 @@ class MarketplaceService:
         self._purchases: dict[str, Purchase] = {}
         self._carts: dict[str, Cart] = {}
         self._licenses: dict[str, License] = {}
+
+        # Lock for purchase operations to prevent TOCTOU race conditions
+        self._purchase_lock = asyncio.Lock()
 
     # =========================================================================
     # Listings
@@ -341,50 +345,53 @@ class MarketplaceService:
         listing_id: str,
         payment_method: PaymentMethod,
     ) -> Purchase:
-        """Process a single purchase."""
-        listing = await self.get_listing(listing_id)
-        if not listing:
-            raise ValueError("Listing not found")
-        if listing.status != ListingStatus.ACTIVE:
-            raise ValueError("Listing is not active")
-        if listing.seller_id == buyer_id:
-            raise ValueError("Cannot purchase your own listing")
+        """Process a single purchase with lock to prevent TOCTOU race conditions."""
+        async with self._purchase_lock:
+            listing = await self.get_listing(listing_id)
+            if not listing:
+                raise ValueError("Listing not found")
+            if listing.status != ListingStatus.ACTIVE:
+                raise ValueError("Listing is not active")
+            if listing.seller_id == buyer_id:
+                raise ValueError("Cannot purchase your own listing")
 
-        # Check if already purchased
-        existing = [
-            p for p in self._purchases.values()
-            if p.buyer_id == buyer_id and p.capsule_id == listing.capsule_id
-        ]
-        if existing:
-            raise ValueError("Already purchased this capsule")
+            # Check if already purchased (inside lock to prevent TOCTOU)
+            existing = [
+                p for p in self._purchases.values()
+                if p.buyer_id == buyer_id and p.capsule_id == listing.capsule_id
+            ]
+            if existing:
+                raise ValueError("Already purchased this capsule")
 
-        # Calculate revenue distribution
-        distribution = self._calculate_distribution(listing.price, listing.capsule_id)
+            # Calculate revenue distribution
+            distribution = self._calculate_distribution(listing.price, listing.capsule_id)
 
-        # Create purchase record
-        purchase = Purchase(
-            listing_id=listing.id,
-            capsule_id=listing.capsule_id,
-            buyer_id=buyer_id,
-            seller_id=listing.seller_id,
-            price=listing.price,
-            currency=listing.currency,
-            license_type=listing.license_type,
-            payment_method=payment_method,
-            seller_revenue=distribution.seller_share,
-            platform_fee=distribution.platform_share,
-            lineage_revenue=distribution.lineage_share,
-            treasury_contribution=distribution.treasury_share,
-        )
-
-        # Set license expiration for subscriptions
-        if listing.license_type == LicenseType.SUBSCRIPTION and listing.subscription_period_days:
-            purchase.license_expires_at = datetime.now(UTC) + timedelta(
-                days=listing.subscription_period_days
+            # Create purchase record
+            purchase = Purchase(
+                listing_id=listing.id,
+                capsule_id=listing.capsule_id,
+                buyer_id=buyer_id,
+                seller_id=listing.seller_id,
+                price=listing.price,
+                currency=listing.currency,
+                license_type=listing.license_type,
+                payment_method=payment_method,
+                seller_revenue=distribution.seller_share,
+                platform_fee=distribution.platform_share,
+                lineage_revenue=distribution.lineage_share,
+                treasury_contribution=distribution.treasury_share,
             )
 
-        self._purchases[purchase.id] = purchase
-        # AUDIT 3 FIX (A1-D03): Persist purchase to database
+            # Set license expiration for subscriptions
+            if listing.license_type == LicenseType.SUBSCRIPTION and listing.subscription_period_days:
+                purchase.license_expires_at = datetime.now(UTC) + timedelta(
+                    days=listing.subscription_period_days
+                )
+
+            # Register purchase in cache before releasing lock
+            self._purchases[purchase.id] = purchase
+
+        # Persistence can happen outside the lock (idempotent operations)
         await self._persist_purchase(purchase)
 
         # Create license

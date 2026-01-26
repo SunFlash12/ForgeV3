@@ -21,7 +21,7 @@ import asyncio
 import json
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import TYPE_CHECKING, Any
 
@@ -436,6 +436,9 @@ class LLMService:
     - Capsule analysis
     - General completions
 
+    Includes a simple circuit breaker that opens after consecutive failures
+    to prevent cascading failures and rate limit exhaustion.
+
     Usage:
         service = LLMService(LLMConfig(
             provider=LLMProvider.ANTHROPIC,
@@ -449,9 +452,17 @@ class LLMService:
         result = await service.constitutional_review(content, context)
     """
 
+    # Circuit breaker settings
+    CIRCUIT_BREAKER_THRESHOLD = 5  # Open after N consecutive failures
+    CIRCUIT_BREAKER_COOLDOWN_SECONDS = 60.0  # Stay open for this duration
+
     def __init__(self, config: LLMConfig | None = None):
         self._config = config or LLMConfig()
         self._provider = self._create_provider()
+
+        # Circuit breaker state
+        self._consecutive_failures: int = 0
+        self._circuit_open_until: datetime | None = None
 
         logger.info(
             "llm_service_initialized",
@@ -498,6 +509,43 @@ class LLMService:
                 "Set OPENAI_API_KEY or ANTHROPIC_API_KEY environment variable."
             )
 
+    def _check_circuit_breaker(self) -> None:
+        """Check if the circuit breaker is open and raise if so."""
+        if self._circuit_open_until is not None:
+            now = datetime.now(UTC)
+            if now < self._circuit_open_until:
+                remaining = (self._circuit_open_until - now).total_seconds()
+                raise RuntimeError(
+                    f"LLM circuit breaker open after {self.CIRCUIT_BREAKER_THRESHOLD} "
+                    f"consecutive failures. Retry in {remaining:.0f}s."
+                )
+            # Cooldown expired, half-open the circuit (allow one attempt)
+            self._circuit_open_until = None
+            logger.info("llm_circuit_breaker_half_open")
+
+    def _record_success(self) -> None:
+        """Record a successful call, resetting the circuit breaker."""
+        if self._consecutive_failures > 0:
+            logger.info(
+                "llm_circuit_breaker_closed",
+                previous_failures=self._consecutive_failures,
+            )
+        self._consecutive_failures = 0
+        self._circuit_open_until = None
+
+    def _record_failure(self) -> None:
+        """Record a failed call, potentially opening the circuit breaker."""
+        self._consecutive_failures += 1
+        if self._consecutive_failures >= self.CIRCUIT_BREAKER_THRESHOLD:
+            self._circuit_open_until = datetime.now(UTC) + timedelta(
+                seconds=self.CIRCUIT_BREAKER_COOLDOWN_SECONDS
+            )
+            logger.error(
+                "llm_circuit_breaker_opened",
+                consecutive_failures=self._consecutive_failures,
+                cooldown_seconds=self.CIRCUIT_BREAKER_COOLDOWN_SECONDS,
+            )
+
     async def complete(
         self,
         messages: list[LLMMessage],
@@ -514,7 +562,12 @@ class LLMService:
 
         Returns:
             LLMResponse with generated content
+
+        Raises:
+            RuntimeError: If circuit breaker is open or all retries exhausted
         """
+        self._check_circuit_breaker()
+
         max_tokens = max_tokens or self._config.max_tokens
         temperature = temperature if temperature is not None else self._config.temperature
 
@@ -533,10 +586,12 @@ class LLMService:
                     latency_ms=response.latency_ms,
                 )
 
+                self._record_success()
                 return response
 
             except (ConnectionError, TimeoutError, ValueError, OSError, RuntimeError) as e:
                 if attempt == self._config.max_retries - 1:
+                    self._record_failure()
                     raise
                 logger.warning(
                     "llm_retry",
@@ -545,6 +600,7 @@ class LLMService:
                 )
                 await asyncio.sleep(2 ** attempt)
 
+        self._record_failure()
         raise RuntimeError("LLM completion failed after retries")
 
     async def ghost_council_review(

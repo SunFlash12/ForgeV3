@@ -19,9 +19,7 @@ The GAME framework enables more sophisticated reasoning by:
 
 from __future__ import annotations
 
-import asyncio
 import logging
-from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
 
@@ -34,6 +32,7 @@ from forge.models.governance import (
     Proposal,
     VoteChoice,
 )
+from forge.security.prompt_sanitization import sanitize_for_prompt
 from forge.services.ghost_council import (
     DEFAULT_COUNCIL_MEMBERS,
     GhostCouncilConfig,
@@ -499,13 +498,19 @@ class GAMEGhostCouncilService:
         """
         member_votes: list[GhostCouncilVote] = []
 
-        # Build context string for agents
+        # Build context string for agents with sanitized user content
+        safe_title = sanitize_for_prompt(proposal.title, field_name="title", max_length=500)
+        safe_description = sanitize_for_prompt(
+            proposal.description, field_name="description", max_length=10000
+        )
+        safe_type = sanitize_for_prompt(str(proposal.type), field_name="type", max_length=100)
+
         context_str = f"""
 PROPOSAL FOR REVIEW:
 - ID: {proposal.id}
-- Title: {proposal.title}
-- Description: {proposal.description}
-- Type: {proposal.type}
+- Title: {safe_title}
+- Description: {safe_description}
+- Type: {safe_type}
 - Proposer: {proposal.proposer_id}
 - Status: {proposal.status}
 
