@@ -104,8 +104,14 @@ services:
     image: forge-cascade-api:${VERSION:?VERSION environment variable is required}
     container_name: forge-api
     restart: unless-stopped
+    stop_grace_period: 30s
     ports:
       - "8000:8000"
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "10"
     environment:
       # Application
       APP_ENV: production
@@ -175,8 +181,14 @@ services:
     image: forge-cascade-frontend:${VERSION:?VERSION environment variable is required}
     container_name: forge-frontend
     restart: unless-stopped
+    read_only: true
     ports:
       - "3000:80"
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
     environment:
       VITE_API_URL: ${API_URL:-http://localhost:8000}
     networks:
@@ -201,6 +213,12 @@ services:
     image: nginx:1.25.3-alpine
     container_name: forge-nginx
     restart: unless-stopped
+    read_only: true
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "10"
     ports:
       - "80:80"
       - "443:443"
