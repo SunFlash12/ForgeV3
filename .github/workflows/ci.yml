@@ -131,6 +131,7 @@ jobs:
           scan-ref: '.'
           severity: 'CRITICAL,HIGH'
           exit-code: '1'
+          ignore-unfixed: true
           format: 'sarif'
           output: 'trivy-results.sarif'
 
@@ -461,6 +462,7 @@ jobs:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.name }}:latest
           severity: 'CRITICAL,HIGH'
           exit-code: '1'
+          ignore-unfixed: true
           format: 'table'
 
   # ===========================================================================

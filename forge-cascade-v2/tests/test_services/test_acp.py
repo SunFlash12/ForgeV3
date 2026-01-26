@@ -9,7 +9,6 @@ Tests cover:
 """
 
 from datetime import datetime, timedelta
-from decimal import Decimal
 from uuid import uuid4
 
 import pytest
@@ -25,7 +24,6 @@ from forge.virtuals.models.acp import (
     ACPPhase,
     JobOffering,
     PaymentToken,
-    TokenPayment,
 )
 
 
@@ -36,34 +34,65 @@ class TestNonceStore:
         store = NonceStore()
         assert store is not None
 
-    def test_generate_nonce(self):
+    @pytest.mark.asyncio
+    async def test_get_highest_nonce_default(self):
         store = NonceStore()
         wallet = "0x1234567890abcdef1234567890abcdef12345678"
 
-        nonce1 = store.get_next_nonce(wallet)
-        nonce2 = store.get_next_nonce(wallet)
+        nonce = await store.get_highest_nonce(wallet)
+        assert nonce == 0
 
-        assert nonce1 == 0
-        assert nonce2 == 1
+    @pytest.mark.asyncio
+    async def test_update_and_get_nonce(self):
+        store = NonceStore()
+        wallet = "0x1234567890abcdef1234567890abcdef12345678"
 
-    def test_different_wallets_have_separate_nonces(self):
+        updated = await store.update_nonce(wallet, 1)
+        assert updated is True
+
+        nonce = await store.get_highest_nonce(wallet)
+        assert nonce == 1
+
+    @pytest.mark.asyncio
+    async def test_different_wallets_have_separate_nonces(self):
         store = NonceStore()
         wallet1 = "0x1111111111111111111111111111111111111111"
         wallet2 = "0x2222222222222222222222222222222222222222"
 
-        nonce1 = store.get_next_nonce(wallet1)
-        nonce2 = store.get_next_nonce(wallet2)
+        await store.update_nonce(wallet1, 5)
+        await store.update_nonce(wallet2, 10)
 
-        assert nonce1 == 0
-        assert nonce2 == 0  # Each wallet starts at 0
+        nonce1 = await store.get_highest_nonce(wallet1)
+        nonce2 = await store.get_highest_nonce(wallet2)
 
-    def test_increment_nonce(self):
+        assert nonce1 == 5
+        assert nonce2 == 10
+
+    @pytest.mark.asyncio
+    async def test_nonce_only_increases(self):
         store = NonceStore()
         wallet = "0x1234567890abcdef1234567890abcdef12345678"
 
-        for expected in range(5):
-            nonce = store.get_next_nonce(wallet)
-            assert nonce == expected
+        await store.update_nonce(wallet, 5)
+        result = await store.update_nonce(wallet, 3)  # Lower nonce
+        assert result is False
+
+        nonce = await store.get_highest_nonce(wallet)
+        assert nonce == 5  # Should still be 5
+
+    @pytest.mark.asyncio
+    async def test_verify_and_consume_nonce(self):
+        store = NonceStore()
+        wallet = "0x1234567890abcdef1234567890abcdef12345678"
+
+        valid, msg = await store.verify_and_consume_nonce(wallet, 1)
+        assert valid is True
+        assert msg == ""
+
+        # Replay should fail
+        valid, msg = await store.verify_and_consume_nonce(wallet, 1)
+        assert valid is False
+        assert "replay" in msg.lower() or "not greater" in msg.lower()
 
 
 class TestJobOffering:
@@ -72,31 +101,34 @@ class TestJobOffering:
     def test_create_offering(self):
         offering = JobOffering(
             id=str(uuid4()),
-            provider_address="0xprovider",
+            provider_agent_id="agent-001",
+            provider_wallet="0xprovider",
             service_type="knowledge_query",
+            title="Knowledge Graph Queries",
             description="Knowledge graph queries",
-            price_min=Decimal("10.0"),
-            price_max=Decimal("100.0"),
-            currency=PaymentToken.VIRTUAL,
-            capabilities=["cypher", "semantic_search"],
+            base_fee_virtual=10.0,
+            accepted_tokens=[PaymentToken.VIRTUAL],
         )
 
-        assert offering.provider_address == "0xprovider"
+        assert offering.provider_wallet == "0xprovider"
         assert offering.service_type == "knowledge_query"
-        assert offering.price_min == Decimal("10.0")
+        assert offering.base_fee_virtual == 10.0
 
-    def test_offering_price_validation(self):
-        """Min price should be <= max price."""
-        with pytest.raises(ValueError):
-            JobOffering(
-                id=str(uuid4()),
-                provider_address="0xprovider",
-                service_type="test",
-                description="Test",
-                price_min=Decimal("100.0"),
-                price_max=Decimal("10.0"),  # Less than min
-                currency=PaymentToken.VIRTUAL,
-            )
+    def test_offering_defaults(self):
+        """Test that offerings have sensible defaults."""
+        offering = JobOffering(
+            provider_agent_id="agent-001",
+            provider_wallet="0xprovider",
+            service_type="test",
+            title="Test Service",
+            description="Test description",
+            base_fee_virtual=5.0,
+        )
+
+        assert offering.is_active is True
+        assert offering.requires_escrow is True
+        assert offering.max_execution_time_seconds == 300
+        assert PaymentToken.VIRTUAL in offering.accepted_tokens
 
 
 class TestACPJob:
@@ -106,44 +138,50 @@ class TestACPJob:
     def sample_job(self):
         return ACPJob(
             id=str(uuid4()),
-            buyer_address="0xbuyer",
-            provider_address="0xprovider",
-            service_type="knowledge_query",
-            phase=ACPPhase.NEGOTIATION,
-            status=ACPJobStatus.PENDING,
-            payment=TokenPayment(
-                token=PaymentToken.VIRTUAL,
-                amount=Decimal("50.0"),
-            ),
-            escrow_amount=Decimal("50.0"),
+            buyer_agent_id="buyer-agent-001",
+            buyer_wallet="0xbuyer",
+            provider_agent_id="provider-agent-001",
+            provider_wallet="0xprovider",
+            job_offering_id=str(uuid4()),
+            current_phase=ACPPhase.NEGOTIATION,
+            status=ACPJobStatus.NEGOTIATING,
+            payment_token=PaymentToken.VIRTUAL,
+            payment_amount=50.0,
+            escrow_amount_virtual=50.0,
+            requirements="Knowledge query with high accuracy",
         )
 
     def test_job_creation(self, sample_job):
-        assert sample_job.buyer_address == "0xbuyer"
-        assert sample_job.phase == ACPPhase.NEGOTIATION
-        assert sample_job.status == ACPJobStatus.PENDING
+        assert sample_job.buyer_wallet == "0xbuyer"
+        assert sample_job.current_phase == ACPPhase.NEGOTIATION
+        assert sample_job.status == ACPJobStatus.NEGOTIATING
 
     def test_job_phase_transition(self, sample_job):
-        """Test valid phase transitions."""
-        assert sample_job.phase == ACPPhase.NEGOTIATION
+        """Test valid phase transitions using advance_to_phase."""
+        assert sample_job.current_phase == ACPPhase.NEGOTIATION
 
-        # Simulate progression
-        sample_job.phase = ACPPhase.EXECUTION
-        assert sample_job.phase == ACPPhase.EXECUTION
+        # Advance to TRANSACTION phase
+        sample_job.advance_to_phase(ACPPhase.TRANSACTION)
+        assert sample_job.current_phase == ACPPhase.TRANSACTION
 
-        sample_job.phase = ACPPhase.EVALUATION
-        assert sample_job.phase == ACPPhase.EVALUATION
+        # Advance to EVALUATION phase
+        sample_job.advance_to_phase(ACPPhase.EVALUATION)
+        assert sample_job.current_phase == ACPPhase.EVALUATION
 
-        sample_job.phase = ACPPhase.COMPLETED
-        assert sample_job.phase == ACPPhase.COMPLETED
+    def test_job_invalid_phase_skip(self, sample_job):
+        """Test that skipping phases raises an error."""
+        assert sample_job.current_phase == ACPPhase.NEGOTIATION
+
+        with pytest.raises(ValueError):
+            sample_job.advance_to_phase(ACPPhase.EVALUATION)  # Skip TRANSACTION
 
     def test_job_to_dict(self, sample_job):
         """Test serialization."""
         data = sample_job.model_dump()
 
-        assert data["buyer_address"] == "0xbuyer"
-        assert data["provider_address"] == "0xprovider"
-        assert "phase" in data
+        assert data["buyer_wallet"] == "0xbuyer"
+        assert data["provider_wallet"] == "0xprovider"
+        assert "current_phase" in data
         assert "status" in data
 
 
@@ -154,11 +192,14 @@ class TestACPMemo:
         memo = ACPMemo(
             job_id=str(uuid4()),
             sender_address="0xsender",
-            content="Test memo content",
+            content={"message": "Test memo content"},
+            content_hash="abc123hash",
             memo_type="status_update",
+            nonce=1,
+            sender_signature="0xsig123",
         )
 
-        assert memo.content == "Test memo content"
+        assert memo.content["message"] == "Test memo content"
         assert memo.memo_type == "status_update"
 
     def test_memo_timestamp(self):
@@ -166,7 +207,11 @@ class TestACPMemo:
         memo = ACPMemo(
             job_id=str(uuid4()),
             sender_address="0xsender",
-            content="Test",
+            content={"message": "Test"},
+            content_hash="hash123",
+            memo_type="request",
+            nonce=0,
+            sender_signature="0xsig",
         )
 
         assert memo.created_at is not None
@@ -177,23 +222,43 @@ class TestACPNegotiationTerms:
 
     def test_create_terms(self):
         terms = ACPNegotiationTerms(
-            proposed_price=Decimal("75.0"),
+            job_id=str(uuid4()),
+            proposed_fee_virtual=75.0,
             proposed_deadline=datetime.utcnow() + timedelta(hours=24),
-            requirements=["Fast response", "High accuracy"],
-            acceptance_criteria=["95% accuracy", "Response within 1 hour"],
+            deliverable_format="json",
+            deliverable_description="Structured knowledge graph query results with confidence scores",
         )
 
-        assert terms.proposed_price == Decimal("75.0")
-        assert len(terms.requirements) == 2
+        assert terms.proposed_fee_virtual == 75.0
+        assert terms.deliverable_format == "json"
 
     def test_terms_deadline_in_future(self):
         """Deadline should be in the future."""
         terms = ACPNegotiationTerms(
-            proposed_price=Decimal("50.0"),
+            job_id=str(uuid4()),
+            proposed_fee_virtual=50.0,
             proposed_deadline=datetime.utcnow() + timedelta(days=7),
+            deliverable_format="text",
+            deliverable_description="Plain text analysis report",
         )
 
         assert terms.proposed_deadline > datetime.utcnow()
+
+    def test_terms_with_special_conditions(self):
+        """Test terms with optional fields."""
+        terms = ACPNegotiationTerms(
+            job_id=str(uuid4()),
+            proposed_fee_virtual=100.0,
+            proposed_deadline=datetime.utcnow() + timedelta(hours=48),
+            deliverable_format="json",
+            deliverable_description="Full analysis with visualizations",
+            special_conditions=["Priority processing", "Extended support"],
+            requires_evaluator=True,
+            suggested_evaluator_id="evaluator-agent-001",
+        )
+
+        assert len(terms.special_conditions) == 2
+        assert terms.requires_evaluator is True
 
 
 class TestACPDeliverable:
@@ -202,22 +267,22 @@ class TestACPDeliverable:
     def test_create_deliverable(self):
         deliverable = ACPDeliverable(
             job_id=str(uuid4()),
-            content_type="application/json",
+            content_type="json",
             content={"result": "test data", "confidence": 0.95},
-            metadata={"processing_time_ms": 150},
+            notes="Processing completed in 150ms",
         )
 
-        assert deliverable.content_type == "application/json"
+        assert deliverable.content_type == "json"
         assert deliverable.content["confidence"] == 0.95
 
-    def test_deliverable_timestamp(self):
+    def test_deliverable_with_default_notes(self):
         deliverable = ACPDeliverable(
             job_id=str(uuid4()),
-            content_type="text/plain",
-            content="Result",
+            content_type="text",
+            content={"text": "Result"},
         )
 
-        assert deliverable.submitted_at is not None
+        assert deliverable.notes == ""
 
 
 class TestACPEvaluation:
@@ -226,34 +291,50 @@ class TestACPEvaluation:
     def test_create_evaluation(self):
         evaluation = ACPEvaluation(
             job_id=str(uuid4()),
-            evaluator_address="0xbuyer",
-            rating=4,
-            passed=True,
+            evaluator_agent_id="buyer-agent-001",
+            result="approved",
+            score=0.85,
             feedback="Good quality work",
         )
 
-        assert evaluation.rating == 4
-        assert evaluation.passed is True
+        assert evaluation.score == 0.85
+        assert evaluation.result == "approved"
 
-    def test_evaluation_rating_bounds(self):
-        """Rating should be 1-5."""
-        # Valid rating
+    def test_evaluation_score_bounds(self):
+        """Score should be 0.0 to 1.0."""
+        # Valid score
         eval1 = ACPEvaluation(
             job_id=str(uuid4()),
-            evaluator_address="0xbuyer",
-            rating=5,
-            passed=True,
+            evaluator_agent_id="buyer-agent-001",
+            result="approved",
+            score=1.0,
+            feedback="Perfect work",
         )
-        assert eval1.rating == 5
+        assert eval1.score == 1.0
 
-        # Rating validation (if implemented)
+        # Score out of bounds (> 1.0)
         with pytest.raises(ValueError):
             ACPEvaluation(
                 job_id=str(uuid4()),
-                evaluator_address="0xbuyer",
-                rating=6,  # Out of bounds
-                passed=True,
+                evaluator_agent_id="buyer-agent-001",
+                result="approved",
+                score=1.5,  # Out of bounds
+                feedback="Invalid score",
             )
+
+    def test_evaluation_rejection(self):
+        """Test a rejected evaluation."""
+        evaluation = ACPEvaluation(
+            job_id=str(uuid4()),
+            evaluator_agent_id="buyer-agent-001",
+            result="rejected",
+            score=0.2,
+            feedback="Did not meet accuracy requirements",
+            unmet_requirements=["95% accuracy", "Response within 1 hour"],
+        )
+
+        assert evaluation.result == "rejected"
+        assert len(evaluation.unmet_requirements) == 2
 
 
 class TestJobLifecycle:
@@ -261,33 +342,36 @@ class TestJobLifecycle:
 
     def test_job_lifecycle_happy_path(self):
         """Test a complete successful job lifecycle."""
-        # 1. Create job
+        # 1. Create job in REQUEST phase
         job = ACPJob(
             id=str(uuid4()),
-            buyer_address="0xbuyer",
-            provider_address="0xprovider",
-            service_type="knowledge_query",
-            phase=ACPPhase.NEGOTIATION,
-            status=ACPJobStatus.PENDING,
-            payment=TokenPayment(
-                token=PaymentToken.VIRTUAL,
-                amount=Decimal("50.0"),
-            ),
-            escrow_amount=Decimal("50.0"),
+            buyer_agent_id="buyer-agent-001",
+            buyer_wallet="0xbuyer",
+            provider_agent_id="provider-agent-001",
+            provider_wallet="0xprovider",
+            job_offering_id=str(uuid4()),
+            current_phase=ACPPhase.REQUEST,
+            status=ACPJobStatus.OPEN,
+            requirements="Knowledge query",
         )
-        assert job.phase == ACPPhase.NEGOTIATION
+        assert job.current_phase == ACPPhase.REQUEST
 
-        # 2. Terms agreed
-        job.phase = ACPPhase.EXECUTION
+        # 2. Advance to negotiation
+        job.advance_to_phase(ACPPhase.NEGOTIATION)
+        job.status = ACPJobStatus.NEGOTIATING
+        assert job.status == ACPJobStatus.NEGOTIATING
+
+        # 3. Terms agreed, advance to transaction
+        job.advance_to_phase(ACPPhase.TRANSACTION)
         job.status = ACPJobStatus.IN_PROGRESS
         assert job.status == ACPJobStatus.IN_PROGRESS
 
-        # 3. Delivery
-        job.phase = ACPPhase.EVALUATION
-        assert job.phase == ACPPhase.EVALUATION
+        # 4. Delivery and evaluation
+        job.advance_to_phase(ACPPhase.EVALUATION)
+        job.status = ACPJobStatus.EVALUATING
+        assert job.status == ACPJobStatus.EVALUATING
 
-        # 4. Evaluation passed
-        job.phase = ACPPhase.COMPLETED
+        # 5. Evaluation passed
         job.status = ACPJobStatus.COMPLETED
         assert job.status == ACPJobStatus.COMPLETED
 
@@ -295,15 +379,13 @@ class TestJobLifecycle:
         """Test job cancellation."""
         job = ACPJob(
             id=str(uuid4()),
-            buyer_address="0xbuyer",
-            provider_address="0xprovider",
-            service_type="test",
-            phase=ACPPhase.NEGOTIATION,
-            status=ACPJobStatus.PENDING,
-            payment=TokenPayment(
-                token=PaymentToken.VIRTUAL,
-                amount=Decimal("50.0"),
-            ),
+            buyer_agent_id="buyer-agent-001",
+            buyer_wallet="0xbuyer",
+            provider_agent_id="provider-agent-001",
+            provider_wallet="0xprovider",
+            job_offering_id=str(uuid4()),
+            current_phase=ACPPhase.NEGOTIATION,
+            status=ACPJobStatus.NEGOTIATING,
         )
 
         # Cancel the job
@@ -314,19 +396,19 @@ class TestJobLifecycle:
         """Test job dispute."""
         job = ACPJob(
             id=str(uuid4()),
-            buyer_address="0xbuyer",
-            provider_address="0xprovider",
-            service_type="test",
-            phase=ACPPhase.EVALUATION,
-            status=ACPJobStatus.IN_PROGRESS,
-            payment=TokenPayment(
-                token=PaymentToken.VIRTUAL,
-                amount=Decimal("50.0"),
-            ),
+            buyer_agent_id="buyer-agent-001",
+            buyer_wallet="0xbuyer",
+            provider_agent_id="provider-agent-001",
+            provider_wallet="0xprovider",
+            job_offering_id=str(uuid4()),
+            current_phase=ACPPhase.EVALUATION,
+            status=ACPJobStatus.EVALUATING,
         )
 
         # File dispute
-        job.phase = ACPPhase.DISPUTE
+        job.is_disputed = True
+        job.dispute_reason = "Deliverable does not meet requirements"
         job.status = ACPJobStatus.DISPUTED
-        assert job.phase == ACPPhase.DISPUTE
+        assert job.current_phase == ACPPhase.EVALUATION
         assert job.status == ACPJobStatus.DISPUTED
+        assert job.is_disputed is True

@@ -31,7 +31,6 @@ from forge.virtuals.models.acp import (
     ACPNegotiationTerms,
     ACPPhase,
     JobOffering,
-    PaymentToken,
 )
 
 
@@ -70,7 +69,7 @@ class MockOfferingRepository:
         return self._offerings.get(offering_id)
 
     async def get_by_provider(self, provider_address: str) -> list[JobOffering]:
-        return [o for o in self._offerings.values() if o.provider_address == provider_address]
+        return [o for o in self._offerings.values() if o.provider_wallet == provider_address]
 
     async def search(self, **kwargs) -> list[JobOffering]:
         return list(self._offerings.values())
@@ -135,14 +134,12 @@ def sample_offering():
     """Create a sample job offering."""
     return JobOffering(
         id=str(uuid4()),
-        provider_address="0xProvider123",
+        provider_agent_id="agent_123",
+        provider_wallet="0xProvider123",
         service_type="knowledge_query",
         title="Knowledge Graph Query Service",
         description="Execute queries against the Forge knowledge graph",
-        price_min=Decimal("10.0"),
-        price_max=Decimal("100.0"),
-        currency=PaymentToken.VIRTUAL,
-        capabilities=["cypher", "semantic_search", "natural_language"],
+        base_fee_virtual=10.0,
         input_schema={"type": "object", "properties": {"query": {"type": "string"}}},
         output_schema={"type": "object", "properties": {"results": {"type": "array"}}},
     )
@@ -197,7 +194,7 @@ class TestOfferingRegistration:
         )
 
         assert registered.id is not None
-        assert registered.provider_address == "0xProvider123"
+        assert registered.provider_wallet == "0xProvider123"
         assert registered.service_type == "knowledge_query"
 
     @pytest.mark.asyncio
@@ -209,13 +206,12 @@ class TestOfferingRegistration:
         ):
             offering = JobOffering(
                 id=str(uuid4()),
-                provider_address="0xProvider123",
+                provider_agent_id="agent_123",
+                provider_wallet="0xProvider123",
                 service_type=service_type,
                 title=f"Service {i}",
                 description=f"Description {i}",
-                price_min=Decimal("10.0"),
-                price_max=Decimal("100.0"),
-                currency=PaymentToken.VIRTUAL,
+                base_fee_virtual=10.0,
             )
             registered = await acp_service.register_offering(
                 agent_id="agent_123",
