@@ -1276,8 +1276,10 @@ class AgentGatewayService:
             "input_schema": input_schema,
             "output_schema": output_schema,
             "max_execution_time_seconds": 300,
-            "capabilities": [c.value for c in session.capabilities],
-            "trust_level": session.trust_level.value,
+            "capabilities": [c.value if hasattr(c, "value") else c for c in session.capabilities],
+            "trust_level": session.trust_level.value
+            if hasattr(session.trust_level, "value")
+            else session.trust_level,
         }
 
     async def execute_acp_job(

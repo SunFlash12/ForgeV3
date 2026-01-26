@@ -399,6 +399,14 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
             return None
 
         capsule_data = result["capsule"]
+
+        # Deserialize metadata from JSON string if needed (same as _to_model)
+        if "metadata" in capsule_data and isinstance(capsule_data["metadata"], str):
+            try:
+                capsule_data["metadata"] = json.loads(capsule_data["metadata"])
+            except json.JSONDecodeError:
+                capsule_data["metadata"] = {}
+
         lineage_data = result.get("lineage", [])
         children_data = result.get("children", [])
 
@@ -1031,7 +1039,9 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
         now = self._now()
 
         # Determine if bidirectional
-        is_bidirectional = data.relationship_type.is_bidirectional
+        # use_enum_values=True stores the string value, so convert back to enum
+        rel_type = SemanticRelationType(data.relationship_type)
+        is_bidirectional = rel_type.is_bidirectional
 
         # For bidirectional edges, store in canonical order (lower ID first)
         if is_bidirectional:
@@ -1042,13 +1052,13 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
             target_id = data.target_id
 
         # Check if edge already exists
-        existing = await self._get_semantic_edge(source_id, target_id, data.relationship_type)
+        existing = await self._get_semantic_edge(source_id, target_id, rel_type)
         if existing:
             self.logger.warning(
                 "Semantic edge already exists",
                 source_id=source_id,
                 target_id=target_id,
-                relationship_type=data.relationship_type.value,
+                relationship_type=rel_type.value,
             )
             return existing
 
@@ -1079,7 +1089,7 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
             "id": edge_id,
             "source_id": source_id,
             "target_id": target_id,
-            "rel_type": data.relationship_type.value,
+            "rel_type": rel_type.value,
             "confidence": data.confidence,
             "reason": data.reason,
             "auto_detected": data.auto_detected,
@@ -1097,7 +1107,7 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
             self.logger.info(
                 "Created semantic edge",
                 edge_id=edge_id,
-                relationship_type=data.relationship_type.value,
+                relationship_type=rel_type.value,
                 source_id=source_id,
                 target_id=target_id,
             )

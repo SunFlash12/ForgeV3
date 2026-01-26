@@ -15,7 +15,15 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import hashlib
 import pytest
 
-from forge.models.user import AuthProvider, Token, User, UserCreate, UserInDB, UserRole
+from forge.models.user import (
+    AuthProvider,
+    Token,
+    TrustFlameAdjustment,
+    User,
+    UserCreate,
+    UserInDB,
+    UserRole,
+)
 from forge.security.auth_service import (
     AccountDeactivatedError,
     AccountLockedError,
@@ -26,6 +34,13 @@ from forge.security.auth_service import (
     IPRateLimiter,
     RegistrationError,
 )
+
+
+def _patch_mfa_disabled():
+    """Patch get_mfa_service so is_enabled returns False (MFA not active)."""
+    mock_mfa = MagicMock()
+    mock_mfa.is_enabled = AsyncMock(return_value=False)
+    return patch("forge.security.mfa.get_mfa_service", return_value=mock_mfa)
 
 
 # =============================================================================
@@ -218,6 +233,7 @@ class TestAuthServiceLogin:
         repo.record_login = AsyncMock()
         repo.update_refresh_token = AsyncMock()
         repo.update_password = AsyncMock()
+        repo.get_token_version = AsyncMock(return_value=1)
         return repo
 
     @pytest.fixture
@@ -260,10 +276,11 @@ class TestAuthServiceLogin:
         """Successful login returns user and tokens."""
         mock_user_repo.get_by_username_or_email.return_value = valid_user
 
-        user, token = await auth_service.login(
-            username_or_email="testuser",
-            password="SecureP@ss123!",
-        )
+        with _patch_mfa_disabled():
+            user, token = await auth_service.login(
+                username_or_email="testuser",
+                password="SecureP@ss123!",
+            )
 
         assert user.id == "user123"
         assert token.access_token
@@ -336,6 +353,10 @@ class TestAuthServiceLogin:
         with limiter._lock:
             limiter._lockouts[ip] = datetime.now(UTC) + timedelta(minutes=15)
 
+        # Mark redis as already initialized (no Redis) to avoid settings access
+        limiter._redis_initialized = True
+        limiter._redis_client = None
+
         auth_service._ip_rate_limiter = limiter
 
         with pytest.raises(IPRateLimitExceededError, match="Too many login attempts"):
@@ -361,6 +382,7 @@ class TestAuthServiceTokens:
         repo.get_by_id = AsyncMock()
         repo.validate_refresh_token = AsyncMock(return_value=True)
         repo.update_refresh_token = AsyncMock()
+        repo.get_token_version = AsyncMock(return_value=1)
         return repo
 
     @pytest.fixture
@@ -459,6 +481,9 @@ class TestAuthServiceTokens:
             mock_settings.jwt_access_token_expire_minutes = -1
             mock_settings.jwt_algorithm = "HS256"
             mock_settings.jwt_secret_key = "test-secret-key-at-least-32-characters-long-for-testing"
+            mock_settings.jwt_issuer = "forge-cascade"
+            mock_settings.jwt_audience = "forge-api"
+            mock_settings.jwt_clock_skew_seconds = 0
 
             from forge.security.tokens import create_access_token
 
@@ -488,6 +513,7 @@ class TestAuthServicePasswordManagement:
         repo.get_by_id = AsyncMock()
         repo.get_by_email = AsyncMock()
         repo.update_password = AsyncMock()
+        repo.update_password_with_history = AsyncMock()
         repo.update_refresh_token = AsyncMock()
         repo.store_password_reset_token = AsyncMock(return_value=True)
         repo.validate_password_reset_token = AsyncMock(return_value=True)
@@ -542,7 +568,7 @@ class TestAuthServicePasswordManagement:
             new_password="NewSecureP@ss2!",
         )
 
-        mock_user_repo.update_password.assert_called_once()
+        mock_user_repo.update_password_with_history.assert_called_once()
         mock_user_repo.update_refresh_token.assert_called_once_with("user123", None)
         mock_audit_repo.log_security_event.assert_called()
 
@@ -591,7 +617,7 @@ class TestAuthServicePasswordManagement:
             reset_token="valid_token_here",
         )
 
-        mock_user_repo.update_password.assert_called_once()
+        mock_user_repo.update_password_with_history.assert_called_once()
         mock_user_repo.clear_password_reset_token.assert_called_once()
         mock_user_repo.clear_lockout.assert_called_once()
 
@@ -721,7 +747,13 @@ class TestAuthServiceAccountManagement:
     ):
         """Trust adjustment works correctly."""
         mock_user_repo.get_by_id.return_value = valid_user
-        mock_user_repo.adjust_trust_flame.return_value = 70
+        mock_user_repo.adjust_trust_flame.return_value = TrustFlameAdjustment(
+            user_id="user123",
+            old_value=60,
+            new_value=70,
+            reason="Good contributions",
+            adjusted_by="admin456",
+        )
 
         new_trust = await auth_service.adjust_user_trust(
             user_id="user123",

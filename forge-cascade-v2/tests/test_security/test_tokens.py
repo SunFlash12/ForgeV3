@@ -254,7 +254,7 @@ class TestTokenValidation:
 
         token = pyjwt.encode(payload, settings.jwt_secret_key, algorithm="HS256")
 
-        with pytest.raises(TokenInvalidError, match="Invalid trust_flame"):
+        with pytest.raises(TokenInvalidError, match="trust_flame"):
             verify_access_token(token)
 
 

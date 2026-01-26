@@ -301,7 +301,7 @@ class TestCapsuleRepositoryRetrieval:
         mock_db_client.execute_single.return_value = {"total": 1}
         mock_db_client.execute.return_value = [{"capsule": sample_capsule_data}]
 
-        result, total = await capsule_repository.list(
+        result, total = await capsule_repository.list_capsules(
             offset=0,
             limit=10,
             filters={"type": "insight", "tag": "test"},
@@ -489,7 +489,7 @@ class TestCapsuleRepositorySemanticSearch:
     @pytest.mark.asyncio
     async def test_semantic_search_handles_error(self, capsule_repository, mock_db_client):
         """Semantic search returns empty on error."""
-        mock_db_client.execute.side_effect = Exception("Vector index not available")
+        mock_db_client.execute.side_effect = RuntimeError("Vector index not available")
 
         embedding = [0.1] * 1536
         result = await capsule_repository.semantic_search(

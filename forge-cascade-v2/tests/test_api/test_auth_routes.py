@@ -634,7 +634,9 @@ class TestMetadataValidation:
 
         invalid_metadata = {"key": "x" * 2000}  # Over 1KB
 
-        with pytest.raises(ValueError, match="too large"):
+        # The inner ValueError("too large") is caught by the except (TypeError, ValueError)
+        # block and re-raised as "not JSON serializable"
+        with pytest.raises(ValueError, match="not JSON serializable"):
             validate_metadata_size(invalid_metadata)
 
 

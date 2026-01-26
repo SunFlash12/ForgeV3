@@ -794,16 +794,16 @@ class TestCypherInjectionPrevention:
 
         malicious_username = "admin'--; DROP (n)"
 
-        user_create = UserCreate(
-            username=malicious_username,
-            email="test@example.com",
-            password="SecureP@ss123!",
-        )
-
         try:
+            user_create = UserCreate(
+                username=malicious_username,
+                email="test@example.com",
+                password="SecureP@ss123!",
+            )
+
             result = await user_repository.create(user_create, password_hash="$2b$12$hash")
         except Exception:
-            pass  # Validation might reject the username, which is fine
+            pass  # Pydantic validation or DB layer might reject the username, which is fine
 
         # If called, verify parameterization
         if mock_db_client.execute_single.called:

@@ -1105,8 +1105,6 @@ class AuthService:
             )
 
             # SECURITY FIX (Audit 3): Hash email in audit logs
-            import hashlib
-
             email_hash = hashlib.sha256(email.lower().encode()).hexdigest()[:16]
             await self.audit_repo.log_security_event(
                 actor_id=user.id,
@@ -1119,8 +1117,6 @@ class AuthService:
 
         # Log attempt for non-existent email (but don't reveal to caller)
         # SECURITY FIX (Audit 3): Hash email in audit logs
-        import hashlib
-
         email_hash = hashlib.sha256(email.lower().encode()).hexdigest()[:16]
         await self.audit_repo.log_security_event(
             actor_id="unknown",

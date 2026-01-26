@@ -9,8 +9,6 @@ These tests verify the complete ACP lifecycle including:
 - Agent Gateway ↔ ACP bridge functionality
 """
 
-import hashlib
-import json
 from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock
 from uuid import uuid4
@@ -26,7 +24,6 @@ from forge.virtuals.models.acp import (
     ACPJob,
     ACPJobCreate,
     ACPJobStatus,
-    ACPMemo,
     ACPNegotiationTerms,
     ACPPhase,
     JobOffering,
@@ -384,9 +381,6 @@ class TestDeliverableSubmission:
         deliverable = ACPDeliverable(
             job_id=job.id,
             content=deliverable_content,
-            content_hash=hashlib.sha256(
-                json.dumps(deliverable_content, sort_keys=True).encode()
-            ).hexdigest(),
             content_type="application/json",
         )
 
@@ -397,7 +391,7 @@ class TestDeliverableSubmission:
         )
 
         assert updated_job.current_phase == ACPPhase.EVALUATION
-        assert updated_job.deliverable is not None
+        assert updated_job.deliverable_content is not None
 
 
 class TestEvaluationPhase:
@@ -422,7 +416,6 @@ class TestEvaluationPhase:
         deliverable = ACPDeliverable(
             job_id=job.id,
             content={"result": "success"},
-            content_hash="abc123",
             content_type="application/json",
         )
         await acp_service.submit_deliverable(job.id, deliverable, "0xProvider123")
@@ -439,7 +432,7 @@ class TestEvaluationPhase:
         completed_job = await acp_service.evaluate_deliverable(
             job_id=job.id,
             evaluation=evaluation,
-            buyer_wallet="0xBuyer123",
+            evaluator_wallet="0xBuyer123",
         )
 
         assert completed_job.status == ACPJobStatus.COMPLETED
@@ -465,7 +458,6 @@ class TestEvaluationPhase:
         deliverable = ACPDeliverable(
             job_id=job.id,
             content={"result": "failure"},
-            content_hash="def456",
             content_type="application/json",
         )
         await acp_service.submit_deliverable(job.id, deliverable, "0xProvider123")
@@ -482,7 +474,7 @@ class TestEvaluationPhase:
         evaluated_job = await acp_service.evaluate_deliverable(
             job_id=job.id,
             evaluation=evaluation,
-            buyer_wallet="0xBuyer123",
+            evaluator_wallet="0xBuyer123",
         )
 
         # Job should be completed but marked as disputed or cancelled
@@ -515,7 +507,6 @@ class TestDisputeResolution:
         deliverable = ACPDeliverable(
             job_id=job.id,
             content={"result": "disputed"},
-            content_hash="ghi789",
             content_type="application/json",
         )
         await acp_service.submit_deliverable(job.id, deliverable, "0xProvider123")
@@ -540,37 +531,38 @@ class TestDisputeResolution:
 
 
 class TestMemoExchange:
-    """Tests for memo/message exchange."""
+    """Tests for memo/message exchange via ACP job lifecycle."""
 
     @pytest.mark.asyncio
-    async def test_send_memo(self, acp_service, sample_offering, sample_job_create):
-        """Parties should be able to exchange memos."""
+    async def test_job_lifecycle_creates_memos(
+        self, acp_service, sample_offering, sample_job_create
+    ):
+        """Job lifecycle phases should create signed memos."""
         # Setup
         await acp_service.register_offering("agent_provider_456", "0xProvider123", sample_offering)
         sample_job_create.job_offering_id = sample_offering.id
         job = await acp_service.create_job(sample_job_create, "0xBuyer123")
 
-        # Send memo
-        memo = ACPMemo(
-            job_id=job.id,
-            sender_address="0xBuyer123",
-            content={"message": "Can you clarify the query parameters?"},
-            content_hash=hashlib.sha256(b"Can you clarify the query parameters?").hexdigest(),
-            nonce=1,
-            sender_signature="mock_signature",
-            memo_type="question",
-        )
+        # Verify request memo was created during job creation
+        assert job.request_memo is not None
+        assert job.request_memo.memo_type == "request"
+        assert job.request_memo.sender_address == "0xBuyer123"
+        assert job.request_memo.content_hash is not None
+        assert job.request_memo.nonce > 0
 
-        result = await acp_service.send_memo(
+        # Provider responds - creates requirement memo
+        terms = ACPNegotiationTerms(
             job_id=job.id,
-            memo=memo,
-            sender_wallet="0xBuyer123",
+            proposed_fee_virtual=50.0,
+            proposed_deadline=datetime.now(UTC) + timedelta(hours=24),
+            deliverable_format="application/json",
+            deliverable_description="Query results",
         )
+        updated_job = await acp_service.respond_to_request(job.id, terms, "0xProvider123")
 
-        assert result is not None
-        # Verify memo is stored
-        job_with_memos = await acp_service.get_job(job.id)
-        assert job_with_memos.memos is not None
+        assert updated_job.requirement_memo is not None
+        assert updated_job.requirement_memo.memo_type == "requirement"
+        assert updated_job.requirement_memo.sender_address == "0xProvider123"
 
 
 class TestAgentGatewayBridge:
@@ -604,7 +596,7 @@ class TestAgentGatewayBridge:
 
         # Create a mock session
         session = AgentSession(
-            session_id="test_session_123",
+            id="test_session_123",
             agent_id="agent_123",
             agent_name="Test Agent",
             api_key_hash="hash123",
@@ -675,9 +667,6 @@ class TestEndToEndJobLifecycle:
         deliverable = ACPDeliverable(
             job_id=job.id,
             content=result_content,
-            content_hash=hashlib.sha256(
-                json.dumps(result_content, sort_keys=True).encode()
-            ).hexdigest(),
             content_type="application/json",
         )
         job = await acp_service.submit_deliverable(job.id, deliverable, "0xProvider")
@@ -720,7 +709,6 @@ class TestEndToEndJobLifecycle:
         deliverable = ACPDeliverable(
             job_id=job.id,
             content={"documents": []},  # Empty results
-            content_hash="empty123",
             content_type="application/json",
         )
         job = await acp_service.submit_deliverable(job.id, deliverable, "0xProvider")
