@@ -31,6 +31,7 @@ from forge.api.dependencies import (
     TrustedUserDep,
     UserRepoDep,
 )
+from forge.models.base import ProposalStatus
 from forge.models.events import EventType
 from forge.models.governance import (
     Proposal,
@@ -40,7 +41,6 @@ from forge.models.governance import (
     VoteChoice,
     VoteDelegation,
 )
-from forge.models.base import ProposalStatus
 
 # Resilience integration - caching, validation, metrics
 from forge.resilience.integration import (
@@ -971,7 +971,9 @@ async def get_governance_metrics(
     Returns statistics about proposals, voting participation,
     and governance health.
     """
-    # Get all proposals for metrics
+    # PERFORMANCE CONCERN (Audit 7 - Session 3): Fetching up to 1000 proposals for metrics
+    # computation. Consider caching these metrics or computing them via a dedicated DB query
+    # instead of loading all proposals into memory. For now, limit is capped at 1000.
     proposals, total = await governance_repo.list_proposals(
         offset=0,
         limit=1000,  # Get all for metrics
@@ -1007,7 +1009,10 @@ async def get_governance_metrics(
         # Aggregate vote counts
         total_votes += p.votes_for + p.votes_against + p.votes_abstain
 
-        # Get votes for unique voter tracking
+        # PERFORMANCE CONCERN (Audit 7 - Session 3): This issues N+1 DB queries (one per proposal)
+        # to fetch votes for unique voter tracking. For large proposal counts, this will be slow.
+        # TODO: Replace with a single aggregation query in the repository layer, e.g.:
+        #   SELECT DISTINCT voter_id FROM votes WHERE proposal_id IN (...)
         votes = await governance_repo.get_proposal_votes(p.id)
         for v in votes:
             unique_voters.add(v.voter_id)

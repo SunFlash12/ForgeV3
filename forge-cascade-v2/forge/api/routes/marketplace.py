@@ -5,7 +5,7 @@ Endpoints for the capsule marketplace.
 """
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
@@ -20,7 +20,11 @@ from forge.models.marketplace import (
     ListingVisibility,
 )
 from forge.models.user import User
-from forge.services.marketplace import ListingUpdateFields, MarketplaceService, get_marketplace_service
+from forge.services.marketplace import (
+    ListingUpdateFields,
+    MarketplaceService,
+    get_marketplace_service,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -215,8 +219,9 @@ async def list_listings(
     max_price: float | None = None,
     tags: str | None = Query(default=None, description="Comma-separated tags"),
     sort_by: str = Query(default="created_at"),
-    limit: int = Query(default=50, ge=1, le=200),
-    offset: int = Query(default=0, ge=0),
+    # SECURITY FIX (Audit 7 - Session 3): Reduce max limit to 100 to prevent excessive queries
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0, le=10000),
     svc: MarketplaceService = MarketplaceDep,
 ) -> ListingListResponse:
     """Browse marketplace listings."""
@@ -523,7 +528,8 @@ async def purchase_single(
 @router.get("/purchases", response_model=list[PurchaseResponse])
 async def get_purchases(
     user: ActiveUserDep,
-    limit: int = Query(default=50, ge=1, le=200),
+    # SECURITY FIX (Audit 7 - Session 3): Reduce max limit to 100
+    limit: int = Query(default=50, ge=1, le=100),
     svc: MarketplaceService = MarketplaceDep,
 ) -> list[PurchaseResponse]:
     """Get purchase history."""
@@ -547,7 +553,8 @@ async def get_purchases(
 @router.get("/sales", response_model=list[PurchaseResponse])
 async def get_sales(
     user: ActiveUserDep,
-    limit: int = Query(default=50, ge=1, le=200),
+    # SECURITY FIX (Audit 7 - Session 3): Reduce max limit to 100
+    limit: int = Query(default=50, ge=1, le=100),
     svc: MarketplaceService = MarketplaceDep,
 ) -> list[PurchaseResponse]:
     """Get sales history (as a seller)."""
@@ -877,9 +884,11 @@ async def submit_web3_purchase(
         )
 
         if not verification.is_valid:
+            # SECURITY FIX (Audit 7 - Session 3): Don't leak verification internals
+            logger.warning("web3_tx_verification_failed: tx=%s, error=%s", request.transaction_hash, verification.error)
             raise HTTPException(
                 status_code=400,
-                detail=f"Transaction verification failed: {verification.error}",
+                detail="Transaction verification failed. Please check your transaction and try again.",
             )
 
         # Process the purchase - grant capsule access
@@ -919,7 +928,8 @@ async def submit_web3_purchase(
             transaction_hash=request.transaction_hash,
             capsule_ids=capsule_ids,
             total_virtual=str(total_virtual),
-            created_at=datetime.utcnow(),
+            # SECURITY FIX (Audit 7 - Session 3): Use timezone-aware datetime
+            created_at=datetime.now(UTC),
         )
 
     except (ValueError, ConnectionError, TimeoutError, OSError) as e:
@@ -1024,19 +1034,22 @@ async def get_virtual_price() -> VirtualPriceResponse:
                     price = float(pairs[0].get("priceUsd", 0))
                     return VirtualPriceResponse(
                         price_usd=price,
-                        updated_at=datetime.utcnow(),
+                        # SECURITY FIX (Audit 7 - Session 3): Use timezone-aware datetime
+                        updated_at=datetime.now(UTC),
                     )
 
         # Fallback price if API fails
         logger.warning("virtual_price_api_failed: fallback=%s", 0.10)
         return VirtualPriceResponse(
             price_usd=0.10,  # Fallback price
-            updated_at=datetime.utcnow(),
+            # SECURITY FIX (Audit 7 - Session 3): Use timezone-aware datetime
+            updated_at=datetime.now(UTC),
         )
 
     except (ValueError, ConnectionError, TimeoutError, OSError) as e:
         logger.error("virtual_price_fetch_failed: error=%s", str(e))
         return VirtualPriceResponse(
             price_usd=0.10,  # Fallback price
-            updated_at=datetime.utcnow(),
+            # SECURITY FIX (Audit 7 - Session 3): Use timezone-aware datetime
+            updated_at=datetime.now(UTC),
         )

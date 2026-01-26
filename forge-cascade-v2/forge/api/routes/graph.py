@@ -37,7 +37,7 @@ from forge.api.dependencies import (
     TrustedUserDep,
 )
 from forge.models.base import generate_id
-from forge.models.events import Event, EventPriority, EventType
+from forge.models.events import EventPriority, EventType
 
 router = APIRouter()
 
@@ -254,7 +254,10 @@ async def explore_graph(
 
     where_clause = f"WHERE {' AND '.join(filters)}" if filters else ""
 
-    # Get nodes with metrics
+    # SECURITY FIX (Audit 7 - Session 3): Cypher query uses f-string for WHERE clause,
+    # but this is safe because filter conditions are hardcoded strings ("c.type = $type", etc.)
+    # and all user-supplied values are passed via Neo4j parameterized query ($type, $community, $min_trust).
+    # Neo4j does not support parameterized WHERE clauses, so this pattern is the standard approach.
     node_query = f"""
     MATCH (c:Capsule)
     {where_clause}
@@ -486,7 +489,8 @@ async def compute_centrality(
     """
     # The GraphRepository only has compute_betweenness_centrality method
     # Use the provider's compute_centrality for more options
-    from forge.models.graph_analysis import AlgorithmType, CentralityRequest as CentralityReq
+    from forge.models.graph_analysis import AlgorithmType
+    from forge.models.graph_analysis import CentralityRequest as CentralityReq
 
     # Map centrality type string to AlgorithmType
     algorithm_map = {
@@ -533,6 +537,8 @@ async def detect_communities(
     # Use the provider for more detailed control
     from forge.models.graph_analysis import (
         AlgorithmType,
+    )
+    from forge.models.graph_analysis import (
         CommunityDetectionRequest as CommunityReq,
     )
 
@@ -700,11 +706,12 @@ async def query_knowledge(
             cypher=result_data.get("cypher") if request.debug else None,
             results=result_data.get("results") if request.include_results else None,
         )
-    except (ValueError, TypeError, KeyError, RuntimeError, OSError) as e:
+    except (ValueError, TypeError, KeyError, RuntimeError, OSError):
         execution_time = (time.time() - start) * 1000
         return KnowledgeQueryResponse(
             question=request.question,
-            answer=f"Error processing query: {str(e)}",
+            # SECURITY FIX (Audit 7 - Session 3): Do not leak internal error details to client
+            answer="Error processing query. Please try rephrasing your question.",
             result_count=0,
             execution_time_ms=execution_time,
             complexity="error",
@@ -880,8 +887,9 @@ async def diff_capsule_versions(
     # diff_versions returns a VersionComparison object that already contains version info
     try:
         comparison = await temporal_repo.diff_versions(version_a, version_b)
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError:
+        # SECURITY FIX (Audit 7 - Session 3): Do not leak internal error details to client
+        raise HTTPException(status_code=404, detail="Version not found")
 
     # Verify capsule_id matches
     if comparison.capsule_id != capsule_id:
@@ -1411,7 +1419,8 @@ async def get_unresolved_contradictions(
     user: ActiveUserDep,
     capsule_repo: CapsuleRepoDep,
     limit: int = Query(default=50, ge=1, le=200),
-    offset: int = Query(default=0, ge=0),
+    # SECURITY FIX (Audit 7 - Session 3): Add upper bound to offset to prevent abuse
+    offset: int = Query(default=0, ge=0, le=10000),
 ) -> dict[str, Any]:
     """
     Get all unresolved contradictions across the knowledge base.

@@ -131,9 +131,10 @@ async def get_agent():
             )
         except (RuntimeError, ConnectionError, OSError, ValueError) as e:
             logger.error(f"Failed to initialize Copilot agent: {e}")
+            # SECURITY FIX (Audit 7 - Session 3): Do not leak internal error details
             raise HTTPException(
                 status_code=503,
-                detail=f"Failed to initialize Copilot agent: {e}"
+                detail="Failed to initialize Copilot agent. Please try again or contact support."
             )
 
     return _agent
@@ -188,9 +189,10 @@ async def chat(
 
     except (ConnectionError, TimeoutError, ValueError, RuntimeError) as e:
         logger.error(f"Chat request failed: {e}")
+        # SECURITY FIX (Audit 7 - Session 3): Do not leak internal error details
         raise HTTPException(
             status_code=500,
-            detail=f"Chat request failed: {e}"
+            detail="Chat request failed. Please try again or contact support."
         )
 
 
@@ -218,7 +220,8 @@ async def stream_chat(
                 yield chunk
         except (ConnectionError, TimeoutError, ValueError, RuntimeError) as e:
             logger.error(f"Stream chat failed: {e}")
-            yield f"\n[Error: {e}]"
+            # SECURITY FIX (Audit 7 - Session 3): Do not leak internal error details
+            yield "\n[Error: Stream processing failed. Please try again.]"
 
     return StreamingResponse(
         generate(),
@@ -435,9 +438,10 @@ async def websocket_chat(websocket: WebSocket) -> None:
     except (ConnectionError, asyncio.CancelledError, OSError, RuntimeError) as e:
         logger.error(f"WebSocket error: {e}")
         try:
+            # SECURITY FIX (Audit 7 - Session 3): Do not leak internal error details
             await websocket.send_json({
                 "type": "error",
-                "message": str(e),
+                "message": "An internal error occurred. Please reconnect.",
             })
         except (WebSocketDisconnect, ConnectionError, OSError, RuntimeError):
             pass

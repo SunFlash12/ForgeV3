@@ -12,6 +12,7 @@ Provides endpoints for:
 
 from __future__ import annotations
 
+import logging
 import time
 from datetime import UTC, datetime
 from typing import Any
@@ -28,6 +29,8 @@ from forge.api.dependencies import (
     TrustedUserDep,
 )
 from forge.kernel.overlay_manager import OverlayExecutionRequest
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -326,9 +329,11 @@ async def generate_differential_diagnosis(
         )
 
     if not result.success:
+        # SECURITY FIX (Audit 7 - Session 3): Do not leak internal error details
+        logger.error("Diagnosis overlay failed: %s", result.error)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Diagnosis failed: {result.error}"
+            detail="Diagnosis processing failed. Please try again or contact support."
         )
 
     execution_time = (time.time() - start) * 1000
@@ -394,9 +399,11 @@ async def search_by_phenotypes(
         )
 
     if not result.success:
+        # SECURITY FIX (Audit 7 - Session 3): Do not leak internal error details
+        logger.error("Phenotype search failed: %s", result.error)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Search failed: {result.error}"
+            detail="Phenotype search failed. Please try again or contact support."
         )
 
     execution_time = (time.time() - start) * 1000
@@ -449,9 +456,11 @@ async def get_drugs_for_disease(
         )
 
     if not result.success:
+        # SECURITY FIX (Audit 7 - Session 3): Do not leak internal error details
+        logger.error("Drug-disease query failed: %s", result.error)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Query failed: {result.error}"
+            detail="Drug-disease query failed. Please try again or contact support."
         )
 
     data = result.data or {}
@@ -495,9 +504,11 @@ async def check_drug_interactions(
         )
 
     if not result.success:
+        # SECURITY FIX (Audit 7 - Session 3): Do not leak internal error details
+        logger.error("Drug interaction query failed: %s", result.error)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Query failed: {result.error}"
+            detail="Drug interaction query failed. Please try again or contact support."
         )
 
     data = result.data or {}
@@ -555,9 +566,11 @@ async def get_gene_disease_associations(
         )
 
     if not result.success:
+        # SECURITY FIX (Audit 7 - Session 3): Do not leak internal error details
+        logger.error("Gene association query failed: %s", result.error)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Query failed: {result.error}"
+            detail="Gene association query failed. Please try again or contact support."
         )
 
     data = result.data or {}
@@ -610,9 +623,11 @@ async def semantic_search(
         )
 
     if not result.success:
+        # SECURITY FIX (Audit 7 - Session 3): Do not leak internal error details
+        logger.error("Semantic search failed: %s", result.error)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Search failed: {result.error}"
+            detail="Semantic search failed. Please try again or contact support."
         )
 
     execution_time = (time.time() - start) * 1000
@@ -665,9 +680,11 @@ async def get_discriminating_phenotypes(
         )
 
     if not result.success:
+        # SECURITY FIX (Audit 7 - Session 3): Do not leak internal error details
+        logger.error("Discriminating phenotypes query failed: %s", result.error)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Query failed: {result.error}"
+            detail="Discriminating phenotypes query failed. Please try again or contact support."
         )
 
     data = result.data or {}
@@ -720,16 +737,19 @@ async def get_disease_details(
         )
 
     if not result.success:
+        # SECURITY FIX (Audit 7 - Session 3): Do not leak internal error details
+        logger.error("Disease details query failed: %s", result.error)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Query failed: {result.error}"
+            detail="Disease details query failed. Please try again or contact support."
         )
 
     data = result.data or {}
     if data.get("error"):
+        # SECURITY FIX (Audit 7 - Session 3): Do not leak internal error details
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=data["error"]
+            detail="Disease not found"
         )
 
     disease = data.get("disease", {})
@@ -856,8 +876,10 @@ async def primekg_health_check(
         }
 
     except (OSError, ConnectionError, TimeoutError, RuntimeError) as e:
+        # SECURITY FIX (Audit 7 - Session 3): Do not leak internal error details
+        logger.error("PrimeKG health check failed: %s", e)
         return {
             "healthy": False,
-            "error": str(e),
+            "error": "Health check failed",
             "checked_at": datetime.now(UTC).isoformat(),
         }

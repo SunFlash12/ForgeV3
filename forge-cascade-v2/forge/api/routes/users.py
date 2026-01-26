@@ -450,9 +450,10 @@ async def update_user_trust(
     )
 
     if adjustment is None:
+        # SECURITY FIX (Audit 7 - Session 3): Generic error message, don't leak internal details
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to adjust trust flame",
+            detail="An unexpected error occurred. Please try again later.",
         )
 
     # Re-fetch user to get the updated state

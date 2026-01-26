@@ -518,7 +518,9 @@ async def stream_events(
             async for event in controller.stream_events(session_id):
                 yield f"data: {json.dumps(event.to_dict())}\n\n"
         except ValueError as e:
-            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+            # SECURITY FIX (Audit 7 - Session 3): Do not leak internal error details
+            logger.error("Stream event error for session %s: %s", session_id, e)
+            yield f"data: {json.dumps({'error': 'Stream processing failed'})}\n\n"
 
     return StreamingResponse(
         event_generator(),

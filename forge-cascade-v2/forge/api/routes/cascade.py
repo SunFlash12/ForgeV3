@@ -27,7 +27,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 from forge.api.dependencies import (
@@ -292,12 +292,15 @@ async def complete_cascade(
 async def list_active_cascades(
     user: ActiveUserDep,
     event_system: EventSystemDep,
+    # SECURITY FIX (Audit 7 - Session 3): Add pagination to prevent unbounded response
+    limit: int = Query(default=50, ge=1, le=200),
 ) -> list[CascadeChainResponse]:
     """
     List all active (incomplete) cascade chains.
     """
     chains = event_system.get_active_cascades()
-    return [_chain_to_response(c) for c in chains]
+    # SECURITY FIX (Audit 7 - Session 3): Apply LIMIT to prevent unbounded queries
+    return [_chain_to_response(c) for c in chains[:limit]]
 
 
 @router.get("/{cascade_id}", response_model=CascadeChainResponse)

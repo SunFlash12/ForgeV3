@@ -139,7 +139,7 @@ async def create_agent(
     be started to begin autonomous operation.
     """
     try:
-        from forge.services.virtuals_integration import get_virtuals_service
+        from forge.services.virtuals_integration import get_virtuals_service  # noqa: F401
         from forge.virtuals.game.sdk_client import GAMEWorker, get_game_client
         from forge.virtuals.models import (
             AgentGoals,
@@ -184,7 +184,7 @@ async def create_agent(
             from forge.database.client import get_db_client
             from forge.repositories.capsule_repository import CapsuleRepository
             from forge.virtuals.game.forge_functions import (
-                create_analysis_worker,
+                create_analysis_worker,  # noqa: F401
                 create_knowledge_worker,
             )
 
@@ -220,7 +220,9 @@ async def create_agent(
         )
 
     except ImportError as e:
-        raise HTTPException(status_code=503, detail=f"GAME SDK not available: {e}")
+        logger.error(f"GAME SDK import failed: {e}")
+        # SECURITY FIX (Audit 7 - Session 3): Do not leak internal error details
+        raise HTTPException(status_code=503, detail="GAME SDK not available. Please check installation.")
     except (ValueError, TypeError, KeyError, ConnectionError, OSError) as e:
         logger.error(f"Failed to create agent: {e}")
         raise HTTPException(status_code=500, detail="Failed to create agent")
@@ -355,7 +357,8 @@ async def run_agent(
         raise
     except (ValueError, TypeError, KeyError, ConnectionError, OSError) as e:
         logger.error(f"Failed to run agent: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to run agent: {e}")
+        # SECURITY FIX (Audit 7 - Session 3): Do not leak internal error details
+        raise HTTPException(status_code=500, detail="Failed to run agent. Please try again or contact support.")
 
 
 @router.post("/agents/{agent_id}/action", response_model=AgentActionResponse)

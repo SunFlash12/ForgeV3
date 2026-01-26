@@ -532,6 +532,9 @@ async def register_peer(
 async def list_peers(
     current_user: AdminUserDep,  # SECURITY FIX: Require authentication
     status: PeerStatus | None = None,
+    # SECURITY FIX (Audit 7 - Session 3): Added pagination to prevent unbounded queries
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0, le=10000),
     sync_service: SyncService = Depends(get_sync_service),
     trust_manager: PeerTrustManager = Depends(get_trust_manager),
 ) -> list[PeerResponse]:
@@ -540,6 +543,9 @@ async def list_peers(
 
     if status:
         peers = [p for p in peers if p.status == status]
+
+    # SECURITY FIX (Audit 7 - Session 3): Apply pagination bounds
+    peers = peers[offset:offset + limit]
 
     responses = []
     for peer in peers:
@@ -734,7 +740,7 @@ async def adjust_peer_trust(
 async def get_peer_trust_history(
     peer_id: str,
     current_user: AdminUserDep,  # SECURITY FIX: Require authentication
-    limit: int = Query(default=50, le=200),
+    limit: int = Query(default=50, ge=1, le=200),  # SECURITY FIX (Audit 7 - Session 3): Added lower bound
     trust_manager: PeerTrustManager = Depends(get_trust_manager),
 ) -> dict[str, Any]:
     """Get trust adjustment history for a peer."""
@@ -828,7 +834,7 @@ async def trigger_sync_all(
 async def get_sync_status(
     current_user: AdminUserDep,  # SECURITY FIX: Require authentication
     peer_id: str | None = None,
-    limit: int = Query(default=20, le=100),
+    limit: int = Query(default=20, ge=1, le=100),  # SECURITY FIX (Audit 7 - Session 3): Added lower bound
     sync_service: SyncService = Depends(get_sync_service),
 ) -> dict[str, Any]:
     """Get recent sync history."""

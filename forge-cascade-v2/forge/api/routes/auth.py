@@ -922,8 +922,10 @@ async def setup_mfa(
     # Check if MFA already enabled
     mfa_status = await mfa.get_status(user.id)
     if mfa_status.enabled and mfa_status.verified:
+        # SECURITY FIX (Audit 7 - Session 3): Use 409 CONFLICT, not 400 BAD_REQUEST.
+        # MFA already being enabled is a resource conflict, not a malformed request.
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_409_CONFLICT,
             detail="MFA is already enabled. Disable it first to reconfigure."
         )
 
@@ -1225,9 +1227,10 @@ async def link_google_account(
         )
 
         if not success:
+            # SECURITY FIX (Audit 7 - Session 3): Generic error message, don't hint at internals
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to link Google account"
+                detail="An unexpected error occurred. Please try again later."
             )
 
         # Audit log
@@ -1290,9 +1293,10 @@ async def unlink_google_account(
     success = await user_repo.unlink_google_account(user.id)
 
     if not success:
+        # SECURITY FIX (Audit 7 - Session 3): Generic error message, don't hint at internals
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to unlink Google account"
+            detail="An unexpected error occurred. Please try again later."
         )
 
     # Audit log

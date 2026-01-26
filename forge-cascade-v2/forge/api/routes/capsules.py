@@ -103,7 +103,11 @@ async def run_semantic_edge_detection(capsule_id: str, user_id: str) -> None:
             logger.debug("semantic_detection_skipped", reason="development mode", capsule_id=capsule_id)
             return
 
-        # Create temporary client and repository
+        # LIMITATION (Audit 7 - Session 3): This background task creates its own Neo4jClient
+        # instead of using the application's connection pool. This is a known limitation because
+        # FastAPI BackgroundTasks run outside the request lifecycle, so the request-scoped DB
+        # dependency is unavailable. Consider migrating to a task queue (Celery/ARQ) with
+        # shared connection pooling for production workloads.
         db_client = Neo4jClient()
         await db_client.connect()
 

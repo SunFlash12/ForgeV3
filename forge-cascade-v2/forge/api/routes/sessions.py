@@ -6,7 +6,7 @@ SECURITY FIX (Audit 6 - Session 2).
 """
 
 from fastapi import APIRouter, HTTPException, Request, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from forge.api.dependencies import ActiveUserDep, SessionServiceDep
 from forge.models.session import (

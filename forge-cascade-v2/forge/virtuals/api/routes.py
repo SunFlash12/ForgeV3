@@ -87,7 +87,12 @@ async def get_current_user_wallet(
     Raises:
         HTTPException: If authentication fails
     """
-    # In development/test mode, allow unauthenticated requests with warning
+    # SECURITY WARNING (Audit 7 - Session 3): Dev mode allows unauthenticated requests.
+    # This bypass MUST NOT be active in production. FORGE_ENV must be set to "production"
+    # in all deployed environments. The default is "development" which permits
+    # unauthenticated access with a placeholder wallet -- this is a known security risk
+    # retained only for local development convenience. Production deployments MUST
+    # set FORGE_ENV=production to enforce authentication on all Virtuals API endpoints.
     env = os.environ.get("FORGE_ENV", "development")
     if env in ("development", "test") and not credentials:
         import structlog
@@ -392,7 +397,7 @@ async def create_governance_proposal(
 @tokenization_router.post("/proposals/{proposal_id}/vote", response_model=APIResponse)
 async def vote_on_proposal(
     proposal_id: str,
-    vote: str = Query(..., regex="^(for|against|abstain)$"),
+    vote: str = Query(..., pattern="^(for|against|abstain)$"),
     wallet: str = Depends(get_current_user_wallet),
 ) -> APIResponse:
     """

@@ -51,6 +51,11 @@ router = APIRouter(tags=["system"])
 
 import threading
 
+# SECURITY FIX (Audit 7 - Session 3): Maintenance mode uses threading.Lock which is
+# thread-safe within a single process only. In multi-process deployments (e.g., gunicorn
+# with multiple workers), each process has its own copy of _maintenance_state.
+# For multi-process deployments, use Redis or a shared database flag instead.
+# NOTE: This is single-process only. See above comment for multi-process deployments.
 _maintenance_state = {
     "enabled": False,
     "enabled_at": None,
@@ -1137,7 +1142,10 @@ async def clear_caches(
             else:
                 cleared.append("token_blacklist (no lock)")
         except (RuntimeError, AttributeError, OSError) as e:
-            errors.append(f"token_blacklist: {str(e)}")
+            # SECURITY FIX (Audit 7 - Session 3): Don't leak internal error details
+            import structlog
+            structlog.get_logger(__name__).warning("cache_clear_failed", cache="token_blacklist", error=str(e))
+            errors.append("token_blacklist: clear failed")
 
     # Clear query cache (from resilience integration)
     if clear_all or "query_cache" in (requested_caches or []):
@@ -1151,7 +1159,10 @@ async def clear_caches(
             # Function not available
             pass
         except (RuntimeError, AttributeError, OSError) as e:
-            errors.append(f"query_cache: {str(e)}")
+            # SECURITY FIX (Audit 7 - Session 3): Don't leak internal error details
+            import structlog
+            structlog.get_logger(__name__).warning("cache_clear_failed", cache="query_cache", error=str(e))
+            errors.append("query_cache: clear failed")
 
     # Clear health status cache
     if clear_all or "health_cache" in (requested_caches or []):
@@ -1165,7 +1176,10 @@ async def clear_caches(
         except ImportError:
             pass
         except (RuntimeError, AttributeError, OSError) as e:
-            errors.append(f"health_cache: {str(e)}")
+            # SECURITY FIX (Audit 7 - Session 3): Don't leak internal error details
+            import structlog
+            structlog.get_logger(__name__).warning("cache_clear_failed", cache="health_cache", error=str(e))
+            errors.append("health_cache: clear failed")
 
     # Clear metrics cache
     if clear_all or "metrics_cache" in (requested_caches or []):
@@ -1178,7 +1192,10 @@ async def clear_caches(
         except ImportError:
             pass
         except (RuntimeError, AttributeError, OSError) as e:
-            errors.append(f"metrics_cache: {str(e)}")
+            # SECURITY FIX (Audit 7 - Session 3): Don't leak internal error details
+            import structlog
+            structlog.get_logger(__name__).warning("cache_clear_failed", cache="metrics_cache", error=str(e))
+            errors.append("metrics_cache: clear failed")
 
     # Clear embedding service cache if available
     if clear_all or "embedding_cache" in (requested_caches or []):
@@ -1193,7 +1210,10 @@ async def clear_caches(
                     await clear_method() if asyncio.iscoroutinefunction(clear_method) else clear_method()
                 cleared.append(f"embedding_cache ({count} entries)")
         except (RuntimeError, AttributeError, ImportError, OSError) as e:
-            errors.append(f"embedding_cache: {str(e)}")
+            # SECURITY FIX (Audit 7 - Session 3): Don't leak internal error details
+            import structlog
+            structlog.get_logger(__name__).warning("cache_clear_failed", cache="embedding_cache", error=str(e))
+            errors.append("embedding_cache: clear failed")
 
     # Resilience: Record cache clear metric
     record_cache_cleared(cleared)
@@ -1345,8 +1365,9 @@ async def get_audit_log(
     action: str | None = Query(None, description="Filter by action type"),
     entity_type: str | None = Query(None, description="Filter by entity type"),
     user_id: str | None = Query(None, description="Filter by user ID"),
+    # SECURITY FIX (Audit 7 - Session 3): Add upper bounds to pagination params
     limit: int = Query(50, ge=1, le=500),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, le=100000),
 ) -> AuditLogResponse:
     """
     Get audit log entries.
@@ -1445,8 +1466,9 @@ async def get_audit_alias(
     action: str | None = Query(None, description="Filter by action type"),
     entity_type: str | None = Query(None, description="Filter by entity type"),
     user_id: str | None = Query(None, description="Filter by user ID"),
+    # SECURITY FIX (Audit 7 - Session 3): Add upper bounds to pagination params
     limit: int = Query(50, ge=1, le=500),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, le=100000),
 ) -> AuditLogResponse:
     """Alias for /audit-log - Get audit log entries."""
     return await get_audit_log(
