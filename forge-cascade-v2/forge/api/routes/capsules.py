@@ -817,7 +817,7 @@ async def update_capsule(
     return CapsuleResponse.from_capsule(updated)
 
 
-@router.delete("/{capsule_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{capsule_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 async def delete_capsule(
     capsule_id: str,
     user: TrustedUserDep,  # Minimum TRUSTED to delete

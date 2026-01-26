@@ -74,7 +74,7 @@ class TestTokenCreation:
 
         payload = decode_token(token)
         assert payload.sub == "user123"
-        assert payload.role.value == "admin"
+        assert str(payload.role) == "admin"
         assert payload.trust_flame == 80
 
     def test_create_refresh_token(self):
@@ -237,15 +237,19 @@ class TestTokenValidation:
         from forge.config import get_settings
 
         settings = get_settings()
+        now = datetime.now(UTC)
         payload = {
             "sub": "user123",
             "username": "testuser",
             "role": "user",
             "trust_flame": 150,  # Invalid - exceeds 100
-            "exp": datetime.now(UTC) + timedelta(hours=1),
-            "iat": datetime.now(UTC),
+            "exp": now + timedelta(hours=1),
+            "iat": now,
+            "nbf": now,
             "jti": "test-jti",
             "type": "access",
+            "iss": settings.jwt_issuer,
+            "aud": settings.jwt_audience,
         }
 
         token = pyjwt.encode(payload, settings.jwt_secret_key, algorithm="HS256")
@@ -377,7 +381,7 @@ class TestTokenUtilities:
 
         expiry = get_token_expiry(token)
         assert expiry is not None
-        assert expiry > datetime.now()
+        assert expiry > datetime.now(UTC)
 
     def test_is_token_expired_valid(self):
         """Valid token is not expired."""
@@ -506,6 +510,9 @@ class TestKeyRotation:
 
     def test_decode_with_rotation_current_key(self):
         """Decode works with current key."""
+        from forge.config import get_settings
+
+        settings = get_settings()
         KeyRotationManager.initialize()
 
         token = create_access_token(
@@ -518,6 +525,8 @@ class TestKeyRotation:
         payload = KeyRotationManager.decode_with_rotation(
             token,
             algorithms=ALLOWED_JWT_ALGORITHMS,
+            issuer=settings.jwt_issuer,
+            audience=settings.jwt_audience,
         )
 
         assert payload["sub"] == "user123"

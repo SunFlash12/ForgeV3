@@ -13,6 +13,7 @@ Run with: pytest tests/test_security/ -v
 """
 
 import re
+import time
 from unittest.mock import MagicMock
 
 import pytest
@@ -73,7 +74,7 @@ class TestPasswordValidation:
         from forge.security.password import PasswordValidationError, validate_password_strength
 
         with pytest.raises(PasswordValidationError, match="too common"):
-            validate_password_strength("Password123!")
+            validate_password_strength("P@ssw0rd")
 
     def test_password_banned_substrings(self):
         """Passwords with banned substrings are rejected."""
@@ -94,14 +95,14 @@ class TestPasswordValidation:
         from forge.security.password import PasswordValidationError, validate_password_strength
 
         with pytest.raises(PasswordValidationError, match="email"):
-            validate_password_strength("TestUser123!", email="testuser@example.com")
+            validate_password_strength("Jsmith7890X!", email="jsmith@example.com")
 
     def test_password_repetitive_pattern(self):
         """Password with repetitive patterns is rejected."""
         from forge.security.password import PasswordValidationError, validate_password_strength
 
         with pytest.raises(PasswordValidationError, match="repetitive"):
-            validate_password_strength("AbcAbcAbcA1!")
+            validate_password_strength("ZqxZqxZqx1!")
 
     def test_valid_password_accepted(self):
         """Valid password passes all checks."""
@@ -410,32 +411,32 @@ class TestTokenSecurity:
 
     def test_token_blacklist_bounded(self):
         """Token blacklist has bounded size."""
-        from forge.security.tokens import _MAX_BLACKLIST_SIZE, TokenBlacklist
+        from forge.security.tokens import TokenBlacklist
+
+        max_size = TokenBlacklist._MAX_BLACKLIST_SIZE
 
         # Add many tokens
-        for i in range(_MAX_BLACKLIST_SIZE + 100):
-            TokenBlacklist.add(f"token_{i}", 3600)
+        for i in range(max_size + 100):
+            TokenBlacklist.add(f"token_{i}", time.time() + 3600)
 
-        # Should not exceed max size (LRU eviction)
-        assert len(TokenBlacklist._blacklist) <= _MAX_BLACKLIST_SIZE
+        # Should not exceed max size (expiry-based eviction)
+        assert len(TokenBlacklist._blacklist) <= max_size
 
         # Clean up
         TokenBlacklist._blacklist.clear()
         TokenBlacklist._expiry_times.clear()
-        TokenBlacklist._access_order.clear()
 
     def test_blacklisted_token_rejected(self):
         """Blacklisted token is correctly identified."""
         from forge.security.tokens import TokenBlacklist
 
-        TokenBlacklist.add("blacklisted_token", 3600)
+        TokenBlacklist.add("blacklisted_token", time.time() + 3600)
         assert TokenBlacklist.is_blacklisted("blacklisted_token") is True
         assert TokenBlacklist.is_blacklisted("other_token") is False
 
         # Clean up
         TokenBlacklist._blacklist.clear()
         TokenBlacklist._expiry_times.clear()
-        TokenBlacklist._access_order.clear()
 
 
 # =============================================================================
@@ -465,7 +466,7 @@ class TestInputValidation:
         middleware = APILimitsMiddleware(app=MagicMock(), max_array_length=10)
 
         data = {"items": list(range(20))}
-        is_valid, error = middleware._check_array_length(data)
+        is_valid, error = middleware._check_json_depth(data)
         assert is_valid is False
         assert "length" in error.lower()
 

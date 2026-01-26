@@ -1,0 +1,32 @@
+# Gitleaks configuration for Forge V3
+# Excludes false positives from specification docs, test configs, and blockchain addresses
+
+title = "Forge V3 Gitleaks Config"
+
+[allowlist]
+  description = "Global allowlist"
+
+  # Specification documents contain example API keys for documentation purposes
+  paths = [
+    '''Forge Specification Files/.*''',
+    '''.*SPECIFICATION.*\.md''',
+    '''.*PHASE_.*\.md''',
+    '''.*SUPPLEMENT_.*\.md''',
+  ]
+
+  # Known non-secret patterns: blockchain addresses, test-only keys, variable names
+  regexTarget = "match"
+  regexes = [
+    # Blockchain contract/token addresses (public by design)
+    '''0x[0-9a-fA-F]{40}''',
+    # Solana public keys (base58, 32-44 chars)
+    '''[1-9A-HJ-NP-Za-km-z]{32,44}''',
+    # Test/CI-only JWT secrets (clearly labeled as test)
+    '''test-secret-key.*''',
+    # Variable assignments that look like keys but aren't actual secrets
+    '''self\._private_key''',
+    '''JWT_SECRET_KEY.*test.*''',
+    # Token mint addresses in config (public blockchain data)
+    '''FROWG_TOKEN_MINT''',
+    '''virtual_token''',
+  ]

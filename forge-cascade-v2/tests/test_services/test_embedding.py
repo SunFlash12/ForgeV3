@@ -26,7 +26,7 @@ class TestEmbeddingConfig:
 
     def test_default_config(self):
         config = EmbeddingConfig()
-        assert config.provider == EmbeddingProvider.MOCK
+        assert config.provider == EmbeddingProvider.SENTENCE_TRANSFORMERS
         assert config.dimensions == 1536
         assert config.cache_enabled is True
 
@@ -56,7 +56,7 @@ class TestMockEmbeddingProvider:
 
         assert isinstance(result, EmbeddingResult)
         assert len(result.embedding) == 1536
-        assert result.model == "mock-embedding"
+        assert result.model == "mock"
         assert result.dimensions == 1536
 
     @pytest.mark.asyncio

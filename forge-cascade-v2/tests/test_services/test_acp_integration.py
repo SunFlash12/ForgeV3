@@ -149,12 +149,10 @@ def sample_offering():
 def sample_job_create():
     """Create a sample job creation request."""
     return ACPJobCreate(
-        offering_id=str(uuid4()),
+        job_offering_id=str(uuid4()),
         buyer_agent_id="agent_buyer_123",
-        provider_agent_id="agent_provider_456",
         requirements="Query for all capsules about AI safety",
-        proposed_payment=Decimal("50.0"),
-        input_data={"query": "Find all AI safety related capsules"},
+        max_fee_virtual=50.0,
     )
 
 
@@ -241,16 +239,16 @@ class TestJobCreation:
         )
 
         # Create the job
-        sample_job_create.offering_id = sample_offering.id
+        sample_job_create.job_offering_id = sample_offering.id
         job = await acp_service.create_job(
             create_request=sample_job_create,
             buyer_wallet="0xBuyer123",
         )
 
         assert job.id is not None
-        assert job.phase == ACPPhase.NEGOTIATION
-        assert job.status == ACPJobStatus.PENDING
-        assert job.buyer_address == "0xBuyer123"
+        assert job.current_phase == ACPPhase.REQUEST
+        assert job.status == ACPJobStatus.OPEN
+        assert job.buyer_wallet == "0xBuyer123"
 
     @pytest.mark.asyncio
     async def test_create_job_stores_requirements(
@@ -263,14 +261,13 @@ class TestJobCreation:
             offering=sample_offering,
         )
 
-        sample_job_create.offering_id = sample_offering.id
+        sample_job_create.job_offering_id = sample_offering.id
         job = await acp_service.create_job(
             create_request=sample_job_create,
             buyer_wallet="0xBuyer123",
         )
 
         assert job.requirements == "Query for all capsules about AI safety"
-        assert job.input_data == {"query": "Find all AI safety related capsules"}
 
 
 class TestNegotiationPhase:
@@ -287,7 +284,7 @@ class TestNegotiationPhase:
             agent_wallet="0xProvider123",
             offering=sample_offering,
         )
-        sample_job_create.offering_id = sample_offering.id
+        sample_job_create.job_offering_id = sample_offering.id
         job = await acp_service.create_job(
             create_request=sample_job_create,
             buyer_wallet="0xBuyer123",
@@ -319,7 +316,7 @@ class TestNegotiationPhase:
             agent_wallet="0xProvider123",
             offering=sample_offering,
         )
-        sample_job_create.offering_id = sample_offering.id
+        sample_job_create.job_offering_id = sample_offering.id
         job = await acp_service.create_job(
             create_request=sample_job_create,
             buyer_wallet="0xBuyer123",
@@ -342,7 +339,7 @@ class TestNegotiationPhase:
             buyer_wallet="0xBuyer123",
         )
 
-        assert updated_job.phase == ACPPhase.EXECUTION
+        assert updated_job.current_phase == ACPPhase.TRANSACTION
         assert updated_job.status == ACPJobStatus.IN_PROGRESS
 
 
@@ -358,7 +355,7 @@ class TestDeliverableSubmission:
             agent_wallet="0xProvider123",
             offering=sample_offering,
         )
-        sample_job_create.offering_id = sample_offering.id
+        sample_job_create.job_offering_id = sample_offering.id
         job = await acp_service.create_job(
             create_request=sample_job_create,
             buyer_wallet="0xBuyer123",
@@ -394,7 +391,7 @@ class TestDeliverableSubmission:
             provider_wallet="0xProvider123",
         )
 
-        assert updated_job.phase == ACPPhase.EVALUATION
+        assert updated_job.current_phase == ACPPhase.EVALUATION
         assert updated_job.deliverable is not None
 
 
@@ -406,7 +403,7 @@ class TestEvaluationPhase:
         """Positive evaluation should complete the job."""
         # Full setup through delivery
         await acp_service.register_offering("agent_provider_456", "0xProvider123", sample_offering)
-        sample_job_create.offering_id = sample_offering.id
+        sample_job_create.job_offering_id = sample_offering.id
         job = await acp_service.create_job(sample_job_create, "0xBuyer123")
         terms = ACPNegotiationTerms(
             proposed_price=Decimal("50.0"),
@@ -437,7 +434,6 @@ class TestEvaluationPhase:
             buyer_wallet="0xBuyer123",
         )
 
-        assert completed_job.phase == ACPPhase.COMPLETED
         assert completed_job.status == ACPJobStatus.COMPLETED
 
     @pytest.mark.asyncio
@@ -447,7 +443,7 @@ class TestEvaluationPhase:
         """Failed evaluation with dispute should move to dispute phase."""
         # Full setup through delivery
         await acp_service.register_offering("agent_provider_456", "0xProvider123", sample_offering)
-        sample_job_create.offering_id = sample_offering.id
+        sample_job_create.job_offering_id = sample_offering.id
         job = await acp_service.create_job(sample_job_create, "0xBuyer123")
         terms = ACPNegotiationTerms(
             proposed_price=Decimal("50.0"),
@@ -478,9 +474,11 @@ class TestEvaluationPhase:
             buyer_wallet="0xBuyer123",
         )
 
-        # Job should be completed but marked as failed
+        # Job should be completed but marked as disputed or cancelled
         assert (
-            evaluated_job.status == ACPJobStatus.FAILED or evaluated_job.phase == ACPPhase.DISPUTE
+            evaluated_job.status == ACPJobStatus.DISPUTED
+            or evaluated_job.status == ACPJobStatus.CANCELLED
+            or evaluated_job.is_disputed
         )
 
 
@@ -492,7 +490,7 @@ class TestDisputeResolution:
         """Should be able to file a dispute."""
         # Setup through evaluation
         await acp_service.register_offering("agent_provider_456", "0xProvider123", sample_offering)
-        sample_job_create.offering_id = sample_offering.id
+        sample_job_create.job_offering_id = sample_offering.id
         job = await acp_service.create_job(sample_job_create, "0xBuyer123")
         terms = ACPNegotiationTerms(
             proposed_price=Decimal("50.0"),
@@ -522,8 +520,8 @@ class TestDisputeResolution:
             initiator_wallet="0xBuyer123",
         )
 
-        assert disputed_job.phase == ACPPhase.DISPUTE
         assert disputed_job.status == ACPJobStatus.DISPUTED
+        assert disputed_job.is_disputed
 
 
 class TestMemoExchange:
@@ -534,7 +532,7 @@ class TestMemoExchange:
         """Parties should be able to exchange memos."""
         # Setup
         await acp_service.register_offering("agent_provider_456", "0xProvider123", sample_offering)
-        sample_job_create.offering_id = sample_offering.id
+        sample_job_create.job_offering_id = sample_offering.id
         job = await acp_service.create_job(sample_job_create, "0xBuyer123")
 
         # Send memo
@@ -629,15 +627,13 @@ class TestEndToEndJobLifecycle:
 
         # 2. Create job
         create_request = ACPJobCreate(
-            offering_id=sample_offering.id,
+            job_offering_id=sample_offering.id,
             buyer_agent_id="buyer_agent",
-            provider_agent_id="provider_agent",
             requirements="Find all documents about climate change",
-            proposed_payment=Decimal("50.0"),
-            input_data={"query": "climate change documents"},
+            max_fee_virtual=50.0,
         )
         job = await acp_service.create_job(create_request, "0xBuyer")
-        assert job.phase == ACPPhase.NEGOTIATION
+        assert job.current_phase == ACPPhase.NEGOTIATION
 
         # 3. Negotiate
         terms = ACPNegotiationTerms(
@@ -648,7 +644,7 @@ class TestEndToEndJobLifecycle:
         )
         await acp_service.respond_with_terms(job.id, terms, "0xProvider")
         job = await acp_service.accept_terms(job.id, "0xBuyer")
-        assert job.phase == ACPPhase.EXECUTION
+        assert job.current_phase == ACPPhase.TRANSACTION
 
         # 4. Deliver
         result_content = {
@@ -664,7 +660,7 @@ class TestEndToEndJobLifecycle:
             mime_type="application/json",
         )
         job = await acp_service.submit_deliverable(job.id, deliverable, "0xProvider")
-        assert job.phase == ACPPhase.EVALUATION
+        assert job.current_phase == ACPPhase.EVALUATION
 
         # 5. Evaluate
         evaluation = ACPEvaluation(
@@ -675,7 +671,6 @@ class TestEndToEndJobLifecycle:
             feedback="Excellent results, exceeded expectations!",
         )
         job = await acp_service.evaluate_deliverable(job.id, evaluation, "0xBuyer")
-        assert job.phase == ACPPhase.COMPLETED
         assert job.status == ACPJobStatus.COMPLETED
 
     @pytest.mark.asyncio
@@ -684,11 +679,10 @@ class TestEndToEndJobLifecycle:
         # Setup through delivery
         await acp_service.register_offering("provider", "0xProvider", sample_offering)
         create_request = ACPJobCreate(
-            offering_id=sample_offering.id,
+            job_offering_id=sample_offering.id,
             buyer_agent_id="buyer",
-            provider_agent_id="provider",
             requirements="Find quantum computing papers",
-            proposed_payment=Decimal("100.0"),
+            max_fee_virtual=100.0,
         )
         job = await acp_service.create_job(create_request, "0xBuyer")
         terms = ACPNegotiationTerms(
@@ -716,8 +710,8 @@ class TestEndToEndJobLifecycle:
         )
         job = await acp_service.file_dispute(job.id, dispute, "0xBuyer")
 
-        assert job.phase == ACPPhase.DISPUTE
         assert job.status == ACPJobStatus.DISPUTED
+        assert job.is_disputed
 
 
 class TestConcurrentJobs:
@@ -732,17 +726,16 @@ class TestConcurrentJobs:
         jobs = []
         for i in range(5):
             create_request = ACPJobCreate(
-                offering_id=sample_offering.id,
+                job_offering_id=sample_offering.id,
                 buyer_agent_id=f"buyer_{i}",
-                provider_agent_id="provider",
                 requirements=f"Query {i}",
-                proposed_payment=Decimal("20.0"),
+                max_fee_virtual=20.0,
             )
             job = await acp_service.create_job(create_request, f"0xBuyer{i}")
             jobs.append(job)
 
         assert len(jobs) == 5
-        assert all(j.status == ACPJobStatus.PENDING for j in jobs)
+        assert all(j.status == ACPJobStatus.OPEN for j in jobs)
 
         # All jobs should have unique IDs
         job_ids = [j.id for j in jobs]

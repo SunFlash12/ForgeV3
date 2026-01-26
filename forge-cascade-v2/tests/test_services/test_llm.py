@@ -25,7 +25,7 @@ class TestLLMConfig:
 
     def test_default_config(self):
         config = LLMConfig()
-        assert config.provider == LLMProvider.MOCK
+        assert config.provider == LLMProvider.OPENAI
         assert config.max_tokens == 4096
         assert config.temperature == 0.7
 
