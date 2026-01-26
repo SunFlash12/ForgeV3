@@ -754,13 +754,19 @@ def create_app(
     # Placed after AuthenticationMiddleware to have access to token_payload
     app.add_middleware(SessionBindingMiddleware)
     # Rate limiting - use environment-based configuration
-    # Production: stricter limits. Development: relaxed for testing
-    is_dev = settings.app_env == "development"
+    # Production: stricter limits. Development/Testing: relaxed for testing
+    is_dev_or_test = settings.app_env in ("development", "testing")
     app.add_middleware(
         RateLimitMiddleware,
         redis_url=settings.redis_url,
-        auth_requests_per_minute=30 if is_dev else 10,  # Stricter in production
-        auth_requests_per_hour=200 if is_dev else 50,  # Stricter in production
+        requests_per_minute=999999 if settings.app_env == "testing" else 120,
+        requests_per_hour=999999 if settings.app_env == "testing" else 3000,
+        auth_requests_per_minute=999999
+        if settings.app_env == "testing"
+        else (30 if is_dev_or_test else 10),
+        auth_requests_per_hour=999999
+        if settings.app_env == "testing"
+        else (200 if is_dev_or_test else 50),
     )
 
     # Exception handlers

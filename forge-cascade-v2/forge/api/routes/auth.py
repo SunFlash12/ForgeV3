@@ -49,6 +49,7 @@ from forge.resilience.integration import (
     record_token_refresh,
     validate_capsule_content,
 )
+from forge.security.auth_service import AuthenticationError
 from forge.security.password import (
     PasswordValidationError,
     hash_password,
@@ -483,6 +484,16 @@ async def login(
     except (ValueError, KeyError, OSError, RuntimeError):
         # Resilience: Record failed login
         record_login_attempt(success=False, reason="invalid_credentials")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    except AuthenticationError:
+        # Handles InvalidCredentialsError, AccountLockedError,
+        # IPRateLimitExceededError, AccountDeactivatedError, etc.
+        record_login_attempt(success=False, reason="authentication_error")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials",

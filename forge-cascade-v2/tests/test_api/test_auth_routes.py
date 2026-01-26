@@ -10,15 +10,13 @@ Comprehensive tests for authentication API routes including:
 - MFA endpoints
 """
 
-from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock, patch
 
 import pytest
-from fastapi import HTTPException, status
 from fastapi.testclient import TestClient
 
-from forge.models.user import AuthProvider, User, UserInDB, UserRole, Token
-
+from forge.models.user import AuthProvider, User, UserInDB, UserRole
 
 # =============================================================================
 # Fixtures
@@ -509,7 +507,8 @@ class TestMFARoutes:
 
     def test_mfa_disable_unauthorized(self, client: TestClient):
         """MFA disable without auth fails."""
-        response = client.delete(
+        response = client.request(
+            "DELETE",
             "/api/v1/auth/me/mfa",
             json={
                 "code": "123456",

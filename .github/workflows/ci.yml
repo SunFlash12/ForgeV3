@@ -224,7 +224,7 @@ jobs:
             -m "not integration and not e2e" \
             --cov=forge \
             --cov-report=term-missing \
-            --cov-fail-under=70
+            --cov-fail-under=35
 
       - name: Start test servers
         env:

@@ -223,7 +223,8 @@ def auth_headers(user_factory):
     token = create_access_token(
         user_id=user["id"],
         username=user["username"],
-        trust_level=user["trust_level"],
+        role="user",
+        trust_flame=user["trust_level"],
     )
     return {"Authorization": f"Bearer {token}"}
 
@@ -237,7 +238,8 @@ def admin_auth_headers(user_factory):
     token = create_access_token(
         user_id=user["id"],
         username=user["username"],
-        trust_level=user["trust_level"],
+        role="admin",
+        trust_flame=user["trust_level"],
     )
     return {"Authorization": f"Bearer {token}"}
 
@@ -419,3 +421,9 @@ def reset_singletons():
     embedding._embedding_service = None
     llm._llm_service = None
     search._search_service = None
+
+    # Reset TokenBlacklist async lock to avoid "Event loop is closed" errors
+    # when pytest-asyncio creates a new event loop per test
+    from forge.security.tokens import TokenBlacklist
+
+    TokenBlacklist._async_lock = None
