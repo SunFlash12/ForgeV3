@@ -130,6 +130,11 @@ class ForgeMetrics:
     Provides counters, histograms, and gauges for key system metrics.
     """
 
+    # Bounds to prevent unbounded memory growth from high-cardinality labels
+    MAX_LOCAL_COUNTER_KEYS = 10_000
+    MAX_LOCAL_HISTOGRAM_KEYS = 1_000
+    MAX_HISTOGRAM_VALUES_PER_KEY = 1_000
+
     def __init__(self) -> None:
         self._config = get_resilience_config().observability
         self._meter: NoOpMeter | Any = None
@@ -304,9 +309,10 @@ class ForgeMetrics:
         if counter:
             counter.add(value, attributes=labels or {})
 
-        # Also track locally
+        # Also track locally (bounded to prevent high-cardinality explosion)
         key = f"{metric_name}:{labels}" if labels else metric_name
-        self._local_counters[key] = self._local_counters.get(key, 0) + value
+        if key in self._local_counters or len(self._local_counters) < self.MAX_LOCAL_COUNTER_KEYS:
+            self._local_counters[key] = self._local_counters.get(key, 0) + value
 
     def record_latency(
         self,
@@ -322,11 +328,17 @@ class ForgeMetrics:
         if histogram:
             histogram.record(latency_seconds, attributes=labels or {})
 
-        # Also track locally
+        # Also track locally (bounded to prevent unbounded growth)
         key = f"{metric_name}:{labels}" if labels else metric_name
         if key not in self._local_histograms:
+            if len(self._local_histograms) >= self.MAX_LOCAL_HISTOGRAM_KEYS:
+                return  # Drop if too many distinct keys
             self._local_histograms[key] = []
-        self._local_histograms[key].append(latency_seconds)
+        values = self._local_histograms[key]
+        values.append(latency_seconds)
+        # Keep only the most recent values
+        if len(values) > self.MAX_HISTOGRAM_VALUES_PER_KEY:
+            self._local_histograms[key] = values[-self.MAX_HISTOGRAM_VALUES_PER_KEY:]
 
     # Convenience methods for common metrics
 

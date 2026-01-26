@@ -115,12 +115,30 @@ class NoOpTracer:
         return NoOpSpan()
 
 
+# Sensitive attribute keys that must never be recorded in spans
+_SENSITIVE_ATTRIBUTE_KEYS = frozenset({
+    "password", "secret", "api_key", "api_secret", "token",
+    "private_key", "mnemonic", "seed_phrase", "wallet_key",
+    "jwt", "jwt_secret", "authorization", "cookie",
+    "client_secret", "oauth_token", "access_token", "refresh_token",
+})
+
+
+def _sanitize_attributes(attributes: dict[str, Any]) -> dict[str, Any]:
+    """Remove sensitive keys from span attributes."""
+    return {
+        k: v for k, v in attributes.items()
+        if k.lower().replace("-", "_").replace(".", "_") not in _SENSITIVE_ATTRIBUTE_KEYS
+    }
+
+
 class ForgeTracer:
     """
     Forge-specific tracer wrapping OpenTelemetry.
 
     Provides convenient methods for tracing Forge operations
-    with automatic attribute enrichment.
+    with automatic attribute enrichment. Automatically filters
+    sensitive attributes to prevent secret leakage in traces.
     """
 
     def __init__(self) -> None:
@@ -220,10 +238,11 @@ class ForgeTracer:
             span_kind = SpanKind.INTERNAL
 
         assert self._tracer is not None
+        safe_attributes = _sanitize_attributes(attributes) if attributes else {}
         with self._tracer.start_as_current_span(
             operation,
             kind=span_kind,
-            attributes=attributes or {}
+            attributes=safe_attributes
         ) as active_span:
             try:
                 yield active_span

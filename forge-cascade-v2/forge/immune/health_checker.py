@@ -726,6 +726,22 @@ class ForgeHealthChecker:
                 await asyncio.sleep(interval_seconds)
 
         self._background_task = asyncio.create_task(monitor_loop())
+
+        def _on_monitor_done(task: asyncio.Task[None]) -> None:
+            """Clean up if monitor task exits unexpectedly."""
+            if task.cancelled():
+                return
+            exc = task.exception()
+            if exc is not None:
+                logger.error(
+                    "health_monitor_task_died",
+                    error=str(exc),
+                    error_type=type(exc).__name__,
+                )
+                self._running = False
+                self._background_task = None
+
+        self._background_task.add_done_callback(_on_monitor_done)
         logger.info(
             "health_monitoring_started",
             interval_seconds=interval_seconds,

@@ -180,14 +180,29 @@ class AnomalyDetector(ABC):
         """Get buffered values."""
         return [v for _, v in self._data_buffer]
 
-    def _can_alert(self, metric_name: str) -> bool:
-        """Check if we can raise an alert (rate limiting)."""
+    def _can_alert(
+        self,
+        metric_name: str,
+        severity: AnomalySeverity = AnomalySeverity.LOW,
+    ) -> bool:
+        """Check if we can raise an alert (rate limiting).
+
+        CRITICAL severity alerts always bypass cooldown to ensure
+        immediate action is never suppressed by rate limiting.
+        """
         now = datetime.now(UTC)
 
         # Reset hourly counter
         if (now - self._hour_start).total_seconds() > 3600:
             self._alerts_this_hour = 0
             self._hour_start = now
+
+        # CRITICAL alerts bypass cooldown but still respect hourly limit
+        # (doubled for CRITICAL to prevent total suppression)
+        if severity == AnomalySeverity.CRITICAL:
+            if self._alerts_this_hour >= self.config.max_alerts_per_hour * 2:
+                return False
+            return True
 
         # Check hourly limit
         if self._alerts_this_hour >= self.config.max_alerts_per_hour:
@@ -205,6 +220,17 @@ class AnomalyDetector(ABC):
         """Record that we raised an alert."""
         self._last_alert_time[metric_name] = datetime.now(UTC)
         self._alerts_this_hour += 1
+
+    @staticmethod
+    def _score_to_severity(score: float) -> AnomalySeverity:
+        """Convert anomaly score to severity for alert rate limiting."""
+        if score > 0.85:
+            return AnomalySeverity.CRITICAL
+        elif score > 0.6:
+            return AnomalySeverity.HIGH
+        elif score > 0.3:
+            return AnomalySeverity.MEDIUM
+        return AnomalySeverity.LOW
 
     def _generate_id(self) -> str:
         """Generate unique anomaly ID."""
@@ -262,12 +288,12 @@ class StatisticalAnomalyDetector(AnomalyDetector):
         if not (z_score_anomaly or iqr_anomaly):
             return None
 
-        metric_name = context.get("metric_name", "unknown") if context else "unknown"
-        if not self._can_alert(metric_name):
-            return None
-
-        # Calculate anomaly score (0-1)
+        # Calculate anomaly score (0-1) - needed before alert check for severity
         z_normalized = min(z_score / (2 * self.config.z_score_threshold), 1.0)
+
+        metric_name = context.get("metric_name", "unknown") if context else "unknown"
+        if not self._can_alert(metric_name, severity=self._score_to_severity(z_normalized)):
+            return None
 
         if iqr > 0:
             if value < lower_fence:
@@ -353,7 +379,7 @@ class IsolationForestDetector(AnomalyDetector):
             return None
 
         metric_name = context.get("metric_name", "unknown") if context else "unknown"
-        if not self._can_alert(metric_name):
+        if not self._can_alert(metric_name, severity=self._score_to_severity(anomaly_score)):
             return None
 
         # Calculate expected range from training data
@@ -588,12 +614,12 @@ class RateAnomalyDetector(AnomalyDetector):
         if z_score < self.config.z_score_threshold:
             return None
 
-        metric_name = context.get("metric_name", "rate") if context else "rate"
-        if not self._can_alert(metric_name):
-            return None
-
-        # Anomaly score
+        # Anomaly score - compute before alert check for severity
         anomaly_score = min(z_score / (2 * self.config.z_score_threshold), 1.0)
+
+        metric_name = context.get("metric_name", "rate") if context else "rate"
+        if not self._can_alert(metric_name, severity=self._score_to_severity(anomaly_score)):
+            return None
 
         # Direction matters for severity
         is_spike = current_rate > mean
