@@ -96,10 +96,12 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
   const onOpenRef = useRef(onOpen);
   const onCloseRef = useRef(onClose);
   const onErrorRef = useRef(onError);
-  onMessageRef.current = onMessage;
-  onOpenRef.current = onOpen;
-  onCloseRef.current = onClose;
-  onErrorRef.current = onError;
+  useEffect(() => {
+    onMessageRef.current = onMessage;
+    onOpenRef.current = onOpen;
+    onCloseRef.current = onClose;
+    onErrorRef.current = onError;
+  });
 
   const clearTimers = useCallback(() => {
     if (pingTimerRef.current) {
@@ -210,7 +212,9 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
       onErrorRef.current?.(event);
     };
   }, [url, clearTimers, startPing, scheduleReconnect]);
-  connectWsRef.current = connectWs;
+  useEffect(() => {
+    connectWsRef.current = connectWs;
+  });
 
   const send = useCallback((message: WebSocketMessage) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -270,8 +274,10 @@ export function useEventStream(options: UseEventStreamOptions = {}) {
   const { topics = [], onEvent, onSubscriptionChange, enabled = true } = options;
   const onEventRef = useRef(onEvent);
   const onSubChangeRef = useRef(onSubscriptionChange);
-  onEventRef.current = onEvent;
-  onSubChangeRef.current = onSubscriptionChange;
+  useEffect(() => {
+    onEventRef.current = onEvent;
+    onSubChangeRef.current = onSubscriptionChange;
+  });
 
   const [subscriptions, setSubscriptions] = useState<string[]>([]);
 
@@ -332,7 +338,9 @@ interface UseDashboardOptions {
 export function useDashboardMetrics(options: UseDashboardOptions = {}) {
   const { onMetrics, enabled = true } = options;
   const onMetricsRef = useRef(onMetrics);
-  onMetricsRef.current = onMetrics;
+  useEffect(() => {
+    onMetricsRef.current = onMetrics;
+  });
 
   const [metrics, setMetrics] = useState<Record<string, unknown> | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
@@ -417,10 +425,12 @@ export function useChatRoom(options: UseChatRoomOptions) {
   const onJoinRef = useRef(onUserJoined);
   const onLeaveRef = useRef(onUserLeft);
   const onTypingRef = useRef(onTyping);
-  onChatRef.current = onChatMessage;
-  onJoinRef.current = onUserJoined;
-  onLeaveRef.current = onUserLeft;
-  onTypingRef.current = onTyping;
+  useEffect(() => {
+    onChatRef.current = onChatMessage;
+    onJoinRef.current = onUserJoined;
+    onLeaveRef.current = onUserLeft;
+    onTypingRef.current = onTyping;
+  });
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [participants, setParticipants] = useState<ChatParticipant[]>([]);
