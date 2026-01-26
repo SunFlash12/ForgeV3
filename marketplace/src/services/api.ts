@@ -1,5 +1,5 @@
 // Forge Shop - API Client
-import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
+import axios, { AxiosInstance, AxiosError } from 'axios';
 import type {
   User,
   Capsule,
