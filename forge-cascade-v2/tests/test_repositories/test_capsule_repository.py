@@ -483,7 +483,7 @@ class TestCapsuleRepositorySemanticSearch:
 
         call_args = mock_db_client.execute.call_args
         params = call_args[0][1]
-        assert params["type"] == "insight"
+        assert params["type"] == "INSIGHT"
         assert params["owner_id"] == "user123"
 
     @pytest.mark.asyncio

@@ -1372,7 +1372,7 @@ async def get_contradictions(
     ]
 
 
-@router.delete("/edges/{edge_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/edges/{edge_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 async def delete_semantic_edge(
     edge_id: str,
     user: StandardUserDep,

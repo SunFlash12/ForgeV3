@@ -146,7 +146,7 @@ class TestEmbeddingCache:
         await service_with_cache.embed("text2")
         await service_with_cache.embed("text1")  # Cache hit
 
-        stats = service_with_cache.cache_stats()
+        stats = await service_with_cache.cache_stats()
 
         assert stats["size"] == 2
         assert stats["hits"] == 1
@@ -163,7 +163,7 @@ class TestEmbeddingCache:
         assert result1.cached is False
         assert result2.cached is False
 
-        stats = service_without_cache.cache_stats()
+        stats = await service_without_cache.cache_stats()
         assert stats["cache_enabled"] is False
 
     @pytest.mark.asyncio
@@ -171,11 +171,11 @@ class TestEmbeddingCache:
         await service_with_cache.embed("text1")
         await service_with_cache.embed("text2")
 
-        assert service_with_cache.cache_stats()["size"] == 2
+        assert (await service_with_cache.cache_stats())["size"] == 2
 
-        service_with_cache.clear_cache()
+        await service_with_cache.clear_cache()
 
-        assert service_with_cache.cache_stats()["size"] == 0
+        assert (await service_with_cache.cache_stats())["size"] == 0
 
 
 class TestSimilarityFunctions:

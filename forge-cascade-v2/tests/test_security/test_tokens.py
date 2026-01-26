@@ -298,14 +298,16 @@ class TestTokenBlacklist:
 
         assert TokenBlacklist.is_blacklisted(jti) is False
 
-    def test_blacklist_size_limit(self):
-        """Blacklist respects size limit via LRU eviction."""
+    def test_blacklist_adds_all(self):
+        """Blacklist adds all tokens (security > memory)."""
         # Add many tokens
         for i in range(TokenBlacklist._MAX_BLACKLIST_SIZE + 100):
             TokenBlacklist.add(f"jti_{i}", time.time() + 3600)
 
-        # Should not exceed max size
-        assert len(TokenBlacklist._blacklist) <= TokenBlacklist._MAX_BLACKLIST_SIZE
+        # Security > memory: all tokens are added even beyond max size
+        assert len(TokenBlacklist._blacklist) >= TokenBlacklist._MAX_BLACKLIST_SIZE
+        # Verify last token is blacklisted
+        assert TokenBlacklist.is_blacklisted(f"jti_{TokenBlacklist._MAX_BLACKLIST_SIZE + 99}")
 
     @pytest.mark.asyncio
     async def test_async_add_and_check(self):

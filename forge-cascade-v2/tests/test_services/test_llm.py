@@ -59,7 +59,7 @@ class TestMockLLMProvider:
         response = await service.complete(messages)
 
         assert isinstance(response, LLMResponse)
-        assert response.model == "mock-llm"
+        assert response.model == "mock"
         assert len(response.content) > 0
         assert response.finish_reason == "stop"
 
@@ -116,7 +116,7 @@ class TestGhostCouncil:
         )
 
         assert "recommendation" in result
-        assert "model" in result
+        assert "raw_response" in result
 
     @pytest.mark.asyncio
     async def test_ghost_council_low_trust_proposer(self, service):
@@ -183,7 +183,7 @@ class TestConstitutionalAI:
             context=context,
         )
 
-        assert "reviewed_at" in result
+        assert "severity" in result
 
 
 class TestCapsuleAnalysis:

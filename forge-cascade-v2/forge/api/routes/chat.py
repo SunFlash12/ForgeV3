@@ -274,6 +274,7 @@ async def update_room(
 @router.delete(
     "/rooms/{room_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
     summary="Delete room",
     description="Delete a chat room. Requires owner role.",
 )
@@ -462,6 +463,7 @@ async def add_member(
 @router.delete(
     "/rooms/{room_id}/members/{user_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
     summary="Remove member",
     description="Remove a member from the room. Admins can remove members, owners can remove anyone except themselves.",
 )

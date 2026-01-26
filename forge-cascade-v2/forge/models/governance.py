@@ -200,7 +200,7 @@ class ProposalCreate(ProposalBase):
         valid_actions = VALID_PROPOSAL_ACTIONS.get(self.type, set())
         if action_type not in valid_actions:
             raise ValueError(
-                f"Action '{action_type}' is not valid for proposal type '{self.type.value}'. "
+                f"Action '{action_type}' is not valid for proposal type '{self.type}'. "
                 f"Valid actions: {', '.join(sorted(valid_actions))}"
             )
 

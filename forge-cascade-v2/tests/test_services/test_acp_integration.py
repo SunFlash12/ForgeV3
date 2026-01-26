@@ -12,7 +12,6 @@ These tests verify the complete ACP lifecycle including:
 import hashlib
 import json
 from datetime import UTC, datetime, timedelta
-from decimal import Decimal
 from unittest.mock import MagicMock
 from uuid import uuid4
 
@@ -172,10 +171,10 @@ class TestACPServiceInitialization:
         assert acp_service._nonce_store is not None
 
         wallet = "0xTestWallet"
-        nonce1 = acp_service._nonce_store.get_next_nonce(wallet)
-        nonce2 = acp_service._nonce_store.get_next_nonce(wallet)
-
-        assert nonce1 == 0
+        nonce = await acp_service._nonce_store.get_highest_nonce(wallet)
+        assert nonce == 0  # No nonces yet
+        await acp_service._nonce_store.update_nonce(wallet, 1)
+        nonce2 = await acp_service._nonce_store.get_highest_nonce(wallet)
         assert nonce2 == 1
 
 
@@ -292,20 +291,20 @@ class TestNegotiationPhase:
 
         # Provider responds
         terms = ACPNegotiationTerms(
-            proposed_price=Decimal("50.0"),
+            job_id=job.id,
+            proposed_fee_virtual=50.0,
             proposed_deadline=datetime.now(UTC) + timedelta(hours=24),
-            requirements=["High accuracy required"],
-            acceptance_criteria=["95% accuracy threshold"],
+            deliverable_format="application/json",
+            deliverable_description="Query results",
         )
 
-        updated_job = await acp_service.respond_with_terms(
+        updated_job = await acp_service.respond_to_request(
             job_id=job.id,
             terms=terms,
             provider_wallet="0xProvider123",
         )
 
-        assert updated_job.negotiation_terms is not None
-        assert updated_job.negotiation_terms.proposed_price == Decimal("50.0")
+        assert updated_job.negotiated_terms is not None
 
     @pytest.mark.asyncio
     async def test_buyer_accepts_terms(self, acp_service, sample_offering, sample_job_create):
@@ -324,10 +323,13 @@ class TestNegotiationPhase:
 
         # Provider responds
         terms = ACPNegotiationTerms(
-            proposed_price=Decimal("50.0"),
+            job_id=job.id,
+            proposed_fee_virtual=50.0,
             proposed_deadline=datetime.now(UTC) + timedelta(hours=24),
+            deliverable_format="application/json",
+            deliverable_description="Query results",
         )
-        await acp_service.respond_with_terms(
+        await acp_service.respond_to_request(
             job_id=job.id,
             terms=terms,
             provider_wallet="0xProvider123",
@@ -361,10 +363,13 @@ class TestDeliverableSubmission:
             buyer_wallet="0xBuyer123",
         )
         terms = ACPNegotiationTerms(
-            proposed_price=Decimal("50.0"),
+            job_id=job.id,
+            proposed_fee_virtual=50.0,
             proposed_deadline=datetime.now(UTC) + timedelta(hours=24),
+            deliverable_format="application/json",
+            deliverable_description="Query results",
         )
-        await acp_service.respond_with_terms(job.id, terms, "0xProvider123")
+        await acp_service.respond_to_request(job.id, terms, "0xProvider123")
         await acp_service.accept_terms(job.id, "0xBuyer123")
 
         # Submit deliverable
@@ -382,7 +387,7 @@ class TestDeliverableSubmission:
             content_hash=hashlib.sha256(
                 json.dumps(deliverable_content, sort_keys=True).encode()
             ).hexdigest(),
-            mime_type="application/json",
+            content_type="application/json",
         )
 
         updated_job = await acp_service.submit_deliverable(
@@ -406,25 +411,28 @@ class TestEvaluationPhase:
         sample_job_create.job_offering_id = sample_offering.id
         job = await acp_service.create_job(sample_job_create, "0xBuyer123")
         terms = ACPNegotiationTerms(
-            proposed_price=Decimal("50.0"),
+            job_id=job.id,
+            proposed_fee_virtual=50.0,
             proposed_deadline=datetime.now(UTC) + timedelta(hours=24),
+            deliverable_format="application/json",
+            deliverable_description="Query results",
         )
-        await acp_service.respond_with_terms(job.id, terms, "0xProvider123")
+        await acp_service.respond_to_request(job.id, terms, "0xProvider123")
         await acp_service.accept_terms(job.id, "0xBuyer123")
         deliverable = ACPDeliverable(
             job_id=job.id,
             content={"result": "success"},
             content_hash="abc123",
-            mime_type="application/json",
+            content_type="application/json",
         )
         await acp_service.submit_deliverable(job.id, deliverable, "0xProvider123")
 
         # Evaluate
         evaluation = ACPEvaluation(
             job_id=job.id,
-            evaluator_address="0xBuyer123",
-            rating=5,
-            passed=True,
+            evaluator_agent_id="0xBuyer123",
+            score=0.9,
+            result="approved",
             feedback="Excellent work, results are accurate.",
         )
 
@@ -446,25 +454,28 @@ class TestEvaluationPhase:
         sample_job_create.job_offering_id = sample_offering.id
         job = await acp_service.create_job(sample_job_create, "0xBuyer123")
         terms = ACPNegotiationTerms(
-            proposed_price=Decimal("50.0"),
+            job_id=job.id,
+            proposed_fee_virtual=50.0,
             proposed_deadline=datetime.now(UTC) + timedelta(hours=24),
+            deliverable_format="application/json",
+            deliverable_description="Query results",
         )
-        await acp_service.respond_with_terms(job.id, terms, "0xProvider123")
+        await acp_service.respond_to_request(job.id, terms, "0xProvider123")
         await acp_service.accept_terms(job.id, "0xBuyer123")
         deliverable = ACPDeliverable(
             job_id=job.id,
             content={"result": "failure"},
             content_hash="def456",
-            mime_type="application/json",
+            content_type="application/json",
         )
         await acp_service.submit_deliverable(job.id, deliverable, "0xProvider123")
 
         # Negative evaluation
         evaluation = ACPEvaluation(
             job_id=job.id,
-            evaluator_address="0xBuyer123",
-            rating=1,
-            passed=False,
+            evaluator_agent_id="0xBuyer123",
+            score=0.2,
+            result="rejected",
             feedback="Results are inaccurate, not what was requested.",
         )
 
@@ -493,31 +504,35 @@ class TestDisputeResolution:
         sample_job_create.job_offering_id = sample_offering.id
         job = await acp_service.create_job(sample_job_create, "0xBuyer123")
         terms = ACPNegotiationTerms(
-            proposed_price=Decimal("50.0"),
+            job_id=job.id,
+            proposed_fee_virtual=50.0,
             proposed_deadline=datetime.now(UTC) + timedelta(hours=24),
+            deliverable_format="application/json",
+            deliverable_description="Query results",
         )
-        await acp_service.respond_with_terms(job.id, terms, "0xProvider123")
+        await acp_service.respond_to_request(job.id, terms, "0xProvider123")
         await acp_service.accept_terms(job.id, "0xBuyer123")
         deliverable = ACPDeliverable(
             job_id=job.id,
             content={"result": "disputed"},
             content_hash="ghi789",
-            mime_type="application/json",
+            content_type="application/json",
         )
         await acp_service.submit_deliverable(job.id, deliverable, "0xProvider123")
 
         # File dispute
         dispute = ACPDispute(
             job_id=job.id,
-            initiator_address="0xBuyer123",
+            filed_by="0xBuyer123",
             reason="Deliverable does not meet requirements",
-            evidence=["Screenshot showing incorrect results"],
+            requested_resolution="full_refund",
+            evidence=[{"description": "Screenshot showing incorrect results"}],
         )
 
         disputed_job = await acp_service.file_dispute(
             job_id=job.id,
             dispute=dispute,
-            initiator_wallet="0xBuyer123",
+            filer_wallet="0xBuyer123",
         )
 
         assert disputed_job.status == ACPJobStatus.DISPUTED
@@ -539,7 +554,10 @@ class TestMemoExchange:
         memo = ACPMemo(
             job_id=job.id,
             sender_address="0xBuyer123",
-            content="Can you clarify the query parameters?",
+            content={"message": "Can you clarify the query parameters?"},
+            content_hash=hashlib.sha256(b"Can you clarify the query parameters?").hexdigest(),
+            nonce=1,
+            sender_signature="mock_signature",
             memo_type="question",
         )
 
@@ -588,7 +606,9 @@ class TestAgentGatewayBridge:
         session = AgentSession(
             session_id="test_session_123",
             agent_id="agent_123",
+            agent_name="Test Agent",
             api_key_hash="hash123",
+            owner_user_id="owner_123",
             trust_level=AgentTrustLevel.VERIFIED,
             capabilities=[
                 AgentCapability.QUERY_GRAPH,
@@ -633,16 +653,17 @@ class TestEndToEndJobLifecycle:
             max_fee_virtual=50.0,
         )
         job = await acp_service.create_job(create_request, "0xBuyer")
-        assert job.current_phase == ACPPhase.NEGOTIATION
+        assert job.current_phase == ACPPhase.REQUEST
 
         # 3. Negotiate
         terms = ACPNegotiationTerms(
-            proposed_price=Decimal("50.0"),
+            job_id=job.id,
+            proposed_fee_virtual=50.0,
             proposed_deadline=datetime.now(UTC) + timedelta(hours=48),
-            requirements=["Include metadata"],
-            acceptance_criteria=["At least 10 relevant results"],
+            deliverable_format="application/json",
+            deliverable_description="Query results",
         )
-        await acp_service.respond_with_terms(job.id, terms, "0xProvider")
+        await acp_service.respond_to_request(job.id, terms, "0xProvider")
         job = await acp_service.accept_terms(job.id, "0xBuyer")
         assert job.current_phase == ACPPhase.TRANSACTION
 
@@ -657,7 +678,7 @@ class TestEndToEndJobLifecycle:
             content_hash=hashlib.sha256(
                 json.dumps(result_content, sort_keys=True).encode()
             ).hexdigest(),
-            mime_type="application/json",
+            content_type="application/json",
         )
         job = await acp_service.submit_deliverable(job.id, deliverable, "0xProvider")
         assert job.current_phase == ACPPhase.EVALUATION
@@ -665,9 +686,9 @@ class TestEndToEndJobLifecycle:
         # 5. Evaluate
         evaluation = ACPEvaluation(
             job_id=job.id,
-            evaluator_address="0xBuyer",
-            rating=5,
-            passed=True,
+            evaluator_agent_id="0xBuyer",
+            score=0.9,
+            result="approved",
             feedback="Excellent results, exceeded expectations!",
         )
         job = await acp_service.evaluate_deliverable(job.id, evaluation, "0xBuyer")
@@ -686,10 +707,13 @@ class TestEndToEndJobLifecycle:
         )
         job = await acp_service.create_job(create_request, "0xBuyer")
         terms = ACPNegotiationTerms(
-            proposed_price=Decimal("100.0"),
+            job_id=job.id,
+            proposed_fee_virtual=100.0,
             proposed_deadline=datetime.now(UTC) + timedelta(hours=24),
+            deliverable_format="application/json",
+            deliverable_description="Query results",
         )
-        await acp_service.respond_with_terms(job.id, terms, "0xProvider")
+        await acp_service.respond_to_request(job.id, terms, "0xProvider")
         job = await acp_service.accept_terms(job.id, "0xBuyer")
 
         # Deliver poor quality
@@ -697,16 +721,17 @@ class TestEndToEndJobLifecycle:
             job_id=job.id,
             content={"documents": []},  # Empty results
             content_hash="empty123",
-            mime_type="application/json",
+            content_type="application/json",
         )
         job = await acp_service.submit_deliverable(job.id, deliverable, "0xProvider")
 
         # Buyer disputes
         dispute = ACPDispute(
             job_id=job.id,
-            initiator_address="0xBuyer",
+            filed_by="0xBuyer",
             reason="No results returned despite many papers existing",
-            evidence=["Manual search found 50+ papers"],
+            requested_resolution="full_refund",
+            evidence=[{"description": "Manual search found 50+ papers"}],
         )
         job = await acp_service.file_dispute(job.id, dispute, "0xBuyer")
 

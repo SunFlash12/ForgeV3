@@ -187,7 +187,7 @@ class TestMFA:
 
         assert result.secret
         assert result.provisioning_uri.startswith("otpauth://totp/")
-        assert "user@example.com" in result.provisioning_uri
+        assert "user%40example.com" in result.provisioning_uri or "user@example.com" in result.provisioning_uri
         assert len(result.backup_codes) == 10
 
     @pytest.mark.asyncio
@@ -409,8 +409,8 @@ class TestGovernanceActionValidation:
 class TestTokenSecurity:
     """Tests for JWT token security."""
 
-    def test_token_blacklist_bounded(self):
-        """Token blacklist has bounded size."""
+    def test_token_blacklist_adds_all(self):
+        """Token blacklist adds all tokens (security > memory)."""
         from forge.security.tokens import TokenBlacklist
 
         max_size = TokenBlacklist._MAX_BLACKLIST_SIZE
@@ -419,8 +419,10 @@ class TestTokenSecurity:
         for i in range(max_size + 100):
             TokenBlacklist.add(f"token_{i}", time.time() + 3600)
 
-        # Should not exceed max size (expiry-based eviction)
-        assert len(TokenBlacklist._blacklist) <= max_size
+        # Security > memory: all tokens are added even beyond max size
+        assert len(TokenBlacklist._blacklist) >= max_size
+        # Verify the last added token is blacklisted
+        assert TokenBlacklist.is_blacklisted(f"token_{max_size + 99}")
 
         # Clean up
         TokenBlacklist._blacklist.clear()

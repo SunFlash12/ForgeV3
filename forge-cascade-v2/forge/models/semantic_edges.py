@@ -153,7 +153,9 @@ class SemanticEdge(SemanticEdgeBase, TimestampMixin):
 
     def __init__(self, **data: Any) -> None:
         super().__init__(**data)
-        self.bidirectional = self.relationship_type.is_bidirectional
+        # use_enum_values=True stores the string value, so convert back to enum
+        rel_type = SemanticRelationType(self.relationship_type)
+        self.bidirectional = rel_type.is_bidirectional
 
 
 class SemanticEdgeWithNodes(SemanticEdge):

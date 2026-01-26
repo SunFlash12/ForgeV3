@@ -458,7 +458,7 @@ class TestCreateAuthContext:
             user_id="user123",
             trust_flame=60,
             role="user",
-            capabilities=["capsule_read", "capsule_write"],
+            capabilities=["CAPSULE_READ", "CAPSULE_WRITE"],
         )
 
         assert Capability.CAPSULE_READ in context.capabilities

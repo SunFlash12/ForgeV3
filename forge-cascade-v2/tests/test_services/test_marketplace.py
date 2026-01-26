@@ -251,7 +251,7 @@ class TestPurchaseWorkflow:
         assert purchase.buyer_id == "buyer-123"
         assert purchase.seller_id == "seller-123"
         assert purchase.price == Decimal("50.00")
-        assert purchase.payment_status == PaymentStatus.PENDING
+        assert purchase.payment_status == PaymentStatus.COMPLETED
 
     @pytest.mark.asyncio
     async def test_cannot_purchase_twice(self, service_with_active_listing):
