@@ -183,7 +183,7 @@ class Cart(ForgeModel):
                 "Convert items to same currency first."
             )
 
-        return sum(item.price for item in self.items)
+        return sum((item.price for item in self.items), Decimal(0))
 
     @property
     def totals_by_currency(self) -> dict[Currency, Decimal]:

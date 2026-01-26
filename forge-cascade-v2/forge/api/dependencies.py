@@ -558,11 +558,11 @@ def _get_real_client_ip(request: Request) -> str:
     # Direct connection is from trusted proxy - check forwarded headers
     # Priority: X-Forwarded-For > X-Real-IP > direct connection
 
-    forwarded_for = request.headers.get("X-Forwarded-For")
+    forwarded_for: str | None = request.headers.get("X-Forwarded-For")
     if forwarded_for:
         # X-Forwarded-For can contain multiple IPs: client, proxy1, proxy2...
         # The first non-proxy IP (from the right) is the real client
-        ips = [ip.strip() for ip in forwarded_for.split(",")]
+        ips: list[str] = [ip.strip() for ip in forwarded_for.split(",")]
 
         # Walk from right to left, find the first IP that's not a trusted proxy
         for ip in reversed(ips):
@@ -574,7 +574,7 @@ def _get_real_client_ip(request: Request) -> str:
             return ips[0]
 
     # Check X-Real-IP header
-    real_ip = request.headers.get("X-Real-IP")
+    real_ip: str | None = request.headers.get("X-Real-IP")
     if real_ip and _is_valid_ip(real_ip):
         return real_ip
 

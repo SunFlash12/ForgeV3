@@ -130,7 +130,25 @@ warn_return_any = true
 warn_unused_ignores = true
 disallow_untyped_defs = false  # Enable per-module below
 
-# External libraries without type stubs
+# Custom type stubs for external libraries (outside forge/ to avoid module conflicts)
+mypy_path = "stubs"
+
+# External libraries - using custom stubs in forge/stubs/
+[[tool.mypy.overrides]]
+module = [
+    "web3",
+    "web3.*",
+    "eth_account",
+    "eth_account.*",
+    "solana",
+    "solana.*",
+    "zxcvbn",
+    "hvac",
+    "hvac.*",
+]
+ignore_missing_imports = false  # Use our custom stubs
+
+# External libraries without type stubs (no custom stubs yet)
 [[tool.mypy.overrides]]
 module = [
     "neo4j.*",
@@ -138,7 +156,6 @@ module = [
     "sklearn.*",
     "passlib.*",
     "jose.*",
-    "hvac.*",
     "boto3.*",
     "botocore.*",
     "psutil.*",
@@ -147,6 +164,7 @@ module = [
     "tenacity.*",
     "structlog.*",
     "wasmtime.*",
+    "opentelemetry.*",
 ]
 ignore_missing_imports = true
 

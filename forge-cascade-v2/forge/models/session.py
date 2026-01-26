@@ -104,11 +104,13 @@ class Session(ForgeModel, TimestampMixin):
 
     @field_validator("ip_history", mode="before")
     @classmethod
-    def validate_ip_history(cls, v: Any) -> list[dict[str, Any]]:
+    def validate_ip_history(cls, v: object) -> list[dict[str, Any]]:
         """Convert None to empty list."""
         if v is None:
             return []
-        return v
+        if isinstance(v, list):
+            return v
+        return []
 
     @staticmethod
     def hash_user_agent(user_agent: str | None) -> str | None:

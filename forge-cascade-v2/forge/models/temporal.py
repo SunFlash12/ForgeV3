@@ -198,7 +198,7 @@ class TrustSnapshot(TrustSnapshotBase, TimestampMixin):
     previous_value: int | None = Field(default=None, ge=0, le=100)
     delta: int | None = None
 
-    @computed_field
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def is_significant(self) -> bool:
         """Check if this is a significant change (>5 points)."""
@@ -294,7 +294,7 @@ class TrustSnapshotCompressor:
         return compressed
 
     @classmethod
-    def estimate_storage(cls, snapshots: list[TrustSnapshot]) -> dict[str, int]:
+    def estimate_storage(cls, snapshots: list[TrustSnapshot]) -> dict[str, int | float]:
         """Estimate storage savings from compression."""
         essential_count = sum(1 for s in snapshots if s.change_type == TrustChangeType.ESSENTIAL)
         derived_count = len(snapshots) - essential_count
@@ -309,7 +309,7 @@ class TrustSnapshotCompressor:
             "derived_count": derived_count,
             "uncompressed_bytes": uncompressed,
             "compressed_bytes": compressed,
-            "savings_percent": round((1 - compressed / uncompressed) * 100, 1) if uncompressed > 0 else 0,
+            "savings_percent": round((1 - compressed / uncompressed) * 100, 1) if uncompressed > 0 else 0.0,
         }
 
 

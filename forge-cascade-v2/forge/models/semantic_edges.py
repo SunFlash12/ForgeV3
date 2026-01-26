@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
-from pydantic import Field, field_validator
+from pydantic import Field, ValidationInfo, field_validator
 
 from forge.models.base import ForgeModel, TimestampMixin, generate_id
 
@@ -125,7 +125,9 @@ class SemanticEdgeCreate(SemanticEdgeBase):
 
     @field_validator("properties")
     @classmethod
-    def validate_properties(cls, v: dict, info) -> dict:
+    def validate_properties(
+        cls, v: dict[str, Any], info: ValidationInfo
+    ) -> dict[str, Any]:
         """Validate properties based on relationship type."""
         rel_type = info.data.get("relationship_type")
         if rel_type == SemanticRelationType.CONTRADICTS:
@@ -151,7 +153,7 @@ class SemanticEdge(SemanticEdgeBase, TimestampMixin):
     # Computed
     bidirectional: bool = Field(default=False)
 
-    def __init__(self, **data):
+    def __init__(self, **data: Any) -> None:
         super().__init__(**data)
         self.bidirectional = self.relationship_type.is_bidirectional
 
@@ -206,7 +208,8 @@ class SupportEdge(SemanticEdge):
     @property
     def strength(self) -> float:
         """How strongly does source support target."""
-        return self.properties.get("strength", self.confidence)
+        value = self.properties.get("strength", self.confidence)
+        return float(value) if value is not None else self.confidence
 
 
 class SupersedesEdge(SemanticEdge):

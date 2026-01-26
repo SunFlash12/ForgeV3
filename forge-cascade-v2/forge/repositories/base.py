@@ -107,7 +107,8 @@ class BaseRepository(ABC, Generic[T, CreateT, UpdateT]):
         if not record:
             return None
         try:
-            return self.model_class.model_validate(record)
+            model: T = self.model_class.model_validate(record)
+            return model
         except Exception as e:
             self.logger.error(
                 "Failed to convert record to model",

@@ -13,7 +13,7 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
-def convert_neo4j_datetime(value: Any) -> datetime:
+def convert_neo4j_datetime(value: object) -> datetime:
     """
     Convert Neo4j DateTime to Python datetime.
 
@@ -30,11 +30,13 @@ def convert_neo4j_datetime(value: Any) -> datetime:
         return value
     # Handle Neo4j DateTime object
     if hasattr(value, 'to_native'):
-        return value.to_native()
+        native_value: datetime = value.to_native()
+        return native_value
     # Handle string format
     if isinstance(value, str):
         return datetime.fromisoformat(value.replace('Z', '+00:00'))
-    return value
+    # Fallback: return current time for unknown types
+    return datetime.now(UTC)
 
 
 class ForgeModel(BaseModel):
@@ -57,7 +59,7 @@ class TimestampMixin(BaseModel):
 
     @field_validator('created_at', 'updated_at', mode='before')
     @classmethod
-    def convert_datetime(cls, v: Any) -> datetime:
+    def convert_datetime(cls, v: object) -> datetime:
         """Convert Neo4j DateTime to Python datetime."""
         return convert_neo4j_datetime(v)
 

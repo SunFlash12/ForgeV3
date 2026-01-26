@@ -15,7 +15,7 @@ import warnings
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, ValidationInfo, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
@@ -281,7 +281,7 @@ class Settings(BaseSettings):
 
     @field_validator("llm_api_key")
     @classmethod
-    def validate_llm_api_key(cls, v: str | None, info) -> str | None:
+    def validate_llm_api_key(cls, v: str | None, info: ValidationInfo) -> str | None:
         """Validate LLM API key format if provided."""
         if v is None:
             return v
@@ -527,8 +527,12 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    """Get cached settings instance."""
-    return Settings()
+    """Get cached settings instance.
+
+    Note: pydantic-settings reads values from environment variables,
+    so explicit arguments are not required.
+    """
+    return Settings()  # type: ignore[call-arg]
 
 
 # Singleton settings instance

@@ -203,11 +203,13 @@ class User(UserBase, TimestampMixin):
 
     @field_validator("metadata", mode="before")
     @classmethod
-    def validate_metadata(cls, v: Any) -> dict[str, Any]:
+    def validate_metadata(cls, v: object) -> dict[str, Any]:
         """Convert None to empty dict for database compatibility."""
         if v is None:
             return {}
-        return v
+        if isinstance(v, dict):
+            return v
+        return {}
 
     @property
     def trust_level(self) -> TrustLevel:

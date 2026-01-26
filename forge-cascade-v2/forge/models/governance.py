@@ -142,15 +142,18 @@ class ProposalBase(ForgeModel):
 
     @field_validator("action", mode="before")
     @classmethod
-    def parse_action(cls, v: Any) -> dict[str, Any]:
+    def parse_action(cls, v: object) -> dict[str, Any]:
         """Handle action being stored as JSON string in database."""
         import json
         if isinstance(v, str):
             try:
-                return json.loads(v)
+                parsed: dict[str, Any] = json.loads(v)
+                return parsed
             except json.JSONDecodeError:
                 return {}
-        return v if v else {}
+        if isinstance(v, dict):
+            return v
+        return {}
 
 
 class ProposalCreate(ProposalBase):
