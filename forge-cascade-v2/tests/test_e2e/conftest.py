@@ -234,9 +234,7 @@ async def acp_service(
     escrow_svc = EscrowService()
     await escrow_svc.initialize()
 
-    svc = ACPService(
-        job_repo, offering_repo, nonce_store=nonce_store, escrow_service=escrow_svc
-    )
+    svc = ACPService(job_repo, offering_repo, nonce_store=nonce_store, escrow_service=escrow_svc)
     svc.config = test_config
     return svc
 
