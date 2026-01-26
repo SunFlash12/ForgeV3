@@ -449,7 +449,7 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
 
         Args:
             query_embedding: Query vector embedding
-            limit: Maximum results
+            limit: Maximum results (capped at 100)
             min_trust: Minimum trust level
             capsule_type: Filter by type
             owner_id: Filter by owner
@@ -457,6 +457,9 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
         Returns:
             List of search results with scores
         """
+        # SECURITY FIX (Audit 4 - Session 4): Bound limit to prevent memory exhaustion
+        limit = max(1, min(int(limit), 100))
+
         # Build optional filters
         where_clauses = ["capsule.trust_level >= $min_trust"]
         params: dict[str, Any] = {
@@ -518,12 +521,16 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
         Args:
             owner_id: Owner user ID
             skip: Pagination offset
-            limit: Maximum results
+            limit: Maximum results (capped at 200)
             include_archived: Include archived capsules
 
         Returns:
             List of capsules
         """
+        # SECURITY FIX (Audit 4 - Session 4): Bound limit/skip to prevent abuse
+        limit = max(1, min(int(limit), 200))
+        skip = max(0, int(skip))
+
         archive_filter = "" if include_archived else "AND c.is_archived = false"
 
         query = f"""
@@ -626,12 +633,16 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
 
         Args:
             offset: Number of records to skip
-            limit: Maximum records to return
+            limit: Maximum records to return (capped at 200)
             filters: Optional filters (type, owner_id, tag)
 
         Returns:
             Tuple of (capsules, total_count)
         """
+        # SECURITY FIX (Audit 4 - Session 4): Bound limit/offset to prevent abuse
+        limit = max(1, min(int(limit), 200))
+        offset = max(0, int(offset))
+
         filters = filters or {}
         conditions = ["c.is_archived = false"]
         params: dict[str, Any] = {"offset": offset, "limit": limit}
@@ -751,11 +762,14 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
         Get most recently created capsules.
 
         Args:
-            limit: Maximum number of capsules to return
+            limit: Maximum number of capsules to return (capped at 100)
 
         Returns:
             List of recent capsules
         """
+        # SECURITY FIX (Audit 4 - Session 4): Bound limit to prevent memory exhaustion
+        limit = max(1, min(int(limit), 100))
+
         query = """
         MATCH (c:Capsule)
         WHERE c.is_archived = false
@@ -781,11 +795,14 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
             since: Get changes after this timestamp (None = all)
             types: Filter by capsule types
             min_trust: Minimum trust level
-            limit: Maximum results
+            limit: Maximum results (capped at 500)
 
         Returns:
             Tuple of (changed capsules, deleted capsule IDs)
         """
+        # SECURITY FIX (Audit 4 - Session 4): Bound limit to prevent memory exhaustion
+        limit = max(1, min(int(limit), 500))
+
         conditions = [
             "c.is_archived = false",
             "c.trust_level >= $min_trust",
@@ -841,11 +858,14 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
 
         Args:
             since: Get changes after this timestamp (None = all)
-            limit: Maximum results
+            limit: Maximum results (capped at 500)
 
         Returns:
             List of edge dictionaries
         """
+        # SECURITY FIX (Audit 4 - Session 4): Bound limit to prevent memory exhaustion
+        limit = max(1, min(int(limit), 500))
+
         conditions = []
         params: dict[str, Any] = {"limit": limit}
 
@@ -885,13 +905,16 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
 
         Args:
             embedding: Query embedding vector
-            limit: Maximum results
+            limit: Maximum results (capped at 100)
             min_similarity: Minimum similarity score (0-1)
             exclude_ids: Capsule IDs to exclude from results
 
         Returns:
             List of (Capsule, similarity_score) tuples
         """
+        # SECURITY FIX (Audit 4 - Session 4): Bound limit to prevent memory exhaustion
+        limit = max(1, min(int(limit), 100))
+
         exclude_ids = exclude_ids or []
 
         query = """
@@ -1073,11 +1096,18 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
             rel_types: Filter by relationship types (None = all)
             direction: "in", "out", or "both"
             min_confidence: Minimum confidence score
-            limit: Maximum results
+            limit: Maximum results (capped at 200)
 
         Returns:
             List of semantic neighbors with relationship info
         """
+        # SECURITY FIX (Audit 4 - Session 4): Bound limit to prevent memory exhaustion
+        limit = max(1, min(int(limit), 200))
+
+        # SECURITY FIX (Audit 4 - Session 4): Validate direction against allowlist
+        if direction not in ("in", "out", "both"):
+            direction = "both"
+
         # SECURITY FIX (Audit 4 - M4): Use parameterized query for type filter
         # Don't format values directly into the query string
         type_filter = ""
@@ -1154,11 +1184,14 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
             tags: Filter to capsules with these tags
             min_severity: Minimum severity level
             include_resolved: Include resolved contradictions
-            limit: Maximum results
+            limit: Maximum results (capped at 200)
 
         Returns:
             List of (capsule1, capsule2, edge) tuples
         """
+        # SECURITY FIX (Audit 4 - Session 4): Bound limit to prevent memory exhaustion
+        limit = max(1, min(int(limit), 200))
+
         conditions = ["r.relationship_type = 'CONTRADICTS'"]
         params: dict[str, Any] = {"limit": limit}
 
@@ -1220,11 +1253,15 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
 
         Args:
             min_size: Minimum cluster size
-            limit: Maximum clusters to return
+            limit: Maximum clusters to return (capped at 100)
 
         Returns:
             List of contradiction clusters
         """
+        # SECURITY FIX (Audit 4 - Session 4): Bound limit to prevent memory exhaustion
+        limit = max(1, min(int(limit), 100))
+        min_size = max(1, min(int(min_size), 100))
+
         query = """
         MATCH (c1:Capsule)-[r:SEMANTIC_EDGE {relationship_type: 'CONTRADICTS'}]-(c2:Capsule)
         WITH collect(DISTINCT c1) + collect(DISTINCT c2) AS all_nodes,
@@ -1277,11 +1314,14 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
             capsule_id: Capsule ID
             rel_types: Filter by relationship types
             include_auto_detected: Include auto-detected edges
-            limit: Maximum results
+            limit: Maximum results (capped at 500)
 
         Returns:
             List of semantic edges
         """
+        # SECURITY FIX (Audit 4 - Session 4): Bound limit to prevent memory exhaustion
+        limit = max(1, min(int(limit), 500))
+
         conditions = ["(c1.id = $id OR c2.id = $id)"]
         params: dict[str, Any] = {"id": capsule_id, "limit": limit}
 

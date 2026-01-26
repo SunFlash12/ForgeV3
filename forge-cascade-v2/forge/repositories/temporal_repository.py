@@ -203,6 +203,9 @@ class TemporalRepository:
         include_content: bool = False,
     ) -> VersionHistory:
         """Get version history for a capsule."""
+        # SECURITY FIX (Audit 4): Bound limit to prevent memory exhaustion
+        limit = max(1, min(int(limit), 500))
+
         query = """
         MATCH (c:Capsule {id: $capsule_id})-[:HAS_VERSION]->(v:CapsuleVersion)
         RETURN v {.*} AS version
@@ -583,11 +586,16 @@ class TemporalRepository:
 
         where_clause = " AND ".join(conditions)
 
+        # SECURITY FIX (Audit 4): Cap results to prevent unbounded queries
+        max_results = 10000
+        params["result_limit"] = max_results
+
         query = f"""
         MATCH (t:TrustSnapshot)
         WHERE {where_clause}
         RETURN t {{.*}} AS snapshot
         ORDER BY t.timestamp
+        LIMIT $result_limit
         """
 
         results = await self.client.execute(query, params)
@@ -755,6 +763,9 @@ class TemporalRepository:
         limit: int = 30,
     ) -> list[GraphSnapshot]:
         """Get graph snapshots over time."""
+        # SECURITY FIX (Audit 4): Bound limit to prevent memory exhaustion
+        limit = max(1, min(int(limit), 500))
+
         conditions = []
         params: dict[str, Any] = {"limit": limit}
 

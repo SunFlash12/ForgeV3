@@ -443,11 +443,14 @@ class ChatRepository:
 
         Args:
             room_id: Room ID
-            limit: Maximum members to return
+            limit: Maximum members to return (capped at 500)
 
         Returns:
             List of members
         """
+        # SECURITY FIX (Audit 4 - S4): Tighten limit cap from 1000 to 500
+        limit = max(1, min(int(limit), 500))
+
         query = """
         MATCH (m:RoomMember {room_id: $room_id})
         RETURN m {.*} AS member
@@ -457,7 +460,7 @@ class ChatRepository:
 
         results = await self.client.execute(query, {
             "room_id": room_id,
-            "limit": min(limit, 1000),
+            "limit": limit,
         })
 
         members = []

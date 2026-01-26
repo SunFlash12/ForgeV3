@@ -413,6 +413,9 @@ class AuditRepository:
         since: datetime | None = None
     ) -> list[AuditEvent]:
         """Get audit events for a specific actor."""
+        # SECURITY FIX (Audit 4 - S4): Bound limit/offset to prevent resource exhaustion
+        limit = max(1, min(int(limit), 1000))
+        offset = max(0, int(offset))
 
         query = f"""
         MATCH (a:AuditLog {{actor_id: $actor_id}})
@@ -442,6 +445,10 @@ class AuditRepository:
         offset: int = 0
     ) -> list[AuditEvent]:
         """Get audit events for a specific resource."""
+        # SECURITY FIX (Audit 4 - S4): Bound limit/offset to prevent resource exhaustion
+        limit = max(1, min(int(limit), 1000))
+        offset = max(0, int(offset))
+
         query = """
         MATCH (a:AuditLog {resource_type: $resource_type, resource_id: $resource_id})
         RETURN a
@@ -466,6 +473,9 @@ class AuditRepository:
         limit: int = 100
     ) -> list[AuditEvent]:
         """Get audit events of a specific type within time range."""
+        # SECURITY FIX (Audit 4 - S4): Bound limit to prevent resource exhaustion
+        limit = max(1, min(int(limit), 1000))
+
         time_clauses = []
         if since:
             time_clauses.append("a.timestamp >= datetime($since)")
@@ -511,6 +521,10 @@ class AuditRepository:
 
         Full-text search on action field with optional filters.
         """
+        # SECURITY FIX (Audit 4 - S4): Bound limit/offset to prevent resource exhaustion
+        limit = max(1, min(int(limit), 1000))
+        offset = max(0, int(offset))
+
         conditions = ["a.action CONTAINS $query_text"]
 
         if event_types:
@@ -636,6 +650,9 @@ class AuditRepository:
         limit: int = 20
     ) -> list[dict[str, Any]]:
         """Get most active actors in time period."""
+        # SECURITY FIX (Audit 4 - S4): Bound limit to prevent resource exhaustion
+        limit = max(1, min(int(limit), 500))
+
         until = until or datetime.now(UTC)
 
         query = """
@@ -889,6 +906,10 @@ class AuditRepository:
         Returns:
             Tuple of (events list, total count)
         """
+        # SECURITY FIX (Audit 4 - S4): Bound limit/offset to prevent resource exhaustion
+        limit = max(1, min(int(limit), 1000))
+        offset = max(0, int(offset))
+
         filters = filters or {}
         conditions = []
         params = {"offset": offset, "limit": limit}

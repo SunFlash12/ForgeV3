@@ -126,6 +126,10 @@ class ListingRepository(BaseRepository[CapsuleListing, CapsuleListing, CapsuleLi
 
     async def find_active(self, skip: int = 0, limit: int = 50) -> list[CapsuleListing]:
         """Find active listings."""
+        # SECURITY FIX (Audit 4 - S4): Bound skip/limit to prevent resource exhaustion
+        limit = max(1, min(int(limit), 100))
+        skip = max(0, int(skip))
+
         query = """
         MATCH (l:MarketplaceListing)
         WHERE l.status = "active"
@@ -135,7 +139,7 @@ class ListingRepository(BaseRepository[CapsuleListing, CapsuleListing, CapsuleLi
         LIMIT $limit
         """
         results = await self.client.execute(
-            query, {"skip": skip, "limit": min(limit, 100)}
+            query, {"skip": skip, "limit": limit}
         )
         return self._to_models([r["entity"] for r in results if r.get("entity")])
 

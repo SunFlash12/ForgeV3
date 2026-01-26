@@ -493,18 +493,26 @@ class OverlayRepository(BaseRepository[Overlay, OverlayCreate, OverlayUpdate]):
         Returns:
             List of overlays
         """
-        state_filter = "AND o.state = 'ACTIVE'" if active_only else ""
+        # SECURITY FIX (Audit 4 - S4): Use parameterized state filter instead of f-string
+        if active_only:
+            query = """
+            MATCH (o:Overlay)
+            WHERE $capability IN o.capabilities AND o.state = $state
+            RETURN o {.*} AS entity
+            """
+            params: dict[str, Any] = {
+                "capability": capability.value,
+                "state": OverlayState.ACTIVE.value,
+            }
+        else:
+            query = """
+            MATCH (o:Overlay)
+            WHERE $capability IN o.capabilities
+            RETURN o {.*} AS entity
+            """
+            params = {"capability": capability.value}
 
-        query = f"""
-        MATCH (o:Overlay)
-        WHERE $capability IN o.capabilities {state_filter}
-        RETURN o {{.*}} AS entity
-        """
-
-        results = await self.client.execute(
-            query,
-            {"capability": capability.value},
-        )
+        results = await self.client.execute(query, params)
 
         return self._to_models([r["entity"] for r in results if r.get("entity")])
 

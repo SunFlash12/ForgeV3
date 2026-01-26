@@ -73,6 +73,9 @@ class BaseRepository(ABC, Generic[T, CreateT, UpdateT]):
         """
         self.client = client
         self.logger = structlog.get_logger(self.__class__.__name__)
+        # SECURITY FIX (Audit 4 - Session 4): Validate node_label at construction time
+        # to ensure subclasses don't introduce injection-unsafe labels.
+        validate_identifier(self.node_label, "node_label")
 
     @property
     @abstractmethod
@@ -139,6 +142,7 @@ class BaseRepository(ABC, Generic[T, CreateT, UpdateT]):
         Returns:
             Entity model or None if not found
         """
+        # Safe: self.node_label validated at __init__ time
         query = f"""
         MATCH (n:{self.node_label} {{id: $id}})
         RETURN n {{.*}} AS entity
@@ -181,6 +185,7 @@ class BaseRepository(ABC, Generic[T, CreateT, UpdateT]):
         limit = min(max(1, limit), 100)
         skip = max(0, skip)
 
+        # Safe: self.node_label validated at __init__ time; order_by validated above
         query = f"""
         MATCH (n:{self.node_label})
         RETURN n {{.*}} AS entity
@@ -203,6 +208,7 @@ class BaseRepository(ABC, Generic[T, CreateT, UpdateT]):
         Returns:
             Total count
         """
+        # Safe: self.node_label validated at __init__ time
         query = f"MATCH (n:{self.node_label}) RETURN count(n) AS count"
         result = await self.client.execute_single(query)
         return result.get("count", 0) if result else 0
@@ -217,6 +223,7 @@ class BaseRepository(ABC, Generic[T, CreateT, UpdateT]):
         Returns:
             True if exists
         """
+        # Safe: self.node_label validated at __init__ time
         query = f"""
         MATCH (n:{self.node_label} {{id: $id}})
         RETURN count(n) > 0 AS exists
@@ -235,6 +242,7 @@ class BaseRepository(ABC, Generic[T, CreateT, UpdateT]):
         Returns:
             True if deleted
         """
+        # Safe: self.node_label validated at __init__ time
         query = f"""
         MATCH (n:{self.node_label} {{id: $id}})
         DETACH DELETE n
@@ -273,6 +281,7 @@ class BaseRepository(ABC, Generic[T, CreateT, UpdateT]):
         # Validate field name to prevent Cypher injection
         field = validate_identifier(field, "field")
 
+        # Safe: self.node_label validated at __init__ time; field validated above
         query = f"""
         MATCH (n:{self.node_label} {{id: $id}})
         SET n.{field} = $value, n.updated_at = $now
@@ -315,6 +324,7 @@ class BaseRepository(ABC, Generic[T, CreateT, UpdateT]):
         # SECURITY FIX (Audit 5): Cap limit (reduced from 1000)
         limit = min(max(1, limit), 100)
 
+        # Safe: self.node_label validated at __init__ time; field validated above
         query = f"""
         MATCH (n:{self.node_label} {{{field}: $value}})
         RETURN n {{.*}} AS entity

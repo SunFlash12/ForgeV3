@@ -206,10 +206,16 @@ class GraphAlgorithmProvider:
         # SECURITY FIX: Validate all user-controlled identifiers to prevent Cypher injection
         node_label = validate_neo4j_identifier(request.node_label, "node_label")
         relationship_type = validate_neo4j_identifier(request.relationship_type, "relationship_type")
+        # Safe: graph_name built from validated identifiers only
         graph_name = f"pagerank_{node_label}_{relationship_type}"
+
+        # SECURITY FIX (Audit 4 - Session 4): Bound limit to prevent memory exhaustion
+        safe_limit = max(1, min(int(request.limit), 1000))
 
         try:
             # Project the graph
+            # Note: GDS CALL arguments do not support $param syntax for graph/label names;
+            # string interpolation is required. All values are validated above.
             await self.client.execute(
                 f"""
                 CALL gds.graph.project(
@@ -221,6 +227,7 @@ class GraphAlgorithmProvider:
             )
 
             # Run PageRank
+            # Safe: node_label validated above; graph_name built from validated identifiers
             results = await self.client.execute(
                 f"""
                 CALL gds.pageRank.stream('{graph_name}', {{
@@ -239,7 +246,7 @@ class GraphAlgorithmProvider:
                     "max_iterations": request.max_iterations,
                     "damping_factor": request.damping_factor,
                     "tolerance": request.tolerance,
-                    "limit": request.limit,
+                    "limit": safe_limit,
                 },
             )
 
@@ -256,6 +263,7 @@ class GraphAlgorithmProvider:
             ]
 
             # Get total node count
+            # Safe: node_label validated above
             count_result = await self.client.execute_single(
                 f"MATCH (n:{node_label}) RETURN count(n) AS count"
             )
@@ -275,6 +283,7 @@ class GraphAlgorithmProvider:
 
         finally:
             # Clean up projected graph
+            # Safe: graph_name built from validated identifiers
             try:
                 await self.client.execute(
                     f"CALL gds.graph.drop('{graph_name}', false)"
@@ -292,7 +301,11 @@ class GraphAlgorithmProvider:
         node_label = validate_neo4j_identifier(request.node_label, "node_label")
         relationship_type = validate_neo4j_identifier(request.relationship_type, "relationship_type")
 
+        # SECURITY FIX (Audit 4 - Session 4): Bound limit to prevent memory exhaustion
+        safe_limit = max(1, min(int(request.limit), 1000))
+
         # Get all nodes with their relationships
+        # Safe: node_label and relationship_type validated above
         results = await self.client.execute(
             f"""
             MATCH (n:{node_label})
@@ -315,7 +328,7 @@ class GraphAlgorithmProvider:
             """,
             {
                 "damping": request.damping_factor,
-                "limit": request.limit,
+                "limit": safe_limit,
             },
         )
 
@@ -331,6 +344,7 @@ class GraphAlgorithmProvider:
             for i, r in enumerate(results)
         ]
 
+        # Safe: node_label validated above
         count_result = await self.client.execute_single(
             f"MATCH (n:{node_label}) RETURN count(n) AS count"
         )
@@ -395,6 +409,10 @@ class GraphAlgorithmProvider:
             relationship_type = validate_neo4j_identifier(request.relationship_type, "relationship_type")
             rel_clause = f":{relationship_type}"
 
+        # SECURITY FIX (Audit 4 - Session 4): Bound limit to prevent memory exhaustion
+        safe_limit = max(1, min(int(request.limit), 1000))
+
+        # Safe: node_label and rel_clause validated above
         results = await self.client.execute(
             f"""
             MATCH (n:{node_label})
@@ -407,7 +425,7 @@ class GraphAlgorithmProvider:
                    n.trust_level AS trust_level,
                    degree AS score
             """,
-            {"limit": request.limit},
+            {"limit": safe_limit},
         )
 
         # Normalize if requested
@@ -425,6 +443,7 @@ class GraphAlgorithmProvider:
             for i, r in enumerate(results)
         ]
 
+        # Safe: node_label validated above
         count_result = await self.client.execute_single(
             f"MATCH (n:{node_label}) RETURN count(n) AS count"
         )
@@ -442,20 +461,30 @@ class GraphAlgorithmProvider:
         """Compute centrality using GDS."""
         # SECURITY FIX: Validate all user-controlled identifiers to prevent Cypher injection
         node_label = validate_neo4j_identifier(request.node_label, "node_label")
-        rel_type = "*"
+        # SECURITY FIX (Audit 4 - Session 4): "*" is a valid GDS wildcard for "all relationships"
+        # Only validate if a specific type is provided; otherwise use the safe constant "*"
+        rel_type = "*"  # Safe: constant GDS wildcard
         if request.relationship_type:
             rel_type = validate_neo4j_identifier(request.relationship_type, "relationship_type")
+        # Safe: graph_name built from validated identifier
         graph_name = f"centrality_{node_label}"
 
-        algo_map = {
+        # SECURITY FIX (Audit 4 - Session 4): Allowlist of valid GDS algorithm procedure names
+        algo_map: dict[AlgorithmType, str] = {
             AlgorithmType.BETWEENNESS_CENTRALITY: "gds.betweenness.stream",
             AlgorithmType.CLOSENESS_CENTRALITY: "gds.closeness.stream",
             AlgorithmType.EIGENVECTOR_CENTRALITY: "gds.eigenvector.stream",
         }
 
+        # Safe: algo comes from a hardcoded allowlist, not user input
         algo = algo_map.get(request.algorithm, "gds.betweenness.stream")
 
+        # SECURITY FIX (Audit 4 - Session 4): Bound limit to prevent memory exhaustion
+        safe_limit = max(1, min(int(request.limit), 1000))
+
         try:
+            # Note: GDS CALL arguments do not support $param syntax for graph/label names;
+            # string interpolation is required. All values are validated above.
             await self.client.execute(
                 f"""
                 CALL gds.graph.project(
@@ -466,6 +495,8 @@ class GraphAlgorithmProvider:
                 """
             )
 
+            # Safe: algo from hardcoded allowlist; graph_name from validated identifiers;
+            # node_label validated above
             results = await self.client.execute(
                 f"""
                 CALL {algo}('{graph_name}')
@@ -476,7 +507,7 @@ class GraphAlgorithmProvider:
                 MATCH (n:{node_label}) WHERE id(n) = nodeId
                 RETURN n.id AS node_id, n.title AS title, n.trust_level AS trust_level, score
                 """,
-                {"limit": request.limit},
+                {"limit": safe_limit},
             )
 
             rankings = [
@@ -491,6 +522,7 @@ class GraphAlgorithmProvider:
                 for i, r in enumerate(results)
             ]
 
+            # Safe: node_label validated above
             count_result = await self.client.execute_single(
                 f"MATCH (n:{node_label}) RETURN count(n) AS count"
             )
@@ -505,6 +537,7 @@ class GraphAlgorithmProvider:
             )
 
         finally:
+            # Safe: graph_name built from validated identifier
             try:
                 await self.client.execute(
                     f"CALL gds.graph.drop('{graph_name}', false)"
@@ -568,6 +601,8 @@ class GraphAlgorithmProvider:
         rel_type = validate_neo4j_identifier(request.relationship_type or "DERIVED_FROM", "relationship_type")
 
         try:
+            # Note: GDS CALL arguments do not support $param syntax for graph/label names;
+            # string interpolation is required. All values are validated above.
             await self.client.execute(
                 f"""
                 CALL gds.graph.project(
@@ -583,6 +618,7 @@ class GraphAlgorithmProvider:
             )
 
             # Run Louvain
+            # Safe: graph_name is constant; node_label validated above
             results = await self.client.execute(
                 f"""
                 CALL gds.louvain.stream('{graph_name}')
@@ -642,6 +678,7 @@ class GraphAlgorithmProvider:
             )
 
         finally:
+            # Safe: graph_name is constant "community_detection"
             try:
                 await self.client.execute(
                     f"CALL gds.graph.drop('{graph_name}', false)"
@@ -663,6 +700,7 @@ class GraphAlgorithmProvider:
         rel_type = validate_neo4j_identifier(request.relationship_type or "DERIVED_FROM", "relationship_type")
 
         # Find connected components using path traversal
+        # Safe: node_label and rel_type validated above
         results = await self.client.execute(
             f"""
             MATCH (n:{node_label})
@@ -741,6 +779,7 @@ class GraphAlgorithmProvider:
         # SECURITY FIX: Validate max_hops is a safe integer value
         max_hops = max(1, min(int(request.max_hops), 20))  # Clamp between 1 and 20
 
+        # Safe: rel_types validated via validate_relationship_pattern; max_hops clamped above
         results = await self.client.execute(
             f"""
             MATCH path = (source:Capsule {{id: $source_id}})-[:{rel_types}*1..{max_hops}]-(target:Capsule {{id: $target_id}})
@@ -894,6 +933,10 @@ class GraphAlgorithmProvider:
         # SECURITY FIX: Validate all user-controlled identifiers to prevent Cypher injection
         validated_node_label = validate_neo4j_identifier(node_label, "node_label")
 
+        # SECURITY FIX (Audit 4 - Session 4): Bound limit to prevent memory exhaustion
+        safe_limit = max(1, min(int(limit), 500))
+
+        # Safe: validated_node_label validated above; DERIVED_FROM is a constant
         results = await self.client.execute(
             f"""
             MATCH (n:{validated_node_label})
@@ -913,7 +956,7 @@ class GraphAlgorithmProvider:
                    upstream_count,
                    trust
             """,
-            {"limit": limit},
+            {"limit": safe_limit},
         )
 
         return [
@@ -963,10 +1006,16 @@ class GraphAlgorithmProvider:
         # SECURITY FIX: Validate all user-controlled identifiers to prevent Cypher injection
         node_label = validate_neo4j_identifier(request.node_label, "node_label")
         relationship_type = validate_neo4j_identifier(request.relationship_type, "relationship_type")
+        # Safe: graph_name built from validated identifier
         graph_name = f"similarity_{node_label}"
+
+        # SECURITY FIX (Audit 4 - Session 4): Bound top_k to prevent memory exhaustion
+        safe_top_k = max(1, min(int(request.top_k), 500))
 
         try:
             # Project the graph
+            # Note: GDS CALL arguments do not support $param syntax for graph/label names;
+            # string interpolation is required. All values are validated above.
             await self.client.execute(
                 f"""
                 CALL gds.graph.project(
@@ -978,6 +1027,7 @@ class GraphAlgorithmProvider:
             )
 
             # Run node similarity
+            # Safe: algo is a constant; graph_name and node_label validated above
             algo = "gds.nodeSimilarity.stream"
             if request.source_node_id:
                 # Similarity for a specific node
@@ -998,7 +1048,7 @@ class GraphAlgorithmProvider:
                     """,
                     {
                         "source_id": request.source_node_id,
-                        "top_k": request.top_k,
+                        "top_k": safe_top_k,
                         "cutoff": request.similarity_cutoff,
                     },
                 )
@@ -1017,7 +1067,7 @@ class GraphAlgorithmProvider:
                     LIMIT $top_k
                     """,
                     {
-                        "top_k": request.top_k,
+                        "top_k": safe_top_k,
                         "cutoff": request.similarity_cutoff,
                     },
                 )
@@ -1042,6 +1092,7 @@ class GraphAlgorithmProvider:
             )
 
         finally:
+            # Safe: graph_name built from validated identifier
             try:
                 await self.client.execute(
                     f"CALL gds.graph.drop('{graph_name}', false)"
@@ -1062,8 +1113,12 @@ class GraphAlgorithmProvider:
         node_label = validate_neo4j_identifier(request.node_label, "node_label")
         relationship_type = validate_neo4j_identifier(request.relationship_type, "relationship_type")
 
+        # SECURITY FIX (Audit 4 - Session 4): Bound top_k to prevent memory exhaustion
+        safe_top_k = max(1, min(int(request.top_k), 500))
+
         if request.source_node_id:
             # Similarity for a specific node
+            # Safe: node_label and relationship_type validated above
             results = await self.client.execute(
                 f"""
                 MATCH (source:{node_label} {{id: $source_id}})-[:{relationship_type}]-(neighbor)
@@ -1087,10 +1142,11 @@ class GraphAlgorithmProvider:
                 {
                     "source_id": request.source_node_id,
                     "cutoff": request.similarity_cutoff,
-                    "top_k": request.top_k,
+                    "top_k": safe_top_k,
                 },
             )
         else:
+            # Safe: node_label and relationship_type validated above
             results = await self.client.execute(
                 f"""
                 MATCH (n1:{node_label})-[:{relationship_type}]-(neighbor)
@@ -1112,7 +1168,7 @@ class GraphAlgorithmProvider:
                 """,
                 {
                     "cutoff": request.similarity_cutoff,
-                    "top_k": request.top_k,
+                    "top_k": safe_top_k,
                 },
             )
 
@@ -1167,13 +1223,16 @@ class GraphAlgorithmProvider:
         request: ShortestPathRequest,
     ) -> ShortestPathResult:
         """Compute weighted shortest path using GDS Dijkstra."""
-        graph_name = "shortest_path_graph"
+        graph_name = "shortest_path_graph"  # Safe: constant value
         # SECURITY FIX: Validate all user-controlled identifiers to prevent Cypher injection
         rel_types_list = [validate_neo4j_identifier(rt, "relationship_type") for rt in request.relationship_types]
+        # Safe: each element validated above; join is safe for GDS projection syntax
         rel_types_for_projection = ", ".join(rel_types_list)
 
         try:
             # Project with trust as weight
+            # Note: GDS CALL arguments do not support $param syntax for graph/label names;
+            # string interpolation is required. All values are validated above.
             await self.client.execute(
                 f"""
                 CALL gds.graph.project(
@@ -1189,6 +1248,7 @@ class GraphAlgorithmProvider:
                 """
             )
 
+            # Safe: graph_name is constant "shortest_path_graph"
             result = await self.client.execute_single(
                 f"""
                 MATCH (source:Capsule {{id: $source_id}}), (target:Capsule {{id: $target_id}})
@@ -1246,6 +1306,7 @@ class GraphAlgorithmProvider:
                 )
 
         finally:
+            # Safe: graph_name is constant "shortest_path_graph"
             try:
                 await self.client.execute(
                     f"CALL gds.graph.drop('{graph_name}', false)"
@@ -1264,6 +1325,7 @@ class GraphAlgorithmProvider:
         # SECURITY FIX: Validate max_depth is a safe integer value
         max_depth = max(1, min(int(request.max_depth), 20))  # Clamp between 1 and 20
 
+        # Safe: rel_types validated via validate_relationship_pattern; max_depth clamped above
         result = await self.client.execute_single(
             f"""
             MATCH path = shortestPath(

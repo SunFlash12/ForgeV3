@@ -19,9 +19,7 @@ from forge.database.client import Neo4jClient
 from forge.models.session import (
     Session,
     SessionCreate,
-    SessionInDB,
     SessionStatus,
-    SessionUpdate,
 )
 
 settings = get_settings()
@@ -480,9 +478,10 @@ class SessionRepository:
             LIMIT $limit
             """
 
+        # SECURITY FIX (Audit 4): Bound limit consistently
         params = {
             "user_id": user_id,
-            "limit": min(limit, 100),
+            "limit": max(1, min(int(limit), 100)),
             "now": self._now().isoformat(),
         }
 

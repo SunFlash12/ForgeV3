@@ -532,6 +532,9 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
         limit: int = 100,
     ) -> list[UserPublic]:
         """Get users with minimum trust level."""
+        # SECURITY FIX (Audit 4): Bound limit to prevent memory exhaustion
+        limit = max(1, min(int(limit), 100))
+
         query = """
         MATCH (u:User)
         WHERE u.trust_flame >= $min_trust AND u.is_active = true
@@ -996,6 +999,9 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
         """
         filters = filters or {}
         conditions: list[str] = []
+        # SECURITY FIX (Audit 4): Bound offset and limit to prevent abuse
+        offset = max(0, int(offset))
+        limit = max(1, min(int(limit), 100))
         params: dict[str, Any] = {"offset": offset, "limit": limit}
 
         if "role" in filters:
@@ -1054,8 +1060,11 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
         Returns:
             List of matching users (safe User model, no password hashes)
         """
-        # Escape special regex characters for safe CONTAINS matching
-        safe_query = query_str.replace("\\", "\\\\").replace("'", "\\'")
+        # SECURITY FIX (Audit 4): Bound limit to prevent memory exhaustion
+        limit = max(1, min(int(limit), 100))
+
+        # No manual escaping needed: $query is a parameterized value,
+        # Neo4j handles escaping automatically for CONTAINS operations.
 
         query = f"""
         MATCH (u:User)
@@ -1074,7 +1083,7 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
 
         results = await self.client.execute(
             query,
-            {"query": safe_query, "limit": limit},
+            {"query": query_str, "limit": limit},
         )
 
         return [

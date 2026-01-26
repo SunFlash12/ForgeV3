@@ -125,16 +125,20 @@ class OfferingRepository:
 
         return self._to_model(result.get("o", result))
 
-    async def get_by_agent(self, agent_id: str) -> list[JobOffering]:
+    async def get_by_agent(self, agent_id: str, limit: int = 100) -> list[JobOffering]:
         """Get all offerings for a specific agent."""
+        # SECURITY FIX (Audit 4 - S4): Add LIMIT to prevent unbounded result sets
+        limit = max(1, min(int(limit), 200))
+
         query = """
         MATCH (o:JobOffering {provider_agent_id: $agent_id})
         WHERE o.is_active = true
         RETURN o
         ORDER BY o.created_at DESC
+        LIMIT $limit
         """
 
-        results = await self.client.execute(query, {"agent_id": agent_id})
+        results = await self.client.execute(query, {"agent_id": agent_id, "limit": limit})
 
         return [self._to_model(r.get("o", r)) for r in results if r]
 
@@ -154,11 +158,14 @@ class OfferingRepository:
             query: Text search in title/description
             max_fee: Maximum base fee
             min_provider_reputation: Minimum provider reputation
-            limit: Max results
+            limit: Max results (capped at 100)
 
         Returns:
             List of matching offerings
         """
+        # SECURITY FIX (Audit 4 - S4): Bound limit to prevent resource exhaustion
+        limit = max(1, min(int(limit), 100))
+
         conditions = ["o.is_active = true"]
         params: dict[str, Any] = {"limit": limit}
 
@@ -500,6 +507,9 @@ class ACPJobRepository:
         limit: int = 50,
     ) -> list[ACPJob]:
         """Get jobs where agent is the buyer."""
+        # SECURITY FIX (Audit 4 - S4): Bound limit to prevent resource exhaustion
+        limit = max(1, min(int(limit), 200))
+
         conditions = ["j.buyer_agent_id = $buyer_agent_id"]
         params: dict[str, Any] = {"buyer_agent_id": buyer_agent_id, "limit": limit}
 
@@ -528,6 +538,9 @@ class ACPJobRepository:
         limit: int = 50,
     ) -> list[ACPJob]:
         """Get jobs where agent is the provider."""
+        # SECURITY FIX (Audit 4 - S4): Bound limit to prevent resource exhaustion
+        limit = max(1, min(int(limit), 200))
+
         conditions = ["j.provider_agent_id = $provider_agent_id"]
         params: dict[str, Any] = {"provider_agent_id": provider_agent_id, "limit": limit}
 
@@ -594,22 +607,29 @@ class ACPJobRepository:
             return float(result["avg_score"])
         return None
 
-    async def get_pending_jobs(self, agent_id: str) -> list[ACPJob]:
+    async def get_pending_jobs(self, agent_id: str, limit: int = 100) -> list[ACPJob]:
         """Get jobs pending action by an agent (as buyer or provider)."""
+        # SECURITY FIX (Audit 4 - S4): Add LIMIT to prevent unbounded result sets
+        limit = max(1, min(int(limit), 200))
+
         query = """
         MATCH (j:ACPJob)
         WHERE (j.buyer_agent_id = $agent_id OR j.provider_agent_id = $agent_id)
         AND j.status IN ['open', 'negotiating', 'in_progress', 'delivered', 'evaluating']
         RETURN j
         ORDER BY j.updated_at DESC
+        LIMIT $limit
         """
 
-        results = await self.client.execute(query, {"agent_id": agent_id})
+        results = await self.client.execute(query, {"agent_id": agent_id, "limit": limit})
 
         return [self._to_model(r.get("j", r)) for r in results if r]
 
-    async def get_timed_out_jobs(self) -> list[ACPJob]:
+    async def get_timed_out_jobs(self, limit: int = 500) -> list[ACPJob]:
         """Get jobs that have timed out in their current phase."""
+        # SECURITY FIX (Audit 4 - S4): Add LIMIT to prevent unbounded result sets
+        limit = max(1, min(int(limit), 1000))
+
         now = datetime.now(UTC).isoformat()
 
         query = """
@@ -622,9 +642,10 @@ class ACPJobRepository:
             (j.current_phase = 'evaluation' AND j.evaluation_timeout IS NOT NULL AND j.evaluation_timeout < $now)
         )
         RETURN j
+        LIMIT $limit
         """
 
-        results = await self.client.execute(query, {"now": now})
+        results = await self.client.execute(query, {"now": now, "limit": limit})
 
         return [self._to_model(r.get("j", r)) for r in results if r]
 

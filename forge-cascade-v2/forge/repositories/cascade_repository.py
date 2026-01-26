@@ -365,12 +365,16 @@ class CascadeRepository:
         Get completed cascade chains.
 
         Args:
-            limit: Maximum chains to return
+            limit: Maximum chains to return (capped at 500)
             skip: Number of chains to skip
 
         Returns:
             List of completed chains with their events
         """
+        # SECURITY FIX (Audit 4 - Session 4): Bound limit/skip to prevent abuse
+        limit = max(1, min(int(limit), 500))
+        skip = max(0, int(skip))
+
         query = """
         MATCH (c:CascadeChain)
         WHERE c.status = 'completed' OR c.completed_at IS NOT NULL
@@ -427,11 +431,15 @@ class CascadeRepository:
         Delete completed chains older than specified days.
 
         Args:
-            days_old: Number of days after which to delete
+            days_old: Number of days after which to delete (clamped to 1-365)
 
         Returns:
             Number of chains deleted
         """
+        # SECURITY FIX (Audit 4 - Session 4): Validate days_old to prevent abuse
+        # Clamp between 1 day and 365 days to prevent accidental mass deletion or negative values
+        days_old = max(1, min(int(days_old), 365))
+
         query = """
         MATCH (c:CascadeChain)
         WHERE c.status = 'completed'

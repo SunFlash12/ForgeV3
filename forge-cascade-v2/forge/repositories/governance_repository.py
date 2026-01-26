@@ -613,6 +613,10 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
         limit: int = 100,
     ) -> list[Vote]:
         """Get all votes for a proposal."""
+        # SECURITY FIX (Audit 4): Bound skip/limit to prevent abuse
+        skip = max(0, int(skip))
+        limit = max(1, min(int(limit), 500))
+
         query = """
         MATCH (v:Vote)-[:VOTED]->(p:Proposal {id: $proposal_id})
         RETURN v {.*} AS vote
@@ -638,6 +642,9 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
         limit: int = 50,
     ) -> list[Vote]:
         """Get a user's voting history."""
+        # SECURITY FIX (Audit 4): Bound limit to prevent abuse
+        limit = max(1, min(int(limit), 500))
+
         query = """
         MATCH (v:Vote {voter_id: $voter_id})
         RETURN v {.*} AS vote
@@ -887,6 +894,10 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
         limit: int = 100,
     ) -> list[Proposal]:
         """Get proposals by a specific user."""
+        # SECURITY FIX (Audit 4): Bound skip/limit to prevent abuse
+        skip = max(0, int(skip))
+        limit = max(1, min(int(limit), 100))
+
         query = """
         MATCH (p:Proposal {proposer_id: $proposer_id})
         RETURN p {.*} AS entity
@@ -961,6 +972,9 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
             Tuple of (proposals list, total count)
         """
         where_clauses = []
+        # SECURITY FIX (Audit 4): Bound offset/limit to prevent abuse
+        offset = max(0, int(offset))
+        limit = max(1, min(int(limit), 100))
         params: dict[str, Any] = {"offset": offset, "limit": limit}
 
         if filters:
