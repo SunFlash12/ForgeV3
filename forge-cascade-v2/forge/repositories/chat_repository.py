@@ -262,7 +262,7 @@ class ChatRepository:
         user_id: str,
         include_public: bool = True,
         limit: int = 50,
-    ) -> list[tuple[ChatRoom, RoomRole]]:
+    ) -> list[tuple[ChatRoom, RoomRole | None]]:
         """
         Get rooms accessible to a user.
 

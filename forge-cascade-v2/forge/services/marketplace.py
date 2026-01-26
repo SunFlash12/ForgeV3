@@ -12,7 +12,7 @@ import logging
 import math
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from typing import TYPE_CHECKING, TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict
 
 from forge.models.marketplace import (
     CapsuleListing,
@@ -562,9 +562,9 @@ class MarketplaceService:
                 stats.sales_today = len(sales_today)
                 stats.sales_this_week = len(sales_week)
                 stats.sales_this_month = len(sales_month)
-                stats.revenue_today = sum(p.price for p in sales_today)
-                stats.revenue_this_week = sum(p.price for p in sales_week)
-                stats.revenue_this_month = sum(p.price for p in sales_month)
+                stats.revenue_today = sum((p.price for p in sales_today), Decimal("0"))
+                stats.revenue_this_week = sum((p.price for p in sales_week), Decimal("0"))
+                stats.revenue_this_month = sum((p.price for p in sales_month), Decimal("0"))
 
                 return stats
             except Exception as e:
@@ -590,8 +590,11 @@ class MarketplaceService:
         for p in all_purchases:
             seller_revenue[p.seller_id] = seller_revenue.get(p.seller_id, Decimal("0")) + p.seller_revenue
 
+        top_sellers_list: list[dict[str, Any]] = [
+            {"seller_id": k, "revenue": float(v)} for k, v in seller_revenue.items()
+        ]
         top_sellers = sorted(
-            [{"seller_id": k, "revenue": float(v)} for k, v in seller_revenue.items()],
+            top_sellers_list,
             key=lambda x: float(x["revenue"]),
             reverse=True
         )[:10]
@@ -601,8 +604,11 @@ class MarketplaceService:
         for p in all_purchases:
             capsule_sales[p.capsule_id] = capsule_sales.get(p.capsule_id, 0) + 1
 
+        top_capsules_list: list[dict[str, Any]] = [
+            {"capsule_id": k, "sales": v} for k, v in capsule_sales.items()
+        ]
         top_capsules = sorted(
-            [{"capsule_id": k, "sales": v} for k, v in capsule_sales.items()],
+            top_capsules_list,
             key=lambda x: int(x["sales"]),
             reverse=True
         )[:10]
@@ -618,16 +624,16 @@ class MarketplaceService:
             total_listings=len(all_listings),
             active_listings=len(active_listings),
             total_sales=len(all_purchases),
-            total_revenue=sum(p.price for p in all_purchases),
+            total_revenue=sum((p.price for p in all_purchases), Decimal("0")),
             sales_today=len(sales_today),
             sales_this_week=len(sales_week),
             sales_this_month=len(sales_month),
-            revenue_today=sum(p.price for p in sales_today),
-            revenue_this_week=sum(p.price for p in sales_week),
-            revenue_this_month=sum(p.price for p in sales_month),
+            revenue_today=sum((p.price for p in sales_today), Decimal("0")),
+            revenue_this_week=sum((p.price for p in sales_week), Decimal("0")),
+            revenue_this_month=sum((p.price for p in sales_month), Decimal("0")),
             top_sellers=top_sellers,
             top_capsules=top_capsules,
-            avg_price=avg_price,
+            avg_price=Decimal(str(avg_price)) if not isinstance(avg_price, Decimal) else avg_price,
             avg_capsules_per_seller=avg_per_seller,
         )
 
@@ -765,7 +771,6 @@ class MarketplaceService:
                 {
                     "listing_id": item.listing_id,
                     "capsule_id": item.capsule_id,
-                    "quantity": item.quantity,
                     "price": str(item.price),
                     "currency": item.currency.value,
                     "title": item.title,
@@ -804,23 +809,22 @@ class MarketplaceService:
             MATCH (c:MarketplaceCart {user_id: $user_id})
             RETURN c.user_id as user_id, c.items as items, c.total as total
             """
-            results = await self.neo4j.execute_read(query, parameters={"user_id": user_id})
+            results: list[dict[str, Any]] = await self.neo4j.execute(query, parameters={"user_id": user_id})
 
             if not results:
                 return None
 
-            record = results[0]
-            items_data = json.loads(record["items"]) if record["items"] else []
+            record: dict[str, Any] = results[0]
+            items_data: list[dict[str, Any]] = json.loads(str(record["items"])) if record["items"] else []
 
             cart = Cart(user_id=user_id)
             for item_data in items_data:
                 cart.items.append(CartItem(
-                    listing_id=item_data["listing_id"],
-                    capsule_id=item_data.get("capsule_id", ""),
-                    quantity=item_data.get("quantity", 1),
-                    price=Decimal(item_data.get("price", "0")),
-                    currency=Currency(item_data.get("currency", "forge")),
-                    title=item_data.get("title", ""),
+                    listing_id=str(item_data["listing_id"]),
+                    capsule_id=str(item_data.get("capsule_id", "")),
+                    price=Decimal(str(item_data.get("price", "0"))),
+                    currency=Currency(str(item_data.get("currency", "forge"))),
+                    title=str(item_data.get("title", "")),
                 ))
 
             return cart
@@ -872,7 +876,7 @@ class MarketplaceService:
                     "revoked_at": license.revoked_at.isoformat() if license.revoked_at else None,
                     "can_derive": license.can_derive,
                     "access_count": license.access_count,
-                    "created_at": license.created_at.isoformat() if license.created_at else None,
+                    "created_at": license.granted_at.isoformat() if license.granted_at else None,
                 }
             )
             return True
@@ -901,20 +905,22 @@ class MarketplaceService:
                    l.status as status, l.title as title, l.description as description,
                    l.tags as tags, l.created_at as created_at, l.published_at as published_at
             """
-            results = await self.neo4j.execute_read(query)
+            results: list[dict[str, Any]] = await self.neo4j.execute(query)
 
-            for record in results:
+            for rec in results:
+                tags_val = rec["tags"]
+                tags_list: list[str] = tags_val if isinstance(tags_val, list) else []
                 listing = CapsuleListing(
-                    id=record["id"],
-                    capsule_id=record["capsule_id"],
-                    seller_id=record["seller_id"],
-                    price=Decimal(record["price"]) if record["price"] else Decimal("0"),
-                    currency=Currency(record["currency"]) if record["currency"] else Currency.FORGE,
-                    license_type=LicenseType(record["license_type"]) if record["license_type"] else LicenseType.PERPETUAL,
-                    status=ListingStatus(record["status"]) if record["status"] else ListingStatus.DRAFT,
-                    title=record["title"] or "",
-                    description=record["description"],
-                    tags=record["tags"] or [],
+                    id=str(rec["id"]),
+                    capsule_id=str(rec["capsule_id"]),
+                    seller_id=str(rec["seller_id"]),
+                    price=Decimal(str(rec["price"])) if rec["price"] else Decimal("0"),
+                    currency=Currency(str(rec["currency"])) if rec["currency"] else Currency.FORGE,
+                    license_type=LicenseType(str(rec["license_type"])) if rec["license_type"] else LicenseType.PERPETUAL,
+                    status=ListingStatus(str(rec["status"])) if rec["status"] else ListingStatus.DRAFT,
+                    title=str(rec["title"]) if rec["title"] else "",
+                    description=str(rec["description"]) if rec["description"] else None,
+                    tags=tags_list,
                 )
                 self._listings[listing.id] = listing
                 loaded += 1
@@ -927,19 +933,19 @@ class MarketplaceService:
                    p.currency as currency, p.license_type as license_type,
                    p.payment_status as payment_status, p.purchased_at as purchased_at
             """
-            purchase_results = await self.neo4j.execute_read(purchase_query)
+            purchase_results: list[dict[str, Any]] = await self.neo4j.execute(purchase_query)
 
-            for record in purchase_results:
+            for prec in purchase_results:
                 purchase = Purchase(
-                    id=record["id"],
-                    listing_id=record["listing_id"],
-                    capsule_id=record["capsule_id"],
-                    buyer_id=record["buyer_id"],
-                    seller_id=record["seller_id"],
-                    price=Decimal(record["price"]) if record["price"] else Decimal("0"),
-                    currency=Currency(record["currency"]) if record["currency"] else Currency.FORGE,
-                    license_type=LicenseType(record["license_type"]) if record["license_type"] else LicenseType.PERPETUAL,
-                    payment_status=PaymentStatus(record["payment_status"]) if record["payment_status"] else PaymentStatus.PENDING,
+                    id=str(prec["id"]),
+                    listing_id=str(prec["listing_id"]),
+                    capsule_id=str(prec["capsule_id"]),
+                    buyer_id=str(prec["buyer_id"]),
+                    seller_id=str(prec["seller_id"]),
+                    price=Decimal(str(prec["price"])) if prec["price"] else Decimal("0"),
+                    currency=Currency(str(prec["currency"])) if prec["currency"] else Currency.FORGE,
+                    license_type=LicenseType(str(prec["license_type"])) if prec["license_type"] else LicenseType.PERPETUAL,
+                    payment_status=PaymentStatus(str(prec["payment_status"])) if prec["payment_status"] else PaymentStatus.PENDING,
                 )
                 self._purchases[purchase.id] = purchase
 
@@ -952,34 +958,34 @@ class MarketplaceService:
                    l.revoked_at as revoked_at, l.can_derive as can_derive,
                    l.access_count as access_count, l.created_at as created_at
             """
-            license_results = await self.neo4j.execute_read(license_query)
+            license_results: list[dict[str, Any]] = await self.neo4j.execute(license_query)
 
-            for record in license_results:
+            for lrec in license_results:
                 expires_at = None
-                if record["expires_at"]:
+                if lrec["expires_at"]:
                     try:
-                        expires_at = datetime.fromisoformat(record["expires_at"].replace("Z", "+00:00"))
+                        expires_at = datetime.fromisoformat(str(lrec["expires_at"]).replace("Z", "+00:00"))
                     except (ValueError, AttributeError):
                         pass
 
                 revoked_at = None
-                if record["revoked_at"]:
+                if lrec["revoked_at"]:
                     try:
-                        revoked_at = datetime.fromisoformat(record["revoked_at"].replace("Z", "+00:00"))
+                        revoked_at = datetime.fromisoformat(str(lrec["revoked_at"]).replace("Z", "+00:00"))
                     except (ValueError, AttributeError):
                         pass
 
                 lic = License(
-                    id=record["id"],
-                    purchase_id=record["purchase_id"],
-                    capsule_id=record["capsule_id"],
-                    holder_id=record["holder_id"],
-                    grantor_id=record["grantor_id"],
-                    license_type=LicenseType(record["license_type"]) if record["license_type"] else LicenseType.PERPETUAL,
+                    id=str(lrec["id"]),
+                    purchase_id=str(lrec["purchase_id"]),
+                    capsule_id=str(lrec["capsule_id"]),
+                    holder_id=str(lrec["holder_id"]),
+                    grantor_id=str(lrec["grantor_id"]),
+                    license_type=LicenseType(str(lrec["license_type"])) if lrec["license_type"] else LicenseType.PERPETUAL,
                     expires_at=expires_at,
                     revoked_at=revoked_at,
-                    can_derive=record.get("can_derive", False),
-                    access_count=record.get("access_count", 0),
+                    can_derive=bool(lrec.get("can_derive", False)),
+                    access_count=int(lrec.get("access_count", 0)),
                 )
                 self._licenses[lic.id] = lic
 

@@ -357,7 +357,7 @@ class Neo4jHealthCheck(HealthCheck):
                         status=HealthStatus.HEALTHY,
                         message="Connected to Neo4j",
                         details={
-                            "uri": self.client.uri[:30] + "...",
+                            "uri": self.client._uri[:30] + "...",
                         },
                     )
 
@@ -394,7 +394,7 @@ class OverlayHealthCheck(HealthCheck):
             active = status.get("active_overlays", 0)
             errored = status.get("errored_overlays", 0)
 
-            if errored > 0:
+            if isinstance(errored, int) and errored > 0:
                 health_status = HealthStatus.DEGRADED
                 message = f"{errored} overlay(s) in error state"
             elif active == total:
@@ -404,11 +404,12 @@ class OverlayHealthCheck(HealthCheck):
                 health_status = HealthStatus.DEGRADED
                 message = f"{active}/{total} overlays active"
 
+            details_out: dict[str, object] = dict(status)
             return HealthCheckResult(
                 name=self.name,
                 status=health_status,
                 message=message,
-                details=status,
+                details=details_out,
             )
         except Exception as e:
             return HealthCheckResult(
@@ -453,11 +454,12 @@ class EventSystemHealthCheck(HealthCheck):
                 health_status = HealthStatus.HEALTHY
                 message = f"{subscribers} subscribers, {pending} pending"
 
+            details_out: dict[str, object] = dict(metrics)
             return HealthCheckResult(
                 name=self.name,
                 status=health_status,
                 message=message,
-                details=metrics,
+                details=details_out,
             )
         except Exception as e:
             return HealthCheckResult(
@@ -483,26 +485,31 @@ class CircuitBreakerHealthCheck(HealthCheck):
         try:
             summary = self.registry.get_health_summary()
 
-            open_circuits = summary.get("open", 0)
-            total = summary.get("total_circuits", 0)
+            open_circuits_val = summary.get("open", 0)
+            total_val = summary.get("total_circuits", 0)
             summary.get("health_score", 1.0)
 
-            if open_circuits > 0:
+            open_circuits_count = int(open_circuits_val) if isinstance(open_circuits_val, (int, float)) else 0
+            total_count = int(total_val) if isinstance(total_val, (int, float)) else 0
+
+            if open_circuits_count > 0:
                 health_status = HealthStatus.DEGRADED
-                open_names = summary.get("open_circuits", [])
-                message = f"{open_circuits} circuit(s) open: {', '.join(open_names)}"
-            elif total == 0:
+                open_names_raw = summary.get("open_circuits", [])
+                open_names: list[str] = open_names_raw if isinstance(open_names_raw, list) else []
+                message = f"{open_circuits_count} circuit(s) open: {', '.join(open_names)}"
+            elif total_count == 0:
                 health_status = HealthStatus.HEALTHY
                 message = "No circuit breakers registered"
             else:
                 health_status = HealthStatus.HEALTHY
-                message = f"All {total} circuits closed"
+                message = f"All {total_count} circuits closed"
 
+            details_out: dict[str, object] = dict(summary)
             return HealthCheckResult(
                 name=self.name,
                 status=health_status,
                 message=message,
-                details=summary,
+                details=details_out,
             )
         except Exception as e:
             return HealthCheckResult(

@@ -180,6 +180,8 @@ class VirtualsIntegrationService:
             # Initialize GAME SDK client
             from forge.virtuals.config import VirtualsConfig
 
+            if self._config.game_api_key is None:
+                raise ValueError("GAME API key is required when game_enabled is True")
             game_config = VirtualsConfig(
                 api_key=self._config.game_api_key,
                 api_base_url=self._config.game_api_base_url,
@@ -466,7 +468,7 @@ class VirtualsIntegrationService:
         limit: int = 50,
     ) -> list[ACPJob]:
         """Get jobs where agent is the buyer."""
-        from forge.virtuals.models.acp import ACPJobStatus
+        from forge.virtuals.models.base import ACPJobStatus
 
         status_enum = ACPJobStatus(status) if status else None
         jobs: list[ACPJob] = await self._job_repo.list_by_buyer(
@@ -483,7 +485,7 @@ class VirtualsIntegrationService:
         limit: int = 50,
     ) -> list[ACPJob]:
         """Get jobs where agent is the provider."""
-        from forge.virtuals.models.acp import ACPJobStatus
+        from forge.virtuals.models.base import ACPJobStatus
 
         status_enum = ACPJobStatus(status) if status else None
         jobs: list[ACPJob] = await self._job_repo.list_by_provider(
@@ -662,8 +664,9 @@ class VirtualsIntegrationService:
         create_request = ForgeAgentCreate(
             name=name,
             personality=AgentPersonality(
+                name=name,
                 description=description,
-                traits=metadata.get("traits", []) if metadata else [],
+                personality_traits=metadata.get("traits", []) if metadata else [],
             ),
             goals=AgentGoals(
                 primary_goal=primary_goal,
@@ -713,8 +716,17 @@ class VirtualsIntegrationService:
 
         if self._game_client is None:
             return None
-        result: dict[str, Any] | None = await self._game_client.get_agent(agent_id)
-        return result
+        agent_result = await self._game_client.get_agent(agent_id)
+        if agent_result is None:
+            return None
+        # Convert ForgeAgent to dict format for API response
+        return {
+            "id": agent_result.id,
+            "name": agent_result.name,
+            "game_agent_id": agent_result.game_agent_id,
+            "status": agent_result.status.value if hasattr(agent_result.status, "value") else str(agent_result.status),
+            "workers": [],
+        }
 
     async def delete_game_agent(self, agent_id: str) -> bool:
         """Delete a GAME agent."""

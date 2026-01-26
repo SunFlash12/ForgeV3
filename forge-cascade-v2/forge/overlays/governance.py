@@ -111,7 +111,7 @@ class SafeCondition:
     value: Any | None = None
     sub_conditions: list["SafeCondition"] | None = None
 
-    def evaluate(self, context: dict) -> bool:
+    def evaluate(self, context: dict[str, Any]) -> bool:
         """
         Safely evaluate this condition against the context.
 
@@ -151,17 +151,17 @@ class SafeCondition:
 
         try:
             if self.operator == ConditionOperator.EQ:
-                return field_value == self.value
+                return bool(field_value == self.value)
             elif self.operator == ConditionOperator.NE:
-                return field_value != self.value
+                return bool(field_value != self.value)
             elif self.operator == ConditionOperator.GT:
-                return field_value > self.value
+                return bool(field_value > self.value)
             elif self.operator == ConditionOperator.GE:
-                return field_value >= self.value
+                return bool(field_value >= self.value)
             elif self.operator == ConditionOperator.LT:
-                return field_value < self.value
+                return bool(field_value < self.value)
             elif self.operator == ConditionOperator.LE:
-                return field_value <= self.value
+                return bool(field_value <= self.value)
         except (TypeError, ValueError):
             # Incompatible types for comparison
             return False
@@ -193,7 +193,7 @@ class PolicyRule:
     required_trust: int = TrustLevel.STANDARD.value
     applies_to: list[ProposalType] = field(default_factory=list)
 
-    def evaluate(self, context: dict) -> tuple[bool, str | None]:
+    def evaluate(self, context: dict[str, Any]) -> tuple[bool, str | None]:
         """Evaluate rule against context using safe condition evaluation."""
         try:
             if self.condition.evaluate(context):
@@ -452,15 +452,15 @@ class GovernanceOverlay(BaseOverlay):
         data = input_data or {}
         if event:
             data.update(event.payload or {})
-            data["event_type"] = event.event_type
+            data["event_type"] = event.type
 
         # Determine action based on event type
         if event:
-            if event.event_type == EventType.PROPOSAL_CREATED:
+            if event.type == EventType.PROPOSAL_CREATED:
                 result = await self._handle_proposal_created(data, context)
-            elif event.event_type == EventType.VOTE_CAST:
+            elif event.type == EventType.VOTE_CAST:
                 result = await self._handle_vote_cast(data, context)
-            elif event.event_type == EventType.GOVERNANCE_ACTION:
+            elif event.type == EventType.GOVERNANCE_ACTION:
                 result = await self._handle_governance_action(data, context)
             else:
                 result = await self._evaluate_consensus(data, context)
@@ -472,7 +472,7 @@ class GovernanceOverlay(BaseOverlay):
 
         self._logger.info(
             "governance_execution_complete",
-            action=event.event_type.value if event else "evaluate",
+            action=event.type.value if event else "evaluate",
             duration_ms=round(duration_ms, 2)
         )
 
@@ -480,11 +480,11 @@ class GovernanceOverlay(BaseOverlay):
 
     async def _handle_proposal_created(
         self,
-        data: dict,
+        data: dict[str, Any],
         context: OverlayContext
     ) -> OverlayResult:
         """Handle new proposal creation."""
-        proposal_id = data.get("proposal_id")
+        proposal_id: str = str(data.get("proposal_id", ""))
 
         # Evaluate policies
         policy_results = self._evaluate_policies(data)
@@ -500,8 +500,6 @@ class GovernanceOverlay(BaseOverlay):
                 if not passed
             ]
             return OverlayResult(
-                overlay_id=self.id,
-                overlay_name=self.NAME,
                 success=False,
                 error=f"Policy violations: {', '.join(failed_policies)}",
                 data={
@@ -532,8 +530,6 @@ class GovernanceOverlay(BaseOverlay):
         )
 
         return OverlayResult(
-            overlay_id=self.id,
-            overlay_name=self.NAME,
             success=True,
             data={
                 "proposal_id": proposal_id,
@@ -557,22 +553,21 @@ class GovernanceOverlay(BaseOverlay):
 
     async def _handle_vote_cast(
         self,
-        data: dict,
+        data: dict[str, Any],
         context: OverlayContext
     ) -> OverlayResult:
         """Handle vote being cast."""
-        proposal_id = data.get("proposal_id")
-        voter_id = data.get("voter_id") or context.user_id
+        raw_proposal_id = data.get("proposal_id")
+        voter_id: str = str(data.get("voter_id") or context.user_id or "anonymous")
         vote_type = VoteChoice(data.get("vote_type", "approve"))
-        comment = data.get("comment")
+        comment: str | None = data.get("comment")
 
-        if not proposal_id:
+        if not raw_proposal_id:
             return OverlayResult(
-                overlay_id=self.id,
-                overlay_name=self.NAME,
                 success=False,
                 error="Missing proposal_id"
             )
+        proposal_id: str = str(raw_proposal_id)
 
         # Calculate vote weight based on trust
         trust_level = context.trust_flame
@@ -628,8 +623,6 @@ class GovernanceOverlay(BaseOverlay):
                 await self._update_stats("consensus_reached")
 
         return OverlayResult(
-            overlay_id=self.id,
-            overlay_name=self.NAME,
             success=True,
             data={
                 "proposal_id": proposal_id,
@@ -655,12 +648,12 @@ class GovernanceOverlay(BaseOverlay):
 
     async def _handle_governance_action(
         self,
-        data: dict,
+        data: dict[str, Any],
         context: OverlayContext
     ) -> OverlayResult:
         """Handle governance actions."""
         action = data.get("action")
-        proposal_id = data.get("proposal_id")
+        proposal_id: str = str(data.get("proposal_id", ""))
 
         if action == "check_consensus":
             return await self._evaluate_consensus(data, context)
@@ -685,8 +678,6 @@ class GovernanceOverlay(BaseOverlay):
                     await self._update_stats("consensus_reached")
 
                 return OverlayResult(
-                    overlay_id=self.id,
-                    overlay_name=self.NAME,
                     success=True,
                     data={
                         "action": "voting_closed",
@@ -707,8 +698,6 @@ class GovernanceOverlay(BaseOverlay):
                         execution_allowed_after = dt.fromisoformat(execution_allowed_after.replace('Z', '+00:00'))
                     except ValueError:
                         return OverlayResult(
-                            overlay_id=self.id,
-                            overlay_name=self.NAME,
                             success=False,
                             error="Invalid execution_allowed_after format"
                         )
@@ -725,8 +714,6 @@ class GovernanceOverlay(BaseOverlay):
                         remaining_seconds=remaining_seconds
                     )
                     return OverlayResult(
-                        overlay_id=self.id,
-                        overlay_name=self.NAME,
                         success=False,
                         error=f"Proposal execution blocked: timelock has {remaining_seconds} seconds remaining",
                         data={
@@ -743,8 +730,6 @@ class GovernanceOverlay(BaseOverlay):
             await self._update_stats("proposals_executed")
 
             return OverlayResult(
-                overlay_id=self.id,
-                overlay_name=self.NAME,
                 success=True,
                 data={
                     "action": "proposal_executed",
@@ -753,38 +738,36 @@ class GovernanceOverlay(BaseOverlay):
             )
 
         return OverlayResult(
-            overlay_id=self.id,
-            overlay_name=self.NAME,
             success=False,
             error=f"Unknown action: {action}"
         )
 
     async def _evaluate_consensus(
         self,
-        data: dict,
+        data: dict[str, Any],
         context: OverlayContext
     ) -> OverlayResult:
         """Evaluate current consensus state."""
-        proposal_id = data.get("proposal_id")
+        raw_proposal_id = data.get("proposal_id")
 
-        if not proposal_id:
+        if not raw_proposal_id:
             # SECURITY FIX (Audit 2): Use lock for reading all proposals
             async with self._proposals_lock:
-                active_summary = {}
+                active_summary: dict[str, dict[str, Any]] = {}
                 for pid, votes in self._active_proposals.items():
                     consensus = self._calculate_consensus(list(votes), None)
                     active_summary[pid] = self._consensus_to_dict(consensus)
                 num_active = len(self._active_proposals)
 
             return OverlayResult(
-                overlay_id=self.id,
-                overlay_name=self.NAME,
                 success=True,
                 data={
                     "active_proposals": num_active,
                     "summary": active_summary
                 }
             )
+
+        proposal_id: str = str(raw_proposal_id)
 
         # SECURITY FIX (Audit 2): Use per-proposal lock for reading votes
         proposal_lock = await self._get_proposal_lock(proposal_id)
@@ -799,8 +782,6 @@ class GovernanceOverlay(BaseOverlay):
             )
 
         return OverlayResult(
-            overlay_id=self.id,
-            overlay_name=self.NAME,
             success=True,
             data={
                 "proposal_id": proposal_id,
@@ -817,7 +798,7 @@ class GovernanceOverlay(BaseOverlay):
             }
         )
 
-    def _evaluate_policies(self, data: dict) -> dict[str, tuple[bool, str | None]]:
+    def _evaluate_policies(self, data: dict[str, Any]) -> dict[str, tuple[bool, str | None]]:
         """Evaluate all applicable policies."""
         results = {}
         proposal_type = data.get("proposal_type")
@@ -958,7 +939,7 @@ class GovernanceOverlay(BaseOverlay):
         self,
         proposal_id: str,
         consensus: ConsensusResult,
-        policy_results: dict
+        policy_results: dict[str, tuple[bool, str | None]]
     ) -> tuple[GovernanceDecision, bool]:
         """
         Make final governance decision.
@@ -994,7 +975,7 @@ class GovernanceOverlay(BaseOverlay):
 
     def _get_ghost_council_recommendation(
         self,
-        data: dict,
+        data: dict[str, Any],
         consensus: ConsensusResult
     ) -> str:
         """
@@ -1019,7 +1000,7 @@ class GovernanceOverlay(BaseOverlay):
         else:
             return "NEUTRAL: Community divided - consider amendments"
 
-    def _consensus_to_dict(self, consensus: ConsensusResult) -> dict:
+    def _consensus_to_dict(self, consensus: ConsensusResult) -> dict[str, Any]:
         """Convert consensus result to dictionary."""
         return {
             "status": consensus.status.value,
@@ -1115,7 +1096,7 @@ class GovernanceOverlay(BaseOverlay):
                 return True
         return False
 
-    def get_policies(self) -> list[dict]:
+    def get_policies(self) -> list[dict[str, Any]]:
         """Get all policies."""
         return [
             {
@@ -1127,7 +1108,7 @@ class GovernanceOverlay(BaseOverlay):
             for p in self._policies
         ]
 
-    def get_stats(self) -> dict:
+    def get_stats(self) -> dict[str, Any]:
         """Get governance statistics."""
         return {
             **self._stats,
@@ -1139,7 +1120,7 @@ class GovernanceOverlay(BaseOverlay):
 # Convenience function
 def create_governance_overlay(
     strict_mode: bool = False,
-    **kwargs
+    **kwargs: Any
 ) -> GovernanceOverlay:
     """
     Create a governance overlay.

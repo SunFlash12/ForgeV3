@@ -36,7 +36,8 @@ from forge.api.dependencies import (
     SettingsDep,
     UserRepoDep,
 )
-from forge.models.user import AuthProvider, TrustLevel, User, UserUpdate
+from forge.models.base import TrustLevel
+from forge.models.user import AuthProvider, User, UserUpdate
 
 # Resilience integration - validation and metrics
 from forge.resilience.integration import (
@@ -65,7 +66,7 @@ router = APIRouter()
 from forge.config import get_settings
 
 
-def get_cookie_settings() -> dict:
+def get_cookie_settings() -> dict[str, Any]:
     """
     Get cookie settings based on environment.
 
@@ -537,9 +538,9 @@ async def verify_mfa_login(
     except TokenInvalidError as e:
         # MFA pending token is invalid or expired
         logger.warning(
-            "mfa_verify_token_invalid",
-            error=str(e),
-            ip=client_info.ip_address,
+            "mfa_verify_token_invalid: error=%s ip=%s",
+            str(e),
+            client_info.ip_address,
         )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -565,9 +566,9 @@ async def verify_mfa_login(
 
     except AuthenticationError as e:
         logger.warning(
-            "mfa_verify_auth_error",
-            error=str(e),
-            ip=client_info.ip_address,
+            "mfa_verify_auth_error: error=%s ip=%s",
+            str(e),
+            client_info.ip_address,
         )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -751,15 +752,21 @@ async def update_profile(
         except ConstraintError as e:
             # Database constraint violated - email already taken by concurrent request
             logger.warning(
-                "email_constraint_violation",
-                user_id=user.id,
-                email=request.email,
-                error=str(e),
+                "email_constraint_violation: user_id=%s email=%s error=%s",
+                user.id,
+                request.email,
+                str(e),
             )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Email already in use",
             ) from None
+
+        if updated_user is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found",
+            )
 
         await audit_repo.log_user_action(
             actor_id=user.id,
@@ -784,8 +791,16 @@ async def change_password(
     """
     Change current user's password.
     """
+    # Fetch user with password_hash from database
+    user_in_db = await user_repo.get_by_username(user.username)
+    if user_in_db is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
     # Verify current password
-    if not verify_password(request.current_password, user.password_hash):
+    if not verify_password(request.current_password, user_in_db.password_hash):
         # SECURITY FIX (Audit 2): Log failed password change attempts for security monitoring
         await audit_repo.log_user_action(
             actor_id=user.id,
@@ -800,7 +815,7 @@ async def change_password(
 
     # Update password
     new_hash = hash_password(request.new_password)
-    await user_repo.update(user.id, {"password_hash": new_hash})
+    await user_repo.update_password(user.id, new_hash)
 
     # Resilience: Record password change metric
     record_password_change()
@@ -817,7 +832,7 @@ async def change_password(
 @router.get("/me/trust")
 async def get_trust_info(
     user: ActiveUserDep,
-) -> dict:
+) -> dict[str, Any]:
     """
     Get current user's trust information.
     """
@@ -905,8 +920,8 @@ async def setup_mfa(
     mfa = get_mfa_service()
 
     # Check if MFA already enabled
-    status = await mfa.get_status(user.id)
-    if status.enabled and status.verified:
+    mfa_status = await mfa.get_status(user.id)
+    if mfa_status.enabled and mfa_status.verified:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="MFA is already enabled. Disable it first to reconfigure."
@@ -1130,7 +1145,7 @@ async def google_auth(
             role=user.role,
             trust_flame=user.trust_flame,
         )
-        refresh_token = create_refresh_token(user_id=user.id)
+        refresh_token = create_refresh_token(user_id=user.id, username=user.username)
         csrf_token = generate_csrf_token()
 
         # Store refresh token hash
@@ -1151,13 +1166,13 @@ async def google_auth(
             response=response,
             access_token=access_token,
             refresh_token=refresh_token,
-            access_expires_seconds=settings.access_token_expire_minutes * 60,
+            access_expires_seconds=settings.jwt_access_token_expire_minutes * 60,
             csrf_token=csrf_token,
         )
 
         return GoogleAuthResponse(
             csrf_token=csrf_token,
-            expires_in=settings.access_token_expire_minutes * 60,
+            expires_in=settings.jwt_access_token_expire_minutes * 60,
             user=UserResponse.from_user(user_repo.to_safe_user(user)),
             is_new_user=is_new_user,
         )

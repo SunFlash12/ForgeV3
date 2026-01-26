@@ -52,7 +52,8 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
 
     @property
     def model_class(self) -> type[User]:
-        return User  # type: ignore[no-any-return]
+        cls: type[User] = User
+        return cls
 
     def _to_model(self, record: dict[str, Any]) -> User | None:
         """
@@ -976,6 +977,65 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
             return self._to_model(result["user"])
         return None
 
+    async def list_users(
+        self,
+        offset: int = 0,
+        limit: int = 20,
+        filters: dict[str, Any] | None = None,
+    ) -> tuple[list[User], int]:
+        """
+        List users with pagination and filters.
+
+        Args:
+            offset: Number of records to skip
+            limit: Maximum records to return
+            filters: Optional filters (role, is_active)
+
+        Returns:
+            Tuple of (users, total_count)
+        """
+        filters = filters or {}
+        conditions: list[str] = []
+        params: dict[str, Any] = {"offset": offset, "limit": limit}
+
+        if "role" in filters:
+            conditions.append("u.role = $role")
+            params["role"] = filters["role"]
+
+        if "is_active" in filters:
+            conditions.append("u.is_active = $is_active")
+            params["is_active"] = filters["is_active"]
+
+        where_clause = "WHERE " + " AND ".join(conditions) if conditions else ""
+
+        # Get count
+        count_query = f"""
+        MATCH (u:User)
+        {where_clause}
+        RETURN count(u) AS total
+        """
+        count_result = await self.client.execute_single(count_query, params)
+        total: int = count_result["total"] if count_result else 0
+
+        # Get users
+        query = f"""
+        MATCH (u:User)
+        {where_clause}
+        RETURN u {{{USER_SAFE_FIELDS}}} AS user
+        ORDER BY u.created_at DESC
+        SKIP $offset
+        LIMIT $limit
+        """
+
+        results = await self.client.execute(query, params)
+        users: list[User] = [
+            u
+            for r in results
+            if r.get("user") and (u := self._to_model(r["user"])) is not None
+        ]
+
+        return users, total
+
     async def search(
         self,
         query_str: str,
@@ -1018,7 +1078,9 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
         )
 
         return [
-            self._to_model(r["user"])
+            user
             for r in results
             if r.get("user")
+            for user in [self._to_model(r["user"])]
+            if user is not None
         ]

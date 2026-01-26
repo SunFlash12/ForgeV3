@@ -7,7 +7,7 @@ Integrates PrimeKG, HPO, genetic data, and Bayesian scoring.
 
 from dataclasses import dataclass
 from datetime import UTC
-from typing import Any
+from typing import Any, Protocol, runtime_checkable
 
 import structlog
 
@@ -24,6 +24,17 @@ from .models import (
 from .scoring import ScoringConfig, create_bayesian_scorer
 
 logger = structlog.get_logger(__name__)
+
+
+@runtime_checkable
+class Neo4jClientProtocol(Protocol):
+    async def run(self, query: str, params: dict[str, Any]) -> list[dict[str, Any]] | None: ...
+
+
+@runtime_checkable
+class HPOServiceProtocol(Protocol):
+    def search_terms(self, text: str, limit: int = 10) -> list[Any]: ...
+    def get_term(self, hpo_id: str) -> Any | None: ...
 
 
 @dataclass
@@ -67,11 +78,11 @@ class DiagnosisEngine:
         self,
         config: EngineConfig | None = None,
         scoring_config: ScoringConfig | None = None,
-        primekg_overlay=None,
-        hpo_service=None,
-        genetic_service=None,
-        neo4j_client=None,
-    ):
+        primekg_overlay: Any = None,
+        hpo_service: Any = None,
+        genetic_service: Any = None,
+        neo4j_client: Any = None,
+    ) -> None:
         """
         Initialize the diagnosis engine.
 
@@ -133,7 +144,7 @@ class DiagnosisEngine:
         self,
         session: DiagnosisSession,
         phenotypes: list[str] | None = None,
-        genetic_variants: list[dict] | None = None,
+        genetic_variants: list[dict[str, Any]] | None = None,
         medical_history: list[str] | None = None,
         family_history: list[str] | None = None,
         demographics: dict[str, Any] | None = None,
@@ -249,7 +260,7 @@ class DiagnosisEngine:
     async def _process_genetic_variants(
         self,
         session: DiagnosisSession,
-        variants: list[dict],
+        variants: list[dict[str, Any]],
     ) -> None:
         """Process genetic variant inputs."""
         for var in variants:
@@ -325,7 +336,7 @@ class DiagnosisEngine:
         session: DiagnosisSession,
     ) -> list[DiagnosisHypothesis]:
         """Get candidate diseases based on phenotypes."""
-        candidates = []
+        candidates: list[DiagnosisHypothesis] = []
 
         phenotype_codes = session.patient.phenotype_codes
         if not phenotype_codes:
@@ -395,7 +406,7 @@ class DiagnosisEngine:
         session: DiagnosisSession,
     ) -> list[DiagnosisHypothesis]:
         """Get candidate diseases based on genetic variants."""
-        candidates = []
+        candidates: list[DiagnosisHypothesis] = []
 
         # Get genes from variants
         genes = []
@@ -884,7 +895,7 @@ class DiagnosisEngine:
         session: DiagnosisSession,
     ) -> list[str]:
         """Generate recommended confirmatory tests."""
-        recommendations = []
+        recommendations: list[str] = []
 
         if not session.top_diagnosis:
             return recommendations
@@ -949,10 +960,10 @@ class DiagnosisEngine:
 def create_diagnosis_engine(
     config: EngineConfig | None = None,
     scoring_config: ScoringConfig | None = None,
-    primekg_overlay=None,
-    hpo_service=None,
-    genetic_service=None,
-    neo4j_client=None,
+    primekg_overlay: Any = None,
+    hpo_service: Any = None,
+    genetic_service: Any = None,
+    neo4j_client: Any = None,
 ) -> DiagnosisEngine:
     """Create a diagnosis engine instance."""
     return DiagnosisEngine(

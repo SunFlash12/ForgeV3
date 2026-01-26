@@ -28,7 +28,8 @@ from .models import (
     PrimeKGNodeType,
     PrimeKGPhenotype,
 )
-from .parser import PrimeKGEdge, PrimeKGNode, PrimeKGParser
+from .models import PrimeKGEdge, PrimeKGNode
+from .parser import PrimeKGParser
 
 __all__ = [
     # Download

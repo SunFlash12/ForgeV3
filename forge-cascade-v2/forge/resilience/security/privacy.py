@@ -20,7 +20,7 @@ import structlog
 
 from forge.resilience.config import get_resilience_config
 
-logger = structlog.get_logger(__name__)
+logger: structlog.stdlib.BoundLogger = structlog.get_logger(__name__)
 
 
 class AnonymizationLevel(Enum):
@@ -95,7 +95,7 @@ class PrivacyManager:
     - Data export (GDPR Article 20)
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._config = get_resilience_config().privacy
         self._patterns: list[PIIPattern] = []
         self._pseudonym_map: dict[str, str] = {}

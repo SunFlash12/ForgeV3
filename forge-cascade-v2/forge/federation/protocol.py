@@ -632,7 +632,7 @@ def validate_url_for_ssrf(
 
     # SECURITY: Require HTTPS in production
     settings = get_settings()
-    if settings.environment == "production" and parsed.scheme != "https":
+    if settings.app_env == "production" and parsed.scheme != "https":
         raise SSRFError("HTTPS required for federation in production")
 
     if parsed.scheme not in ("http", "https"):
@@ -666,7 +666,7 @@ def validate_url_for_ssrf(
     try:
         # Resolve all IP addresses for the hostname
         addr_info = socket.getaddrinfo(hostname, port, proto=socket.IPPROTO_TCP)
-        resolved_ips = list({info[4][0] for info in addr_info})
+        resolved_ips: list[str] = list({str(info[4][0]) for info in addr_info})
 
         for ip_str in resolved_ips:
             try:
@@ -866,10 +866,13 @@ class FederationProtocol:
             try:
                 logger.info(f"Loading federation keys from {key_dir}")
                 with open(private_key_path, "rb") as f:
-                    self._private_key = serialization.load_pem_private_key(
+                    loaded_key = serialization.load_pem_private_key(
                         f.read(),
                         password=None,  # Keys stored without password encryption
                     )
+                if not isinstance(loaded_key, ed25519.Ed25519PrivateKey):
+                    raise TypeError("Loaded key is not an Ed25519 private key")
+                self._private_key = loaded_key
                 self._public_key = self._private_key.public_key()
 
                 # Export public key as base64
@@ -915,6 +918,7 @@ class FederationProtocol:
             # Get passphrase from environment variable
             passphrase = os.environ.get("FEDERATION_KEY_PASSPHRASE")
 
+            encryption_algo: serialization.KeySerializationEncryption
             if passphrase:
                 # Encrypt with provided passphrase
                 encryption_algo = serialization.BestAvailableEncryption(
@@ -929,6 +933,9 @@ class FederationProtocol:
                     "This is insecure for production deployments!"
                 )
 
+            if self._private_key is None:
+                raise RuntimeError("Private key not initialized")
+
             # Save private key (PEM format)
             private_pem = self._private_key.private_bytes(
                 encoding=serialization.Encoding.PEM,
@@ -941,6 +948,9 @@ class FederationProtocol:
             # SECURITY FIX (Audit 4 - M6): Set restrictive permissions on private key
             # os.chmod doesn't work properly on Windows, so we need platform-specific handling
             await self._set_restrictive_permissions(private_key_path)
+
+            if self._public_key is None:
+                raise RuntimeError("Public key not initialized")
 
             # Save public key (PEM format)
             public_pem = self._public_key.public_bytes(
@@ -1158,7 +1168,7 @@ class FederationProtocol:
 
         # SECURITY FIX (Audit 4 - H3): Validate URL with DNS pinning
         settings = get_settings()
-        allow_private = settings.environment != "production"
+        allow_private = settings.app_env != "production"
         try:
             validated = validate_url_for_ssrf(
                 peer_url,
@@ -1249,7 +1259,7 @@ class FederationProtocol:
 
         # SECURITY FIX (Audit 4 - H3): Validate URL with DNS pinning
         settings = get_settings()
-        allow_private = settings.environment != "production"
+        allow_private = settings.app_env != "production"
         try:
             validated = validate_url_for_ssrf(
                 peer.url,
@@ -1306,7 +1316,7 @@ class FederationProtocol:
 
         # SECURITY FIX (Audit 4 - H3): Validate URL with DNS pinning
         settings = get_settings()
-        allow_private = settings.environment != "production"
+        allow_private = settings.app_env != "production"
         try:
             validated = validate_url_for_ssrf(
                 peer.url,
@@ -1384,7 +1394,7 @@ class FederationProtocol:
 
         # SECURITY FIX (Audit 4 - H3): Validate URL with DNS pinning
         settings = get_settings()
-        allow_private = settings.environment != "production"
+        allow_private = settings.app_env != "production"
         try:
             validated = validate_url_for_ssrf(
                 peer.url,

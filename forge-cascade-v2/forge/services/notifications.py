@@ -778,7 +778,7 @@ class NotificationService:
                     "title": notification.title,
                     "message": notification.message,
                     "priority": notification.priority.value,
-                    "is_read": notification.is_read,
+                    "is_read": notification.read,
                     "created_at": notification.created_at.isoformat() if notification.created_at else None,
                     "read_at": notification.read_at.isoformat() if notification.read_at else None,
                 }

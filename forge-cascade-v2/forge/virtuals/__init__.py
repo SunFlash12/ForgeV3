@@ -67,6 +67,8 @@ For detailed documentation and examples, see:
 
 __version__ = "0.1.0"
 
+from typing import Any
+
 # Configuration
 from .acp import ACPService, get_acp_service
 from .bridge import BridgeRoute, BridgeService, BridgeStatus, get_bridge_service
@@ -115,7 +117,7 @@ from .tipping import FrowgTippingService, TipCategory, TipRecord, TipStatus
 from .tokenization import TokenizationService, get_tokenization_service
 
 
-async def initialize_virtuals() -> dict[str, any]:
+async def initialize_virtuals() -> dict[str, Any]:
     """
     Initialize all Virtuals Protocol integration services.
 

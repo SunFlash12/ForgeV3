@@ -27,7 +27,7 @@ from forge.api.dependencies import (
     OverlayManagerDep,
     TrustedUserDep,
 )
-from forge.overlays.base import OverlayContext
+from forge.kernel.overlay_manager import OverlayExecutionRequest
 
 router = APIRouter()
 
@@ -304,31 +304,26 @@ async def generate_differential_diagnosis(
     """
     start = time.time()
 
-    # Get PrimeKG overlay
-    primekg_overlay = overlay_manager.get_overlay("primekg")
-    if not primekg_overlay:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="PrimeKG overlay not available"
-        )
-
-    # Create execution context
-    context = OverlayContext(
-        execution_id=correlation_id,
-        user_id=user.id,
-        trust_level=user.trust_level.value if hasattr(user.trust_level, 'value') else user.trust_level,
-    )
-
-    # Execute differential diagnosis
-    result = await primekg_overlay.execute(
-        context=context,
+    # Execute differential diagnosis via overlay manager
+    exec_request = OverlayExecutionRequest(
+        overlay_name="primekg",
         input_data={
             "operation": "differential_diagnosis",
             "phenotypes": request.phenotypes,
             "genes": request.genes,
             "medications": request.medications,
-        }
+        },
+        user_id=user.id,
+        trust_flame=user.trust_level.value if hasattr(user.trust_level, 'value') else int(user.trust_level),
+        correlation_id=correlation_id,
     )
+    result = await overlay_manager.execute(exec_request)
+
+    if not result.success and result.error and "not found" in result.error.lower():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="PrimeKG overlay not available"
+        )
 
     if not result.success:
         raise HTTPException(
@@ -337,6 +332,7 @@ async def generate_differential_diagnosis(
         )
 
     execution_time = (time.time() - start) * 1000
+    data = result.data or {}
 
     # Audit log for medical query
     await audit_repo.log_capsule_action(
@@ -346,7 +342,7 @@ async def generate_differential_diagnosis(
         details={
             "phenotype_count": len(request.phenotypes),
             "gene_count": len(request.genes),
-            "result_count": len(result.data.get("differential", [])),
+            "result_count": len(data.get("differential", [])),
         },
         correlation_id=correlation_id,
     )
@@ -357,9 +353,9 @@ async def generate_differential_diagnosis(
         input_medications=request.medications,
         differential=[
             DiagnosisCandidate(**d)
-            for d in result.data.get("differential", [])
+            for d in data.get("differential", [])
         ],
-        total_candidates=result.data.get("total_candidates", 0),
+        total_candidates=data.get("total_candidates", 0),
         execution_time_ms=execution_time,
     )
 
@@ -378,27 +374,24 @@ async def search_by_phenotypes(
     """
     start = time.time()
 
-    primekg_overlay = overlay_manager.get_overlay("primekg")
-    if not primekg_overlay:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="PrimeKG overlay not available"
-        )
-
-    context = OverlayContext(
-        execution_id=f"phenotype_search_{int(time.time())}",
-        user_id=user.id,
-        trust_level=user.trust_level.value if hasattr(user.trust_level, 'value') else user.trust_level,
-    )
-
-    result = await primekg_overlay.execute(
-        context=context,
+    exec_request = OverlayExecutionRequest(
+        overlay_name="primekg",
         input_data={
             "operation": "phenotype_to_disease",
             "phenotypes": request.phenotypes,
             "limit": request.limit,
-        }
+        },
+        user_id=user.id,
+        trust_flame=user.trust_level.value if hasattr(user.trust_level, 'value') else int(user.trust_level),
+        correlation_id=f"phenotype_search_{int(time.time())}",
     )
+    result = await overlay_manager.execute(exec_request)
+
+    if not result.success and result.error and "not found" in result.error.lower():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="PrimeKG overlay not available"
+        )
 
     if not result.success:
         raise HTTPException(
@@ -407,12 +400,13 @@ async def search_by_phenotypes(
         )
 
     execution_time = (time.time() - start) * 1000
+    data: dict[str, Any] = result.data if result.data is not None else {}
 
     return PhenotypeSearchResponse(
         input_phenotypes=request.phenotypes,
         results=[
             DiagnosisCandidate(**r)
-            for r in result.data.get("results", [])
+            for r in data.get("results", [])
         ],
         execution_time_ms=execution_time,
     )
@@ -436,26 +430,23 @@ async def get_drugs_for_disease(
     - Contraindications: Drugs contraindicated for this disease
     - Off-label: Drugs used off-label for this disease
     """
-    primekg_overlay = overlay_manager.get_overlay("primekg")
-    if not primekg_overlay:
+    exec_request = OverlayExecutionRequest(
+        overlay_name="primekg",
+        input_data={
+            "operation": "disease_to_drugs",
+            "disease_id": request.disease_id,
+        },
+        user_id=user.id,
+        trust_flame=user.trust_level.value if hasattr(user.trust_level, 'value') else int(user.trust_level),
+        correlation_id=f"drug_disease_{int(time.time())}",
+    )
+    result = await overlay_manager.execute(exec_request)
+
+    if not result.success and result.error and "not found" in result.error.lower():
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="PrimeKG overlay not available"
         )
-
-    context = OverlayContext(
-        execution_id=f"drug_disease_{int(time.time())}",
-        user_id=user.id,
-        trust_level=user.trust_level.value if hasattr(user.trust_level, 'value') else user.trust_level,
-    )
-
-    result = await primekg_overlay.execute(
-        context=context,
-        input_data={
-            "operation": "disease_to_drugs",
-            "disease_id": request.disease_id,
-        }
-    )
 
     if not result.success:
         raise HTTPException(
@@ -463,7 +454,7 @@ async def get_drugs_for_disease(
             detail=f"Query failed: {result.error}"
         )
 
-    data = result.data
+    data = result.data or {}
     return DrugDiseaseResponse(
         disease_id=data.get("disease_id", request.disease_id),
         disease_name=data.get("disease_name"),
@@ -484,27 +475,24 @@ async def check_drug_interactions(
 
     Useful for medication safety checking in diagnosis workflows.
     """
-    primekg_overlay = overlay_manager.get_overlay("primekg")
-    if not primekg_overlay:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="PrimeKG overlay not available"
-        )
-
-    context = OverlayContext(
-        execution_id=f"drug_interaction_{int(time.time())}",
-        user_id=user.id,
-        trust_level=user.trust_level.value if hasattr(user.trust_level, 'value') else user.trust_level,
-    )
-
-    result = await primekg_overlay.execute(
-        context=context,
+    exec_request = OverlayExecutionRequest(
+        overlay_name="primekg",
         input_data={
             "operation": "check_drug_interactions",
             "drugs": request.drugs,
             "diseases": request.diseases,
-        }
+        },
+        user_id=user.id,
+        trust_flame=user.trust_level.value if hasattr(user.trust_level, 'value') else int(user.trust_level),
+        correlation_id=f"drug_interaction_{int(time.time())}",
     )
+    result = await overlay_manager.execute(exec_request)
+
+    if not result.success and result.error and "not found" in result.error.lower():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="PrimeKG overlay not available"
+        )
 
     if not result.success:
         raise HTTPException(
@@ -512,7 +500,7 @@ async def check_drug_interactions(
             detail=f"Query failed: {result.error}"
         )
 
-    data = result.data
+    data = result.data or {}
     return DrugInteractionResponse(
         drugs=data.get("drugs", request.drugs),
         diseases=data.get("diseases", request.diseases),
@@ -546,28 +534,25 @@ async def get_gene_disease_associations(
             detail="Either gene_id or disease_id must be provided"
         )
 
-    primekg_overlay = overlay_manager.get_overlay("primekg")
-    if not primekg_overlay:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="PrimeKG overlay not available"
-        )
-
-    context = OverlayContext(
-        execution_id=f"gene_assoc_{int(time.time())}",
-        user_id=user.id,
-        trust_level=user.trust_level.value if hasattr(user.trust_level, 'value') else user.trust_level,
-    )
-
-    result = await primekg_overlay.execute(
-        context=context,
+    exec_request = OverlayExecutionRequest(
+        overlay_name="primekg",
         input_data={
             "operation": "gene_disease_association",
             "gene_id": request.gene_id,
             "disease_id": request.disease_id,
             "limit": request.limit,
-        }
+        },
+        user_id=user.id,
+        trust_flame=user.trust_level.value if hasattr(user.trust_level, 'value') else int(user.trust_level),
+        correlation_id=f"gene_assoc_{int(time.time())}",
     )
+    result = await overlay_manager.execute(exec_request)
+
+    if not result.success and result.error and "not found" in result.error.lower():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="PrimeKG overlay not available"
+        )
 
     if not result.success:
         raise HTTPException(
@@ -575,7 +560,7 @@ async def get_gene_disease_associations(
             detail=f"Query failed: {result.error}"
         )
 
-    data = result.data
+    data = result.data or {}
     return GeneAssociationResponse(
         query=data.get("query", {"gene_id": request.gene_id, "disease_id": request.disease_id}),
         associations=[
@@ -603,29 +588,26 @@ async def semantic_search(
     """
     start = time.time()
 
-    primekg_overlay = overlay_manager.get_overlay("primekg")
-    if not primekg_overlay:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="PrimeKG overlay not available"
-        )
-
-    context = OverlayContext(
-        execution_id=f"semantic_search_{int(time.time())}",
-        user_id=user.id,
-        trust_level=user.trust_level.value if hasattr(user.trust_level, 'value') else user.trust_level,
-    )
-
-    result = await primekg_overlay.execute(
-        context=context,
+    exec_request = OverlayExecutionRequest(
+        overlay_name="primekg",
         input_data={
             "operation": "semantic_search",
             "query": request.query,
             "node_type": request.node_type,
             "limit": request.limit,
             "min_score": request.min_score,
-        }
+        },
+        user_id=user.id,
+        trust_flame=user.trust_level.value if hasattr(user.trust_level, 'value') else int(user.trust_level),
+        correlation_id=f"semantic_search_{int(time.time())}",
     )
+    result = await overlay_manager.execute(exec_request)
+
+    if not result.success and result.error and "not found" in result.error.lower():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="PrimeKG overlay not available"
+        )
 
     if not result.success:
         raise HTTPException(
@@ -635,11 +617,12 @@ async def semantic_search(
 
     execution_time = (time.time() - start) * 1000
 
+    data = result.data or {}
     return SemanticSearchResponse(
         query=request.query,
         results=[
             SemanticSearchResult(**r)
-            for r in result.data.get("results", [])
+            for r in data.get("results", [])
         ],
         execution_time_ms=execution_time,
     )
@@ -661,28 +644,25 @@ async def get_discriminating_phenotypes(
     Used to generate follow-up questions that help narrow down
     the differential diagnosis.
     """
-    primekg_overlay = overlay_manager.get_overlay("primekg")
-    if not primekg_overlay:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="PrimeKG overlay not available"
-        )
-
-    context = OverlayContext(
-        execution_id=f"discrim_pheno_{int(time.time())}",
-        user_id=user.id,
-        trust_level=user.trust_level.value if hasattr(user.trust_level, 'value') else user.trust_level,
-    )
-
-    result = await primekg_overlay.execute(
-        context=context,
+    exec_request = OverlayExecutionRequest(
+        overlay_name="primekg",
         input_data={
             "operation": "find_discriminating_phenotypes",
             "disease_a": request.disease_a,
             "disease_b": request.disease_b,
             "already_present": request.already_present,
-        }
+        },
+        user_id=user.id,
+        trust_flame=user.trust_level.value if hasattr(user.trust_level, 'value') else int(user.trust_level),
+        correlation_id=f"discrim_pheno_{int(time.time())}",
     )
+    result = await overlay_manager.execute(exec_request)
+
+    if not result.success and result.error and "not found" in result.error.lower():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="PrimeKG overlay not available"
+        )
 
     if not result.success:
         raise HTTPException(
@@ -690,7 +670,7 @@ async def get_discriminating_phenotypes(
             detail=f"Query failed: {result.error}"
         )
 
-    data = result.data
+    data = result.data or {}
     return DiscriminatingPhenotypesResponse(
         disease_a=data.get("disease_a", request.disease_a),
         disease_b=data.get("disease_b", request.disease_b),
@@ -721,26 +701,23 @@ async def get_disease_details(
 
     Returns phenotypes, associated genes, and available treatments.
     """
-    primekg_overlay = overlay_manager.get_overlay("primekg")
-    if not primekg_overlay:
+    exec_request = OverlayExecutionRequest(
+        overlay_name="primekg",
+        input_data={
+            "operation": "get_disease_details",
+            "disease_id": disease_id,
+        },
+        user_id=user.id,
+        trust_flame=user.trust_level.value if hasattr(user.trust_level, 'value') else int(user.trust_level),
+        correlation_id=f"disease_details_{int(time.time())}",
+    )
+    result = await overlay_manager.execute(exec_request)
+
+    if not result.success and result.error and "not found" in result.error.lower():
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="PrimeKG overlay not available"
         )
-
-    context = OverlayContext(
-        execution_id=f"disease_details_{int(time.time())}",
-        user_id=user.id,
-        trust_level=user.trust_level.value if hasattr(user.trust_level, 'value') else user.trust_level,
-    )
-
-    result = await primekg_overlay.execute(
-        context=context,
-        input_data={
-            "operation": "get_disease_details",
-            "disease_id": disease_id,
-        }
-    )
 
     if not result.success:
         raise HTTPException(
@@ -748,13 +725,14 @@ async def get_disease_details(
             detail=f"Query failed: {result.error}"
         )
 
-    if result.data.get("error"):
+    data = result.data or {}
+    if data.get("error"):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=result.data["error"]
+            detail=data["error"]
         )
 
-    disease = result.data.get("disease", {})
+    disease = data.get("disease", {})
     return DiseaseDetailsResponse(
         node_id=disease.get("node_id", disease_id),
         mondo_id=disease.get("mondo_id"),

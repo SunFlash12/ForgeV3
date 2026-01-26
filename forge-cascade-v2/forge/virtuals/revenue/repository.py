@@ -25,7 +25,7 @@ class RevenueRepository:
     - Indexed by id, source_entity_id, and timestamp for efficient querying
     """
 
-    def __init__(self, neo4j_client):
+    def __init__(self, neo4j_client: Any) -> None:
         """
         Initialize repository with database client.
 
@@ -340,7 +340,7 @@ class RevenueRepository:
 _revenue_repo: RevenueRepository | None = None
 
 
-def get_revenue_repository(neo4j_client=None) -> RevenueRepository:
+def get_revenue_repository(neo4j_client: Any = None) -> RevenueRepository:
     """
     Get or create the revenue repository singleton.
 

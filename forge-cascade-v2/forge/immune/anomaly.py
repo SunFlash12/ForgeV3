@@ -508,7 +508,7 @@ class IsolationTree:
                 return depth + self._c(node.size)
             return depth
 
-        if value < node.split_value:
+        if node.split_value is not None and value < node.split_value:
             return self._path_length(node.left, value, depth + 1)
         return self._path_length(node.right, value, depth + 1)
 
@@ -971,8 +971,8 @@ class ForgeAnomalySystem:
         recent_hour = [a for a in self._anomaly_history if a.timestamp >= last_hour]
         recent_day = [a for a in self._anomaly_history if a.timestamp >= last_day]
 
-        by_severity = defaultdict(int)
-        by_type = defaultdict(int)
+        by_severity: dict[str, int] = defaultdict(int)
+        by_type: dict[str, int] = defaultdict(int)
         for a in recent_day:
             by_severity[a.severity.value] += 1
             by_type[a.type.value] += 1

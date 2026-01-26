@@ -38,6 +38,7 @@ from forge.api.dependencies import (
     PipelineDep,
     TrustedUserDep,
 )
+from forge.models.events import CascadeChain, CascadeEvent
 
 # Resilience integration - metrics and caching
 from forge.resilience.integration import (
@@ -115,7 +116,7 @@ class PropagateRequest(BaseModel):
 # Helper Functions
 # =============================================================================
 
-def _event_to_response(event) -> CascadeEventResponse:
+def _event_to_response(event: CascadeEvent) -> CascadeEventResponse:
     """Convert CascadeEvent model to response."""
     return CascadeEventResponse(
         id=event.id,
@@ -131,7 +132,7 @@ def _event_to_response(event) -> CascadeEventResponse:
     )
 
 
-def _chain_to_response(chain, is_active: bool = True) -> CascadeChainResponse:
+def _chain_to_response(chain: CascadeChain, is_active: bool = True) -> CascadeChainResponse:
     """Convert CascadeChain model to response."""
     return CascadeChainResponse(
         cascade_id=chain.cascade_id,
@@ -356,7 +357,7 @@ async def execute_cascade_pipeline(
     pipeline: PipelineDep,
     audit_repo: AuditRepoDep,
     correlation_id: CorrelationIdDep,
-) -> dict:
+) -> dict[str, Any]:
     """
     Execute the full 7-phase pipeline with cascade propagation.
 

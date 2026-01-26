@@ -23,6 +23,7 @@ Usage:
 
 import logging
 from datetime import UTC, datetime
+from typing import cast
 
 from .protocols import (
     CapsuleRepositoryProtocol,
@@ -231,6 +232,7 @@ def create_create_capsule_function(
                 title=title,
                 content=content,
                 capsule_type=capsule_type,
+                owner_id="system",
                 tags=tags_list,
                 parent_ids=[parent_capsule_id] if parent_capsule_id else [],
             )
@@ -511,9 +513,10 @@ def create_cast_vote_function(
 
             result = await governance_service.cast_vote(
                 proposal_id=proposal_id,
-                voter_address=agent_wallet,
+                voter_id=agent_wallet,
                 vote=vote,
                 reasoning=reasoning,
+                voter_address=agent_wallet,
             )
 
             return STATUS_DONE, {
@@ -597,12 +600,13 @@ def create_knowledge_worker(
             if "last_search_query" in function_result.get("state_update", {}):
                 if "search_history" not in state:
                     state["search_history"] = []
-                state["search_history"].append({
+                history = cast(list[dict[str, object]], state["search_history"])
+                history.append({
                     "query": function_result["state_update"]["last_search_query"],
                     "timestamp": datetime.now(UTC).isoformat(),
                 })
                 # Keep last 10 searches
-                state["search_history"] = state["search_history"][-10:]
+                state["search_history"] = history[-10:]
 
         return state
 

@@ -16,6 +16,7 @@ for IP and User-Agent tracking.
 
 from __future__ import annotations
 
+import types
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -38,7 +39,7 @@ try:
     import redis.asyncio as aioredis
     REDIS_AVAILABLE = True
 except ImportError:
-    aioredis = None
+    aioredis: types.ModuleType | None = None  # type: ignore[no-redef]
     REDIS_AVAILABLE = False
 from ..models.user import Token, User, UserCreate
 from ..repositories.audit_repository import AuditRepository
@@ -165,7 +166,7 @@ class IPRateLimiter:
             return None
 
         try:
-            self._redis_client = aioredis.from_url(
+            self._redis_client = aioredis.from_url(  # type: ignore[no-untyped-call]
                 redis_url,
                 encoding="utf-8",
                 decode_responses=True,
@@ -661,13 +662,16 @@ class AuthService:
             try:
                 # Decode token to get JTI and expiration
                 access_payload = decode_token(token.access_token, verify_exp=False)
+                jti_value = access_payload.jti or ""
+                exp_value = access_payload.exp
+                exp_ts: float = float(exp_value.timestamp()) if isinstance(exp_value, datetime) else (float(exp_value) if exp_value is not None else 0.0)
                 await self._session_service.create_session(
                     user_id=user.id,
-                    token_jti=access_payload.jti,
+                    token_jti=jti_value,
                     token_type="access",
                     ip_address=ip_address or "unknown",
                     user_agent=user_agent,
-                    expires_at=datetime.fromtimestamp(access_payload.exp, tz=UTC),
+                    expires_at=datetime.fromtimestamp(exp_ts, tz=UTC),
                 )
             except Exception as e:
                 # Don't fail login if session creation fails
@@ -790,13 +794,16 @@ class AuthService:
         if self._session_service:
             try:
                 access_payload = decode_token(token.access_token, verify_exp=False)
+                jti_value = access_payload.jti or ""
+                exp_value = access_payload.exp
+                exp_ts2: float = float(exp_value.timestamp()) if isinstance(exp_value, datetime) else (float(exp_value) if exp_value is not None else 0.0)
                 await self._session_service.create_session(
                     user_id=user.id,
-                    token_jti=access_payload.jti,
+                    token_jti=jti_value,
                     token_type="access",
                     ip_address=ip_address or "unknown",
                     user_agent=user_agent,
-                    expires_at=datetime.fromtimestamp(access_payload.exp, tz=UTC),
+                    expires_at=datetime.fromtimestamp(exp_ts2, tz=UTC),
                 )
             except Exception as e:
                 logger.warning(
@@ -874,9 +881,14 @@ class AuthService:
 
         # SECURITY FIX (Audit 5): Blacklist the old refresh token before issuing new one
         # This prevents token replay even if the stored token validation is bypassed
+        payload_jti: str = payload.jti or ""
+        payload_exp_float: float | None = (
+            float(payload.exp.timestamp()) if isinstance(payload.exp, datetime)
+            else (float(payload.exp) if payload.exp is not None else None)
+        )
         await TokenBlacklist.add_async(
-            jti=payload.jti,
-            expires_at=payload.exp  # Use original expiry time - FIXED: was 'exp='
+            jti=payload_jti,
+            expires_at=payload_exp_float  # Use original expiry time - FIXED: was 'exp='
         )
         logger.debug(
             "refresh_token_blacklisted",
@@ -1026,7 +1038,8 @@ class AuthService:
         if not user:
             raise AuthenticationError("User not found")
 
-        if not verify_password(current_password, user.password_hash):
+        user_pw_hash: str = getattr(user, "password_hash", "")
+        if not verify_password(current_password, user_pw_hash):
             await self.audit_repo.log_security_event(
                 actor_id=user_id,
                 event_name="password_change_failed",
@@ -1039,7 +1052,7 @@ class AuthService:
         # Get password history from user (may be empty for older accounts)
         password_history = getattr(user, 'password_history', []) or []
         # Also check against current password hash
-        all_history = [user.password_hash] + password_history
+        all_history = [user_pw_hash] + password_history
         check_password_history(new_password, all_history)
 
         # Hash and update new password (with context-aware validation)
@@ -1047,7 +1060,7 @@ class AuthService:
         new_hash = hash_password(new_password, username=user.username, email=user.email)
 
         # SECURITY FIX (Audit 6): Update password history before changing password
-        new_history = update_password_history(user.password_hash, password_history)
+        new_history = update_password_history(user_pw_hash, password_history)
         await self.user_repo.update_password_with_history(user_id, new_hash, new_history)
 
         # Revoke all existing sessions for security
@@ -1169,7 +1182,8 @@ class AuthService:
 
         # SECURITY FIX (Audit 6): Check password history to prevent reuse
         password_history = getattr(user, 'password_history', []) or []
-        all_history = [user.password_hash] + password_history
+        reset_pw_hash: str = getattr(user, "password_hash", "")
+        all_history = [reset_pw_hash] + password_history
         check_password_history(new_password, all_history)
 
         # Hash and update password (with context-aware validation)
@@ -1177,7 +1191,7 @@ class AuthService:
         new_hash = hash_password(new_password, username=user.username, email=user.email)
 
         # SECURITY FIX (Audit 6): Update password history
-        new_history = update_password_history(user.password_hash, password_history)
+        new_history = update_password_history(reset_pw_hash, password_history)
         await self.user_repo.update_password_with_history(user_id, new_hash, new_history)
 
         # Clear the reset token (one-time use)
@@ -1227,7 +1241,7 @@ class AuthService:
 
         # SECURITY FIX: Hash the provided token and validate against stored hash
         token_hash = hashlib.sha256(verification_token.encode()).hexdigest()
-        is_valid = await self.user_repo.validate_email_verification_token(
+        is_valid = await self.user_repo.validate_email_verification_token(  # type: ignore[attr-defined]
             user_id=user_id,
             token_hash=token_hash
         )
@@ -1245,7 +1259,7 @@ class AuthService:
         await self.user_repo.set_verified(user_id)
 
         # Clear the verification token (one-time use)
-        await self.user_repo.clear_email_verification_token(user_id)
+        await self.user_repo.clear_email_verification_token(user_id)  # type: ignore[attr-defined]
 
         await self.audit_repo.log_user_action(
             actor_id=user_id,
@@ -1287,7 +1301,7 @@ class AuthService:
         # Token expires in 24 hours
         expires_at = datetime.now(UTC) + timedelta(hours=24)
 
-        await self.user_repo.store_email_verification_token(
+        await self.user_repo.store_email_verification_token(  # type: ignore[attr-defined]
             user_id=user_id,
             token_hash=token_hash,
             expires_at=expires_at
@@ -1495,7 +1509,10 @@ class AuthService:
         )
 
         # Handle case where result is TrustFlameAdjustment or int
-        new_trust = result.new_value if hasattr(result, 'new_value') else result
+        if result is not None:
+            new_trust: int = result.new_value
+        else:
+            new_trust = old_trust
 
         old_level = get_trust_level_from_score(old_trust)
         new_level = get_trust_level_from_score(new_trust)

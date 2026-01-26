@@ -14,13 +14,13 @@ from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, TypeVar
+from typing import Any, TypeVar, cast
 
 import structlog
 
 from forge.resilience.config import get_resilience_config
 
-logger = structlog.get_logger(__name__)
+logger: structlog.stdlib.BoundLogger = structlog.get_logger(__name__)
 
 F = TypeVar('F', bound=Callable[..., Any])
 
@@ -142,10 +142,10 @@ class TenantIsolator:
     and enforces resource quotas.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._config = get_resilience_config().tenant_isolation
         self._tenants: dict[str, TenantContext] = {}
-        self._cross_tenant_attempts: list[dict] = []
+        self._cross_tenant_attempts: list[dict[str, str]] = []
 
     def register_tenant(self, context: TenantContext) -> None:
         """Register a tenant context."""
@@ -253,10 +253,10 @@ class TenantIsolator:
                 )
 
         elif resource_type == "storage":
-            new_total = current.current_storage_mb + amount
-            if current.limits.max_storage_mb >= 0 and new_total > current.limits.max_storage_mb:
+            new_storage_total = current.current_storage_mb + amount
+            if current.limits.max_storage_mb >= 0 and new_storage_total > current.limits.max_storage_mb:
                 raise TenantQuotaExceededError(
-                    f"Storage quota exceeded: {new_total}/{current.limits.max_storage_mb} MB"
+                    f"Storage quota exceeded: {new_storage_total}/{current.limits.max_storage_mb} MB"
                 )
 
         return True
@@ -277,7 +277,7 @@ class TenantIsolator:
 
         return {"tenant_id": current.tenant_id}
 
-    def apply_tenant_filter(self, query: str, params: dict | None = None) -> tuple[str, dict]:
+    def apply_tenant_filter(self, query: str, params: dict[str, Any] | None = None) -> tuple[str, dict[str, Any]]:
         """
         Apply tenant filter to a Cypher query using parameterization.
 
@@ -356,7 +356,7 @@ class TenantIsolator:
         if len(self._cross_tenant_attempts) > 1000:
             self._cross_tenant_attempts = self._cross_tenant_attempts[-1000:]
 
-    def get_audit_log(self) -> list[dict]:
+    def get_audit_log(self) -> list[dict[str, str]]:
         """Get cross-tenant access attempt audit log."""
         return list(self._cross_tenant_attempts)
 
@@ -381,7 +381,7 @@ def require_tenant(func: F) -> F:
         TenantIsolationError: If no tenant context is set
     """
     @functools.wraps(func)
-    async def async_wrapper(*args, **kwargs):
+    async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
         isolator = get_tenant_isolator()
         if isolator._config.enabled:
             current = isolator.get_current_tenant()
@@ -390,7 +390,7 @@ def require_tenant(func: F) -> F:
         return await func(*args, **kwargs)
 
     @functools.wraps(func)
-    def sync_wrapper(*args, **kwargs):
+    def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
         isolator = get_tenant_isolator()
         if isolator._config.enabled:
             current = isolator.get_current_tenant()
@@ -400,8 +400,8 @@ def require_tenant(func: F) -> F:
 
     import asyncio
     if asyncio.iscoroutinefunction(func):
-        return async_wrapper
-    return sync_wrapper
+        return cast(F, async_wrapper)
+    return cast(F, sync_wrapper)
 
 
 class tenant_scope:
@@ -424,7 +424,7 @@ class tenant_scope:
         isolator.set_current_tenant(self._context)
         return self._context
 
-    def __exit__(self, *args) -> None:
+    def __exit__(self, *args: Any) -> None:
         isolator = get_tenant_isolator()
         if self._previous:
             isolator.set_current_tenant(self._previous)

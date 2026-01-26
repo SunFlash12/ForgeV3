@@ -15,9 +15,12 @@ Each tool is defined using Pydantic models for automatic JSON schema
 generation, ensuring type safety and clear documentation.
 """
 
+from __future__ import annotations
+
 import logging
 from typing import Any
 
+from copilot import Tool, ToolInvocation, ToolResult
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
@@ -160,20 +163,20 @@ class ForgeToolRegistry:
         ```
     """
 
-    def __init__(self):
-        self._db_client = None
-        self._search_service = None
-        self._capsule_service = None
-        self._overlay_manager = None
+    def __init__(self) -> None:
+        self._db_client: Any = None
+        self._search_service: Any = None
+        self._capsule_service: Any = None
+        self._overlay_manager: Any = None
         self._initialized = False
 
     async def initialize(
         self,
-        db_client=None,
-        search_service=None,
-        capsule_service=None,
-        overlay_manager=None,
-    ):
+        db_client: Any = None,
+        search_service: Any = None,
+        capsule_service: Any = None,
+        overlay_manager: Any = None,
+    ) -> None:
         """
         Initialize the tool registry with Forge services.
 
@@ -190,23 +193,13 @@ class ForgeToolRegistry:
         self._initialized = True
         logger.info("ForgeToolRegistry initialized")
 
-    def get_copilot_tools(self) -> list:
+    def get_copilot_tools(self) -> list[Tool]:
         """
         Get all Forge tools formatted for Copilot SDK.
 
         Returns:
             List of tool definitions with handlers
         """
-        # Import here to avoid circular imports and allow optional dependency
-        try:
-            from copilot import Tool
-        except ImportError:
-            logger.warning(
-                "GitHub Copilot SDK not installed. "
-                "Install with: pip install github-copilot-sdk"
-            )
-            return []
-
         return [
             Tool(
                 name="forge_knowledge_query",
@@ -259,7 +252,7 @@ class ForgeToolRegistry:
             ),
         ]
 
-    async def _handle_knowledge_query(self, invocation: dict) -> dict:
+    async def _handle_knowledge_query(self, invocation: ToolInvocation) -> ToolResult:
         """Handle knowledge graph query tool invocation."""
         args = invocation.get("arguments", {})
         params = KnowledgeQueryParams(**args)
@@ -275,17 +268,16 @@ class ForgeToolRegistry:
                 filters=params.filters,
             )
 
-            return {
-                "textResultForLlm": self._format_capsule_results(results),
-                "resultType": "success",
-                "sessionLog": f"Found {len(results)} results for: {params.query}",
-                "data": {"results": results, "count": len(results)},
-            }
+            return ToolResult(
+                textResultForLlm=self._format_capsule_results(results),
+                resultType="success",
+                sessionLog=f"Found {len(results)} results for: {params.query}",
+            )
         except Exception as e:
             logger.error(f"Knowledge query failed: {e}")
             return self._error_result(f"Query failed: {e}")
 
-    async def _handle_semantic_search(self, invocation: dict) -> dict:
+    async def _handle_semantic_search(self, invocation: ToolInvocation) -> ToolResult:
         """Handle semantic search tool invocation."""
         args = invocation.get("arguments", {})
         params = SemanticSearchParams(**args)
@@ -301,17 +293,16 @@ class ForgeToolRegistry:
                 capsule_types=params.capsule_types,
             )
 
-            return {
-                "textResultForLlm": self._format_search_results(results),
-                "resultType": "success",
-                "sessionLog": f"Semantic search found {len(results)} matches",
-                "data": {"matches": results},
-            }
+            return ToolResult(
+                textResultForLlm=self._format_search_results(results),
+                resultType="success",
+                sessionLog=f"Semantic search found {len(results)} matches",
+            )
         except Exception as e:
             logger.error(f"Semantic search failed: {e}")
             return self._error_result(f"Search failed: {e}")
 
-    async def _handle_create_capsule(self, invocation: dict) -> dict:
+    async def _handle_create_capsule(self, invocation: ToolInvocation) -> ToolResult:
         """Handle capsule creation tool invocation."""
         args = invocation.get("arguments", {})
         params = CreateCapsuleParams(**args)
@@ -328,17 +319,16 @@ class ForgeToolRegistry:
                 metadata=params.metadata,
             )
 
-            return {
-                "textResultForLlm": f"Created capsule '{params.title}' with ID: {capsule.id}",
-                "resultType": "success",
-                "sessionLog": f"Capsule created: {capsule.id}",
-                "data": {"capsule_id": capsule.id, "title": params.title},
-            }
+            return ToolResult(
+                textResultForLlm=f"Created capsule '{params.title}' with ID: {capsule.id}",
+                resultType="success",
+                sessionLog=f"Capsule created: {capsule.id}",
+            )
         except Exception as e:
             logger.error(f"Capsule creation failed: {e}")
             return self._error_result(f"Creation failed: {e}")
 
-    async def _handle_get_capsule(self, invocation: dict) -> dict:
+    async def _handle_get_capsule(self, invocation: ToolInvocation) -> ToolResult:
         """Handle capsule retrieval tool invocation."""
         args = invocation.get("arguments", {})
         params = GetCapsuleParams(**args)
@@ -356,17 +346,16 @@ class ForgeToolRegistry:
             if not capsule:
                 return self._error_result(f"Capsule not found: {params.capsule_id}")
 
-            return {
-                "textResultForLlm": self._format_capsule(capsule),
-                "resultType": "success",
-                "sessionLog": f"Retrieved capsule: {params.capsule_id}",
-                "data": capsule,
-            }
+            return ToolResult(
+                textResultForLlm=self._format_capsule(capsule),
+                resultType="success",
+                sessionLog=f"Retrieved capsule: {params.capsule_id}",
+            )
         except Exception as e:
             logger.error(f"Capsule retrieval failed: {e}")
             return self._error_result(f"Retrieval failed: {e}")
 
-    async def _handle_list_overlays(self, invocation: dict) -> dict:
+    async def _handle_list_overlays(self, invocation: ToolInvocation) -> ToolResult:
         """Handle overlay listing tool invocation."""
         args = invocation.get("arguments", {})
         params = ListOverlaysParams(**args)
@@ -380,17 +369,16 @@ class ForgeToolRegistry:
                 category=params.category,
             )
 
-            return {
-                "textResultForLlm": self._format_overlays(overlays),
-                "resultType": "success",
-                "sessionLog": f"Found {len(overlays)} overlays",
-                "data": {"overlays": overlays},
-            }
+            return ToolResult(
+                textResultForLlm=self._format_overlays(overlays),
+                resultType="success",
+                sessionLog=f"Found {len(overlays)} overlays",
+            )
         except Exception as e:
             logger.error(f"Overlay listing failed: {e}")
             return self._error_result(f"Listing failed: {e}")
 
-    async def _handle_execute_overlay(self, invocation: dict) -> dict:
+    async def _handle_execute_overlay(self, invocation: ToolInvocation) -> ToolResult:
         """Handle overlay execution tool invocation."""
         args = invocation.get("arguments", {})
         params = ExecuteOverlayParams(**args)
@@ -404,18 +392,17 @@ class ForgeToolRegistry:
                 input_data=params.input_data,
             )
 
-            return {
-                "textResultForLlm": f"Overlay {params.overlay_id} executed successfully. "
-                                   f"Output: {result.get('summary', 'Complete')}",
-                "resultType": "success",
-                "sessionLog": f"Executed overlay: {params.overlay_id}",
-                "data": result,
-            }
+            return ToolResult(
+                textResultForLlm=f"Overlay {params.overlay_id} executed successfully. "
+                                 f"Output: {result.get('summary', 'Complete')}",
+                resultType="success",
+                sessionLog=f"Executed overlay: {params.overlay_id}",
+            )
         except Exception as e:
             logger.error(f"Overlay execution failed: {e}")
             return self._error_result(f"Execution failed: {e}")
 
-    async def _handle_governance_query(self, invocation: dict) -> dict:
+    async def _handle_governance_query(self, invocation: ToolInvocation) -> ToolResult:
         """Handle governance query tool invocation."""
         args = invocation.get("arguments", {})
         params = GovernanceQueryParams(**args)
@@ -446,18 +433,17 @@ class ForgeToolRegistry:
 
         result = governance_data.get(params.query_type, {})
 
-        return {
-            "textResultForLlm": f"Governance {params.query_type}: {result}",
-            "resultType": "success",
-            "sessionLog": f"Queried governance: {params.query_type}",
-            "data": result,
-        }
+        return ToolResult(
+            textResultForLlm=f"Governance {params.query_type}: {result}",
+            resultType="success",
+            sessionLog=f"Queried governance: {params.query_type}",
+        )
 
     # ═══════════════════════════════════════════════════════════════════════════
     # FORMATTING HELPERS
     # ═══════════════════════════════════════════════════════════════════════════
 
-    def _format_capsule_results(self, results: list) -> str:
+    def _format_capsule_results(self, results: list[Any]) -> str:
         """Format capsule search results for LLM consumption."""
         if not results:
             return "No capsules found matching the query."
@@ -471,7 +457,7 @@ class ForgeToolRegistry:
             )
         return "\n".join(lines)
 
-    def _format_search_results(self, results: list) -> str:
+    def _format_search_results(self, results: list[Any]) -> str:
         """Format semantic search results for LLM consumption."""
         if not results:
             return "No semantically similar content found."
@@ -485,7 +471,7 @@ class ForgeToolRegistry:
             )
         return "\n".join(lines)
 
-    def _format_capsule(self, capsule: dict) -> str:
+    def _format_capsule(self, capsule: dict[str, Any]) -> str:
         """Format a single capsule for LLM consumption."""
         return (
             f"**{capsule.get('title', 'Untitled')}**\n"
@@ -496,7 +482,7 @@ class ForgeToolRegistry:
             f"Content:\n{capsule.get('content', 'No content')}"
         )
 
-    def _format_overlays(self, overlays: list) -> str:
+    def _format_overlays(self, overlays: list[Any]) -> str:
         """Format overlay list for LLM consumption."""
         if not overlays:
             return "No overlays available."
@@ -509,13 +495,13 @@ class ForgeToolRegistry:
             )
         return "\n".join(lines)
 
-    def _error_result(self, message: str) -> dict:
+    def _error_result(self, message: str) -> ToolResult:
         """Create an error result for tool invocation."""
-        return {
-            "textResultForLlm": f"Error: {message}",
-            "resultType": "error",
-            "sessionLog": f"Tool error: {message}",
-        }
+        return ToolResult(
+            textResultForLlm=f"Error: {message}",
+            resultType="failure",
+            sessionLog=f"Tool error: {message}",
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

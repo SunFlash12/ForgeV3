@@ -19,7 +19,7 @@ from typing import Any
 
 import structlog
 
-from ..models.capsule import CapsuleType
+from ..models.base import CapsuleType
 from ..models.events import Event, EventType
 from ..models.overlay import Capability
 from .base import BaseOverlay, OverlayContext, OverlayError, OverlayResult
@@ -159,7 +159,7 @@ class LineageTrackerOverlay(BaseOverlay):
         trust_decay_rate: float = 0.05,
         max_derivations_per_day: int = 100,
         lineage_provider: Any | None = None
-    ):
+    ) -> None:
         """
         Initialize the lineage tracker.
 
@@ -236,20 +236,20 @@ class LineageTrackerOverlay(BaseOverlay):
         data = input_data or {}
         if event:
             data.update(event.payload or {})
-            data["event_type"] = event.event_type
+            data["event_type"] = event.type
 
         # Determine action
-        anomalies = []
-        result_data = {}
+        anomalies: list[LineageAnomaly] = []
+        result_data: dict[str, Any] = {}
 
         if event:
-            if event.event_type == EventType.CAPSULE_CREATED:
+            if event.type == EventType.CAPSULE_CREATED:
                 result_data = await self._handle_capsule_created(data, context)
-            elif event.event_type == EventType.CAPSULE_LINKED:
+            elif event.type == EventType.CAPSULE_LINKED:
                 result_data = await self._handle_capsule_linked(data, context)
-            elif event.event_type == EventType.CASCADE_TRIGGERED:
+            elif event.type == EventType.CASCADE_TRIGGERED:
                 result_data = await self._handle_cascade(data, context)
-            elif event.event_type == EventType.SEMANTIC_EDGE_CREATED:
+            elif event.type == EventType.SEMANTIC_EDGE_CREATED:
                 result_data = await self._handle_semantic_edge_created(data, context)
             else:
                 result_data = await self._get_lineage_info(data, context)
@@ -290,8 +290,6 @@ class LineageTrackerOverlay(BaseOverlay):
                     })
 
         return OverlayResult(
-            overlay_id=self.id,
-            overlay_name=self.NAME,
             success=True,
             data={
                 **result_data,
@@ -315,14 +313,14 @@ class LineageTrackerOverlay(BaseOverlay):
 
     async def _handle_capsule_created(
         self,
-        data: dict,
+        data: dict[str, Any],
         context: OverlayContext
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Handle new capsule creation."""
         capsule_id = data.get("capsule_id")
         parent_id = data.get("parent_id")
         parent_ids = [parent_id] if parent_id else []
-        capsule_type = data.get("type", data.get("capsule_type", CapsuleType.NOTE.value))
+        capsule_type: str = str(data.get("type", data.get("capsule_type", CapsuleType.KNOWLEDGE.value)))
 
         if not capsule_id:
             return {"error": "Missing capsule_id"}
@@ -412,9 +410,9 @@ class LineageTrackerOverlay(BaseOverlay):
 
     async def _handle_capsule_linked(
         self,
-        data: dict,
+        data: dict[str, Any],
         context: OverlayContext
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Handle capsule linking (new parent-child relationship)."""
         parent_id = data.get("parent_id")
         child_id = data.get("child_id")
@@ -454,9 +452,9 @@ class LineageTrackerOverlay(BaseOverlay):
 
     async def _handle_cascade(
         self,
-        data: dict,
+        data: dict[str, Any],
         context: OverlayContext
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Handle cascade event - update affected lineages."""
         source_id = data.get("source_id")
         affected_ids = data.get("affected_ids", [])
@@ -480,9 +478,9 @@ class LineageTrackerOverlay(BaseOverlay):
 
     async def _handle_semantic_edge_created(
         self,
-        data: dict,
+        data: dict[str, Any],
         context: OverlayContext
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Handle semantic edge creation event."""
         source_id = data.get("source_id")
         target_id = data.get("target_id")
@@ -560,7 +558,7 @@ class LineageTrackerOverlay(BaseOverlay):
         source_id: str,
         target_id: str,
         max_hops: int = 5
-    ) -> dict | None:
+    ) -> dict[str, Any] | None:
         """
         Compute semantic distance between two capsules.
 
@@ -581,7 +579,7 @@ class LineageTrackerOverlay(BaseOverlay):
         # BFS to find shortest path
         from collections import deque
 
-        queue = deque([(source_id, [source_id], [])])
+        queue: deque[tuple[str, list[str], list[str]]] = deque([(source_id, [source_id], [])])
         visited = {source_id}
 
         while queue:
@@ -634,7 +632,7 @@ class LineageTrackerOverlay(BaseOverlay):
 
         return {"distance": -1, "path": [], "relationship_types": [], "found": False}
 
-    def find_contradiction_clusters(self, min_size: int = 2) -> list[dict]:
+    def find_contradiction_clusters(self, min_size: int = 2) -> list[dict[str, Any]]:
         """
         Find clusters of mutually contradicting capsules.
 
@@ -644,8 +642,8 @@ class LineageTrackerOverlay(BaseOverlay):
         Returns:
             List of contradiction clusters with their members
         """
-        clusters = []
-        visited = set()
+        clusters: list[dict[str, Any]] = []
+        visited: set[str] = set()
 
         for node_id, node in self._nodes.items():
             if node_id in visited or not node.contradicts:
@@ -681,9 +679,9 @@ class LineageTrackerOverlay(BaseOverlay):
 
     async def _get_lineage_info(
         self,
-        data: dict,
+        data: dict[str, Any],
         context: OverlayContext
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Get lineage information for a capsule."""
         capsule_id = data.get("capsule_id")
 
@@ -987,7 +985,7 @@ class LineageTrackerOverlay(BaseOverlay):
 
     def _detect_anomalies(self, capsule_id: str) -> list[LineageAnomaly]:
         """Detect anomalies in lineage."""
-        anomalies = []
+        anomalies: list[LineageAnomaly] = []
 
         if capsule_id not in self._nodes:
             return anomalies
@@ -1070,7 +1068,7 @@ class LineageTrackerOverlay(BaseOverlay):
         """Get a specific lineage node."""
         return self._nodes.get(capsule_id)
 
-    def get_stats(self) -> dict:
+    def get_stats(self) -> dict[str, Any]:
         """Get lineage tracking statistics."""
         return {
             **self._stats,
@@ -1140,7 +1138,7 @@ class LineageTrackerOverlay(BaseOverlay):
 # Convenience function
 def create_lineage_tracker(
     strict_mode: bool = False,
-    **kwargs
+    **kwargs: Any
 ) -> LineageTrackerOverlay:
     """
     Create a lineage tracker overlay.

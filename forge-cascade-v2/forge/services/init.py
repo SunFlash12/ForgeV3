@@ -7,6 +7,8 @@ Called during application startup in the FastAPI app.
 
 from __future__ import annotations
 
+from typing import Any
+
 import structlog
 
 from forge.config import settings
@@ -35,9 +37,9 @@ logger = structlog.get_logger(__name__)
 
 
 def init_all_services(
-    db_client=None,
-    capsule_repo=None,
-    event_bus=None,
+    db_client: Any = None,
+    capsule_repo: Any = None,
+    event_bus: Any = None,
 ) -> None:
     """
     Initialize all services based on configuration.
@@ -229,7 +231,7 @@ def init_all_services(
     logger.info("all_services_initialized")
 
 
-def _setup_ghost_council_event_handlers(ghost_council, event_bus) -> None:
+def _setup_ghost_council_event_handlers(ghost_council: Any, event_bus: Any) -> None:
     """
     Set up event handlers for Ghost Council serious issue detection.
 
@@ -252,7 +254,7 @@ def _setup_ghost_council_event_handlers(ghost_council, event_bus) -> None:
         EventType.IMMUNE_ALERT,
     }
 
-    async def handle_potential_serious_issue(event):
+    async def handle_potential_serious_issue(event: Any) -> None:
         """Handle events that might be serious issues."""
         try:
             issue = ghost_council.detect_serious_issue(
@@ -271,7 +273,7 @@ def _setup_ghost_council_event_handlers(ghost_council, event_bus) -> None:
                 )
 
                 # SECURITY FIX (Audit 3): Track background task and handle exceptions
-                async def _safe_respond(gc, iss):
+                async def _safe_respond(gc: Any, iss: Any) -> None:
                     try:
                         await gc.respond_to_issue(iss)
                     except Exception as e:
@@ -309,12 +311,30 @@ def shutdown_all_services() -> None:
     """
     Shutdown all services gracefully.
 
-    Called during application shutdown.
+    Called during application shutdown (sync version).
+    For async shutdown, use shutdown_all_services_async().
     """
     logger.info("shutting_down_services")
 
     shutdown_search_service()
-    shutdown_llm_service()
+    # Note: shutdown_llm_service is async; sync shutdown just clears references
+    # For proper cleanup, use shutdown_all_services_async() in async contexts
+    shutdown_embedding_service()
+    shutdown_ghost_council_service()
+
+    logger.info("all_services_shutdown")
+
+
+async def shutdown_all_services_async() -> None:
+    """
+    Shutdown all services gracefully (async version).
+
+    Called during application shutdown in async contexts.
+    """
+    logger.info("shutting_down_services")
+
+    shutdown_search_service()
+    await shutdown_llm_service()
     shutdown_embedding_service()
     shutdown_ghost_council_service()
 
@@ -324,4 +344,5 @@ def shutdown_all_services() -> None:
 __all__ = [
     "init_all_services",
     "shutdown_all_services",
+    "shutdown_all_services_async",
 ]

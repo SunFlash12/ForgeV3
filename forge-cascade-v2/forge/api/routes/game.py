@@ -17,7 +17,7 @@ from typing import Any
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel, Field
 
-from forge.api.dependencies import ActiveUserDep
+from forge.api.dependencies import ActiveUserDep, OptionalUserDep
 
 logger = logging.getLogger(__name__)
 
@@ -70,9 +70,9 @@ class AgentResponse(BaseModel):
     name: str
     status: str
     game_agent_id: str | None
-    personality: dict
-    goals: dict
-    workers: list[dict]
+    personality: dict[str, Any]
+    goals: dict[str, Any]
+    workers: list[dict[str, Any]]
     forge_overlay_id: str | None
     forge_capsule_ids: list[str]
     primary_chain: str
@@ -93,8 +93,8 @@ class AgentRunResponse(BaseModel):
     run_id: str
     status: str
     iterations_completed: int
-    results: list[dict]
-    final_state: dict
+    results: list[dict[str, Any]]
+    final_state: dict[str, Any]
 
 
 class AgentActionResponse(BaseModel):
@@ -102,7 +102,7 @@ class AgentActionResponse(BaseModel):
     iteration: int
     worker_id: str
     function_name: str
-    arguments: dict
+    arguments: dict[str, Any]
     status: str
     result: Any
     reasoning: str
@@ -111,7 +111,7 @@ class AgentActionResponse(BaseModel):
 class StoreMemoryRequest(BaseModel):
     """Request to store agent memory."""
     memory_type: str = Field(description="Type: conversation, fact, preference, insight")
-    content: dict
+    content: dict[str, Any]
     ttl_days: int | None = None
 
 
@@ -150,10 +150,10 @@ async def create_agent(
         # Build personality
         personality = AgentPersonality(
             name=request.personality.name,
-            bio=request.personality.bio,
-            traits=request.personality.traits,
+            description=request.personality.bio,
+            personality_traits=request.personality.traits,
             communication_style=request.personality.communication_style,
-            expertise_areas=request.personality.expertise_areas,
+            expertise_domains=request.personality.expertise_areas,
         )
 
         # Build goals
@@ -161,7 +161,7 @@ async def create_agent(
             primary_goal=request.goals.primary_goal,
             secondary_goals=request.goals.secondary_goals,
             constraints=request.goals.constraints,
-            success_criteria=request.goals.success_criteria,
+            success_metrics=request.goals.success_criteria,
         )
 
         # Create agent request
@@ -188,10 +188,10 @@ async def create_agent(
                 create_knowledge_worker,
             )
 
-            db_client = get_db_client()
+            db_client = await get_db_client()
             capsule_repo = CapsuleRepository(db_client)
 
-            workers.append(create_knowledge_worker(capsule_repo))
+            workers.append(create_knowledge_worker(capsule_repo))  # type: ignore[arg-type]
         else:
             # Use specified worker configs
             for wc in request.workers:
@@ -264,7 +264,7 @@ async def get_agent(agent_id: str) -> AgentResponse:
 async def delete_agent(
     agent_id: str,
     current_user: ActiveUserDep,
-) -> dict:
+) -> dict[str, str]:
     """Delete an agent."""
     try:
         from forge.virtuals.game.sdk_client import get_game_client
@@ -324,12 +324,12 @@ async def run_agent(
             raise HTTPException(status_code=404, detail="Agent not found")
 
         # Get database client and create workers
-        db_client = get_db_client()
+        db_client = await get_db_client()
         capsule_repo = CapsuleRepository(db_client)
 
         # Create Forge workers
         workers = {
-            "knowledge_worker": create_knowledge_worker(capsule_repo),
+            "knowledge_worker": create_knowledge_worker(capsule_repo),  # type: ignore[arg-type]
         }
 
         # Run the agent loop
@@ -361,9 +361,9 @@ async def run_agent(
 @router.post("/agents/{agent_id}/action", response_model=AgentActionResponse)
 async def get_next_action(
     agent_id: str,
-    current_state: dict,
+    current_state: dict[str, Any],
     context: str | None = None,
-    current_user: ActiveUserDep = None,
+    current_user: OptionalUserDep = None,
 ) -> AgentActionResponse:
     """
     Get the next action for an agent without executing it.
@@ -379,6 +379,9 @@ async def get_next_action(
 
         if not agent:
             raise HTTPException(status_code=404, detail="Agent not found")
+
+        if not agent.game_agent_id:
+            raise HTTPException(status_code=400, detail="Agent not registered with GAME framework")
 
         action = await game_client.get_next_action(
             agent.game_agent_id,
@@ -412,7 +415,7 @@ async def store_memory(
     agent_id: str,
     request: StoreMemoryRequest,
     current_user: ActiveUserDep,
-) -> dict:
+) -> dict[str, str]:
     """
     Store a memory for an agent.
 
@@ -447,7 +450,7 @@ async def store_memory(
 async def search_memories(
     agent_id: str,
     request: SearchMemoryRequest,
-) -> dict:
+) -> dict[str, Any]:
     """
     Search agent memories using semantic similarity.
 
@@ -483,7 +486,7 @@ async def search_memories(
 # ============================================================================
 
 @router.get("/functions")
-async def list_available_functions() -> dict:
+async def list_available_functions() -> dict[str, Any]:
     """
     List all available Forge functions for GAME workers.
 

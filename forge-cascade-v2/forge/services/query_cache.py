@@ -431,7 +431,7 @@ async def init_query_cache() -> QueryCache | InMemoryQueryCache:
         try:
             import redis.asyncio as redis
 
-            client = redis.from_url(
+            client = redis.from_url(  # type: ignore[no-untyped-call]
                 settings.redis_url,
                 password=settings.redis_password,
                 decode_responses=True,

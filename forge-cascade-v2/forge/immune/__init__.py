@@ -12,6 +12,18 @@ Together, these components ensure Forge remains resilient
 and can heal itself from failures.
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from forge.database.client import Neo4jClient
+    from forge.immune.health_checker import (
+        CircuitBreakerRegistryProtocol,
+        EventSystemProtocol,
+        OverlayManagerProtocol,
+    )
+
 from forge.immune.anomaly import (
     Anomaly,
     AnomalyDetector,
@@ -66,10 +78,10 @@ from forge.immune.health_checker import (
 # Convenience factory functions
 
 def create_immune_system(
-    db_client=None,
-    overlay_manager=None,
-    event_system=None,
-) -> dict:
+    db_client: Neo4jClient | None = None,
+    overlay_manager: OverlayManagerProtocol | None = None,
+    event_system: EventSystemProtocol | None = None,
+) -> dict[str, object]:
     """
     Create complete Forge immune system.
 

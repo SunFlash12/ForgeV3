@@ -472,7 +472,7 @@ async def download_primekg_cli(
     Usage:
         python -m forge.services.primekg.download --output-dir ./data/primekg
     """
-    def progress_callback(progress: DownloadProgress):
+    def progress_callback(progress: DownloadProgress) -> None:
         """Print progress to console."""
         if progress.total_bytes > 0:
             pct = progress.progress_percent

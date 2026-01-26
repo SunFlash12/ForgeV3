@@ -16,12 +16,15 @@ from __future__ import annotations
 
 import asyncio
 import time
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from functools import wraps
+from typing import Any, TypeVar, cast
 
 import structlog
+
+F = TypeVar("F", bound=Callable[..., Any])
 
 logger = structlog.get_logger(__name__)
 
@@ -36,12 +39,12 @@ class Counter:
     name: str
     description: str
     labels: list[str] = field(default_factory=list)
-    _values: dict[tuple, float] = field(default_factory=dict)
+    _values: dict[tuple[str, ...], float] = field(default_factory=dict)
     # SECURITY FIX: Limit label cardinality to prevent memory exhaustion
     _max_cardinality: int = 1000
     _cardinality_warned: bool = field(default=False, repr=False)
 
-    def inc(self, value: float = 1.0, **labels) -> None:
+    def inc(self, value: float = 1.0, **labels: str) -> None:
         """Increment the counter with cardinality protection."""
         key = self._label_key(labels)
 
@@ -58,10 +61,10 @@ class Counter:
 
         self._values[key] = self._values.get(key, 0) + value
 
-    def _label_key(self, labels: dict) -> tuple:
+    def _label_key(self, labels: dict[str, str]) -> tuple[str, ...]:
         return tuple(labels.get(l, "") for l in self.labels)
 
-    def collect(self) -> list[dict]:
+    def collect(self) -> list[dict[str, Any]]:
         """Collect all metric values."""
         return [
             {
@@ -80,12 +83,12 @@ class Gauge:
     name: str
     description: str
     labels: list[str] = field(default_factory=list)
-    _values: dict[tuple, float] = field(default_factory=dict)
+    _values: dict[tuple[str, ...], float] = field(default_factory=dict)
     # SECURITY FIX: Limit label cardinality to prevent memory exhaustion
     _max_cardinality: int = 1000
     _cardinality_warned: bool = field(default=False, repr=False)
 
-    def _check_cardinality(self, key: tuple) -> bool:
+    def _check_cardinality(self, key: tuple[str, ...]) -> bool:
         """Check if we can add a new key. Returns False if at limit."""
         if key not in self._values and len(self._values) >= self._max_cardinality:
             if not self._cardinality_warned:
@@ -97,31 +100,31 @@ class Gauge:
             return False
         return True
 
-    def set(self, value: float, **labels) -> None:
+    def set(self, value: float, **labels: str) -> None:
         """Set the gauge value with cardinality protection."""
         key = self._label_key(labels)
         if not self._check_cardinality(key):
             return
         self._values[key] = value
 
-    def inc(self, value: float = 1.0, **labels) -> None:
+    def inc(self, value: float = 1.0, **labels: str) -> None:
         """Increment the gauge with cardinality protection."""
         key = self._label_key(labels)
         if not self._check_cardinality(key):
             return
         self._values[key] = self._values.get(key, 0) + value
 
-    def dec(self, value: float = 1.0, **labels) -> None:
+    def dec(self, value: float = 1.0, **labels: str) -> None:
         """Decrement the gauge with cardinality protection."""
         key = self._label_key(labels)
         if not self._check_cardinality(key):
             return
         self._values[key] = self._values.get(key, 0) - value
 
-    def _label_key(self, labels: dict) -> tuple:
+    def _label_key(self, labels: dict[str, str]) -> tuple[str, ...]:
         return tuple(labels.get(l, "") for l in self.labels)
 
-    def collect(self) -> list[dict]:
+    def collect(self) -> list[dict[str, Any]]:
         return [
             {
                 "name": self.name,
@@ -143,15 +146,15 @@ class Histogram:
         0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0
     ])
     # FIX: Store running statistics instead of all observations to prevent unbounded memory
-    _stats: dict[tuple, dict] = field(default_factory=dict)
+    _stats: dict[tuple[str, ...], dict[str, Any]] = field(default_factory=dict)
     # Keep last N observations for percentile calculation (bounded)
-    _recent_observations: dict[tuple, list[float]] = field(default_factory=dict)
+    _recent_observations: dict[tuple[str, ...], list[float]] = field(default_factory=dict)
     _max_observations: int = 10000  # Limit stored observations per label set
     # SECURITY FIX: Limit label cardinality to prevent memory exhaustion
     _max_cardinality: int = 1000
     _cardinality_warned: bool = field(default=False, repr=False)
 
-    def observe(self, value: float, **labels) -> None:
+    def observe(self, value: float, **labels: str) -> None:
         """Observe a value with bounded memory and cardinality protection."""
         key = self._label_key(labels)
 
@@ -186,12 +189,12 @@ class Histogram:
         if len(obs) > self._max_observations:
             obs.pop(0)  # Remove oldest
 
-    def _label_key(self, labels: dict) -> tuple:
+    def _label_key(self, labels: dict[str, str]) -> tuple[str, ...]:
         return tuple(labels.get(l, "") for l in self.labels)
 
-    def collect(self) -> list[dict]:
+    def collect(self) -> list[dict[str, Any]]:
         """Collect histogram metrics using pre-computed statistics."""
-        results = []
+        results: list[dict[str, Any]] = []
         for key, stats in self._stats.items():
             labels = dict(zip(self.labels, key, strict=False))
 
@@ -215,14 +218,14 @@ class Summary:
     labels: list[str] = field(default_factory=list)
     quantiles: list[float] = field(default_factory=lambda: [0.5, 0.9, 0.99])
     # FIX: Bounded storage to prevent unbounded memory growth
-    _observations: dict[tuple, list[float]] = field(default_factory=dict)
-    _stats: dict[tuple, dict] = field(default_factory=dict)
+    _observations: dict[tuple[str, ...], list[float]] = field(default_factory=dict)
+    _stats: dict[tuple[str, ...], dict[str, Any]] = field(default_factory=dict)
     _max_observations: int = 10000  # Limit for quantile calculation
     # SECURITY FIX: Limit label cardinality to prevent memory exhaustion
     _max_cardinality: int = 1000
     _cardinality_warned: bool = field(default=False, repr=False)
 
-    def observe(self, value: float, **labels) -> None:
+    def observe(self, value: float, **labels: str) -> None:
         """Observe a value with bounded memory and cardinality protection."""
         key = self._label_key(labels)
 
@@ -250,11 +253,11 @@ class Summary:
         if len(obs) > self._max_observations:
             obs.pop(0)  # Remove oldest
 
-    def _label_key(self, labels: dict) -> tuple:
+    def _label_key(self, labels: dict[str, str]) -> tuple[str, ...]:
         return tuple(labels.get(l, "") for l in self.labels)
 
-    def collect(self) -> list[dict]:
-        results = []
+    def collect(self) -> list[dict[str, Any]]:
+        results: list[dict[str, Any]] = []
         for key, observations in self._observations.items():
             labels = dict(zip(self.labels, key, strict=False))
             sorted_obs = sorted(observations)
@@ -323,7 +326,7 @@ class MetricsRegistry:
                 description=description,
                 labels=labels or [],
             )
-        return self._metrics[full_name]
+        return cast(Counter, self._metrics[full_name])
 
     def gauge(
         self,
@@ -339,7 +342,7 @@ class MetricsRegistry:
                 description=description,
                 labels=labels or [],
             )
-        return self._metrics[full_name]
+        return cast(Gauge, self._metrics[full_name])
 
     def histogram(
         self,
@@ -357,7 +360,7 @@ class MetricsRegistry:
                 labels=labels or [],
                 buckets=buckets or [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0],
             )
-        return self._metrics[full_name]
+        return cast(Histogram, self._metrics[full_name])
 
     def summary(
         self,
@@ -375,9 +378,9 @@ class MetricsRegistry:
                 labels=labels or [],
                 quantiles=quantiles or [0.5, 0.9, 0.99],
             )
-        return self._metrics[full_name]
+        return cast(Summary, self._metrics[full_name])
 
-    def collect_all(self) -> list[dict]:
+    def collect_all(self) -> list[dict[str, Any]]:
         """Collect all metrics."""
         results = []
         for metric in self._metrics.values():
@@ -439,7 +442,7 @@ class MetricsRegistry:
 
         return "\n".join(lines)
 
-    def _format_labels(self, labels: dict) -> str:
+    def _format_labels(self, labels: dict[str, Any]) -> str:
         """Format labels for Prometheus output."""
         if not labels:
             return ""
@@ -605,11 +608,11 @@ canary_traffic_percent = metrics.gauge(
 # Decorators and Context Managers
 # =============================================================================
 
-def track_time(histogram: Histogram, **labels):
+def track_time(histogram: Histogram, **labels: str) -> Callable[[F], F]:
     """Decorator to track function execution time."""
-    def decorator(func: Callable):
+    def decorator(func: F) -> F:
         @wraps(func)
-        async def async_wrapper(*args, **kwargs):
+        async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
             start = time.time()
             try:
                 return await func(*args, **kwargs)
@@ -617,7 +620,7 @@ def track_time(histogram: Histogram, **labels):
                 histogram.observe(time.time() - start, **labels)
 
         @wraps(func)
-        def sync_wrapper(*args, **kwargs):
+        def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
             start = time.time()
             try:
                 return func(*args, **kwargs)
@@ -625,32 +628,33 @@ def track_time(histogram: Histogram, **labels):
                 histogram.observe(time.time() - start, **labels)
 
         if asyncio.iscoroutinefunction(func):
-            return async_wrapper
-        return sync_wrapper
+            return cast(F, async_wrapper)
+        return cast(F, sync_wrapper)
     return decorator
 
 
 @asynccontextmanager
-async def track_in_progress(gauge: Gauge, **labels):
+async def track_in_progress(gauge: Gauge, **labels: str) -> AsyncIterator[None]:
     """Context manager to track in-progress operations."""
-    gauge.inc(**labels)
+    gauge.inc(1.0, **labels)
     try:
         yield
     finally:
-        gauge.dec(**labels)
+        gauge.dec(1.0, **labels)
 
 
 # =============================================================================
 # FastAPI Integration
 # =============================================================================
 
-def add_metrics_middleware(app):
+def add_metrics_middleware(app: Any) -> None:
     """Add metrics middleware to FastAPI app."""
     from fastapi import Request
     from starlette.middleware.base import BaseHTTPMiddleware
+    from starlette.responses import Response as StarletteResponse
 
     class MetricsMiddleware(BaseHTTPMiddleware):
-        async def dispatch(self, request: Request, call_next):
+        async def dispatch(self, request: Request, call_next: Callable[..., Any]) -> StarletteResponse:
             method = request.method
             path = request.url.path
 
@@ -670,7 +674,7 @@ def add_metrics_middleware(app):
                     endpoint=path,
                 )
 
-                return response
+                return response  # type: ignore[no-any-return]
             except Exception:
                 http_requests_total.inc(method=method, endpoint=path, status="500")
                 raise
@@ -680,12 +684,12 @@ def add_metrics_middleware(app):
     app.add_middleware(MetricsMiddleware)
 
 
-def create_metrics_endpoint(app):
+def create_metrics_endpoint(app: Any) -> None:
     """Create /metrics endpoint for Prometheus scraping."""
     from fastapi import Response
 
-    @app.get("/metrics", include_in_schema=False)
-    async def prometheus_metrics():
+    @app.get("/metrics", include_in_schema=False)  # type: ignore[untyped-decorator]
+    async def prometheus_metrics() -> Response:
         return Response(
             content=metrics.to_prometheus_format(),
             media_type="text/plain; version=0.0.4; charset=utf-8",

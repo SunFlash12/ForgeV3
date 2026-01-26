@@ -14,6 +14,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import structlog
 
@@ -113,7 +114,7 @@ class PrimeKGImportService:
 
     def __init__(
         self,
-        neo4j_client,
+        neo4j_client: Any,
         batch_size: int = 1000,
         edge_batch_size: int = 5000,
         max_retries: int = 3,
@@ -313,11 +314,15 @@ class PrimeKGImportService:
             self._notify_progress(progress)
 
         progress.completed_at = datetime.now(UTC)
+        if progress.started_at is not None:
+            duration = (progress.completed_at - progress.started_at).total_seconds()
+        else:
+            duration = 0.0
         logger.info(
             "primekg_nodes_imported",
             imported=progress.imported_records,
             failed=progress.failed_records,
-            duration_seconds=(progress.completed_at - progress.started_at).total_seconds()
+            duration_seconds=duration
         )
 
         return progress
@@ -421,7 +426,7 @@ class PrimeKGImportService:
 
         return False
 
-    async def _add_specialized_labels(self, nodes: list[dict]) -> None:
+    async def _add_specialized_labels(self, nodes: list[dict[str, Any]]) -> None:
         """Add specialized labels based on node type."""
         label_queries = {
             "disease": "MATCH (n:PrimeKGNode) WHERE n.node_index IN $indices SET n:PrimeKGDisease",
@@ -717,12 +722,13 @@ class PrimeKGImportService:
         except Exception as e:
             logger.warning("primekg_progress_save_error", error=str(e))
 
-    def _load_progress(self) -> dict | None:
+    def _load_progress(self) -> dict[str, Any] | None:
         """Load saved progress for resume."""
         try:
             if self.progress_file.exists():
                 with open(self.progress_file) as f:
-                    return json.load(f)
+                    result: dict[str, Any] = json.load(f)
+                    return result
         except Exception as e:
             logger.warning("primekg_progress_load_error", error=str(e))
         return None

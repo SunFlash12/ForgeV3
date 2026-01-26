@@ -70,7 +70,7 @@ class EmbeddingConfig:
             f"batch_size={self.batch_size})"
         )
 
-    def to_safe_dict(self) -> dict:
+    def to_safe_dict(self) -> dict[str, Any]:
         """Return config dict with sensitive values redacted."""
         return {
             "provider": self.provider.value if hasattr(self.provider, 'value') else str(self.provider),
@@ -194,7 +194,7 @@ class OpenAIEmbeddingProvider(EmbeddingProviderBase):
 
         # For text-embedding-3-* models, dimensions can be specified
         if self._model.startswith("text-embedding-3"):
-            payload["dimensions"] = self._dimensions
+            payload["dimensions"] = self._dimensions  # type: ignore[assignment]
 
         # SECURITY FIX (Audit 3): Reuse HTTP client
         client = self._get_client()
@@ -237,12 +237,12 @@ class SentenceTransformersProvider(EmbeddingProviderBase):
     - all-MiniLM-L12-v2 (384 dims, balanced)
     """
 
-    def __init__(self, model: str = "all-MiniLM-L6-v2"):
+    def __init__(self, model: str = "all-MiniLM-L6-v2") -> None:
         self._model_name = model
-        self._model = None
-        self._dimensions = None
+        self._model: Any = None
+        self._dimensions: int | None = None
 
-    def _load_model(self):
+    def _load_model(self) -> None:
         """Lazy load the model."""
         if self._model is None:
             try:
@@ -250,7 +250,7 @@ class SentenceTransformersProvider(EmbeddingProviderBase):
                 self._model = SentenceTransformer(self._model_name)
                 # Get dimensions from a test embedding
                 test = self._model.encode(["test"])
-                self._dimensions = len(test[0])
+                self._dimensions = int(len(test[0]))
             except ImportError:
                 raise ImportError(
                     "sentence-transformers not installed. "
@@ -273,9 +273,10 @@ class SentenceTransformersProvider(EmbeddingProviderBase):
         # Run in thread pool to not block async loop
         # SECURITY FIX (Audit 4): Use get_running_loop() instead of deprecated get_event_loop()
         loop = asyncio.get_running_loop()
+        model = self._model
         embeddings = await loop.run_in_executor(
             None,
-            lambda: self._model.encode(texts, normalize_embeddings=True)
+            lambda: model.encode(texts, normalize_embeddings=True)
         )
 
         results = []
@@ -699,14 +700,14 @@ def cosine_similarity(a: list[float], b: list[float]) -> float:
     if len(a) != len(b):
         raise ValueError("Vectors must have same dimensions")
 
-    dot_product = sum(x * y for x, y in zip(a, b, strict=False))
-    magnitude_a = sum(x ** 2 for x in a) ** 0.5
-    magnitude_b = sum(x ** 2 for x in b) ** 0.5
+    dot_product: float = sum(x * y for x, y in zip(a, b, strict=False))
+    magnitude_a: float = sum(x ** 2 for x in a) ** 0.5
+    magnitude_b: float = sum(x ** 2 for x in b) ** 0.5
 
     if magnitude_a == 0 or magnitude_b == 0:
         return 0.0
 
-    return dot_product / (magnitude_a * magnitude_b)
+    return float(dot_product / (magnitude_a * magnitude_b))
 
 
 def euclidean_distance(a: list[float], b: list[float]) -> float:
@@ -714,7 +715,8 @@ def euclidean_distance(a: list[float], b: list[float]) -> float:
     if len(a) != len(b):
         raise ValueError("Vectors must have same dimensions")
 
-    return sum((x - y) ** 2 for x, y in zip(a, b, strict=False)) ** 0.5
+    result: float = sum((x - y) ** 2 for x, y in zip(a, b, strict=False)) ** 0.5
+    return float(result)
 
 
 __all__ = [

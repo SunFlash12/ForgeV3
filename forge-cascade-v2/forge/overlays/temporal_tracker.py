@@ -23,14 +23,16 @@ from ..models.base import TrustLevel
 from ..models.events import Event, EventType
 from ..models.overlay import Capability
 from ..models.temporal import (
+    ChangeType,
     SnapshotType,
     TrustSnapshotCompressor,
+    TrustSnapshotCreate,
     VersioningPolicy,
 )
 from ..repositories.temporal_repository import TemporalRepository
 from .base import BaseOverlay, OverlayContext, OverlayError, OverlayResult
 
-logger = structlog.get_logger()
+logger: structlog.stdlib.BoundLogger = structlog.get_logger()
 
 
 class TemporalError(OverlayError):
@@ -108,7 +110,7 @@ class TemporalTrackerOverlay(BaseOverlay):
         self,
         temporal_repository: TemporalRepository | None = None,
         config: TemporalConfig | None = None
-    ):
+    ) -> None:
         """
         Initialize the temporal tracker.
 
@@ -121,8 +123,7 @@ class TemporalTrackerOverlay(BaseOverlay):
         self._temporal_repository = temporal_repository
         self._config = config or TemporalConfig()
         self._versioning_policy = VersioningPolicy(
-            snapshot_every_n=self._config.snapshot_every_n_changes,
-            always_snapshot_trusted=self._config.always_snapshot_trusted
+            snapshot_every_n_changes=self._config.snapshot_every_n_changes,
         )
         self._trust_compressor = TrustSnapshotCompressor()
 
@@ -133,7 +134,7 @@ class TemporalTrackerOverlay(BaseOverlay):
         self._last_graph_snapshot: datetime | None = None
 
         # Statistics
-        self._stats = {
+        self._stats: dict[str, int] = {
             "versions_created": 0,
             "trust_snapshots_created": 0,
             "graph_snapshots_created": 0,
@@ -143,6 +144,12 @@ class TemporalTrackerOverlay(BaseOverlay):
         }
 
         self._logger = logger.bind(overlay=self.NAME)
+
+    def _require_repository(self) -> TemporalRepository:
+        """Return the temporal repository or raise if not configured."""
+        if self._temporal_repository is None:
+            raise TemporalError("Temporal repository not configured")
+        return self._temporal_repository
 
     def set_repository(self, repository: TemporalRepository) -> None:
         """Set the temporal repository (for dependency injection)."""
@@ -169,24 +176,24 @@ class TemporalTrackerOverlay(BaseOverlay):
         Handles:
         - CAPSULE_CREATED: Create initial version
         - CAPSULE_UPDATED: Create new version with diff/snapshot
-        - TRUST_ADJUSTED: Record trust snapshot
+        - TRUST_UPDATED: Record trust snapshot
         - SYSTEM_EVENT: May trigger graph snapshot
         """
-        if not self._temporal_repository:
+        if self._temporal_repository is None:
             return OverlayResult.fail("Temporal repository not configured")
 
-        data = input_data or {}
+        data: dict[str, Any] = input_data or {}
         if event:
             data.update(event.payload or {})
-            data["event_type"] = event.event_type
+            data["event_type"] = event.type
 
         try:
-            result_data = {}
-            events_to_emit = []
+            result_data: dict[str, Any] = {}
+            events_to_emit: list[dict[str, Any]] = []
 
             # Route based on event type
             if event:
-                if event.event_type == EventType.CAPSULE_CREATED:
+                if event.type == EventType.CAPSULE_CREATED:
                     result_data = await self._handle_capsule_created(data, context)
                     events_to_emit.append(
                         self.create_event_emission(
@@ -194,7 +201,7 @@ class TemporalTrackerOverlay(BaseOverlay):
                             {"type": "version_created", "capsule_id": data.get("capsule_id")}
                         )
                     )
-                elif event.event_type == EventType.CAPSULE_UPDATED:
+                elif event.type == EventType.CAPSULE_UPDATED:
                     result_data = await self._handle_capsule_updated(data, context)
                     events_to_emit.append(
                         self.create_event_emission(
@@ -202,9 +209,9 @@ class TemporalTrackerOverlay(BaseOverlay):
                             {"type": "version_created", "capsule_id": data.get("capsule_id")}
                         )
                     )
-                elif event.event_type == EventType.TRUST_UPDATED:
+                elif event.type == EventType.TRUST_UPDATED:
                     result_data = await self._handle_trust_adjusted(data, context)
-                elif event.event_type == EventType.SYSTEM_EVENT:
+                elif event.type == EventType.SYSTEM_EVENT:
                     result_data = await self._handle_system_event(data, context)
             else:
                 # Direct invocation - determine operation
@@ -243,30 +250,32 @@ class TemporalTrackerOverlay(BaseOverlay):
             self._logger.error(
                 "temporal_tracking_error",
                 error=str(e),
-                event_type=event.event_type.value if event else "direct"
+                event_type=event.type.value if event else "direct"
             )
             return OverlayResult.fail(f"Temporal tracking error: {str(e)}")
 
     async def _handle_capsule_created(
         self,
-        data: dict,
+        data: dict[str, Any],
         context: OverlayContext
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Handle new capsule creation - create initial version."""
+        repo = self._require_repository()
+
         capsule_id = data.get("capsule_id")
         if not capsule_id:
             return {"error": "Missing capsule_id"}
 
-        content = data.get("content", "")
-        trust_level = data.get("trust_level", TrustLevel.STANDARD.value)
+        content: str = data.get("content", "")
+        trust_level: int = data.get("trust_level", TrustLevel.STANDARD.value)
 
         # Create initial version (always full snapshot)
-        version = await self._temporal_repository.create_version(
+        version = await repo.create_version(
             capsule_id=capsule_id,
             content=content,
-            change_type="create",
-            created_by=context.user_id,
-            snapshot_type=SnapshotType.FULL,
+            change_type=ChangeType.CREATE,
+            created_by=context.user_id or "system",
+            trust_level=trust_level,
             metadata={
                 "trust_level": trust_level,
                 "initial": True
@@ -278,7 +287,7 @@ class TemporalTrackerOverlay(BaseOverlay):
         self._stats["full_snapshots"] += 1
 
         return {
-            "version_id": version.version_id,
+            "version_id": version.id,
             "capsule_id": capsule_id,
             "version_number": version.version_number,
             "snapshot_type": version.snapshot_type.value,
@@ -287,38 +296,36 @@ class TemporalTrackerOverlay(BaseOverlay):
 
     async def _handle_capsule_updated(
         self,
-        data: dict,
+        data: dict[str, Any],
         context: OverlayContext
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Handle capsule update - create new version."""
+        repo = self._require_repository()
+
         capsule_id = data.get("capsule_id")
         if not capsule_id:
             return {"error": "Missing capsule_id"}
 
-        content = data.get("content", "")
-        old_content = data.get("old_content", "")
-        trust_level = data.get("trust_level", TrustLevel.STANDARD.value)
+        content: str = data.get("content", "")
+        trust_level: int = data.get("trust_level", TrustLevel.STANDARD.value)
 
         # Increment version count
         count = self._version_counts.get(capsule_id, 0) + 1
         self._version_counts[capsule_id] = count
 
-        # Determine snapshot type
-        is_trusted = trust_level >= TrustLevel.TRUSTED.value
-        snapshot_type = self._versioning_policy.get_snapshot_type(
-            change_number=count,
-            is_trusted=is_trusted,
-            is_major=data.get("is_major", False)
-        )
+        # Determine if this is a major change (fork or merge)
+        is_major: bool = data.get("is_major", False)
+        change_type = ChangeType.UPDATE
+        if is_major:
+            change_type = ChangeType.FORK
 
-        # Create version
-        version = await self._temporal_repository.create_version(
+        # Create version - the repository decides snapshot type via policy
+        version = await repo.create_version(
             capsule_id=capsule_id,
             content=content,
-            change_type="update",
-            created_by=context.user_id,
-            snapshot_type=snapshot_type,
-            previous_content=old_content if snapshot_type == SnapshotType.DIFF else None,
+            change_type=change_type,
+            created_by=context.user_id or "system",
+            trust_level=trust_level,
             metadata={
                 "trust_level": trust_level,
                 "change_number": count
@@ -326,13 +333,13 @@ class TemporalTrackerOverlay(BaseOverlay):
         )
 
         self._stats["versions_created"] += 1
-        if snapshot_type == SnapshotType.FULL:
+        if version.snapshot_type == SnapshotType.FULL:
             self._stats["full_snapshots"] += 1
         else:
             self._stats["diffs_computed"] += 1
 
         return {
-            "version_id": version.version_id,
+            "version_id": version.id,
             "capsule_id": capsule_id,
             "version_number": version.version_number,
             "snapshot_type": version.snapshot_type.value,
@@ -342,54 +349,51 @@ class TemporalTrackerOverlay(BaseOverlay):
 
     async def _handle_trust_adjusted(
         self,
-        data: dict,
+        data: dict[str, Any],
         context: OverlayContext
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Handle trust adjustment - create trust snapshot."""
-        entity_id = data.get("entity_id") or data.get("user_id") or data.get("capsule_id")
-        entity_type = data.get("entity_type", "User")
-        new_trust = data.get("new_trust") or data.get("trust_value")
-        old_trust = data.get("old_trust")
-        reason = data.get("reason")
+        repo = self._require_repository()
+
+        entity_id: str | None = (
+            data.get("entity_id") or data.get("user_id") or data.get("capsule_id")
+        )
+        entity_type: str = data.get("entity_type", "User")
+        new_trust: int | None = data.get("new_trust") or data.get("trust_value")
+        reason: str | None = data.get("reason")
 
         if not entity_id or new_trust is None:
             return {"error": "Missing entity_id or new_trust"}
 
-        # Determine if this is an essential change
-        change_type = self._trust_compressor.classify_change(
-            reason=reason,
-            trust_delta=abs(new_trust - (old_trust or new_trust)),
-            context=data
-        )
-
-        # Create snapshot (compressed if derived)
-        snapshot = await self._temporal_repository.create_trust_snapshot(
+        # Create snapshot via TrustSnapshotCreate
+        snapshot_create = TrustSnapshotCreate(
             entity_id=entity_id,
             entity_type=entity_type,
             trust_value=new_trust,
             reason=reason,
             adjusted_by=context.user_id,
-            change_type=change_type,
-            compress=self._config.compress_derived_snapshots
+            source_event_id=data.get("source_event_id"),
         )
+
+        snapshot = await repo.create_trust_snapshot(data=snapshot_create)
 
         self._stats["trust_snapshots_created"] += 1
 
         return {
-            "snapshot_id": snapshot.snapshot_id,
+            "snapshot_id": snapshot.id,
             "entity_id": entity_id,
             "trust_value": new_trust,
-            "change_type": change_type.value,
-            "timestamp": snapshot.timestamp.isoformat()
+            "change_type": snapshot.change_type.value,
+            "timestamp": snapshot.created_at.isoformat()
         }
 
     async def _handle_system_event(
         self,
-        data: dict,
+        data: dict[str, Any],
         context: OverlayContext
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Handle system events that might trigger graph snapshots."""
-        event_subtype = data.get("type", data.get("subtype"))
+        event_subtype: str | None = data.get("type", data.get("subtype"))
 
         if event_subtype == "graph_snapshot_requested":
             return await self._create_graph_snapshot(data, context)
@@ -398,79 +402,85 @@ class TemporalTrackerOverlay(BaseOverlay):
 
     async def _get_version_history(
         self,
-        data: dict,
+        data: dict[str, Any],
         context: OverlayContext
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Get version history for a capsule."""
+        repo = self._require_repository()
+
         capsule_id = data.get("capsule_id")
         if not capsule_id:
             return {"error": "Missing capsule_id"}
 
-        limit = data.get("limit", 50)
-        versions = await self._temporal_repository.get_version_history(
+        limit: int = data.get("limit", 50)
+        history = await repo.get_version_history(
             capsule_id=capsule_id,
             limit=limit
         )
 
         return {
             "capsule_id": capsule_id,
-            "version_count": len(versions),
+            "version_count": len(history.versions),
             "versions": [
                 {
-                    "version_id": v.version_id,
+                    "version_id": v.id,
                     "version_number": v.version_number,
                     "snapshot_type": v.snapshot_type.value,
-                    "change_type": v.change_type,
+                    "change_type": v.change_type.value,
                     "created_by": v.created_by,
                     "created_at": v.created_at.isoformat()
                 }
-                for v in versions
+                for v in history.versions
             ]
         }
 
     async def _get_specific_version(
         self,
-        data: dict,
+        data: dict[str, Any],
         context: OverlayContext
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Get a specific version with full content."""
+        repo = self._require_repository()
+
         version_id = data.get("version_id")
         if not version_id:
             return {"error": "Missing version_id"}
 
-        version = await self._temporal_repository.get_version(version_id)
+        version = await repo._get_version_by_id(version_id)
         if not version:
             return {"error": "Version not found", "version_id": version_id}
 
         # Reconstruct content if needed
-        content = await self._temporal_repository.reconstruct_content(version)
+        content = await repo._reconstruct_content(version)
 
         return {
-            "version_id": version.version_id,
+            "version_id": version.id,
             "capsule_id": version.capsule_id,
             "version_number": version.version_number,
             "content": content,
             "snapshot_type": version.snapshot_type.value,
-            "change_type": version.change_type,
+            "change_type": version.change_type.value,
             "created_by": version.created_by,
             "created_at": version.created_at.isoformat(),
-            "metadata": version.metadata
+            "metadata": version.metadata_at_version
         }
 
     async def _get_capsule_at_time(
         self,
-        data: dict,
+        data: dict[str, Any],
         context: OverlayContext
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Get capsule state at a specific point in time."""
+        repo = self._require_repository()
+
         capsule_id = data.get("capsule_id")
-        timestamp_str = data.get("timestamp")
+        timestamp_str: str | None = data.get("timestamp")
 
         if not capsule_id or not timestamp_str:
             return {"error": "Missing capsule_id or timestamp"}
 
         timestamp = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
-        version = await self._temporal_repository.get_capsule_at_time(
+        version = await repo.get_capsule_at_time(
             capsule_id=capsule_id,
             timestamp=timestamp
         )
@@ -482,13 +492,13 @@ class TemporalTrackerOverlay(BaseOverlay):
                 "found": False
             }
 
-        content = await self._temporal_repository.reconstruct_content(version)
+        content = await repo._reconstruct_content(version)
 
         return {
             "capsule_id": capsule_id,
             "timestamp": timestamp.isoformat(),
             "found": True,
-            "version_id": version.version_id,
+            "version_id": version.id,
             "version_number": version.version_number,
             "content": content,
             "created_at": version.created_at.isoformat()
@@ -496,14 +506,16 @@ class TemporalTrackerOverlay(BaseOverlay):
 
     async def _get_trust_timeline(
         self,
-        data: dict,
+        data: dict[str, Any],
         context: OverlayContext
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Get trust evolution timeline for an entity."""
+        repo = self._require_repository()
+
         entity_id = data.get("entity_id")
-        entity_type = data.get("entity_type", "User")
-        start_str = data.get("start")
-        end_str = data.get("end")
+        entity_type: str = data.get("entity_type", "User")
+        start_str: str | None = data.get("start")
+        end_str: str | None = data.get("end")
 
         if not entity_id:
             return {"error": "Missing entity_id"}
@@ -511,12 +523,14 @@ class TemporalTrackerOverlay(BaseOverlay):
         start = datetime.fromisoformat(start_str) if start_str else datetime.now(UTC) - timedelta(days=30)
         end = datetime.fromisoformat(end_str) if end_str else datetime.now(UTC)
 
-        snapshots = await self._temporal_repository.get_trust_timeline(
+        timeline = await repo.get_trust_timeline(
             entity_id=entity_id,
             entity_type=entity_type,
             start=start,
             end=end
         )
+
+        snapshots = timeline.snapshots
 
         return {
             "entity_id": entity_id,
@@ -527,7 +541,7 @@ class TemporalTrackerOverlay(BaseOverlay):
             "timeline": [
                 {
                     "trust_value": s.trust_value,
-                    "timestamp": s.timestamp.isoformat(),
+                    "timestamp": s.created_at.isoformat(),
                     "change_type": s.change_type.value,
                     "reason": s.reason
                 }
@@ -540,58 +554,67 @@ class TemporalTrackerOverlay(BaseOverlay):
 
     async def _diff_versions(
         self,
-        data: dict,
+        data: dict[str, Any],
         context: OverlayContext
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Compute diff between two versions."""
+        repo = self._require_repository()
+
         version_a = data.get("version_a")
         version_b = data.get("version_b")
 
         if not version_a or not version_b:
             return {"error": "Missing version_a or version_b"}
 
-        diff = await self._temporal_repository.diff_versions(version_a, version_b)
+        comparison = await repo.diff_versions(version_a, version_b)
 
         return {
             "version_a": version_a,
             "version_b": version_b,
-            "diff": diff
+            "diff": comparison.diff.model_dump()
         }
 
     async def _create_graph_snapshot(
         self,
-        data: dict,
+        data: dict[str, Any],
         context: OverlayContext
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Create a graph snapshot."""
-        snapshot = await self._temporal_repository.create_graph_snapshot()
+        repo = self._require_repository()
+
+        metrics: dict[str, Any] = data.get("metrics", {})
+        snapshot = await repo.create_graph_snapshot(metrics=metrics)
         self._last_graph_snapshot = datetime.now(UTC)
         self._stats["graph_snapshots_created"] += 1
 
         return {
-            "snapshot_id": snapshot.snapshot_id,
+            "snapshot_id": snapshot.id,
             "created_at": snapshot.created_at.isoformat(),
-            "metrics": snapshot.metrics
+            "metrics": {
+                "total_nodes": snapshot.total_nodes,
+                "total_edges": snapshot.total_edges,
+            }
         }
 
     async def _compact_versions(
         self,
-        data: dict,
+        data: dict[str, Any],
         context: OverlayContext
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Compact old versions to save storage."""
-        capsule_id = data.get("capsule_id")
-        older_than_days = data.get("older_than_days", self._config.compact_after_days)
-        keep_min = data.get("keep_min", self._config.keep_min_versions)
+        repo = self._require_repository()
+
+        capsule_id: str | None = data.get("capsule_id")
 
         if capsule_id:
-            result = await self._temporal_repository.compact_versions(
+            compacted = await repo.compact_old_versions(
                 capsule_id=capsule_id,
-                older_than=datetime.now(UTC) - timedelta(days=older_than_days),
-                keep_min=keep_min
             )
             self._stats["compactions_performed"] += 1
-            return result
+            return {
+                "capsule_id": capsule_id,
+                "compacted_count": compacted,
+            }
         else:
             # System-wide compaction
             return {"error": "capsule_id required for compaction"}
@@ -601,18 +624,19 @@ class TemporalTrackerOverlay(BaseOverlay):
         if not self._config.enable_graph_snapshots:
             return
 
+        repo = self._require_repository()
         interval = timedelta(hours=self._config.graph_snapshot_interval_hours)
 
         if self._last_graph_snapshot is None:
             # Check if there's a recent one in the database
-            recent = await self._temporal_repository.get_latest_graph_snapshot()
+            recent = await repo.get_latest_graph_snapshot()
             if recent:
                 self._last_graph_snapshot = recent.created_at
 
         if self._last_graph_snapshot is None or datetime.now(UTC) - self._last_graph_snapshot > interval:
             await self._create_graph_snapshot({}, context)
 
-    def get_stats(self) -> dict:
+    def get_stats(self) -> dict[str, Any]:
         """Get temporal tracking statistics."""
         return {
             **self._stats,
@@ -624,7 +648,7 @@ class TemporalTrackerOverlay(BaseOverlay):
 # Convenience function
 def create_temporal_tracker_overlay(
     temporal_repository: TemporalRepository | None = None,
-    **kwargs
+    **kwargs: Any
 ) -> TemporalTrackerOverlay:
     """
     Create a temporal tracker overlay.

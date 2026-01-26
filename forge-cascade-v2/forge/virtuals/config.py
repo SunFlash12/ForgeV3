@@ -16,7 +16,7 @@ import os
 import warnings
 from enum import Enum
 
-from pydantic import Field, field_validator
+from pydantic import Field, ValidationInfo, field_validator
 from pydantic_settings import BaseSettings
 
 logger = logging.getLogger(__name__)
@@ -231,7 +231,7 @@ class VirtualsConfig(BaseSettings):
 
     @field_validator('operator_private_key', 'solana_private_key')
     @classmethod
-    def validate_private_key_security(cls, v: str | None, info) -> str | None:
+    def validate_private_key_security(cls, v: str | None, info: ValidationInfo) -> str | None:
         """
         Warn about insecure private key storage in production.
 

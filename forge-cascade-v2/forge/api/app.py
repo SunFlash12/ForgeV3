@@ -15,7 +15,17 @@ from __future__ import annotations
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
+
+if TYPE_CHECKING:
+    from sentry_sdk._types import Event as SentryEvent
+
+    from forge.immune.health_checker import OverlayManagerProtocol
+    from forge.overlays.base import BaseOverlay
+    from forge.services.diagnosis import SessionController
+    from forge.services.diagnosis.agents import DiagnosticCoordinator
+    from forge.services.query_cache import InMemoryQueryCache, QueryCache
+    from forge.services.scheduler import BackgroundScheduler
 
 import sentry_sdk
 import structlog
@@ -47,9 +57,17 @@ from forge.resilience.integration import (
 _settings = get_settings()
 
 
-def _sentry_before_send(event, hint):
+def _sentry_before_send(
+    event: "SentryEvent",
+    hint: dict[str, Any],
+) -> "SentryEvent | None":
     """Filter out health check endpoint errors from Sentry."""
-    url = event.get("request", {}).get("url", "")
+    request_data = event.get("request")
+    url = ""
+    if isinstance(request_data, dict):
+        url_value = request_data.get("url", "")
+        if isinstance(url_value, str):
+            url = url_value
     if "/health" in url or "/ready" in url:
         return None
     return event
@@ -103,7 +121,7 @@ class ForgeApp:
     Holds references to all core components for dependency injection.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.settings = get_settings()
 
         # Core components (initialized in lifespan)
@@ -113,10 +131,10 @@ class ForgeApp:
         self.pipeline: CascadePipeline | None = None
 
         # Immune system components
-        self.circuit_registry = None
-        self.health_checker = None
-        self.anomaly_system = None
-        self.canary_manager = None
+        self.circuit_registry: Any = None
+        self.health_checker: Any = None
+        self.anomaly_system: Any = None
+        self.canary_manager: Any = None
 
         # Resilience components
         self.resilience_initialized: bool = False
@@ -124,6 +142,14 @@ class ForgeApp:
         # State
         self.started_at: datetime | None = None
         self.is_ready: bool = False
+
+        # Diagnosis services
+        self.session_controller: SessionController | None = None
+        self.diagnostic_coordinator: DiagnosticCoordinator | None = None
+
+        # Query cache and scheduler
+        self.query_cache: QueryCache | InMemoryQueryCache | None = None
+        self.scheduler: BackgroundScheduler | None = None
 
     async def initialize(self) -> None:
         """Initialize all components."""
@@ -168,7 +194,7 @@ class ForgeApp:
         try:
             immune = create_immune_system(
                 db_client=self.db_client,
-                overlay_manager=self.overlay_manager,
+                overlay_manager=cast("OverlayManagerProtocol | None", self.overlay_manager),
                 event_system=self.event_system,
             )
             self.circuit_registry = immune["circuit_registry"]
@@ -348,9 +374,10 @@ class ForgeApp:
         )
 
         # Get PrimeKG overlay for disease/phenotype queries
-        primekg_overlay = None
+        primekg_overlay: BaseOverlay | None = None
         if self.overlay_manager:
-            primekg_overlay = self.overlay_manager.get_instance("primekg")
+            overlays = self.overlay_manager.get_by_name("primekg")
+            primekg_overlay = overlays[0] if overlays else None
 
         # Create session controller for autonomous diagnosis
         session_config = SessionConfig(
@@ -358,12 +385,13 @@ class ForgeApp:
             auto_advance=True,
             pause_for_questions=True,
         )
-        self.session_controller = create_session_controller(
+        session_controller = create_session_controller(
             config=session_config,
             primekg_overlay=primekg_overlay,
             neo4j_client=self.db_client,
         )
-        await self.session_controller.start()
+        await session_controller.start()
+        self.session_controller = session_controller
 
         # Create multi-agent diagnostic coordinator
         coordinator_config = CoordinatorConfig(
@@ -372,12 +400,13 @@ class ForgeApp:
             enable_differential_agent=True,
             parallel_analysis=True,
         )
-        self.diagnostic_coordinator = create_diagnostic_coordinator(
+        diagnostic_coordinator = create_diagnostic_coordinator(
             config=coordinator_config,
             primekg_overlay=primekg_overlay,
             neo4j_client=self.db_client,
         )
-        await self.diagnostic_coordinator.start()
+        await diagnostic_coordinator.start()
+        self.diagnostic_coordinator = diagnostic_coordinator
 
         # Wire up the API routes
         initialize_diagnosis_services(
@@ -444,7 +473,7 @@ class ForgeApp:
         # Shutdown Copilot agent
         try:
             from forge.api.routes.copilot import shutdown_agent
-            await shutdown_agent()
+            await shutdown_agent()  # type: ignore[no-untyped-call]
             logger.info("copilot_agent_shutdown")
         except Exception as e:
             logger.warning("copilot_shutdown_failed", error=str(e))
@@ -686,7 +715,7 @@ def create_app(
 
     # Exception handlers
     @app.exception_handler(StarletteHTTPException)
-    async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    async def http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
         return JSONResponse(
             status_code=exc.status_code,
             content={
@@ -697,7 +726,7 @@ def create_app(
         )
 
     @app.exception_handler(RequestValidationError)
-    async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
         # SECURITY FIX (Audit 2): Sanitize validation errors to not leak schema details
         # Only return field location and generic error type, not attempted values
         sanitized_errors = []
@@ -721,7 +750,7 @@ def create_app(
         )
 
     @app.exception_handler(ServiceUnavailable)
-    async def database_unavailable_handler(request: Request, exc: ServiceUnavailable):
+    async def database_unavailable_handler(request: Request, exc: ServiceUnavailable) -> JSONResponse:
         logger.error(
             "database_unavailable",
             path=str(request.url.path),
@@ -738,7 +767,7 @@ def create_app(
         )
 
     @app.exception_handler(SessionExpired)
-    async def database_session_expired_handler(request: Request, exc: SessionExpired):
+    async def database_session_expired_handler(request: Request, exc: SessionExpired) -> JSONResponse:
         logger.warning(
             "database_session_expired",
             path=str(request.url.path),
@@ -755,7 +784,7 @@ def create_app(
         )
 
     @app.exception_handler(TransientError)
-    async def database_transient_error_handler(request: Request, exc: TransientError):
+    async def database_transient_error_handler(request: Request, exc: TransientError) -> JSONResponse:
         logger.warning(
             "database_transient_error",
             path=str(request.url.path),
@@ -772,7 +801,7 @@ def create_app(
         )
 
     @app.exception_handler(Exception)
-    async def general_exception_handler(request: Request, exc: Exception):
+    async def general_exception_handler(request: Request, exc: Exception) -> JSONResponse:
         logger.exception(
             "unhandled_exception",
             path=str(request.url.path),
@@ -836,7 +865,7 @@ def create_app(
 
     # Root endpoint
     @app.get("/", include_in_schema=False)
-    async def root():
+    async def root() -> dict[str, Any]:
         return {
             "name": title,
             "version": version,
@@ -845,14 +874,14 @@ def create_app(
 
     # Health check (lightweight)
     @app.get("/health", include_in_schema=False)
-    async def health():
+    async def health() -> dict[str, str]:
         return {
             "status": "healthy" if forge_app.is_ready else "starting",
         }
 
     # Readiness check (full check)
     @app.get("/ready", include_in_schema=False)
-    async def ready():
+    async def ready() -> dict[str, str] | JSONResponse:
         if not forge_app.is_ready:
             return JSONResponse(
                 status_code=503,
@@ -862,26 +891,8 @@ def create_app(
 
     # Prometheus metrics endpoint
     # Returns metrics in Prometheus text format for scraping
-    metrics_response = create_metrics_endpoint(app)
-
-    @app.get("/metrics", include_in_schema=False)
-    async def metrics():
-        """
-        Prometheus metrics endpoint.
-
-        Returns all collected metrics in Prometheus text format.
-        Configure your prometheus.yml to scrape this endpoint:
-
-            scrape_configs:
-              - job_name: 'forge-cascade'
-                static_configs:
-                  - targets: ['localhost:8000']
-                metrics_path: '/metrics'
-        """
-        return Response(
-            content=metrics_response(),
-            media_type="text/plain; charset=utf-8",
-        )
+    # create_metrics_endpoint registers a /metrics route on the app directly
+    create_metrics_endpoint(app)
 
     logger.info(
         "fastapi_app_created",

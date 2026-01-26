@@ -26,7 +26,7 @@ logger = structlog.get_logger(__name__)
 router = APIRouter()
 
 
-def _handle_internal_error(e: Exception, context: str) -> HTTPException:
+def _handle_internal_error(e: Exception, context: str) -> HTTPException:  # noqa: ARG001
     """Log internal error and return sanitized HTTPException."""
     logger.error(
         "diagnosis_api_error",
@@ -137,10 +137,13 @@ import threading
 class _DiagnosisServices:
     """Thread-safe singleton for diagnosis services."""
 
-    _instance = None
-    _lock = threading.Lock()
+    _instance: "_DiagnosisServices | None" = None
+    _lock: threading.Lock = threading.Lock()
+    _session_controller: Any
+    _diagnostic_coordinator: Any
+    _initialized: bool
 
-    def __new__(cls):
+    def __new__(cls) -> "_DiagnosisServices":
         if cls._instance is None:
             with cls._lock:
                 if cls._instance is None:
@@ -150,7 +153,7 @@ class _DiagnosisServices:
                     cls._instance._initialized = False
         return cls._instance
 
-    def initialize(self, session_controller, diagnostic_coordinator):
+    def initialize(self, session_controller: Any, diagnostic_coordinator: Any) -> None:
         """Thread-safe initialization."""
         with self._lock:
             self._session_controller = session_controller
@@ -158,22 +161,22 @@ class _DiagnosisServices:
             self._initialized = True
 
     @property
-    def session_controller(self):
+    def session_controller(self) -> Any:
         return self._session_controller
 
     @property
-    def diagnostic_coordinator(self):
+    def diagnostic_coordinator(self) -> Any:
         return self._diagnostic_coordinator
 
     @property
-    def is_initialized(self):
+    def is_initialized(self) -> bool:
         return self._initialized
 
 
 _services = _DiagnosisServices()
 
 
-def get_session_controller():
+def get_session_controller() -> Any:
     """Get the session controller."""
     if not _services.is_initialized or _services.session_controller is None:
         raise HTTPException(
@@ -183,7 +186,7 @@ def get_session_controller():
     return _services.session_controller
 
 
-def get_diagnostic_coordinator():
+def get_diagnostic_coordinator() -> Any:
     """Get the diagnostic coordinator."""
     if not _services.is_initialized or _services.diagnostic_coordinator is None:
         raise HTTPException(
@@ -204,10 +207,10 @@ def get_diagnostic_coordinator():
     description="Create a new autonomous diagnosis session.",
 )
 async def create_session(
-    request: CreateSessionRequest,
-    user=Depends(get_current_active_user),
-    controller=Depends(get_session_controller),
-):
+    request: CreateSessionRequest,  # noqa: ARG001
+    user: Any = Depends(get_current_active_user),  # noqa: ARG001, B008
+    controller: Any = Depends(get_session_controller),  # noqa: B008
+) -> SessionResponse:
     """Create a new diagnosis session."""
     try:
         session = await controller.create_session(
@@ -239,13 +242,13 @@ async def create_session(
 async def start_diagnosis(
     session_id: str,
     request: StartDiagnosisRequest,
-    user=Depends(get_current_active_user),
-    controller=Depends(get_session_controller),
-):
+    user: Any = Depends(get_current_active_user),  # noqa: ARG001, B008
+    controller: Any = Depends(get_session_controller),  # noqa: B008
+) -> SessionResponse:
     """Start diagnosis with initial intake data."""
     try:
         # Convert and validate phenotype inputs
-        raw_phenotypes = []
+        raw_phenotypes: list[str | dict[str, Any]] = []
         for p in request.phenotypes:
             if isinstance(p, str):
                 raw_phenotypes.append(p)
@@ -313,9 +316,9 @@ async def start_diagnosis(
 )
 async def get_session(
     session_id: str,
-    user=Depends(get_current_active_user),
-    controller=Depends(get_session_controller),
-):
+    user: Any = Depends(get_current_active_user),  # noqa: ARG001, B008
+    controller: Any = Depends(get_session_controller),  # noqa: B008
+) -> SessionResponse:
     """Get session status."""
     session = controller.get_session(session_id)
     if not session:
@@ -343,9 +346,9 @@ async def get_session(
 async def answer_questions(
     session_id: str,
     request: AnswerQuestionRequest,
-    user=Depends(get_current_active_user),
-    controller=Depends(get_session_controller),
-):
+    user: Any = Depends(get_current_active_user),  # noqa: ARG001, B008
+    controller: Any = Depends(get_session_controller),  # noqa: B008
+) -> SessionResponse:
     """Answer follow-up questions."""
     try:
         session = await controller.answer_questions(
@@ -380,9 +383,9 @@ async def answer_questions(
 )
 async def skip_questions(
     session_id: str,
-    user=Depends(get_current_active_user),
-    controller=Depends(get_session_controller),
-):
+    user: Any = Depends(get_current_active_user),  # noqa: ARG001, B008
+    controller: Any = Depends(get_session_controller),  # noqa: B008
+) -> SessionResponse:
     """Skip questions and finalize."""
     try:
         session = await controller.skip_questions(session_id)
@@ -413,9 +416,9 @@ async def skip_questions(
 )
 async def pause_session(
     session_id: str,
-    user=Depends(get_current_active_user),
-    controller=Depends(get_session_controller),
-):
+    user: Any = Depends(get_current_active_user),  # noqa: ARG001, B008
+    controller: Any = Depends(get_session_controller),  # noqa: B008
+) -> SessionResponse:
     """Pause a running session."""
     try:
         session = await controller.pause_session(session_id)
@@ -442,9 +445,9 @@ async def pause_session(
 )
 async def resume_session(
     session_id: str,
-    user=Depends(get_current_active_user),
-    controller=Depends(get_session_controller),
-):
+    user: Any = Depends(get_current_active_user),  # noqa: ARG001, B008
+    controller: Any = Depends(get_session_controller),  # noqa: B008
+) -> SessionResponse:
     """Resume a paused session."""
     try:
         session = await controller.resume_session(session_id)
@@ -472,9 +475,9 @@ async def resume_session(
 )
 async def get_result(
     session_id: str,
-    user=Depends(get_current_active_user),
-    controller=Depends(get_session_controller),
-):
+    user: Any = Depends(get_current_active_user),  # noqa: ARG001, B008
+    controller: Any = Depends(get_session_controller),  # noqa: B008
+) -> DiagnosisResultResponse:
     """Get final diagnosis result."""
     try:
         result = await controller.get_result(session_id)
@@ -504,11 +507,13 @@ async def get_result(
 )
 async def stream_events(
     session_id: str,
-    user=Depends(get_current_active_user),
-    controller=Depends(get_session_controller),
-):
+    user: Any = Depends(get_current_active_user),  # noqa: ARG001, B008
+    controller: Any = Depends(get_session_controller),  # noqa: B008
+) -> StreamingResponse:
     """Stream session events via Server-Sent Events."""
-    async def event_generator():
+    from collections.abc import AsyncGenerator
+
+    async def event_generator() -> AsyncGenerator[str, None]:
         try:
             async for event in controller.stream_events(session_id):
                 yield f"data: {json.dumps(event.to_dict())}\n\n"
@@ -531,9 +536,9 @@ async def stream_events(
 )
 async def delete_session(
     session_id: str,
-    user=Depends(get_current_active_user),
-    controller=Depends(get_session_controller),
-):
+    user: Any = Depends(get_current_active_user),  # noqa: ARG001, B008
+    controller: Any = Depends(get_session_controller),  # noqa: B008
+) -> dict[str, str]:
     """Delete a diagnosis session."""
     deleted = await controller.delete_session(session_id)
     if not deleted:
@@ -552,13 +557,13 @@ async def delete_session(
 )
 async def multi_agent_diagnose(
     request: MultiAgentDiagnosisRequest,
-    user=Depends(get_current_active_user),
-    coordinator=Depends(get_diagnostic_coordinator),
-):
+    user: Any = Depends(get_current_active_user),  # noqa: ARG001, B008
+    coordinator: Any = Depends(get_diagnostic_coordinator),  # noqa: B008
+) -> Any:
     """Run multi-agent diagnosis."""
     try:
         # Convert and validate phenotype inputs
-        raw_phenotypes = []
+        raw_phenotypes: list[str | dict[str, Any]] = []
         for p in request.phenotypes:
             if isinstance(p, str):
                 raw_phenotypes.append(p)
@@ -568,7 +573,7 @@ async def multi_agent_diagnose(
         hpo_codes, text_descriptions = validate_phenotype_input(raw_phenotypes)
 
         # Build phenotypes list with validated codes and text
-        phenotypes = []
+        phenotypes: list[dict[str, Any]] = []
         for code in hpo_codes:
             phenotypes.append({"code": code, "value": code})
         for desc in text_descriptions:
@@ -579,11 +584,12 @@ async def multi_agent_diagnose(
             if not isinstance(p, str) and p.negated and p.code:
                 # Re-add negated phenotypes with validation
                 if p.code.upper().startswith("HP:") and len(p.code) == 10:
-                    phenotypes.append({
+                    negated_phenotype: dict[str, Any] = {
                         "code": p.code.upper(),
                         "value": p.value,
                         "negated": True,
-                    })
+                    }
+                    phenotypes.append(negated_phenotype)
 
         # Convert and validate genetic inputs
         raw_variants = [
@@ -596,7 +602,7 @@ async def multi_agent_diagnose(
         ]
         genetic_variants = validate_genetic_input(raw_variants)
 
-        patient_data = {
+        patient_data: dict[str, Any] = {
             "phenotypes": phenotypes,
             "genetic_variants": genetic_variants,
             "medical_history": [{"value": h} for h in request.medical_history],
@@ -605,11 +611,9 @@ async def multi_agent_diagnose(
         }
 
         if request.demographics:
-            patient_data.update({
-                "age": request.demographics.age,
-                "age_of_onset": request.demographics.age_of_onset,
-                "sex": request.demographics.sex,
-            })
+            patient_data["age"] = request.demographics.age
+            patient_data["age_of_onset"] = request.demographics.age_of_onset
+            patient_data["sex"] = request.demographics.sex
 
         result = await coordinator.diagnose(patient_data)
         return result
@@ -625,9 +629,9 @@ async def multi_agent_diagnose(
 )
 async def get_discriminating_phenotypes(
     session_id: str,
-    user=Depends(get_current_active_user),
-    coordinator=Depends(get_diagnostic_coordinator),
-):
+    user: Any = Depends(get_current_active_user),  # noqa: ARG001, B008
+    coordinator: Any = Depends(get_diagnostic_coordinator),  # noqa: B008
+) -> dict[str, Any]:
     """Get discriminating phenotype suggestions."""
     try:
         suggestions = await coordinator.suggest_discriminating_phenotypes(session_id)
@@ -644,7 +648,7 @@ async def get_discriminating_phenotypes(
     "/health",
     summary="Health check",
 )
-async def health_check():
+async def health_check() -> dict[str, str | bool]:
     """Check diagnosis service health."""
     return {
         "status": "healthy",
@@ -660,8 +664,8 @@ async def health_check():
 # =============================================================================
 
 def initialize_diagnosis_services(
-    session_controller,
-    diagnostic_coordinator,
-):
+    session_controller: Any,
+    diagnostic_coordinator: Any,
+) -> None:
     """Initialize diagnosis services (called from app.py). Thread-safe."""
     _services.initialize(session_controller, diagnostic_coordinator)

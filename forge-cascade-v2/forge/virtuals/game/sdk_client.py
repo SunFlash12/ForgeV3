@@ -17,9 +17,9 @@ governance advisors.
 
 import asyncio
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Coroutine
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, Union
 
 import httpx
 
@@ -75,9 +75,12 @@ class FunctionDefinition:
         name: str,
         description: str,
         arguments: list[dict[str, Any]],
-        executable: Callable[..., tuple[str, Any, dict]],
+        executable: Union[
+            Callable[..., tuple[str, Any, dict[str, Any]]],
+            Callable[..., Coroutine[Any, Any, tuple[str, Any, dict[str, Any]]]],
+        ],
         returns_description: str = "",
-    ):
+    ) -> None:
         """
         Initialize a function definition.
 
@@ -95,7 +98,7 @@ class FunctionDefinition:
         self.executable = executable
         self.returns_description = returns_description
 
-    def to_game_format(self) -> dict:
+    def to_game_format(self) -> dict[str, Any]:
         """Convert to GAME SDK function format."""
         return {
             "fn_name": self.name,
@@ -110,7 +113,7 @@ class FunctionDefinition:
             ],
         }
 
-    async def execute(self, **kwargs) -> tuple[str, Any, dict]:
+    async def execute(self, **kwargs: Any) -> tuple[str, Any, dict[str, Any]]:
         """
         Execute the function with given arguments.
 
@@ -121,9 +124,11 @@ class FunctionDefinition:
             - state_update: Dict of state changes to apply
         """
         if asyncio.iscoroutinefunction(self.executable):
-            return await self.executable(**kwargs)
+            result: tuple[str, Any, dict[str, Any]] = await self.executable(**kwargs)
+            return result
         else:
-            return self.executable(**kwargs)
+            sync_result: tuple[str, Any, dict[str, Any]] = self.executable(**kwargs)  # type: ignore[assignment]
+            return sync_result
 
 
 class GAMEWorker:
@@ -147,7 +152,7 @@ class GAMEWorker:
         worker_id: str,
         description: str,
         functions: list[FunctionDefinition],
-        get_state_fn: Callable | None = None,
+        get_state_fn: Callable[..., dict[str, Any]] | None = None,
     ):
         """
         Initialize a GAME worker.
@@ -166,16 +171,16 @@ class GAMEWorker:
         self._get_state_fn = get_state_fn or self._default_get_state
         self._state: dict[str, Any] = {}
 
-    def _default_get_state(self, function_result: Any, current_state: dict) -> dict:
+    def _default_get_state(self, function_result: Any, current_state: dict[str, Any]) -> dict[str, Any]:
         """Default state function returns current state unchanged."""
         return current_state
 
-    def get_state(self, function_result: Any = None) -> dict:
+    def get_state(self, function_result: Any = None) -> dict[str, Any]:
         """Get the current worker state, optionally updating based on function result."""
         self._state = self._get_state_fn(function_result, self._state)
         return self._state
 
-    def to_game_format(self) -> dict:
+    def to_game_format(self) -> dict[str, Any]:
         """Convert to GAME SDK worker configuration format."""
         return {
             "id": self.worker_id,
@@ -183,7 +188,7 @@ class GAMEWorker:
             "action_space": [f.to_game_format() for f in self.functions.values()],
         }
 
-    async def execute_function(self, function_name: str, **kwargs) -> tuple[str, Any, dict]:
+    async def execute_function(self, function_name: str, **kwargs: Any) -> tuple[str, Any, dict[str, Any]]:
         """Execute a function on this worker."""
         if function_name not in self.functions:
             raise GAMEClientError(f"Function {function_name} not found on worker {self.worker_id}")
@@ -299,8 +304,8 @@ class GAMESDKClient:
         self,
         method: str,
         endpoint: str,
-        **kwargs
-    ) -> dict:
+        **kwargs: Any,
+    ) -> dict[str, Any]:
         """
         Make an authenticated request to the GAME API.
 
@@ -322,6 +327,9 @@ class GAMESDKClient:
         headers = kwargs.pop("headers", {})
         headers.update(self._get_auth_headers())
 
+        if self._http_client is None:
+            raise GAMEClientError("HTTP client not initialized. Call initialize() first.")
+
         try:
             response = await self._http_client.request(
                 method,
@@ -338,7 +346,8 @@ class GAMESDKClient:
                 self._rate_limit_reset = datetime.fromtimestamp(reset_timestamp)
 
             response.raise_for_status()
-            return response.json()
+            data: dict[str, Any] = response.json()
+            return data
 
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 429:
@@ -465,7 +474,10 @@ class GAMESDKClient:
         )
 
         # Return updated agent
-        return await self.get_agent(agent_id)
+        agent = await self.get_agent(agent_id)
+        if agent is None:
+            raise AgentNotFoundError(f"Agent {agent_id} not found after update")
+        return agent
 
     async def delete_agent(self, agent_id: str) -> bool:
         """
@@ -522,7 +534,8 @@ class GAMESDKClient:
             json=request_data,
         )
 
-        return response.get("data", {})
+        result: dict[str, Any] = response.get("data", {})
+        return result
 
     async def run_agent_loop(
         self,
@@ -530,8 +543,8 @@ class GAMESDKClient:
         workers: dict[str, GAMEWorker],
         context: str | None = None,
         max_iterations: int = 10,
-        stop_condition: Callable[[dict], bool] | None = None,
-    ) -> list[dict]:
+        stop_condition: Callable[[dict[str, Any]], bool] | None = None,
+    ) -> list[dict[str, Any]]:
         """
         Run the agent's autonomous decision loop.
 
@@ -558,7 +571,7 @@ class GAMESDKClient:
         if not agent.game_agent_id:
             raise GAMEClientError("Agent not registered with GAME framework")
 
-        results = []
+        results: list[dict[str, Any]] = []
 
         for iteration in range(max_iterations):
             # Gather state from all workers
@@ -585,23 +598,27 @@ class GAMESDKClient:
                 break
 
             # Execute the action
-            worker_id = action.get("worker_id")
-            function_name = action.get("function_name")
-            arguments = action.get("arguments", {})
+            target_worker_id: str | None = action.get("worker_id")
+            function_name: str | None = action.get("function_name")
+            arguments: dict[str, Any] = action.get("arguments", {})
 
-            if worker_id not in workers:
-                logger.error(f"Unknown worker: {worker_id}")
+            if target_worker_id is None or target_worker_id not in workers:
+                logger.error(f"Unknown worker: {target_worker_id}")
+                continue
+
+            if function_name is None:
+                logger.error("No function_name in action")
                 continue
 
             try:
-                status, result, state_update = await workers[worker_id].execute_function(
+                status, result, state_update = await workers[target_worker_id].execute_function(
                     function_name,
                     **arguments
                 )
 
                 action_result = {
                     "iteration": iteration,
-                    "worker_id": worker_id,
+                    "worker_id": target_worker_id,
                     "function_name": function_name,
                     "arguments": arguments,
                     "status": status,
@@ -624,7 +641,7 @@ class GAMESDKClient:
                 logger.error(f"Action execution failed: {e}")
                 results.append({
                     "iteration": iteration,
-                    "worker_id": worker_id,
+                    "worker_id": target_worker_id,
                     "function_name": function_name,
                     "status": "FAILED",
                     "error": str(e),
@@ -663,7 +680,7 @@ class GAMESDKClient:
         }
 
         if ttl_days:
-            memory_data["ttlDays"] = ttl_days
+            memory_data["ttlDays"] = ttl_days  # type: ignore[assignment]
 
         response = await self._make_request(
             "POST",
@@ -671,7 +688,8 @@ class GAMESDKClient:
             json=memory_data,
         )
 
-        return response.get("data", {}).get("memoryId", "")
+        memory_id: str = response.get("data", {}).get("memoryId", "")
+        return memory_id
 
     async def retrieve_memories(
         self,
@@ -679,7 +697,7 @@ class GAMESDKClient:
         query: str,
         memory_type: str | None = None,
         limit: int = 10,
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """
         Retrieve relevant memories for an agent.
 
@@ -694,7 +712,7 @@ class GAMESDKClient:
         Returns:
             List of memory objects with content and metadata
         """
-        params = {
+        params: dict[str, Any] = {
             "agentId": agent_id,
             "query": query,
             "limit": limit,
@@ -709,7 +727,8 @@ class GAMESDKClient:
             params=params,
         )
 
-        return response.get("data", {}).get("memories", [])
+        memories: list[dict[str, Any]] = response.get("data", {}).get("memories", [])
+        return memories
 
 
 # Global client instance

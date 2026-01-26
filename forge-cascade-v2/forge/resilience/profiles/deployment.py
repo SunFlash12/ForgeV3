@@ -203,7 +203,7 @@ class DeploymentProfileManager:
     - Profile migration
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._profiles: dict[DeploymentProfile, DeploymentProfileSpec] = {
             DeploymentProfile.LITE: LITE_PROFILE,
             DeploymentProfile.STANDARD: STANDARD_PROFILE,
@@ -385,7 +385,7 @@ class DeploymentProfileManager:
             if '.' in key:
                 # Nested key like "cache.enabled"
                 parts = key.split('.')
-                obj = config
+                obj: Any = config
                 for part in parts[:-1]:
                     obj = getattr(obj, part, None)
                     if obj is None:

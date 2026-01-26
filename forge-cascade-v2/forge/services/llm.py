@@ -344,12 +344,14 @@ class OllamaProvider(LLMProviderBase):
         }
 
         if max_tokens:
-            payload["options"] = payload.get("options", {})
-            payload["options"]["num_predict"] = max_tokens
+            options: dict[str, Any] = payload.get("options", {})  # type: ignore[assignment]
+            options["num_predict"] = max_tokens
+            payload["options"] = options
 
         if temperature is not None:
-            payload["options"] = payload.get("options", {})
-            payload["options"]["temperature"] = temperature
+            options_temp: dict[str, Any] = payload.get("options", {})  # type: ignore[assignment]
+            options_temp["temperature"] = temperature
+            payload["options"] = options_temp
 
         # SECURITY FIX (Audit 3): Reuse HTTP client
         client = self._get_client()
@@ -378,7 +380,7 @@ class MockLLMProvider(LLMProviderBase):
     NOT RECOMMENDED FOR PRODUCTION USE.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         logger.warning(
             "mock_llm_provider_initialized",
             warning="Using mock LLM. AI features will not work properly.",
@@ -645,7 +647,7 @@ Be balanced and thorough. Acknowledge uncertainty where it exists."""
                 lines = content.split("\n")
                 content = "\n".join(lines[1:-1])
 
-            result = json.loads(content)
+            result: dict[str, Any] = json.loads(content)
             result["model"] = response.model
             result["tokens_used"] = response.tokens_used
 
@@ -748,12 +750,12 @@ Respond with a JSON object:
         response = await self.complete(messages, temperature=0.2)
 
         try:
-            content = response.content.strip()
-            if content.startswith("```"):
-                lines = content.split("\n")
-                content = "\n".join(lines[1:-1])
+            content_str = response.content.strip()
+            if content_str.startswith("```"):
+                lines = content_str.split("\n")
+                content_str = "\n".join(lines[1:-1])
 
-            result = json.loads(content)
+            result: dict[str, Any] = json.loads(content_str)
             result["model"] = response.model
             result["reviewed_at"] = datetime.now(UTC).isoformat()
 
@@ -835,12 +837,12 @@ Respond with a JSON object:
         response = await self.complete(messages, temperature=0.4)
 
         try:
-            content = response.content.strip()
-            if content.startswith("```"):
-                lines = content.split("\n")
-                content = "\n".join(lines[1:-1])
+            content_str = response.content.strip()
+            if content_str.startswith("```"):
+                lines = content_str.split("\n")
+                content_str = "\n".join(lines[1:-1])
 
-            result = json.loads(content)
+            result: dict[str, Any] = json.loads(content_str)
             return result
 
         except json.JSONDecodeError:

@@ -11,6 +11,7 @@ Chain: Solana
 
 from datetime import UTC, datetime
 from enum import Enum
+from typing import Any
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
@@ -114,7 +115,7 @@ class TipLeaderboard(BaseModel):
     """Leaderboard of top tipped targets."""
     target_type: TipTargetType
     period: str = Field(description="all_time, monthly, weekly")
-    entries: list[dict] = Field(
+    entries: list[dict[str, Any]] = Field(
         default_factory=list,
         description="List of {target_id, total_frowg, tip_count}"
     )

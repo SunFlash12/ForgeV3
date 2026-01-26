@@ -148,10 +148,9 @@ class BridgeService:
     """
 
     # Bridge contract address (same on Base and Ethereum)
-    BRIDGE_CONTRACT = ContractAddresses.BASE_MAINNET.get(
+    BRIDGE_CONTRACT: str = ContractAddresses.BASE_MAINNET.get(
         "bridge",
-        "0x3154Cf16ccdb4C6d922629664174b904d80F2C35"
-    )
+    ) or "0x3154Cf16ccdb4C6d922629664174b904d80F2C35"
 
     # Minimum and maximum bridge amounts
     MIN_BRIDGE_AMOUNT = Decimal("1.0")
@@ -172,6 +171,12 @@ class BridgeService:
         self._pending_bridges: dict[str, BridgeRequest] = {}
         self._config = get_virtuals_config()
 
+    def _get_chain_manager(self) -> ChainManager:
+        """Get the chain manager, raising if not initialized."""
+        if self._chain_manager is None:
+            raise BridgeError("Bridge service not initialized. Call initialize() first.")
+        return self._chain_manager
+
     async def initialize(self) -> None:
         """Initialize the bridge service and chain connections."""
         if self._initialized:
@@ -179,12 +184,13 @@ class BridgeService:
 
         if self._chain_manager is None:
             self._chain_manager = ChainManager()
+            await self._chain_manager.initialize()
 
-        # Initialize supported chains
+        # Log supported chains
         for chain in [ChainNetwork.BASE, ChainNetwork.ETHEREUM, ChainNetwork.SOLANA]:
             if self._config.is_chain_enabled(chain):
                 try:
-                    await self._chain_manager.initialize_chain(chain)
+                    self._get_chain_manager().get_client(chain)
                     logger.info(f"Bridge service: {chain.value} initialized")
                 except Exception as e:
                     logger.warning(f"Bridge service: Failed to init {chain.value}: {e}")
@@ -299,12 +305,17 @@ class BridgeService:
         source_chain, dest_chain = self._get_chain_from_route(route)
 
         # Get VIRTUAL token address on source chain
+        token_address_opt: str | None
         if source_chain == ChainNetwork.BASE:
-            token_address = ContractAddresses.BASE_MAINNET["virtual_token"]
+            token_address_opt = ContractAddresses.BASE_MAINNET["virtual_token"]
         elif source_chain == ChainNetwork.ETHEREUM:
-            token_address = ContractAddresses.ETHEREUM_MAINNET["virtual_token"]
+            token_address_opt = ContractAddresses.ETHEREUM_MAINNET["virtual_token"]
         else:
-            token_address = ContractAddresses.SOLANA_MAINNET["virtual_token"]
+            token_address_opt = ContractAddresses.SOLANA_MAINNET["virtual_token"]
+
+        if token_address_opt is None:
+            raise ValueError(f"VIRTUAL token address not configured for chain {source_chain}")
+        token_address: str = token_address_opt
 
         # Estimate fee
         fee_estimate = await self.estimate_bridge_fee(route, amount)
@@ -358,7 +369,7 @@ class BridgeService:
         dest_chain: ChainNetwork,
     ) -> TransactionRecord:
         """Initiate bridge from EVM chain (Base or Ethereum)."""
-        client = self._chain_manager.get_client(source_chain)
+        client = self._get_chain_manager().get_client(source_chain)
 
         # First approve bridge contract to spend tokens
         await client.approve_tokens(
@@ -373,7 +384,7 @@ class BridgeService:
         # Convert recipient address to bytes32 format
         if dest_chain == ChainNetwork.SOLANA:
             # Solana addresses need base58 -> bytes32 conversion
-            import base58
+            import base58  # type: ignore[import-not-found]
             recipient_bytes = base58.b58decode(request.recipient_address)
             recipient_bytes32 = recipient_bytes.rjust(32, b'\x00')
         else:
@@ -406,7 +417,7 @@ class BridgeService:
         dest_chain: ChainNetwork,
     ) -> TransactionRecord:
         """Initiate bridge from Solana."""
-        client = self._chain_manager.get_client(ChainNetwork.SOLANA)
+        client = self._get_chain_manager().get_client(ChainNetwork.SOLANA)
 
         # Solana bridge uses different instruction format
         # This is a simplified implementation - real Wormhole integration
@@ -489,7 +500,7 @@ class BridgeService:
 
         try:
             # Get destination chain client (for full Wormhole implementation)
-            _dest_client = self._chain_manager.get_client(request.destination_chain)
+            _dest_client = self._get_chain_manager().get_client(request.destination_chain)
 
             if request.destination_chain in [ChainNetwork.BASE, ChainNetwork.ETHEREUM]:
                 # Complete on EVM chain

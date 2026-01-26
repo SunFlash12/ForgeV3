@@ -20,13 +20,18 @@ import threading
 import time
 import uuid
 from collections import defaultdict
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
+from types import ModuleType
+from typing import TYPE_CHECKING, Any
 
 import structlog
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-from starlette.responses import JSONResponse, Response
+from starlette.responses import JSONResponse, Response, StreamingResponse
+
+if TYPE_CHECKING:
+    from starlette.datastructures import QueryParams
 
 logger = structlog.get_logger(__name__)
 
@@ -38,7 +43,7 @@ SENSITIVE_PARAM_KEYS = frozenset({
 })
 
 
-def sanitize_query_params(query_params) -> str | None:
+def sanitize_query_params(query_params: QueryParams | None) -> str | None:
     """
     Sanitize query parameters for safe logging.
 
@@ -47,7 +52,7 @@ def sanitize_query_params(query_params) -> str | None:
     if not query_params:
         return None
 
-    sanitized = {}
+    sanitized: dict[str, str] = {}
     for key, value in query_params.items():
         key_lower = key.lower()
         # Check if key contains any sensitive keyword
@@ -65,6 +70,7 @@ def sanitize_query_params(query_params) -> str | None:
 
 
 # Optional Redis import
+redis: ModuleType | None
 try:
     import redis.asyncio as redis
     REDIS_AVAILABLE = True
@@ -86,9 +92,11 @@ class CorrelationIdMiddleware(BaseHTTPMiddleware):
 
     HEADER_NAME = "X-Correlation-ID"
 
-    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
         # Get or generate correlation ID
-        correlation_id = request.headers.get(self.HEADER_NAME)
+        correlation_id: str | None = request.headers.get(self.HEADER_NAME)
         if not correlation_id:
             correlation_id = str(uuid.uuid4())
 
@@ -99,7 +107,7 @@ class CorrelationIdMiddleware(BaseHTTPMiddleware):
         structlog.contextvars.bind_contextvars(correlation_id=correlation_id)
 
         # Process request
-        response = await call_next(request)
+        response: Response = await call_next(request)
 
         # Add to response headers
         response.headers[self.HEADER_NAME] = correlation_id
@@ -123,17 +131,20 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
     # Paths to skip logging (health checks, etc.)
     SKIP_PATHS = {"/health", "/ready", "/favicon.ico"}
 
-    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
         # Skip certain paths
         if request.url.path in self.SKIP_PATHS:
-            return await call_next(request)
+            response: Response = await call_next(request)
+            return response
 
         # Record start time
         start_time = time.perf_counter()
 
         # Get client info
         client_ip = self._get_client_ip(request)
-        correlation_id = getattr(request.state, 'correlation_id', 'unknown')
+        correlation_id: str = getattr(request.state, 'correlation_id', 'unknown')
 
         # Log request with sanitized query params
         logger.info(
@@ -225,10 +236,13 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
         "/api/v1/auth/refresh",
     }
 
-    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
         # Skip public paths
         if request.url.path in self.PUBLIC_PATHS:
-            return await call_next(request)
+            response: Response = await call_next(request)
+            return response
 
         # Extract token from header
         auth_header = request.headers.get("Authorization")
@@ -246,7 +260,7 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
                 payload = verify_token(token, settings.jwt_secret_key)
 
                 # Check if token is blacklisted (revoked) - async for Redis support
-                jti = payload.jti if hasattr(payload, 'jti') else None
+                jti: str | None = payload.jti if hasattr(payload, 'jti') else None
                 if await TokenBlacklist.is_blacklisted_async(jti):
                     logger.warning(
                         "blacklisted_token_used",
@@ -268,7 +282,8 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
                     error=str(e)[:100],  # Truncate to avoid log bloat
                 )
 
-        return await call_next(request)
+        response = await call_next(request)
+        return response
 
     def _get_client_ip(self, request: Request) -> str:
         """Extract client IP, handling proxies."""
@@ -310,7 +325,7 @@ class SessionBindingMiddleware(BaseHTTPMiddleware):
         "/api/v1/auth/refresh",
     }
 
-    def __init__(self, app, session_service=None):
+    def __init__(self, app: Any, session_service: Any = None) -> None:
         """
         Initialize SessionBindingMiddleware.
 
@@ -321,29 +336,35 @@ class SessionBindingMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self._session_service = session_service
 
-    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
         # Skip public/auth paths
         if request.url.path in self.SKIP_PATHS:
-            return await call_next(request)
+            response: Response = await call_next(request)
+            return response
 
         # Skip if no token payload (unauthenticated request)
-        token_payload = getattr(request.state, 'token_payload', None)
+        token_payload: Any = getattr(request.state, 'token_payload', None)
         if not token_payload:
-            return await call_next(request)
+            response = await call_next(request)
+            return response
 
         # Get session service from request app state if not set
-        session_service = self._session_service
+        session_service: Any = self._session_service
         if not session_service:
             session_service = getattr(request.app.state, 'session_service', None)
 
         # Skip if session service not available
         if not session_service:
-            return await call_next(request)
+            response = await call_next(request)
+            return response
 
         # Get token JTI
-        jti = getattr(token_payload, 'jti', None)
+        jti: str | None = getattr(token_payload, 'jti', None)
         if not jti:
-            return await call_next(request)
+            response = await call_next(request)
+            return response
 
         # Get client info
         ip_address = self._get_client_ip(request)
@@ -384,7 +405,8 @@ class SessionBindingMiddleware(BaseHTTPMiddleware):
                 path=request.url.path,
             )
 
-        return await call_next(request)
+        response = await call_next(request)
+        return response
 
     def _get_client_ip(self, request: Request) -> str:
         """Extract client IP, handling proxies."""
@@ -439,7 +461,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     def __init__(
         self,
-        app,
+        app: Any,
         requests_per_minute: int = 120,
         requests_per_hour: int = 3000,
         burst_allowance: int = 30,
@@ -449,7 +471,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         llm_requests_per_minute: int = 10,
         llm_requests_per_hour: int = 100,
         redis_url: str | None = None,
-    ):
+    ) -> None:
         super().__init__(app)
         self.requests_per_minute = requests_per_minute
         self.requests_per_hour = requests_per_hour
@@ -461,7 +483,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self.llm_requests_per_hour = llm_requests_per_hour
 
         # Redis client for distributed rate limiting
-        self._redis: redis.Redis | None = None
+        self._redis: Any = None
         self._redis_url = redis_url
         self._use_redis = False
 
@@ -471,7 +493,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self._last_bucket_cleanup = time.time()
 
         # Initialize Redis if available
-        if redis_url and REDIS_AVAILABLE:
+        if redis_url and REDIS_AVAILABLE and redis is not None:
             try:
                 self._redis = redis.from_url(redis_url, decode_responses=True)
                 self._use_redis = True
@@ -479,10 +501,13 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             except Exception as e:
                 logger.warning("rate_limit_redis_failed", error=str(e))
 
-    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
         # Skip exempt paths
         if request.url.path in self.EXEMPT_PATHS:
-            return await call_next(request)
+            response: Response = await call_next(request)
+            return response
 
         # Get rate limit key (IP or user ID)
         key = self._get_rate_limit_key(request)
@@ -557,20 +582,24 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             minute_key = f"ratelimit:{key}:minute:{int(now // 60)}"
             hour_key = f"ratelimit:{key}:hour:{int(now // 3600)}"
 
-            pipe = self._redis.pipeline()
+            # Null check for Redis client before using pipeline
+            if self._redis is None:
+                return self._check_memory_rate_limit(key, minute_limit, hour_limit, burst)
+
+            pipe: Any = self._redis.pipeline()
             pipe.incr(minute_key)
             pipe.expire(minute_key, 120)  # 2 min TTL
             pipe.incr(hour_key)
             pipe.expire(hour_key, 7200)  # 2 hour TTL
-            results = await pipe.execute()
+            results: list[Any] = await pipe.execute()
 
             # SECURITY FIX: Validate pipeline results before indexing
             if not results or len(results) < 4:
                 logger.warning("redis_pipeline_incomplete", results_count=len(results) if results else 0)
                 return self._check_memory_rate_limit(key, minute_limit, hour_limit, burst)
 
-            minute_count = results[0]
-            hour_count = results[2]
+            minute_count: int = results[0]
+            hour_count: int = results[2]
 
             if minute_count > minute_limit + burst:
                 # Ensure retry_after is always a positive integer (min 1 second)
@@ -703,12 +732,14 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     API_VERSION = "2.0.0"
     API_MIN_SUPPORTED_VERSION = "2.0.0"
 
-    def __init__(self, app, enable_hsts: bool = False):
+    def __init__(self, app: Any, enable_hsts: bool = False) -> None:
         super().__init__(app)
         self.enable_hsts = enable_hsts
 
-    async def dispatch(self, request: Request, call_next: Callable) -> Response:
-        response = await call_next(request)
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        response: Response = await call_next(request)
 
         # Security headers
         response.headers["X-Content-Type-Options"] = "nosniff"
@@ -782,32 +813,39 @@ class CSRFProtectionMiddleware(BaseHTTPMiddleware):
         "/redoc",
     ]
 
-    def __init__(self, app, enabled: bool = True):
+    def __init__(self, app: Any, enabled: bool = True) -> None:
         super().__init__(app)
         self.enabled = enabled
 
-    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
         if not self.enabled:
-            return await call_next(request)
+            response: Response = await call_next(request)
+            return response
 
         # Only check protected methods
         if request.method not in self.PROTECTED_METHODS:
-            return await call_next(request)
+            response = await call_next(request)
+            return response
 
         # Check exempt paths
         path = request.url.path
         if path in self.EXEMPT_PATHS:
-            return await call_next(request)
+            response = await call_next(request)
+            return response
 
         for prefix in self.EXEMPT_PREFIXES:
             if path.startswith(prefix):
-                return await call_next(request)
+                response = await call_next(request)
+                return response
 
         # If using Authorization header (API clients), skip CSRF check
         # API clients use tokens, not cookies, so CSRF doesn't apply
         auth_header = request.headers.get("Authorization")
         if auth_header and auth_header.startswith("Bearer "):
-            return await call_next(request)
+            response = await call_next(request)
+            return response
 
         # For cookie-based auth, validate CSRF token
         csrf_cookie = request.cookies.get("csrf_token")
@@ -816,7 +854,8 @@ class CSRFProtectionMiddleware(BaseHTTPMiddleware):
         # If no cookie auth is being used, skip CSRF check
         access_token_cookie = request.cookies.get("access_token")
         if not access_token_cookie:
-            return await call_next(request)
+            response = await call_next(request)
+            return response
 
         # Cookie auth is being used - require valid CSRF token
         # SECURITY FIX (Audit 4 - M): Add code field for robust frontend detection
@@ -838,7 +877,8 @@ class CSRFProtectionMiddleware(BaseHTTPMiddleware):
                 content={"error": "CSRF token invalid", "code": "CSRF_INVALID"},
             )
 
-        return await call_next(request)
+        response = await call_next(request)
+        return response
 
 
 class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
@@ -846,7 +886,7 @@ class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
     Limit request body size to prevent DoS attacks.
     """
 
-    def __init__(self, app, max_content_length: int = 10 * 1024 * 1024):
+    def __init__(self, app: Any, max_content_length: int = 10 * 1024 * 1024) -> None:
         """
         Args:
             max_content_length: Maximum request body size in bytes (default 10MB)
@@ -854,7 +894,9 @@ class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self.max_content_length = max_content_length
 
-    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
         # Check Content-Length header
         content_length = request.headers.get("Content-Length")
         if content_length:
@@ -870,7 +912,8 @@ class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
             except ValueError:
                 pass  # Invalid Content-Length header
 
-        return await call_next(request)
+        response: Response = await call_next(request)
+        return response
 
 
 class APILimitsMiddleware(BaseHTTPMiddleware):
@@ -885,11 +928,11 @@ class APILimitsMiddleware(BaseHTTPMiddleware):
 
     def __init__(
         self,
-        app,
+        app: Any,
         max_json_depth: int = 20,
         max_query_params: int = 50,
         max_array_length: int = 1000,
-    ):
+    ) -> None:
         """
         Args:
             max_json_depth: Maximum nesting depth for JSON bodies (default 20)
@@ -901,7 +944,7 @@ class APILimitsMiddleware(BaseHTTPMiddleware):
         self.max_query_params = max_query_params
         self.max_array_length = max_array_length
 
-    def _check_json_depth(self, obj, current_depth: int = 0) -> tuple[bool, str]:
+    def _check_json_depth(self, obj: Any, current_depth: int = 0) -> tuple[bool, str]:
         """
         Recursively check JSON depth and array lengths.
 
@@ -926,7 +969,9 @@ class APILimitsMiddleware(BaseHTTPMiddleware):
 
         return True, ""
 
-    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
         # Check query parameter count
         query_params = request.query_params
         if len(query_params) > self.max_query_params:
@@ -973,7 +1018,8 @@ class APILimitsMiddleware(BaseHTTPMiddleware):
             except Exception:
                 pass  # Don't block on body read errors
 
-        return await call_next(request)
+        response: Response = await call_next(request)
+        return response
 
 
 @dataclass
@@ -981,7 +1027,7 @@ class IdempotencyEntry:
     """Cached response for idempotency."""
     status_code: int
     body: bytes
-    headers: dict
+    headers: dict[str, str]
     created_at: float
 
 
@@ -1003,22 +1049,26 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
     # SECURITY FIX (Audit 6): Limit response body size to prevent memory exhaustion
     MAX_RESPONSE_SIZE = 1024 * 1024  # 1MB max response size for caching
 
-    def __init__(self, app, ttl_seconds: int = 86400):  # 24 hour default
+    def __init__(self, app: Any, ttl_seconds: int = 86400) -> None:  # 24 hour default
         super().__init__(app)
         self.ttl_seconds = ttl_seconds
         self._cache: dict[str, IdempotencyEntry] = {}
         self._lock = threading.Lock()
         self._last_cleanup = time.time()
 
-    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
         # Only handle idempotent methods
         if request.method not in self.IDEMPOTENT_METHODS:
-            return await call_next(request)
+            response: Response = await call_next(request)
+            return response
 
         # Check for idempotency key
         idempotency_key = request.headers.get("X-Idempotency-Key")
         if not idempotency_key:
-            return await call_next(request)
+            response = await call_next(request)
+            return response
 
         # Validate key format - must be alphanumeric/dashes, 8-64 chars
         if len(idempotency_key) < 8:
@@ -1039,7 +1089,7 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
             )
 
         # Build cache key including user if authenticated
-        user_id = getattr(request.state, 'user_id', 'anonymous')
+        user_id: str = getattr(request.state, 'user_id', None) or 'anonymous'
         cache_key = f"{user_id}:{request.url.path}:{idempotency_key}"
 
         # Check cache
@@ -1063,10 +1113,17 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
 
         # Cache successful responses (2xx, 4xx client errors)
         if 200 <= response.status_code < 500:
-            # Read response body
+            # Read response body - body_iterator is available on StreamingResponse
             body = b""
-            async for chunk in response.body_iterator:
-                body += chunk
+            if hasattr(response, 'body_iterator'):
+                streaming_response: StreamingResponse = response  # type: ignore[assignment]
+                async for chunk in streaming_response.body_iterator:
+                    if isinstance(chunk, bytes):
+                        body += chunk
+                    elif isinstance(chunk, str):
+                        body += chunk.encode()
+                    elif isinstance(chunk, memoryview):
+                        body += bytes(chunk)
 
             # SECURITY FIX (Audit 6): Only cache responses under size limit
             if len(body) <= self.MAX_RESPONSE_SIZE:
@@ -1083,10 +1140,11 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
                         for key in oldest_keys:
                             del self._cache[key]
 
+                    headers_dict: dict[str, str] = dict(response.headers)
                     self._cache[cache_key] = IdempotencyEntry(
                         status_code=response.status_code,
                         body=body,
-                        headers=dict(response.headers),
+                        headers=headers_dict,
                         created_at=time.time(),
                     )
 
@@ -1122,11 +1180,13 @@ class CompressionMiddleware(BaseHTTPMiddleware):
     This is a placeholder showing where compression would go.
     """
 
-    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
         # Check if client accepts gzip
         request.headers.get("Accept-Encoding", "")
 
-        response = await call_next(request)
+        response: Response = await call_next(request)
 
         # In production, actual compression would happen here
         # For now, just pass through
@@ -1151,15 +1211,17 @@ class RequestTimeoutMiddleware(BaseHTTPMiddleware):
 
     def __init__(
         self,
-        app,
+        app: Any,
         default_timeout: float = 30.0,  # 30 seconds default
         extended_timeout: float = 120.0,  # 2 minutes for long operations
-    ):
+    ) -> None:
         super().__init__(app)
         self.default_timeout = default_timeout
         self.extended_timeout = extended_timeout
 
-    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
         # Determine timeout for this request
         timeout = self.default_timeout
         for path in self.EXTENDED_TIMEOUT_PATHS:
@@ -1168,7 +1230,7 @@ class RequestTimeoutMiddleware(BaseHTTPMiddleware):
                 break
 
         try:
-            response = await asyncio.wait_for(
+            response: Response = await asyncio.wait_for(
                 call_next(request),
                 timeout=timeout,
             )
@@ -1198,6 +1260,7 @@ __all__ = [
     "SecurityHeadersMiddleware",
     "CSRFProtectionMiddleware",
     "RequestSizeLimitMiddleware",
+    "APILimitsMiddleware",
     "IdempotencyMiddleware",
     "CompressionMiddleware",
     "RequestTimeoutMiddleware",

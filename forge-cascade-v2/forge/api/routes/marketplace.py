@@ -19,7 +19,8 @@ from forge.models.marketplace import (
     ListingStatus,
     ListingVisibility,
 )
-from forge.services.marketplace import MarketplaceService, get_marketplace_service
+from forge.models.user import User
+from forge.services.marketplace import ListingUpdateFields, MarketplaceService, get_marketplace_service
 
 logger = logging.getLogger(__name__)
 
@@ -336,7 +337,7 @@ async def update_listing(
 ) -> ListingResponse:
     """Update a listing."""
     try:
-        updates = request.model_dump(exclude_none=True)
+        updates: ListingUpdateFields = request.model_dump(exclude_none=True)  # type: ignore[assignment]
         listing = await svc.update_listing(listing_id, user.id, updates)
     except ValueError as e:
         # SECURITY FIX (Audit 3): Sanitize error message
@@ -710,7 +711,7 @@ async def analyze_pricing(
         tier_reason=result.tier_reason,
         base_price=float(result.base_price),
         multipliers=result.multipliers,
-        adjustments=result.adjustments,
+        adjustments={k: float(v) for k, v in result.adjustments.items()},
         market_comparison=result.market_comparison if request.include_market_comparison else None,
         recommendations=result.recommendations if request.include_recommendations else [],
     )
@@ -720,7 +721,7 @@ async def analyze_pricing(
 async def get_lineage_distribution(
     capsule_id: str,
     sale_price: float = Query(..., gt=0, description="The sale price to calculate distribution from"),
-    user: ActiveUserDep = None,
+    user: User | None = None,
 ) -> LineageDistributionResponse:
     """
     Calculate how lineage revenue would be distributed for a sale.
@@ -788,7 +789,7 @@ async def get_pricing_tiers() -> dict[str, Any]:
     }
 
 
-def _get_tier_description(tier) -> str:
+def _get_tier_description(tier: Any) -> str:
     """Get description for pricing tier."""
     from forge.services.pricing_engine import PricingTier
 
@@ -886,7 +887,7 @@ async def submit_web3_purchase(
         total_virtual = sum(int(item.price_virtual) for item in request.items)
 
         # Record purchase in database
-        purchase = await svc.record_web3_purchase(
+        purchase = await svc.record_web3_purchase(  # type: ignore[attr-defined]
             user_id=user.id,
             wallet_address=request.wallet_address,
             transaction_hash=request.transaction_hash,
@@ -906,7 +907,7 @@ async def submit_web3_purchase(
 
     except ImportError:
         # Web3 service not available - return pending status
-        logger.warning("web3_service_not_available", tx=request.transaction_hash)
+        logger.warning("web3_service_not_available: tx=%s", request.transaction_hash)
 
         # Still record the purchase request for manual verification
         capsule_ids = [item.capsule_id for item in request.items]
@@ -922,7 +923,7 @@ async def submit_web3_purchase(
         )
 
     except Exception as e:
-        logger.error("web3_purchase_failed", error=str(e), tx=request.transaction_hash)
+        logger.error("web3_purchase_failed: error=%s, tx=%s", str(e), request.transaction_hash)
         raise HTTPException(
             status_code=400,
             detail="Failed to process purchase. Please contact support.",
@@ -957,7 +958,7 @@ async def get_transaction_status(
         )
 
         # Look up purchase record
-        purchase = await svc.get_purchase_by_transaction(transaction_hash)
+        purchase = await svc.get_purchase_by_transaction(transaction_hash)  # type: ignore[attr-defined]
 
         if purchase:
             return TransactionStatusResponse(
@@ -987,7 +988,7 @@ async def get_transaction_status(
         )
 
     except Exception as e:
-        logger.error("transaction_status_failed", error=str(e), tx=transaction_hash)
+        logger.error("transaction_status_failed: error=%s, tx=%s", str(e), transaction_hash)
         raise HTTPException(
             status_code=500,
             detail="Failed to check transaction status",
@@ -1027,14 +1028,14 @@ async def get_virtual_price() -> VirtualPriceResponse:
                     )
 
         # Fallback price if API fails
-        logger.warning("virtual_price_api_failed", fallback=0.10)
+        logger.warning("virtual_price_api_failed: fallback=%s", 0.10)
         return VirtualPriceResponse(
             price_usd=0.10,  # Fallback price
             updated_at=datetime.utcnow(),
         )
 
     except Exception as e:
-        logger.error("virtual_price_fetch_failed", error=str(e))
+        logger.error("virtual_price_fetch_failed: error=%s", str(e))
         return VirtualPriceResponse(
             price_usd=0.10,  # Fallback price
             updated_at=datetime.utcnow(),

@@ -7,12 +7,14 @@ Enables agent-to-agent commerce through the Virtuals Protocol.
 
 import logging
 from datetime import datetime
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from forge.api.dependencies import ActiveUserDep
 from forge.services.virtuals_integration import get_virtuals_service
+from forge.virtuals.models.acp import ACPJob
 
 logger = logging.getLogger(__name__)
 
@@ -35,8 +37,8 @@ class CreateOfferingRequest(BaseModel):
     unit_type: str | None = Field(default=None, description="Unit type for per-unit fees")
     max_execution_time_seconds: int = Field(default=300, ge=1, description="Max execution time")
     tags: list[str] = Field(default_factory=list, description="Tags for discovery")
-    input_schema: dict = Field(default_factory=dict, description="Expected input JSON schema")
-    output_schema: dict = Field(default_factory=dict, description="Output JSON schema")
+    input_schema: dict[str, Any] = Field(default_factory=dict, description="Expected input JSON schema")
+    output_schema: dict[str, Any] = Field(default_factory=dict, description="Output JSON schema")
 
 
 class OfferingResponse(BaseModel):
@@ -65,7 +67,7 @@ class CreateJobRequest(BaseModel):
     requirements: str = Field(max_length=5000, description="Detailed requirements")
     max_fee_virtual: float = Field(ge=0, description="Maximum fee willing to pay")
     preferred_deadline: datetime | None = None
-    additional_context: dict = Field(default_factory=dict)
+    additional_context: dict[str, Any] = Field(default_factory=dict)
 
 
 class NegotiationTermsRequest(BaseModel):
@@ -82,7 +84,7 @@ class NegotiationTermsRequest(BaseModel):
 class DeliverableRequest(BaseModel):
     """Deliverable submission."""
     content_type: str = Field(description="Type: json, text, url, file_reference")
-    content: dict = Field(description="Deliverable content or reference")
+    content: dict[str, Any] = Field(description="Deliverable content or reference")
     notes: str = Field(default="", max_length=1000)
 
 
@@ -101,7 +103,7 @@ class DisputeRequest(BaseModel):
     """Dispute filing."""
     filed_by: str = Field(description="buyer or provider")
     reason: str = Field(max_length=2000)
-    evidence: list[dict] = Field(default_factory=list)
+    evidence: list[dict[str, Any]] = Field(default_factory=list)
     requested_resolution: str = Field(description="full_refund, partial_refund, renegotiate, arbitration")
 
 
@@ -641,7 +643,7 @@ async def get_provider_jobs(
 # Helper Functions
 # ============================================================================
 
-def _job_to_response(job) -> JobResponse:
+def _job_to_response(job: ACPJob) -> JobResponse:
     """Convert ACPJob to JobResponse."""
     return JobResponse(
         id=job.id,

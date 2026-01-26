@@ -84,7 +84,7 @@ class PeerTrustManager:
     MAX_PEER_LOCKS = 10000
     MAX_PEER_CACHE = 10000
 
-    def __init__(self):
+    def __init__(self) -> None:
         # SECURITY FIX (Audit 4 - M15): Use deque with maxlen for bounded history
         self._trust_history: deque[TrustEvent] = deque(maxlen=self.MAX_HISTORY_EVENTS)
         self._peer_trust_cache: dict[str, float] = {}
@@ -107,9 +107,9 @@ class PeerTrustManager:
                     for key in keys_to_evict:
                         del self._peer_locks[key]
                     logger.warning(
-                        "peer_locks_eviction",
-                        evicted_count=evict_count,
-                        remaining=len(self._peer_locks),
+                        "peer_locks_eviction: evicted_count=%s, remaining=%s",
+                        evict_count,
+                        len(self._peer_locks),
                     )
                 self._peer_locks[peer_id] = asyncio.Lock()
             return self._peer_locks[peer_id]
@@ -128,9 +128,9 @@ class PeerTrustManager:
                 for key in keys_to_evict:
                     del self._peer_trust_cache[key]
                 logger.warning(
-                    "peer_cache_eviction",
-                    evicted_count=evict_count,
-                    remaining=len(self._peer_trust_cache),
+                    "peer_cache_eviction: evicted_count=%s, remaining=%s",
+                    evict_count,
+                    len(self._peer_trust_cache),
                 )
         self._peer_trust_cache[peer_id] = trust_score
 
@@ -420,12 +420,11 @@ class PeerTrustManager:
             peer.status = PeerStatus.REVOKED
             self._update_trust_cache(peer.id, 0.0)
 
-            # Store revocation metadata
-            if not hasattr(peer, 'metadata') or peer.metadata is None:
-                peer.metadata = {}
-            peer.metadata['revoked_at'] = datetime.now(UTC).isoformat()
-            peer.metadata['revoked_by'] = revoked_by
-            peer.metadata['revocation_reason'] = reason
+            # Store revocation metadata in description field
+            revoked_at = datetime.now(UTC).isoformat()
+            peer.description = (
+                f"REVOKED at {revoked_at} by {revoked_by}: {reason}"
+            )
 
             self._record_event(
                 peer.id,
@@ -547,10 +546,10 @@ class PeerTrustManager:
         limit: int = 100,
     ) -> list[TrustEvent]:
         """Get trust event history."""
-        events = self._trust_history
+        events_list: list[TrustEvent] = list(self._trust_history)
         if peer_id:
-            events = [e for e in events if e.peer_id == peer_id]
-        return events[-limit:]
+            events_list = [e for e in events_list if e.peer_id == peer_id]
+        return events_list[-limit:]
 
     async def calculate_network_trust(
         self,
@@ -568,7 +567,7 @@ class PeerTrustManager:
             }
 
         trust_scores = [p.trust_score for p in peers]
-        tiers = {}
+        tiers: dict[str, int] = {}
         healthy = 0
         at_risk = 0
 

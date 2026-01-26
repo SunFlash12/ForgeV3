@@ -7,6 +7,7 @@ Tips are purely for social recognition - no functional impact on Forge.
 All endpoints are public and optional - tipping doesn't gate any features.
 """
 
+from typing import Any
 
 import structlog
 from fastapi import APIRouter, HTTPException, Query
@@ -28,7 +29,7 @@ router = APIRouter(prefix="/tips", tags=["Tipping"])
 
 
 @router.get("/info")
-async def get_tipping_info() -> dict:
+async def get_tipping_info() -> dict[str, Any]:
     """
     Get information about the FROWG tipping system.
 

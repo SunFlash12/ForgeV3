@@ -181,8 +181,9 @@ class GraphAlgorithmProvider:
         cache_key = f"pagerank:{request.node_label}:{request.relationship_type}"
 
         cached = self._get_cached(cache_key)
-        if cached:
-            return cached
+        if cached is not None:
+            cached_result: NodeRankingResult = cached
+            return cached_result
 
         start_time = datetime.now(UTC)
         backend = await self.detect_backend()
@@ -265,6 +266,7 @@ class GraphAlgorithmProvider:
                 backend_used=GraphBackend.GDS,
                 rankings=rankings,
                 total_nodes=total_nodes,
+                computation_time_ms=0.0,
                 parameters={
                     "damping_factor": request.damping_factor,
                     "max_iterations": request.max_iterations,
@@ -339,6 +341,7 @@ class GraphAlgorithmProvider:
             backend_used=GraphBackend.CYPHER,
             rankings=rankings,
             total_nodes=total_nodes,
+            computation_time_ms=0.0,
             parameters={
                 "damping_factor": request.damping_factor,
                 "note": "Cypher approximation based on in/out degree ratio",
@@ -358,8 +361,9 @@ class GraphAlgorithmProvider:
         cache_key = f"centrality:{request.algorithm}:{request.node_label}"
 
         cached = self._get_cached(cache_key)
-        if cached:
-            return cached
+        if cached is not None:
+            cached_result: NodeRankingResult = cached
+            return cached_result
 
         start_time = datetime.now(UTC)
         backend = await self.detect_backend()
@@ -430,6 +434,7 @@ class GraphAlgorithmProvider:
             backend_used=GraphBackend.CYPHER,
             rankings=rankings,
             total_nodes=count_result.get("count", 0) if count_result else 0,
+            computation_time_ms=0.0,
             parameters={"normalized": request.normalized},
         )
 
@@ -495,6 +500,7 @@ class GraphAlgorithmProvider:
                 backend_used=GraphBackend.GDS,
                 rankings=rankings,
                 total_nodes=count_result.get("count", 0) if count_result else 0,
+                computation_time_ms=0.0,
                 parameters={},
             )
 
@@ -531,8 +537,9 @@ class GraphAlgorithmProvider:
         cache_key = f"communities:{request.algorithm}"
 
         cached = self._get_cached(cache_key)
-        if cached:
-            return cached
+        if cached is not None:
+            cached_result: CommunityDetectionResult = cached
+            return cached_result
 
         start_time = datetime.now(UTC)
         backend = await self.detect_backend()
@@ -630,6 +637,7 @@ class GraphAlgorithmProvider:
                 total_communities=len(communities),
                 modularity=0.0,  # GDS doesn't return this directly in stream mode
                 coverage=len(results) / max(len(results), 1),
+                computation_time_ms=0.0,
                 parameters={},
             )
 
@@ -708,6 +716,7 @@ class GraphAlgorithmProvider:
             total_communities=len(communities),
             modularity=0.0,
             coverage=1.0,
+            computation_time_ms=0.0,
             parameters={"note": "Connected component approximation"},
         )
 
@@ -1028,6 +1037,7 @@ class GraphAlgorithmProvider:
                 similar_nodes=similar_nodes,
                 similarity_metric=request.similarity_metric,
                 top_k=request.top_k,
+                computation_time_ms=0.0,
                 backend_used=GraphBackend.GDS,
             )
 
@@ -1122,6 +1132,7 @@ class GraphAlgorithmProvider:
             similar_nodes=similar_nodes,
             similarity_metric="jaccard",
             top_k=request.top_k,
+            computation_time_ms=0.0,
             backend_used=GraphBackend.CYPHER,
         )
 
@@ -1222,6 +1233,7 @@ class GraphAlgorithmProvider:
                     path_length=result.get("path_length", len(node_ids) - 1),
                     path_nodes=path_nodes,
                     total_trust=result.get("totalCost"),
+                    computation_time_ms=0.0,
                     backend_used=GraphBackend.GDS,
                 )
             else:
@@ -1229,6 +1241,7 @@ class GraphAlgorithmProvider:
                     source_id=request.source_id,
                     target_id=request.target_id,
                     path_found=False,
+                    computation_time_ms=0.0,
                     backend_used=GraphBackend.GDS,
                 )
 
@@ -1306,6 +1319,7 @@ class GraphAlgorithmProvider:
                 path_nodes=path_nodes,
                 path_relationships=rel_types,
                 total_trust=total_trust,
+                computation_time_ms=0.0,
                 backend_used=GraphBackend.CYPHER,
             )
         else:
@@ -1313,6 +1327,7 @@ class GraphAlgorithmProvider:
                 source_id=request.source_id,
                 target_id=request.target_id,
                 path_found=False,
+                computation_time_ms=0.0,
                 backend_used=GraphBackend.CYPHER,
             )
 

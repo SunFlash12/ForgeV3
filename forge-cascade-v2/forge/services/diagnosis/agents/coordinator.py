@@ -106,11 +106,11 @@ class DiagnosticCoordinator:
         phenotype_agent: PhenotypeAgent | None = None,
         genetic_agent: GeneticAgent | None = None,
         differential_agent: DifferentialAgent | None = None,
-        primekg_overlay=None,
-        hpo_service=None,
-        genetic_service=None,
-        neo4j_client=None,
-    ):
+        primekg_overlay: Any = None,
+        hpo_service: Any = None,
+        genetic_service: Any = None,
+        neo4j_client: Any = None,
+    ) -> None:
         """
         Initialize the diagnostic coordinator.
 
@@ -674,10 +674,10 @@ class DiagnosticCoordinator:
 
 def create_diagnostic_coordinator(
     config: CoordinatorConfig | None = None,
-    primekg_overlay=None,
-    hpo_service=None,
-    genetic_service=None,
-    neo4j_client=None,
+    primekg_overlay: Any = None,
+    hpo_service: Any = None,
+    genetic_service: Any = None,
+    neo4j_client: Any = None,
 ) -> DiagnosticCoordinator:
     """Create a diagnostic coordinator instance."""
     return DiagnosticCoordinator(

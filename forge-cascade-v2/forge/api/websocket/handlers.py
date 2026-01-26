@@ -186,7 +186,7 @@ class WebSocketConnection:
         user_id: str | None = None,
         subscriptions: set[str] | None = None,
         token: str | None = None,  # SECURITY FIX (Audit 6): Store token for periodic validation
-    ):
+    ) -> None:
         self.websocket = websocket
         self.connection_id = connection_id
         self.user_id = user_id
@@ -333,7 +333,7 @@ class ConnectionManager:
     - Broadcast and targeted messaging
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         # Connection storage by type
         self._event_connections: dict[str, WebSocketConnection] = {}
         self._dashboard_connections: dict[str, WebSocketConnection] = {}
@@ -431,7 +431,7 @@ class ConnectionManager:
 
         return connection
 
-    async def disconnect_events(self, connection_id: str):
+    async def disconnect_events(self, connection_id: str) -> None:
         """Disconnect an event stream connection."""
 
         if connection_id not in self._event_connections:
@@ -454,7 +454,7 @@ class ConnectionManager:
         event_type: str,
         data: dict[str, Any],
         topic: str | None = None
-    ):
+    ) -> None:
         """Broadcast an event to subscribed connections."""
 
         message = {
@@ -530,7 +530,7 @@ class ConnectionManager:
 
         return connection
 
-    async def disconnect_dashboard(self, connection_id: str):
+    async def disconnect_dashboard(self, connection_id: str) -> None:
         """Disconnect a dashboard connection."""
 
         if connection_id not in self._dashboard_connections:
@@ -543,7 +543,7 @@ class ConnectionManager:
 
         logger.info("websocket_dashboard_disconnected", connection_id=connection_id)
 
-    async def broadcast_dashboard_update(self, metrics: dict[str, Any]):
+    async def broadcast_dashboard_update(self, metrics: dict[str, Any]) -> None:
         """Broadcast metrics update to all dashboard connections."""
 
         message = {
@@ -617,7 +617,7 @@ class ConnectionManager:
 
         return connection
 
-    async def disconnect_chat(self, room_id: str, connection_id: str):
+    async def disconnect_chat(self, room_id: str, connection_id: str) -> None:
         """Disconnect a chat room connection."""
 
         if room_id not in self._chat_connections:
@@ -652,7 +652,7 @@ class ConnectionManager:
         message_type: str,
         data: dict[str, Any],
         exclude_connection: str | None = None
-    ):
+    ) -> None:
         """Broadcast a message to all connections in a chat room."""
 
         if room_id not in self._chat_connections:
@@ -964,7 +964,7 @@ async def websocket_events(
     websocket: WebSocket,
     token: str | None = Query(default=None),
     topics: str | None = Query(default=None, description="Comma-separated topic list")
-):
+) -> None:
     """
     WebSocket endpoint for real-time event streaming.
 
@@ -1107,7 +1107,7 @@ async def websocket_events(
 async def websocket_dashboard(
     websocket: WebSocket,
     token: str | None = Query(default=None)
-):
+) -> None:
     """
     WebSocket endpoint for live dashboard metrics.
 
@@ -1200,7 +1200,7 @@ async def websocket_chat(
     token: str | None = Query(default=None),
     display_name: str | None = Query(default=None),
     invite_code: str | None = Query(default=None),
-):
+) -> None:
     """
     WebSocket endpoint for chat rooms.
 

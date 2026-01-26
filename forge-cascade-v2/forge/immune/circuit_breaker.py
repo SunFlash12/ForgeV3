@@ -526,22 +526,22 @@ class CircuitBreakerRegistry:
     in the Forge system.
     """
 
-    def __init__(self):
-        self._breakers: dict[str, CircuitBreaker] = {}
+    def __init__(self) -> None:
+        self._breakers: dict[str, CircuitBreaker[Any]] = {}
         self._lock = asyncio.Lock()
 
     async def get_or_create(
         self,
         name: str,
         config: CircuitBreakerConfig | None = None,
-    ) -> CircuitBreaker:
+    ) -> CircuitBreaker[Any]:
         """Get existing or create new circuit breaker."""
         async with self._lock:
             if name not in self._breakers:
                 self._breakers[name] = CircuitBreaker(name, config)
             return self._breakers[name]
 
-    async def get(self, name: str) -> CircuitBreaker | None:
+    async def get(self, name: str) -> CircuitBreaker[Any] | None:
         """Get circuit breaker by name."""
         return self._breakers.get(name)
 
@@ -616,7 +616,7 @@ def get_circuit_registry() -> CircuitBreakerRegistry:
 async def circuit_breaker(
     name: str,
     config: CircuitBreakerConfig | None = None,
-) -> CircuitBreaker:
+) -> CircuitBreaker[Any]:
     """Get or create a circuit breaker from global registry."""
     return await get_circuit_registry().get_or_create(name, config)
 
@@ -626,7 +626,7 @@ class ForgeCircuits:
     """Pre-configured circuit breakers for Forge services."""
 
     @staticmethod
-    async def neo4j() -> CircuitBreaker:
+    async def neo4j() -> CircuitBreaker[Any]:
         """Circuit breaker for Neo4j database."""
         config = CircuitBreakerConfig(
             failure_threshold=3,
@@ -636,7 +636,7 @@ class ForgeCircuits:
         return await circuit_breaker("neo4j", config)
 
     @staticmethod
-    async def external_ml() -> CircuitBreaker:
+    async def external_ml() -> CircuitBreaker[Any]:
         """Circuit breaker for external ML services."""
         config = CircuitBreakerConfig(
             failure_threshold=5,
@@ -646,7 +646,7 @@ class ForgeCircuits:
         return await circuit_breaker("external_ml", config)
 
     @staticmethod
-    async def overlay(overlay_name: str) -> CircuitBreaker:
+    async def overlay(overlay_name: str) -> CircuitBreaker[Any]:
         """Circuit breaker for specific overlay."""
         config = CircuitBreakerConfig(
             failure_threshold=5,
@@ -656,7 +656,7 @@ class ForgeCircuits:
         return await circuit_breaker(f"overlay_{overlay_name}", config)
 
     @staticmethod
-    async def webhook() -> CircuitBreaker:
+    async def webhook() -> CircuitBreaker[Any]:
         """Circuit breaker for webhook calls."""
         config = CircuitBreakerConfig(
             failure_threshold=10,

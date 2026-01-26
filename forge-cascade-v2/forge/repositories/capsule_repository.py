@@ -62,7 +62,8 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
 
     @property
     def model_class(self) -> type[Capsule]:
-        return Capsule  # type: ignore[no-any-return]
+        cls: type[Capsule] = Capsule
+        return cls
 
     def _to_model(self, record: dict[str, Any]) -> Capsule | None:
         """
@@ -240,7 +241,10 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
                 owner_id=owner_id,
                 content_hash=content_hash[:16] + "...",
             )
-            return self._to_model(result["capsule"])
+            capsule = self._to_model(result["capsule"])
+            if capsule is None:
+                raise RuntimeError("Failed to deserialize created capsule")
+            return capsule
 
         raise RuntimeError("Failed to create capsule")
 
@@ -482,15 +486,17 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
         try:
             results = await self.client.execute(query, params)
 
-            return [
-                CapsuleSearchResult(
-                    capsule=self._to_model(r["capsule"]),
-                    score=r["score"],
-                    highlights=[],  # Would need text search for highlights
-                )
-                for r in results
-                if r.get("capsule")
-            ]
+            search_results: list[CapsuleSearchResult] = []
+            for r in results:
+                if r.get("capsule"):
+                    capsule = self._to_model(r["capsule"])
+                    if capsule is not None:
+                        search_results.append(CapsuleSearchResult(
+                            capsule=capsule,
+                            score=r["score"],
+                            highlights=[],  # Would need text search for highlights
+                        ))
+            return search_results
         except Exception as e:
             self.logger.error(
                 "Semantic search failed",
@@ -909,11 +915,13 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
                 },
             )
 
-            return [
-                (self._to_model(r["capsule"]), r["score"])
-                for r in results[:limit]
-                if r.get("capsule")
-            ]
+            similar: list[tuple[Capsule, float]] = []
+            for r in results[:limit]:
+                if r.get("capsule"):
+                    capsule = self._to_model(r["capsule"])
+                    if capsule is not None:
+                        similar.append((capsule, r["score"]))
+            return similar
         except Exception as e:
             self.logger.warning(
                 "find_similar_by_embedding failed",
@@ -1187,15 +1195,18 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
 
         results = await self.client.execute(query, params)
 
-        return [
-            (
-                self._to_model(r["capsule1"]),
-                self._to_model(r["capsule2"]),
-                self._to_semantic_edge(r["edge"]),
-            )
-            for r in results
-            if r.get("capsule1") and r.get("capsule2") and r.get("edge")
-        ]
+        contradictions: list[tuple[Capsule, Capsule, SemanticEdge]] = []
+        for r in results:
+            if r.get("capsule1") and r.get("capsule2") and r.get("edge"):
+                c1 = self._to_model(r["capsule1"])
+                c2 = self._to_model(r["capsule2"])
+                if c1 is not None and c2 is not None:
+                    contradictions.append((
+                        c1,
+                        c2,
+                        self._to_semantic_edge(r["edge"]),
+                    ))
+        return contradictions
 
     async def find_contradiction_clusters(
         self,
@@ -1582,13 +1593,21 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
 
         target = self._to_model(target_result["capsule"])
 
+        if target is None:
+            return {
+                "capsule_id": capsule_id,
+                "found": False,
+                "valid": False,
+                "error": "Capsule could not be deserialized",
+            }
+
         # Build chain from root to leaf
-        chain = list(reversed(ancestors)) + [target]
+        chain: list[Capsule] = list(reversed(ancestors)) + [target]
 
         all_valid = True
-        verified_capsules = []
-        failed_capsules = []
-        broken_at = None
+        verified_capsules: list[str] = []
+        failed_capsules: list[str] = []
+        broken_at: str | None = None
 
         previous_merkle_root: str | None = None
 

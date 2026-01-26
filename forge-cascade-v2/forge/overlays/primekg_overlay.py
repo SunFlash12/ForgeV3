@@ -32,6 +32,9 @@ from forge.overlays.base import (
     OverlayResult,
 )
 
+# Protocol types for external services (no concrete implementations available)
+# These allow mypy to understand the duck-typed service interfaces.
+
 logger = structlog.get_logger(__name__)
 
 
@@ -86,10 +89,10 @@ class PrimeKGOverlay(BaseOverlay):
 
     def __init__(
         self,
-        neo4j_client=None,
-        embedding_service=None,
-        llm_service=None,
-    ):
+        neo4j_client: Any = None,
+        embedding_service: Any = None,
+        llm_service: Any = None,
+    ) -> None:
         """
         Initialize the PrimeKG overlay.
 
@@ -99,9 +102,9 @@ class PrimeKGOverlay(BaseOverlay):
             llm_service: LLM service for natural language queries
         """
         super().__init__()
-        self._neo4j = neo4j_client
-        self._embedding = embedding_service
-        self._llm = llm_service
+        self._neo4j: Any = neo4j_client
+        self._embedding: Any = embedding_service
+        self._llm: Any = llm_service
 
         # Cached data structures
         self._hpo_hierarchy: dict[str, list[str]] | None = None
@@ -234,9 +237,9 @@ class PrimeKGOverlay(BaseOverlay):
 
     async def _phenotype_to_disease(
         self,
-        data: dict,
+        data: dict[str, Any],
         context: OverlayContext,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """
         Map phenotypes (HPO terms) to candidate diseases.
 
@@ -304,9 +307,9 @@ class PrimeKGOverlay(BaseOverlay):
 
     async def _disease_to_drugs(
         self,
-        data: dict,
+        data: dict[str, Any],
         context: OverlayContext,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """
         Get drugs related to a disease (indications, contraindications, off-label).
 
@@ -370,9 +373,9 @@ class PrimeKGOverlay(BaseOverlay):
 
     async def _gene_disease_association(
         self,
-        data: dict,
+        data: dict[str, Any],
         context: OverlayContext,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """
         Get gene-disease associations from PrimeKG.
 
@@ -434,9 +437,9 @@ class PrimeKGOverlay(BaseOverlay):
 
     async def _pathway_analysis(
         self,
-        data: dict,
+        data: dict[str, Any],
         context: OverlayContext,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """
         Analyze pathway involvement for genes or diseases.
 
@@ -499,9 +502,9 @@ class PrimeKGOverlay(BaseOverlay):
 
     async def _differential_diagnosis(
         self,
-        data: dict,
+        data: dict[str, Any],
         context: OverlayContext,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """
         Generate differential diagnosis from phenotypes and clinical context.
 
@@ -551,7 +554,7 @@ class PrimeKGOverlay(BaseOverlay):
 
         # Phase 3: Filter by contraindications if medications provided
         if medications and candidates:
-            contraindicated_diseases = set()
+            contraindicated_diseases: set[str] = set()
             for _med in medications:
                 # This would query drug-disease contraindications
                 # Simplified for now - actual implementation would use _med
@@ -578,9 +581,9 @@ class PrimeKGOverlay(BaseOverlay):
 
     async def _semantic_search(
         self,
-        data: dict,
+        data: dict[str, Any],
         context: OverlayContext,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """
         Semantic search on PrimeKG clinical descriptions.
 
@@ -617,9 +620,9 @@ class PrimeKGOverlay(BaseOverlay):
 
     async def _find_discriminating_phenotypes(
         self,
-        data: dict,
+        data: dict[str, Any],
         context: OverlayContext,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """
         Find phenotypes that discriminate between two diseases.
 
@@ -696,9 +699,9 @@ class PrimeKGOverlay(BaseOverlay):
 
     async def _get_disease_details(
         self,
-        data: dict,
+        data: dict[str, Any],
         context: OverlayContext,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """
         Get full details for a disease.
 
@@ -751,9 +754,9 @@ class PrimeKGOverlay(BaseOverlay):
 
     async def _check_drug_interactions(
         self,
-        data: dict,
+        data: dict[str, Any],
         context: OverlayContext,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """
         Check for drug-disease interactions and contraindications.
 
@@ -813,7 +816,7 @@ class PrimeKGOverlay(BaseOverlay):
     # Helper Methods
     # =========================================================================
 
-    async def _verify_primekg_data(self) -> dict:
+    async def _verify_primekg_data(self) -> dict[str, Any]:
         """Verify PrimeKG data is loaded in Neo4j."""
         query = """
         MATCH (n:PrimeKGNode)
@@ -845,7 +848,7 @@ class PrimeKGOverlay(BaseOverlay):
         query: str,
         node_type: str | None,
         limit: int,
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """Fallback text search using full-text index."""
         type_filter = f"AND n.node_type = '{node_type}'" if node_type else ""
 
@@ -881,9 +884,9 @@ class PrimeKGOverlay(BaseOverlay):
 # =============================================================================
 
 def create_primekg_overlay(
-    neo4j_client=None,
-    embedding_service=None,
-    llm_service=None,
+    neo4j_client: Any = None,
+    embedding_service: Any = None,
+    llm_service: Any = None,
 ) -> PrimeKGOverlay:
     """
     Factory function to create PrimeKG overlay.

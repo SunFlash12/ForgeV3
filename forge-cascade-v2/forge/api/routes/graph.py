@@ -484,12 +484,28 @@ async def compute_centrality(
     - betweenness: Bridge nodes between communities
     - closeness: Average distance to all other nodes
     """
-    rankings = await graph_repo.compute_centrality(
-        centrality_type=request.centrality_type,
+    # The GraphRepository only has compute_betweenness_centrality method
+    # Use the provider's compute_centrality for more options
+    from forge.models.graph_analysis import AlgorithmType, CentralityRequest as CentralityReq
+
+    # Map centrality type string to AlgorithmType
+    algorithm_map = {
+        "degree": AlgorithmType.DEGREE_CENTRALITY,
+        "betweenness": AlgorithmType.BETWEENNESS_CENTRALITY,
+        "closeness": AlgorithmType.CLOSENESS_CENTRALITY,
+        "eigenvector": AlgorithmType.EIGENVECTOR_CENTRALITY,
+    }
+    algorithm = algorithm_map.get(request.centrality_type, AlgorithmType.DEGREE_CENTRALITY)
+
+    centrality_request = CentralityReq(
+        algorithm=algorithm,
         node_label=request.node_label,
         relationship_type=request.relationship_type,
         limit=request.limit,
     )
+    result = await graph_repo.provider.compute_centrality(centrality_request)
+    rankings = result.rankings
+
     return [
         NodeRankingResponse(
             node_id=r.node_id,
@@ -513,22 +529,39 @@ async def detect_communities(
     Uses Louvain or label propagation algorithm to find
     clusters of closely related capsules.
     """
-    communities = await graph_repo.detect_communities(
-        algorithm=request.algorithm,
+    # GraphRepository.detect_communities only takes algorithm and min_size
+    # Use the provider for more detailed control
+    from forge.models.graph_analysis import (
+        AlgorithmType,
+        CommunityDetectionRequest as CommunityReq,
+    )
+
+    algo = (
+        AlgorithmType.COMMUNITY_LOUVAIN
+        if request.algorithm == "louvain"
+        else AlgorithmType.COMMUNITY_LABEL_PROPAGATION
+    )
+
+    community_request = CommunityReq(
+        algorithm=algo,
         node_label=request.node_label,
         relationship_type=request.relationship_type,
         min_community_size=request.min_community_size,
-        limit=request.limit,
+        max_communities=request.limit,
     )
+    result = await graph_repo.provider.detect_communities(community_request)
+    communities = result.communities
+
     return [
         CommunityResponse(
             community_id=c.community_id,
             size=c.size,
             density=c.density,
             dominant_type=c.dominant_type,
-            node_ids=c.node_ids,
+            # Community model has 'members' not 'node_ids'
+            node_ids=[m.node_id for m in c.members],
         )
-        for c in communities
+        for c in communities[:request.limit]
     ]
 
 
@@ -544,19 +577,29 @@ async def compute_trust_transitivity(
     Calculates trust through graph paths, with decay
     over distance.
     """
-    result = await graph_repo.compute_trust_transitivity(
+    # Use the provider directly to get full result with paths
+    from forge.models.graph_analysis import TrustTransitivityRequest as TrustReq
+
+    trust_request = TrustReq(
         source_id=request.source_id,
         target_id=request.target_id,
         max_hops=request.max_hops,
-        decay_factor=request.decay_factor,
+        decay_rate=request.decay_factor,
+        return_all_paths=True,
     )
+    result = await graph_repo.provider.compute_trust_transitivity(trust_request)
+
+    # Get best path info
+    best_path_nodes = result.best_path.path_nodes if result.best_path else []
+    best_path_length = result.best_path.path_length if result.best_path else 0
+
     return {
         "source_id": request.source_id,
         "target_id": request.target_id,
-        "trust_score": result.trust_score,
-        "path_count": result.path_count,
-        "best_path": result.best_path,
-        "best_path_length": result.best_path_length,
+        "trust_score": result.transitive_trust,
+        "path_count": result.paths_found,
+        "best_path": best_path_nodes,
+        "best_path_length": best_path_length,
     }
 
 
@@ -576,8 +619,8 @@ async def get_graph_metrics(
         avg_clustering=metrics.avg_clustering,
         connected_components=metrics.connected_components,
         diameter=metrics.diameter,
-        node_distribution=metrics.node_distribution,
-        edge_distribution=metrics.edge_distribution,
+        node_distribution=metrics.nodes_by_type,
+        edge_distribution=metrics.edges_by_type,
     )
 
 
@@ -604,7 +647,9 @@ async def query_knowledge(
     start = time.time()
 
     # Get the knowledge query overlay
-    knowledge_overlay = overlay_manager.get_overlay("knowledge_query")
+    # Use get_by_name method which returns a list of overlays
+    knowledge_overlays = overlay_manager.get_by_name("knowledge_query")
+    knowledge_overlay = knowledge_overlays[0] if knowledge_overlays else None
     if not knowledge_overlay:
         return KnowledgeQueryResponse(
             question=request.question,
@@ -615,27 +660,45 @@ async def query_knowledge(
         )
 
     try:
-        # Use the overlay to compile and execute the query
-        from forge.overlays.knowledge_query import QueryContext
-        context = QueryContext(
-            question=request.question,
-            user_trust_level=user.trust_level.value if hasattr(user.trust_level, 'value') else user.trust_level,
-            limit=request.limit,
-            include_debug=request.debug,
+        # Use the overlay's execute method with proper context
+        from forge.overlays.base import OverlayContext
+        context = OverlayContext(
+            overlay_id=knowledge_overlay.id,
+            overlay_name=knowledge_overlay.NAME,
+            execution_id=generate_id(),
+            triggered_by="api.graph.query",
+            correlation_id=generate_id(),
+            user_id=user.id,
+            trust_flame=user.trust_level.value if hasattr(user.trust_level, 'value') else user.trust_level,
         )
-        result = await knowledge_overlay.execute_query(context, graph_repo)
+        # Execute through the overlay's run method
+        overlay_result = await knowledge_overlay.run(
+            context,
+            event=None,
+            input_data={
+                "question": request.question,
+                "limit": request.limit,
+                "debug": request.debug,
+                "include_results": request.include_results,
+            }
+        )
+
+        if not overlay_result.success:
+            raise Exception(overlay_result.error or "Query failed")
 
         execution_time = (time.time() - start) * 1000
 
+        # Extract results from overlay_result.data
+        result_data = overlay_result.data or {}
         return KnowledgeQueryResponse(
             question=request.question,
-            answer=result.answer,
-            result_count=result.result_count,
+            answer=result_data.get("answer"),
+            result_count=result_data.get("result_count", 0),
             execution_time_ms=execution_time,
-            complexity=result.complexity,
-            explanation=result.explanation if request.debug else None,
-            cypher=result.cypher if request.debug else None,
-            results=result.results if request.include_results else None,
+            complexity=result_data.get("complexity", "unknown"),
+            explanation=result_data.get("explanation") if request.debug else None,
+            cypher=result_data.get("cypher") if request.debug else None,
+            results=result_data.get("results") if request.include_results else None,
         )
     except Exception as e:
         execution_time = (time.time() - start) * 1000
@@ -710,19 +773,23 @@ async def get_capsule_versions(
     if not capsule:
         raise HTTPException(status_code=404, detail="Capsule not found")
 
-    versions = await temporal_repo.get_version_history(capsule_id=capsule_id, limit=limit)
+    # get_version_history returns VersionHistory, access .versions for the list
+    version_history = await temporal_repo.get_version_history(capsule_id=capsule_id, limit=limit)
     return [
         VersionResponse(
-            version_id=v.version_id,
+            # CapsuleVersion uses 'id' not 'version_id'
+            version_id=v.id,
             capsule_id=v.capsule_id,
             version_number=v.version_number,
-            snapshot_type=v.snapshot_type,
-            change_type=v.change_type,
+            # snapshot_type is SnapshotType enum, access .value
+            snapshot_type=v.snapshot_type.value if hasattr(v.snapshot_type, 'value') else str(v.snapshot_type),
+            # change_type is ChangeType enum, access .value
+            change_type=v.change_type.value if hasattr(v.change_type, 'value') else str(v.change_type),
             created_by=v.created_by,
             created_at=v.created_at.isoformat() if v.created_at else "",
             content=None,  # Don't include full content in list
         )
-        for v in versions
+        for v in version_history.versions
     ]
 
 
@@ -736,19 +803,29 @@ async def get_capsule_version(
     """
     Get a specific version with full content.
     """
-    version = await temporal_repo.get_version(version_id)
-    if not version or version.capsule_id != capsule_id:
+    # No get_version method exists - query directly through client
+    query = """
+    MATCH (c:Capsule {id: $capsule_id})-[:HAS_VERSION]->(v:CapsuleVersion {id: $version_id})
+    RETURN v {.*} AS version
+    """
+    result = await temporal_repo.client.execute_single(
+        query, {"capsule_id": capsule_id, "version_id": version_id}
+    )
+
+    if not result or not result.get("version"):
         raise HTTPException(status_code=404, detail="Version not found")
 
+    v = result["version"]
     return VersionResponse(
-        version_id=version.version_id,
-        capsule_id=version.capsule_id,
-        version_number=version.version_number,
-        snapshot_type=version.snapshot_type,
-        change_type=version.change_type,
-        created_by=version.created_by,
-        created_at=version.created_at.isoformat() if version.created_at else "",
-        content=version.content,
+        version_id=v.get("id", version_id),
+        capsule_id=v.get("capsule_id", capsule_id),
+        version_number=v.get("version_number", "1.0.0"),
+        snapshot_type=v.get("snapshot_type", "full"),
+        change_type=v.get("change_type", "update"),
+        created_by=v.get("created_by"),
+        created_at=v.get("created_at", ""),
+        # CapsuleVersion uses content_snapshot, not content
+        content=v.get("content_snapshot"),
     )
 
 
@@ -780,10 +857,11 @@ async def get_capsule_at_time(
         "timestamp": timestamp,
         "found": True,
         "version": {
-            "version_id": version.version_id,
+            # CapsuleVersion uses 'id' not 'version_id', and 'content_snapshot' not 'content'
+            "version_id": version.id,
             "version_number": version.version_number,
             "created_at": version.created_at.isoformat() if version.created_at else None,
-            "content": version.content,
+            "content": version.content_snapshot,
         }
     }
 
@@ -799,29 +877,34 @@ async def diff_capsule_versions(
     """
     Compare two versions of a capsule.
     """
-    # Get both versions
-    va = await temporal_repo.get_version(version_a)
-    vb = await temporal_repo.get_version(version_b)
+    # diff_versions returns a VersionComparison object that already contains version info
+    try:
+        comparison = await temporal_repo.diff_versions(version_a, version_b)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
-    if not va or va.capsule_id != capsule_id:
-        raise HTTPException(status_code=404, detail=f"Version {version_a} not found")
-    if not vb or vb.capsule_id != capsule_id:
-        raise HTTPException(status_code=404, detail=f"Version {version_b} not found")
-
-    diff = await temporal_repo.diff_versions(version_a, version_b)
+    # Verify capsule_id matches
+    if comparison.capsule_id != capsule_id:
+        raise HTTPException(status_code=404, detail="Version not found for this capsule")
 
     return {
         "version_a": {
-            "version_id": va.version_id,
-            "version_number": va.version_number,
-            "created_at": va.created_at.isoformat() if va.created_at else None,
+            "version_id": comparison.version_a_id,
+            "version_number": comparison.version_a_number,
+            "created_at": None,  # VersionComparison doesn't have created_at
         },
         "version_b": {
-            "version_id": vb.version_id,
-            "version_number": vb.version_number,
-            "created_at": vb.created_at.isoformat() if vb.created_at else None,
+            "version_id": comparison.version_b_id,
+            "version_number": comparison.version_b_number,
+            "created_at": None,  # VersionComparison doesn't have created_at
         },
-        "diff": diff,
+        "diff": {
+            # VersionComparison.diff is a VersionDiff object
+            "added_lines": comparison.diff.added_lines,
+            "removed_lines": comparison.diff.removed_lines,
+            "modified_sections": comparison.diff.modified_sections,
+            "summary": comparison.diff.summary,
+        },
     }
 
 
@@ -861,22 +944,25 @@ async def get_trust_timeline(
         end=end_dt,
     )
 
-    trust_values = [s.trust_value for s in timeline]
+    # TrustTimeline object has snapshots list, not the object itself
+    trust_values = [s.trust_value for s in timeline.snapshots]
 
     return TrustTimelineResponse(
         entity_id=entity_id,
         entity_type=entity_type,
         start=start_dt.isoformat(),
         end=end_dt.isoformat(),
-        snapshot_count=len(timeline),
+        snapshot_count=len(timeline.snapshots),
         timeline=[
             TrustSnapshotResponse(
                 trust_value=s.trust_value,
-                timestamp=s.timestamp.isoformat() if s.timestamp else "",
-                change_type=s.change_type,
+                # TrustSnapshot uses created_at from TimestampMixin, not timestamp
+                timestamp=s.created_at.isoformat() if s.created_at else "",
+                # change_type is TrustChangeType enum, access .value
+                change_type=s.change_type.value if hasattr(s.change_type, 'value') else str(s.change_type),
                 reason=s.reason,
             )
-            for s in timeline
+            for s in timeline.snapshots
         ],
         trust_min=min(trust_values) if trust_values else None,
         trust_max=max(trust_values) if trust_values else None,
@@ -906,8 +992,8 @@ async def create_graph_snapshot(
             "density": metrics.density,
             "avg_degree": metrics.avg_degree if hasattr(metrics, 'avg_degree') else 0.0,
             "connected_components": metrics.connected_components,
-            "nodes_by_type": metrics.node_distribution,
-            "edges_by_type": metrics.edge_distribution,
+            "nodes_by_type": metrics.nodes_by_type,
+            "edges_by_type": metrics.edges_by_type,
         },
         created_by=user.id,
     )
@@ -1017,10 +1103,8 @@ async def create_semantic_edge(
     )
 
     # Emit event for lineage tracker and other overlays
-    await event_system.publish(Event(
-        id=generate_id(),
-        type=EventType.SEMANTIC_EDGE_CREATED,
-        source="api.graph",
+    await event_system.publish(
+        event_type=EventType.SEMANTIC_EDGE_CREATED,
         payload={
             "edge_id": edge.id,
             "source_id": edge.source_id,
@@ -1030,9 +1114,10 @@ async def create_semantic_edge(
             "bidirectional": edge.bidirectional,
             "created_by": user.id,
         },
+        source="api.graph",
         correlation_id=correlation_id,
         priority=EventPriority.NORMAL,
-    ))
+    )
 
     # Audit log
     await audit_repo.log_capsule_action(
@@ -1064,7 +1149,7 @@ async def get_capsule_edges(
     capsule_id: str,
     user: ActiveUserDep,
     capsule_repo: CapsuleRepoDep,
-    direction: str = Query(default="both", description="in, out, or both"),
+    direction: str = Query(default="both", description="in, out, or both (for API compatibility, filtering done post-query)"),
     relationship_type: str | None = Query(default=None, description="Filter by type"),
 ) -> list[SemanticEdgeResponse]:
     """
@@ -1075,12 +1160,26 @@ async def get_capsule_edges(
     if not capsule:
         raise HTTPException(status_code=404, detail="Capsule not found")
 
-    rel_types = [relationship_type.upper()] if relationship_type else None
+    # Convert string to SemanticRelationType enum list
+    from forge.models.semantic_edges import SemanticRelationType as SRT
+    rel_type_enums: list[SRT] | None = None
+    if relationship_type:
+        try:
+            rel_type_enums = [SRT(relationship_type.upper())]
+        except ValueError:
+            pass
+
+    # get_semantic_edges doesn't have direction parameter - filter in post-processing
     edges = await capsule_repo.get_semantic_edges(
         capsule_id=capsule_id,
-        direction=direction,
-        rel_types=rel_types
+        rel_types=rel_type_enums,
     )
+
+    # Filter by direction if specified (the repository returns all edges)
+    if direction == "in":
+        edges = [e for e in edges if e.target_id == capsule_id]
+    elif direction == "out":
+        edges = [e for e in edges if e.source_id == capsule_id]
 
     return [
         SemanticEdgeResponse(
@@ -1113,26 +1212,37 @@ async def get_semantic_neighbors(
     if not capsule:
         raise HTTPException(status_code=404, detail="Capsule not found")
 
-    rel_types = [relationship_type.upper()] if relationship_type else None
+    # Convert string to SemanticRelationType enum list
+    from forge.models.semantic_edges import SemanticRelationType
+    rel_type_enums: list[SemanticRelationType] | None = None
+    if relationship_type:
+        try:
+            rel_type_enums = [SemanticRelationType(relationship_type.upper())]
+        except ValueError:
+            # Invalid relationship type - let it be None to get all types
+            pass
+
     neighbors = await capsule_repo.get_semantic_neighbors(
         capsule_id=capsule_id,
-        rel_types=rel_types,
-        direction=direction
+        rel_types=rel_type_enums,
+        direction=direction,
+        limit=limit,
     )
 
+    # SemanticNeighbor has capsule_id, title, capsule_type, etc. (not a nested capsule object)
     return SemanticNeighborsResponse(
         capsule_id=capsule_id,
         neighbors=[
             {
                 "capsule": {
-                    "id": n.capsule.id,
-                    "title": n.capsule.title,
-                    "type": n.capsule.type.value if hasattr(n.capsule.type, 'value') else str(n.capsule.type),
+                    "id": n.capsule_id,
+                    "title": n.title,
+                    "type": n.capsule_type,
                 },
                 "edge": {
-                    "relationship_type": n.edge.relationship_type.value,
+                    "relationship_type": n.relationship_type.value if hasattr(n.relationship_type, 'value') else str(n.relationship_type),
                     "direction": n.direction,
-                    "properties": n.edge.properties
+                    "confidence": n.confidence,
                 }
             }
             for n in neighbors[:limit]
@@ -1191,7 +1301,7 @@ async def delete_semantic_edge(
     capsule_repo: CapsuleRepoDep,
     audit_repo: AuditRepoDep,
     correlation_id: CorrelationIdDep,
-):
+) -> None:
     """
     Delete a semantic edge.
 
@@ -1242,10 +1352,13 @@ async def get_contradiction_clusters(
         "clusters": [
             {
                 "cluster_id": c.cluster_id,
+                # size is a property computed from capsule_ids
                 "size": c.size,
                 "capsule_ids": c.capsule_ids,
-                "contradiction_count": c.contradiction_count,
-                "topics": c.topics
+                # ContradictionCluster uses edges list, derive count
+                "edge_count": len(c.edges),
+                "overall_severity": c.overall_severity.value if hasattr(c.overall_severity, 'value') else str(c.overall_severity),
+                "resolution_status": c.resolution_status.value if hasattr(c.resolution_status, 'value') else str(c.resolution_status),
             }
             for c in clusters
         ]
@@ -1263,8 +1376,10 @@ async def refresh_graph_analysis(
     Requires TRUSTED trust level.
     """
     # Clear caches in graph algorithms overlay
-    graph_overlay = overlay_manager.get_overlay("graph_algorithms")
-    if graph_overlay:
+    # Use get_by_name which returns a list
+    graph_overlays = overlay_manager.get_by_name("graph_algorithms")
+    graph_overlay = graph_overlays[0] if graph_overlays else None
+    if graph_overlay and hasattr(graph_overlay, 'clear_cache'):
         await graph_overlay.clear_cache()
 
     return {

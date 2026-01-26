@@ -91,10 +91,9 @@ class FrowgTippingService:
     """
 
     # FROWG token address on Solana
-    FROWG_TOKEN_ADDRESS = ContractAddresses.SOLANA_MAINNET.get(
+    FROWG_TOKEN_ADDRESS: str = ContractAddresses.SOLANA_MAINNET.get(
         "frowg_token",
-        "uogFxqx5SPdL7CMWTTttz4KZ2WctR4RjgZwmGcwpump"
-    )
+    ) or "uogFxqx5SPdL7CMWTTttz4KZ2WctR4RjgZwmGcwpump"
 
     # Minimum and maximum tip amounts
     MIN_TIP_AMOUNT = Decimal("0.001")
@@ -118,6 +117,12 @@ class FrowgTippingService:
         self._initialized = False
         self._tip_history: list[TipRecord] = []
 
+    def _get_chain_manager(self) -> ChainManager:
+        """Get the chain manager, raising if not initialized."""
+        if self._chain_manager is None:
+            raise RuntimeError("Tipping service not initialized. Call initialize() first.")
+        return self._chain_manager
+
     async def initialize(self) -> None:
         """Initialize the tipping service and Solana connection."""
         if self._initialized:
@@ -125,13 +130,11 @@ class FrowgTippingService:
 
         if self._chain_manager is None:
             self._chain_manager = ChainManager()
-
-        # Initialize Solana client
-        await self._chain_manager.initialize_chain(ChainNetwork.SOLANA)
+            await self._chain_manager.initialize()
 
         # Verify FROWG token is accessible
         try:
-            client = self._chain_manager.get_client(ChainNetwork.SOLANA)
+            client = self._get_chain_manager().get_client(ChainNetwork.SOLANA)
             token_info = await client.get_token_info(self.FROWG_TOKEN_ADDRESS)
             logger.info(f"FROWG tipping service initialized. Token: {token_info.symbol}")
         except Exception as e:
@@ -196,7 +199,7 @@ class FrowgTippingService:
 
         try:
             # Get Solana client
-            client = self._chain_manager.get_client(ChainNetwork.SOLANA)
+            client = self._get_chain_manager().get_client(ChainNetwork.SOLANA)
 
             # Execute token transfer
             tx_record: TransactionRecord = await client.transfer_tokens(
@@ -247,7 +250,7 @@ class FrowgTippingService:
         if not self._initialized:
             await self.initialize()
 
-        client = self._chain_manager.get_client(ChainNetwork.SOLANA)
+        client = self._get_chain_manager().get_client(ChainNetwork.SOLANA)
         balance = await client.get_wallet_balance(
             address=address,
             token_address=self.FROWG_TOKEN_ADDRESS

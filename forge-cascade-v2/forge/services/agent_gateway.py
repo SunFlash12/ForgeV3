@@ -26,7 +26,7 @@ from forge.models.agent_gateway import (
     QueryType,
     StreamChunk,
 )
-from forge.models.capsule import TrustLevel
+from forge.models.base import CapsuleType, TrustLevel
 
 logger = logging.getLogger(__name__)
 
@@ -95,11 +95,11 @@ class AgentGatewayService:
 
     def __init__(
         self,
-        db_client=None,
-        capsule_repo=None,
-        query_compiler=None,
-        event_system=None,
-    ):
+        db_client: Any = None,
+        capsule_repo: Any = None,
+        query_compiler: Any = None,
+        event_system: Any = None,
+    ) -> None:
         self.db = db_client
         self.capsule_repo = capsule_repo
         self.query_compiler = query_compiler
@@ -203,10 +203,10 @@ class AgentGatewayService:
         self._stats.active_sessions = len([s for s in self._sessions.values() if s.is_active])
 
         logger.info(
-            "agent_session_created",
-            session_id=session.id,
-            agent_name=agent_name,
-            trust_level=trust_level.value,
+            "agent_session_created session_id=%s agent_name=%s trust_level=%s",
+            session.id,
+            agent_name,
+            trust_level.value,
         )
 
         return session, api_key
@@ -252,7 +252,7 @@ class AgentGatewayService:
 
         self._stats.active_sessions = len([s for s in self._sessions.values() if s.is_active])
 
-        logger.info("agent_session_revoked", session_id=session_id)
+        logger.info("agent_session_revoked session_id=%s", session_id)
         return True
 
     async def list_sessions(
@@ -340,7 +340,7 @@ class AgentGatewayService:
 
         # Check cache
         cache_key = self._get_cache_key(query)
-        if cache_key in self._query_cache:
+        if cache_key is not None and cache_key in self._query_cache:
             cached = self._query_cache[cache_key]
             cached.cache_hit = True
             return cached
@@ -386,13 +386,13 @@ class AgentGatewayService:
             )
 
             # Cache successful results
-            if result.success and cache_key:
+            if result.success and cache_key is not None:
                 self._query_cache[cache_key] = result
 
             return result
 
         except Exception as e:
-            logger.exception("agent_query_failed", query_id=query.id)
+            logger.exception("agent_query_failed query_id=%s", query.id)
             self._stats.error_count += 1
 
             return QueryResult(
@@ -751,8 +751,6 @@ class AgentGatewayService:
 
         # Create capsule through repository
         if self.capsule_repo:
-            from forge.models.capsule import CapsuleType
-
             capsule = await self.capsule_repo.create(
                 type=CapsuleType(request.capsule_type),
                 content=request.content,
@@ -880,21 +878,22 @@ class AgentGatewayService:
         """Filter records based on agent trust level."""
         self.TRUST_LEVEL_VALUES.get(session.trust_level, 0)
 
-        # Map trust level to capsule trust threshold
-        # Untrusted agents can only see COMMUNITY+ capsules
-        # Basic can see EMERGING+
-        # Verified can see UNVERIFIED+
-        # Trusted and System can see all
+        # Map agent trust level to minimum capsule trust threshold
+        # Higher agent trust = can access lower-trust capsules
+        # UNTRUSTED agents can only see TRUSTED+ capsules
+        # BASIC can see STANDARD+
+        # VERIFIED can see SANDBOX+
+        # TRUSTED and SYSTEM can see all (including QUARANTINE)
 
-        min_capsule_trust = {
-            AgentTrustLevel.UNTRUSTED: TrustLevel.COMMUNITY,
-            AgentTrustLevel.BASIC: TrustLevel.EMERGING,
-            AgentTrustLevel.VERIFIED: TrustLevel.UNVERIFIED,
-            AgentTrustLevel.TRUSTED: TrustLevel.UNVERIFIED,
-            AgentTrustLevel.SYSTEM: TrustLevel.UNVERIFIED,
-        }.get(session.trust_level, TrustLevel.COMMUNITY)
+        min_capsule_trust: TrustLevel = {
+            AgentTrustLevel.UNTRUSTED: TrustLevel.TRUSTED,
+            AgentTrustLevel.BASIC: TrustLevel.STANDARD,
+            AgentTrustLevel.VERIFIED: TrustLevel.SANDBOX,
+            AgentTrustLevel.TRUSTED: TrustLevel.QUARANTINE,
+            AgentTrustLevel.SYSTEM: TrustLevel.QUARANTINE,
+        }.get(session.trust_level, TrustLevel.TRUSTED)
 
-        filtered = []
+        filtered: list[dict[str, Any]] = []
         for record in records:
             capsule_trust = record.get("trust_level", 0)
             if isinstance(capsule_trust, int) and capsule_trust >= min_capsule_trust.value:
@@ -1043,7 +1042,13 @@ class AgentGatewayService:
         from forge.virtuals.models import JobOffering
 
         # Create and register the offering
+        wallet_address = session.metadata.get("wallet_address", "")
+        if not wallet_address:
+            raise ValueError("Session must have wallet_address in metadata for ACP registration")
+
         offering = JobOffering(
+            provider_agent_id=session.agent_id,
+            provider_wallet=wallet_address,
             service_type=service_type,
             title=title,
             description=description,
@@ -1052,10 +1057,6 @@ class AgentGatewayService:
             base_fee_virtual=base_fee_virtual,
             max_execution_time_seconds=offering_data["max_execution_time_seconds"],
         )
-
-        wallet_address = session.metadata.get("wallet_address", "")
-        if not wallet_address:
-            raise ValueError("Session must have wallet_address in metadata for ACP registration")
 
         registered_offering = await acp_service.register_offering(
             agent_id=session.agent_id,
@@ -1128,13 +1129,15 @@ class AgentGatewayService:
         from forge.virtuals.models import ACPDeliverable
 
         # Create and submit the deliverable
+        content_hash = hashlib.sha256(
+            json.dumps(result, sort_keys=True).encode()
+        ).hexdigest()
+
         deliverable = ACPDeliverable(
             job_id=job_id,
+            content_type="json",
             content=result,
-            content_hash=hashlib.sha256(
-                json.dumps(result, sort_keys=True).encode()
-            ).hexdigest(),
-            mime_type="application/json",
+            notes=f"Auto-generated deliverable, hash: {content_hash}",
         )
 
         wallet_address = session.metadata.get("wallet_address", "")
@@ -1148,12 +1151,14 @@ class AgentGatewayService:
         )
 
         logger.info(
-            f"Submitted deliverable for ACP job {job_id} from session {session_id}"
+            "Submitted deliverable for ACP job %s from session %s",
+            job_id,
+            session_id,
         )
 
         return {
             "job_id": job_id,
-            "deliverable_hash": deliverable.content_hash,
+            "deliverable_hash": content_hash,
             "job_phase": updated_job.phase.value,
             "execution_result": result,
         }
@@ -1299,6 +1304,8 @@ class AgentGatewayService:
 
         # Create and execute the query
         query = AgentQuery(
+            session_id=session.id,
+            agent_id=session.agent_id,
             query_type=query_type,
             query_text=query_text,
             max_results=input_data.get("max_results", 10),

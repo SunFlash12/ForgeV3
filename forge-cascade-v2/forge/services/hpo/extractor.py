@@ -235,7 +235,7 @@ class PhenotypeExtractor:
                     break
 
         # Deduplicate by HPO ID, keeping highest confidence
-        seen = {}
+        seen: dict[str, ExtractedPhenotype] = {}
         for ext in extractions:
             if ext.hpo_id not in seen or ext.confidence > seen[ext.hpo_id].confidence:
                 seen[ext.hpo_id] = ext
@@ -245,7 +245,7 @@ class PhenotypeExtractor:
     def _create_extraction(
         self,
         text: str,
-        term,
+        term: Any,
         match_text: str,
         start_idx: int,
         match_type: str,
@@ -455,7 +455,7 @@ class PhenotypeExtractor:
                     ))
 
         # Deduplicate
-        seen = {}
+        seen: dict[str, ExtractedPhenotype] = {}
         for ext in extractions:
             if ext.hpo_id not in seen or ext.confidence > seen[ext.hpo_id].confidence:
                 seen[ext.hpo_id] = ext
@@ -530,9 +530,12 @@ JSON Output:"""
         content = response.choices[0].message.content
         try:
             # Parse JSON from response
-            return json.loads(content)
+            if content is None:
+                return []
+            result: list[dict[str, Any]] = json.loads(content)
+            return result
         except json.JSONDecodeError:
-            logger.warning("llm_json_parse_failed", content=content[:200])
+            logger.warning("llm_json_parse_failed", content=str(content)[:200])
             return []
 
 

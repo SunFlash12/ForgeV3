@@ -9,6 +9,7 @@ Normalizes and maps phenotypes to standardized HPO terms:
 """
 
 from dataclasses import dataclass
+from typing import Any
 
 import structlog
 
@@ -46,7 +47,7 @@ class PhenotypeNormalizer:
         self,
         ontology: HPOOntologyService,
         config: NormalizationConfig | None = None,
-        embedding_service=None,
+        embedding_service: Any = None,
     ):
         """
         Initialize the normalizer.
@@ -220,9 +221,10 @@ class PhenotypeNormalizer:
             s1, s2 = s2, s1
             len1, len2 = len2, len1
 
-        current_row = range(len1 + 1)
+        current_row: list[int] = list(range(len1 + 1))
         for i in range(1, len2 + 1):
-            previous_row, current_row = current_row, [i] + [0] * len1
+            previous_row: list[int] = current_row
+            current_row = [i] + [0] * len1
             for j in range(1, len1 + 1):
                 add, delete, change = (
                     previous_row[j] + 1,
@@ -233,7 +235,7 @@ class PhenotypeNormalizer:
                     change += 1
                 current_row[j] = min(add, delete, change)
 
-        distance = current_row[len1]
+        distance: int = current_row[len1]
         return 1.0 - (distance / max_len)
 
     async def _match_by_embedding(self, text: str) -> list[PhenotypeMatch]:
@@ -424,7 +426,7 @@ class PhenotypeNormalizer:
 def create_phenotype_normalizer(
     ontology: HPOOntologyService,
     config: NormalizationConfig | None = None,
-    embedding_service=None,
+    embedding_service: Any = None,
 ) -> PhenotypeNormalizer:
     """
     Create a phenotype normalizer instance.

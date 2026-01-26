@@ -68,13 +68,13 @@ class ContractAddresses:
     }
 
     # Ethereum Mainnet
-    ETHEREUM_MAINNET = {
+    ETHEREUM_MAINNET: dict[str, str | None] = {
         "virtual_token": "0x44ff8620b8cA30902395A7bD3F2407e1A091BF73",
         "bridge": "0x3154Cf16ccdb4C6d922629664174b904d80F2C35",
     }
 
     # Solana Mainnet
-    SOLANA_MAINNET = {
+    SOLANA_MAINNET: dict[str, str | None] = {
         "virtual_token": "3iQL8BFS2vE7mww4ehAqQHAsbmRNCrPxizWAT2Zfyr9y",
         # FROWG token for tipping - community token on Solana
         "frowg_token": "uogFxqx5SPdL7CMWTTttz4KZ2WctR4RjgZwmGcwpump",
@@ -83,7 +83,7 @@ class ContractAddresses:
     @classmethod
     def get_address(cls, chain: str, contract: str) -> str | None:
         """Get a contract address for a specific chain."""
-        chain_map = {
+        chain_map: dict[str, dict[str, str | None]] = {
             "base": cls.BASE_MAINNET,
             "base_sepolia": cls.BASE_SEPOLIA,
             "ethereum": cls.ETHEREUM_MAINNET,

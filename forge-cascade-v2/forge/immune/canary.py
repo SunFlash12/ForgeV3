@@ -264,14 +264,14 @@ class CanaryManager(Generic[T]):
     def __init__(
         self,
         default_config: CanaryConfig | None = None,
-        on_state_change: Callable[[CanaryDeployment, CanaryState, CanaryState], Coroutine[Any, Any, None]] | None = None,
+        on_state_change: Callable[[CanaryDeployment[T], CanaryState, CanaryState], Coroutine[Any, Any, None]] | None = None,
     ):
         self.default_config = default_config or CanaryConfig()
         self.on_state_change = on_state_change
 
         self._deployments: dict[str, CanaryDeployment[T]] = {}
         self._lock = asyncio.Lock()
-        self._background_tasks: dict[str, asyncio.Task] = {}
+        self._background_tasks: dict[str, asyncio.Task[None]] = {}
         self._request_counter = 0
 
     async def create_deployment(
@@ -732,7 +732,7 @@ class CanaryManager(Generic[T]):
 class OverlayCanaryManager(CanaryManager[dict[str, Any]]):
     """Specialized canary manager for overlay configurations."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(
             default_config=CanaryConfig(
                 initial_percentage=5.0,

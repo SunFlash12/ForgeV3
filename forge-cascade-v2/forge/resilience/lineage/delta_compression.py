@@ -107,7 +107,7 @@ class LineageSnapshot:
     data: dict[str, Any]
     hash: str = ""
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if not self.hash:
             self.hash = self._compute_hash()
 
@@ -358,7 +358,7 @@ class DeltaCompressor:
             return
 
         # Navigate to parent
-        current = data
+        current: Any = data
         for part in path_parts[:-1]:
             if isinstance(part, int):
                 current = current[part]
@@ -366,7 +366,7 @@ class DeltaCompressor:
                 current = current[part]
 
         # Apply operation
-        final_key = path_parts[-1]
+        final_key: str | int = path_parts[-1]
 
         if entry.operation == DiffOperation.ADD:
             if isinstance(final_key, int):
@@ -388,7 +388,7 @@ class DeltaCompressor:
         if not path:
             return []
 
-        parts = []
+        parts: list[str | int] = []
         current = ""
 
         i = 0

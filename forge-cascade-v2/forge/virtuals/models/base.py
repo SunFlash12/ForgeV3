@@ -11,7 +11,7 @@ from enum import Enum
 from typing import Any
 from uuid import uuid4
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, ValidationInfo, field_validator
 
 
 class TokenizationStatus(str, Enum):
@@ -138,7 +138,7 @@ class WalletInfo(BaseModel):
 
     @field_validator('address')
     @classmethod
-    def validate_address(cls, v: str, info) -> str:
+    def validate_address(cls, v: str, info: ValidationInfo) -> str:
         """Basic validation of wallet address format."""
         # EVM addresses start with 0x and are 42 chars
         # Solana addresses are base58 encoded, typically 32-44 chars
@@ -250,6 +250,10 @@ class RevenueRecord(BaseModel):
     tx_hash: str | None = Field(
         default=None,
         description="Transaction hash of distribution"
+    )
+    metadata: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Additional metadata about revenue event"
     )
 
 

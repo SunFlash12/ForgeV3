@@ -109,7 +109,7 @@ class EmbeddingVersionRegistry:
     Manages version lifecycle, compatibility, and migration paths.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._versions: dict[str, EmbeddingVersion] = {}
         self._active_version: str | None = None
         self._default_version: str | None = None

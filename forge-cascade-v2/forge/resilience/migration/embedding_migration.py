@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import secrets
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import Enum
@@ -125,17 +125,17 @@ class EmbeddingMigrationService:
     - Cleanup of old embeddings
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._config = get_resilience_config().embedding_migration
         self._registry = get_version_registry()
         self._jobs: dict[str, MigrationJob] = {}
         self._active_job: str | None = None
-        self._task: asyncio.Task | None = None
+        self._task: asyncio.Task[None] | None = None
 
         # Callbacks
-        self._embed_callback: Callable | None = None
-        self._store_callback: Callable | None = None
-        self._cleanup_callback: Callable | None = None
+        self._embed_callback: Callable[[str, str], Awaitable[list[float]]] | None = None
+        self._store_callback: Callable[[str, list[float], str], Awaitable[bool]] | None = None
+        self._cleanup_callback: Callable[[str, str], Awaitable[bool]] | None = None
 
         # Statistics
         self._stats = {
@@ -147,7 +147,7 @@ class EmbeddingMigrationService:
 
     def set_embed_callback(
         self,
-        callback: Callable[[str, str], list[float]]
+        callback: Callable[[str, str], Awaitable[list[float]]]
     ) -> None:
         """
         Set callback for generating embeddings.
@@ -159,7 +159,7 @@ class EmbeddingMigrationService:
 
     def set_store_callback(
         self,
-        callback: Callable[[str, list[float], str], bool]
+        callback: Callable[[str, list[float], str], Awaitable[bool]]
     ) -> None:
         """
         Set callback for storing embeddings.
@@ -171,7 +171,7 @@ class EmbeddingMigrationService:
 
     def set_cleanup_callback(
         self,
-        callback: Callable[[str, str], bool]
+        callback: Callable[[str, str], Awaitable[bool]]
     ) -> None:
         """
         Set callback for cleaning up old embeddings.
@@ -186,7 +186,7 @@ class EmbeddingMigrationService:
         from_version: str,
         to_version: str,
         capsule_filter: dict[str, Any] | None = None,
-        cleanup_old: bool = None
+        cleanup_old: bool | None = None
     ) -> MigrationJob:
         """
         Create a new migration job.
@@ -588,8 +588,8 @@ class EmbeddingMigrationService:
         cleanup_old: bool
     ) -> bool:
         """Migrate a single capsule's embedding."""
-        capsule_id = capsule.get("id")
-        content = capsule.get("content", "")
+        capsule_id: str = str(capsule.get("id", ""))
+        content: str = str(capsule.get("content", ""))
 
         if not content:
             return True  # Nothing to embed
@@ -625,7 +625,8 @@ class EmbeddingMigrationService:
 
         # Update the embedding version on the capsule
         try:
-            await self._update_capsule_embedding_version(capsule_id, to_version)
+            if capsule_id is not None:
+                await self._update_capsule_embedding_version(capsule_id, to_version)
         except Exception as e:
             logger.warning(
                 "embedding_version_update_failed",

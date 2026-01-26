@@ -34,7 +34,7 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
-from ..chains import get_chain_manager
+from ..chains import MultiChainManager, get_chain_manager
 from ..config import get_virtuals_config
 from ..models import (
     BondingCurveContribution,
@@ -122,12 +122,20 @@ class TokenizationService:
         self._entity_repo = tokenized_entity_repository
         self._contribution_repo = contribution_repository
         self._proposal_repo = proposal_repository
-        self._chain_manager = None
+        self._chain_manager: MultiChainManager | None = None
 
     async def initialize(self) -> None:
         """Initialize the service and chain connections."""
         self._chain_manager = await get_chain_manager()
         logger.info("Tokenization Service initialized")
+
+    def _get_chain_manager(self) -> MultiChainManager:
+        """Get the chain manager, raising if not initialized."""
+        if self._chain_manager is None:
+            raise RuntimeError(
+                "TokenizationService not initialized. Call initialize() first."
+            )
+        return self._chain_manager
 
     # ==================== Tokenization Lifecycle ====================
 
@@ -706,7 +714,7 @@ class TokenizationService:
         ) external returns (address tokenAddress);
         ```
         """
-        client = self._chain_manager.primary_client
+        client = self._get_chain_manager().primary_client
         chain = self.config.primary_chain.value
 
         # Get factory address for this chain
@@ -722,7 +730,7 @@ class TokenizationService:
 
         if can_deploy:
             try:
-                web3 = client.web3
+                web3 = client.web3  # type: ignore[attr-defined]
 
                 # Build the contract instance
                 contract = web3.eth.contract(
@@ -732,6 +740,7 @@ class TokenizationService:
 
                 # Get operator account for signing
                 from eth_account import Account
+                assert self.config.operator_private_key is not None
                 operator = Account.from_key(self.config.operator_private_key)
 
                 # Build transaction
@@ -783,6 +792,7 @@ class TokenizationService:
                     entity.token_info.token_address = token_address
                     logger.info(f"[BLOCKCHAIN] Token deployed at: {token_address}")
 
+                assert factory_address is not None
                 return TransactionRecord(
                     tx_hash=tx_hash.hex(),
                     chain=chain,
@@ -838,7 +848,7 @@ class TokenizationService:
         function contribute(uint256 amount) external returns (uint256 tokensReceived);
         ```
         """
-        client = self._chain_manager.primary_client
+        client = self._get_chain_manager().primary_client
         chain = self.config.primary_chain.value
         token_address = entity.token_info.token_address
 
@@ -852,11 +862,12 @@ class TokenizationService:
 
         if can_contribute:
             try:
-                web3 = client.web3
+                web3 = client.web3  # type: ignore[attr-defined]
                 virtual_token_address = ContractAddresses.get_address(chain, "virtual_token")
 
                 # Get operator account
                 from eth_account import Account
+                assert self.config.operator_private_key is not None
                 operator = Account.from_key(self.config.operator_private_key)
 
                 amount_wei = web3.to_wei(amount_virtual, 'ether')
@@ -991,7 +1002,7 @@ class TokenizationService:
         function graduate() external returns (address poolAddress);
         ```
         """
-        client = self._chain_manager.primary_client
+        client = self._get_chain_manager().primary_client
 
         if not hasattr(client, 'web3'):
             raise BlockchainConfigurationError(
@@ -1004,7 +1015,7 @@ class TokenizationService:
             )
 
         token_address = entity.token_info.token_address
-        web3 = client._w3
+        web3 = client._w3  # type: ignore[attr-defined]
 
         # Get the BondingCurve contract address - this is where graduation happens
         # The bonding curve contract manages the token lifecycle including graduation
@@ -1032,7 +1043,7 @@ class TokenizationService:
                 logger.info(f"Token {token_address} is already graduated")
                 return TransactionRecord(
                     tx_hash="",
-                    chain=self._chain_manager.primary_client.chain.value,
+                    chain=self._get_chain_manager().primary_client.chain.value,
                     block_number=0,
                     timestamp=datetime.now(UTC),
                     from_address="",
@@ -1046,7 +1057,8 @@ class TokenizationService:
             # Call unwrapToken to convert FERC20 to ERC20 and create LP
             # This requires the token to have reached graduation threshold
             # The function takes: srcTokenAddress and list of account addresses to unwrap for
-            accounts_to_unwrap = [entity.creator_address] if entity.creator_address else []
+            creator_addr = str(entity.metadata.get("creator_address", ""))
+            accounts_to_unwrap = [creator_addr] if creator_addr else []
 
             unwrap_data = bonding_contract.encodeABI(
                 fn_name='unwrapToken',
@@ -1074,7 +1086,8 @@ class TokenizationService:
                 f"(tx: {tx_record.tx_hash})"
             )
 
-            return tx_record
+            result: TransactionRecord = tx_record
+            return result
 
         except Exception as e:
             logger.error(f"Graduation transaction failed: {e}")
@@ -1101,7 +1114,7 @@ class TokenizationService:
         - Execute batch transfer via multi-send contract
         - Or set up Merkle root for claim-based distribution
         """
-        client = self._chain_manager.primary_client
+        client = self._get_chain_manager().primary_client
 
         if hasattr(client, 'web3'):
             try:
@@ -1149,7 +1162,7 @@ class TokenizationService:
                                 chain="base",
                                 block_number=0,
                                 timestamp=datetime.now(UTC),
-                                from_address=client._operator_account.address if client._operator_account else "",
+                                from_address=client._operator_account.address if getattr(client, '_operator_account', None) else "",  # type: ignore[attr-defined]
                                 to_address=recipient,
                                 value=amount,
                                 gas_used=0,
@@ -1182,7 +1195,7 @@ class TokenizationService:
                     else:
                         # Use MultiSend contract for batch efficiency
                         # Encode multiple transfer calls into single transaction
-                        web3 = client._w3
+                        web3 = client._w3  # type: ignore[attr-defined]
                         virtual_contract = web3.eth.contract(
                             address=web3.to_checksum_address(virtual_address),
                             abi=ERC20_ABI,
@@ -1259,7 +1272,7 @@ class TokenizationService:
         This implements deflationary tokenomics by using revenue
         to reduce circulating supply, increasing value for holders.
         """
-        client = self._chain_manager.primary_client
+        client = self._get_chain_manager().primary_client
 
         if not entity.token_info.token_address or not entity.liquidity_pool_address:
             raise BlockchainConfigurationError(
@@ -1309,7 +1322,7 @@ class TokenizationService:
                 "Cannot query token balance: token contract address not set."
             )
 
-        client = self._chain_manager.primary_client
+        client = self._get_chain_manager().primary_client
 
         if not hasattr(client, 'web3'):
             raise BlockchainConfigurationError(

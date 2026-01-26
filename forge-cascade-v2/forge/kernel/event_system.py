@@ -42,7 +42,7 @@ class Subscription:
     def matches(self, event: Event) -> bool:
         """Check if this subscription matches an event."""
         # Check event type
-        if event.event_type not in self.event_types:
+        if event.type not in self.event_types:
             return False
 
         # Check priority
@@ -72,7 +72,7 @@ class EventMetrics:
     # SECURITY FIX (Audit 5): Use deque with maxlen for automatic bounding
     delivery_times: Any = field(default_factory=lambda: deque(maxlen=1000))
 
-    def record_delivery(self, duration_ms: float):
+    def record_delivery(self, duration_ms: float) -> None:
         """Record a delivery time."""
         self.delivery_times.append(duration_ms)
         # deque automatically drops oldest items when maxlen is exceeded
@@ -114,7 +114,7 @@ class EventBus:
         self._max_retries = max_retries
         self._retry_delay = retry_delay_seconds
         self._running = False
-        self._worker_task: asyncio.Task | None = None
+        self._worker_task: asyncio.Task[None] | None = None
 
         # Event type index for faster lookups
         self._type_index: dict[EventType, set[str]] = defaultdict(set)
@@ -569,7 +569,7 @@ class EventBus:
         start_time = asyncio.get_running_loop().time()
 
         # Find matching subscriptions using type index
-        potential_subs = self._type_index.get(event.event_type, set())
+        potential_subs = self._type_index.get(event.type, set())
 
         tasks = []
         for sub_id in potential_subs:
@@ -740,7 +740,7 @@ class EventBus:
         Returns:
             List of (event, error_message) tuples
         """
-        dead_letters = []
+        dead_letters: list[tuple[Event, str]] = []
 
         while len(dead_letters) < limit and not self._dead_letter_queue.empty():
             event, error = await self._dead_letter_queue.get()

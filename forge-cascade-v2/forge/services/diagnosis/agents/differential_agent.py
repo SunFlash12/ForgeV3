@@ -52,10 +52,10 @@ class DifferentialAgent(DiagnosticAgent):
     def __init__(
         self,
         config: DifferentialAgentConfig | None = None,
-        bayesian_scorer=None,
-        primekg_overlay=None,
-        neo4j_client=None,
-    ):
+        bayesian_scorer: Any = None,
+        primekg_overlay: Any = None,
+        neo4j_client: Any = None,
+    ) -> None:
         """
         Initialize the differential diagnosis agent.
 
@@ -76,7 +76,7 @@ class DifferentialAgent(DiagnosticAgent):
         self._neo4j = neo4j_client
 
         # Working state
-        self._current_hypotheses: list[dict] = []
+        self._current_hypotheses: list[dict[str, Any]] = []
         self._evidence_summary: dict[str, Any] = {}
 
     async def analyze(
@@ -148,24 +148,26 @@ class DifferentialAgent(DiagnosticAgent):
             genetic_analysis=genetic_analysis,
         )
 
-        result = {
+        evidence_summary_data: dict[str, Any] = {
+            "phenotype_count": len(phenotypes),
+            "genetic_variant_count": len(genetic),
+            "history_items": len(history),
+            "family_history_items": len(family_history),
+            "wearable_data_points": len(wearable),
+        }
+
+        result: dict[str, Any] = {
             "differential": differential[:self.config.max_differential],
             "primary_diagnosis": differential[0] if differential else None,
             "confidence_assessment": confidence_assessment,
             "explanations": explanations,
-            "evidence_summary": {
-                "phenotype_count": len(phenotypes),
-                "genetic_variant_count": len(genetic),
-                "history_items": len(history),
-                "family_history_items": len(family_history),
-                "wearable_data_points": len(wearable),
-            },
+            "evidence_summary": evidence_summary_data,
             "hypotheses_considered": len(hypotheses),
             "hypotheses_ranked": len(differential),
         }
 
         self._current_hypotheses = differential
-        self._evidence_summary = result["evidence_summary"]
+        self._evidence_summary = evidence_summary_data
 
         logger.info(
             "differential_analysis_complete",
@@ -287,10 +289,10 @@ class DifferentialAgent(DiagnosticAgent):
 
     async def _generate_candidates(
         self,
-        phenotypes: list[dict] | None = None,
-        genetic: list[dict] | None = None,
-        phenotype_analysis: dict | None = None,
-        genetic_analysis: dict | None = None,
+        phenotypes: list[dict[str, Any]] | None = None,
+        genetic: list[dict[str, Any]] | None = None,
+        phenotype_analysis: dict[str, Any] | None = None,
+        genetic_analysis: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
         """Generate candidate hypotheses from evidence."""
         candidates = []
@@ -393,13 +395,13 @@ class DifferentialAgent(DiagnosticAgent):
     async def _score_hypotheses(
         self,
         hypotheses: list[dict[str, Any]],
-        phenotypes: list[dict] | None = None,
-        genetic: list[dict] | None = None,
-        history: list[dict] | None = None,
-        family_history: list[dict] | None = None,
-        wearable: list[dict] | None = None,
-        phenotype_analysis: dict | None = None,
-        genetic_analysis: dict | None = None,
+        phenotypes: list[dict[str, Any]] | None = None,
+        genetic: list[dict[str, Any]] | None = None,
+        history: list[dict[str, Any]] | None = None,
+        family_history: list[dict[str, Any]] | None = None,
+        wearable: list[dict[str, Any]] | None = None,
+        phenotype_analysis: dict[str, Any] | None = None,
+        genetic_analysis: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
         """Score all hypotheses."""
         scored = []
@@ -447,8 +449,8 @@ class DifferentialAgent(DiagnosticAgent):
     async def _score_phenotype_match(
         self,
         hypothesis: dict[str, Any],
-        phenotypes: list[dict],
-        phenotype_analysis: dict | None = None,
+        phenotypes: list[dict[str, Any]],
+        phenotype_analysis: dict[str, Any] | None = None,
     ) -> float:
         """Score phenotype match for hypothesis."""
         disease_id = hypothesis.get("disease_id")
@@ -460,9 +462,10 @@ class DifferentialAgent(DiagnosticAgent):
             for assoc in phenotype_analysis.get("disease_associations", []):
                 if assoc.get("disease_id") == disease_id:
                     # Normalize to 0-1
-                    matches = assoc.get("phenotype_matches", 0)
-                    total = phenotype_analysis.get("phenotype_count", 1) or 1
-                    return min(1.0, matches / total)
+                    matches: int = assoc.get("phenotype_matches", 0)
+                    total_raw = phenotype_analysis.get("phenotype_count", 1)
+                    total: int = total_raw if total_raw else 1
+                    return min(1.0, float(matches) / float(total))
 
         # Compute directly
         patient_hpo = [
@@ -498,8 +501,8 @@ class DifferentialAgent(DiagnosticAgent):
     async def _score_genetic_match(
         self,
         hypothesis: dict[str, Any],
-        genetic: list[dict],
-        genetic_analysis: dict | None = None,
+        genetic: list[dict[str, Any]],
+        genetic_analysis: dict[str, Any] | None = None,
     ) -> float:
         """Score genetic match for hypothesis."""
         if not genetic:
@@ -555,8 +558,8 @@ class DifferentialAgent(DiagnosticAgent):
     def _score_history_match(
         self,
         hypothesis: dict[str, Any],
-        history: list[dict],
-        family_history: list[dict],
+        history: list[dict[str, Any]],
+        family_history: list[dict[str, Any]],
     ) -> float:
         """Score history match for hypothesis."""
         if not history and not family_history:
@@ -586,7 +589,7 @@ class DifferentialAgent(DiagnosticAgent):
     def _score_wearable_match(
         self,
         hypothesis: dict[str, Any],
-        wearable: list[dict],
+        wearable: list[dict[str, Any]],
     ) -> float:
         """Score wearable data match for hypothesis."""
         if not wearable:
@@ -661,8 +664,8 @@ class DifferentialAgent(DiagnosticAgent):
     def _generate_explanations(
         self,
         differential: list[dict[str, Any]],
-        phenotype_analysis: dict | None = None,
-        genetic_analysis: dict | None = None,
+        phenotype_analysis: dict[str, Any] | None = None,
+        genetic_analysis: dict[str, Any] | None = None,
     ) -> dict[str, str]:
         """Generate explanations for top diagnoses."""
         explanations = {}
@@ -740,8 +743,8 @@ class DifferentialAgent(DiagnosticAgent):
     def _calculate_confidence(
         self,
         combined_score: float,
-        supporting: list[dict],
-        refuting: list[dict],
+        supporting: list[dict[str, Any]],
+        refuting: list[dict[str, Any]],
     ) -> float:
         """Calculate confidence based on evidence balance."""
         base = combined_score
@@ -793,9 +796,9 @@ class DifferentialAgent(DiagnosticAgent):
 
 def create_differential_agent(
     config: DifferentialAgentConfig | None = None,
-    bayesian_scorer=None,
-    primekg_overlay=None,
-    neo4j_client=None,
+    bayesian_scorer: Any = None,
+    primekg_overlay: Any = None,
+    neo4j_client: Any = None,
 ) -> DifferentialAgent:
     """Create a differential diagnosis agent instance."""
     return DifferentialAgent(

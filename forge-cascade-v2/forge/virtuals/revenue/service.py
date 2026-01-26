@@ -23,7 +23,7 @@ from collections import defaultdict
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from ..chains import get_chain_manager
+from ..chains import MultiChainManager, get_chain_manager
 from ..config import get_virtuals_config
 from ..models import (
     RevenueRecord,
@@ -65,7 +65,7 @@ class RevenueService:
         """
         self.config = get_virtuals_config()
         self._revenue_repo = revenue_repository
-        self._chain_manager = None
+        self._chain_manager: MultiChainManager | None = None
         self._pending_distributions: list[RevenueRecord] = []
 
     async def initialize(self) -> None:
@@ -346,10 +346,12 @@ class RevenueService:
         if abs(distribution_total - expected_total) > 0.001:  # Allow small float precision error
             logger.error(
                 "distribution_integrity_mismatch",
-                expected_total=expected_total,
-                distribution_total=distribution_total,
-                difference=distribution_total - expected_total,
-                batch_size=len(batch),
+                extra={
+                    "expected_total": expected_total,
+                    "distribution_total": distribution_total,
+                    "difference": distribution_total - expected_total,
+                    "batch_size": len(batch),
+                },
             )
             # Return batch to queue and abort this distribution
             self._pending_distributions = batch + self._pending_distributions

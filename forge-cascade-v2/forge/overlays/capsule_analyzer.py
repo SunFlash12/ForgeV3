@@ -22,6 +22,7 @@ import structlog
 
 from forge.models.base import CapsuleType
 from forge.models.events import Event, EventType
+from forge.models.overlay import OverlayHealthCheck
 from forge.overlays.base import (
     BaseOverlay,
     OverlayContext,
@@ -86,11 +87,11 @@ class CapsuleAnalyzerOverlay(BaseOverlay):
     MAX_ANALYSIS_CACHE_SIZE = 10000  # Maximum cached analyses
     MAX_TOPIC_INDEX_SIZE = 5000  # Maximum topics tracked
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self._analysis_cache: dict[str, ContentAnalysis] = {}
         self._topic_index: dict[str, set[str]] = {}  # topic -> capsule_ids
-        self._term_frequency: Counter = Counter()
+        self._term_frequency: Counter[str] = Counter()
         self._stats: dict[str, Any] = {}
 
     async def initialize(self) -> bool:
@@ -153,7 +154,7 @@ class CapsuleAnalyzerOverlay(BaseOverlay):
             self._logger.error("Capsule analyzer error", error=str(e))
             return OverlayResult.fail(str(e))
 
-    async def _analyze_content(self, data: dict) -> dict:
+    async def _analyze_content(self, data: dict[str, Any]) -> dict[str, Any]:
         """Perform comprehensive content analysis."""
         content = data.get("content", "")
         capsule_id = data.get("capsule_id")
@@ -215,16 +216,19 @@ class CapsuleAnalyzerOverlay(BaseOverlay):
                     self._topic_index[topic] = set()
                 self._topic_index[topic].add(capsule_id)
 
-        analysis = {
+        rounded_avg = round(avg_sentence_length, 1)
+        rounded_quality = round(quality_score, 2)
+
+        analysis: dict[str, Any] = {
             "word_count": word_count,
             "char_count": char_count,
             "sentence_count": sentence_count,
-            "avg_sentence_length": round(avg_sentence_length, 1),
+            "avg_sentence_length": rounded_avg,
             "reading_level": reading_level,
             "key_terms": key_terms,
             "topics": topics,
             "sentiment": sentiment,
-            "quality_score": round(quality_score, 2),
+            "quality_score": rounded_quality,
         }
 
         # Cache analysis with size limit
@@ -234,11 +238,21 @@ class CapsuleAnalyzerOverlay(BaseOverlay):
                 # Remove oldest entry (FIFO - first key added)
                 oldest_key = next(iter(self._analysis_cache))
                 del self._analysis_cache[oldest_key]
-            self._analysis_cache[capsule_id] = ContentAnalysis(**analysis)
+            self._analysis_cache[capsule_id] = ContentAnalysis(
+                word_count=word_count,
+                char_count=char_count,
+                sentence_count=sentence_count,
+                avg_sentence_length=rounded_avg,
+                reading_level=reading_level,
+                key_terms=key_terms,
+                topics=topics,
+                sentiment=sentiment,
+                quality_score=rounded_quality,
+            )
 
         return analysis
 
-    async def _extract_insights(self, data: dict) -> dict:
+    async def _extract_insights(self, data: dict[str, Any]) -> dict[str, Any]:
         """Extract key insights from content."""
         content = data.get("content", "")
 
@@ -286,7 +300,7 @@ class CapsuleAnalyzerOverlay(BaseOverlay):
             "references": references[:3],
         }
 
-    async def _classify_content(self, data: dict) -> dict:
+    async def _classify_content(self, data: dict[str, Any]) -> dict[str, Any]:
         """Classify content into capsule type."""
         content = data.get("content", "")
         current_type = data.get("current_type")
@@ -303,7 +317,7 @@ class CapsuleAnalyzerOverlay(BaseOverlay):
             CapsuleType.DECISION.value: 0,
             CapsuleType.INSIGHT.value: 0,
             CapsuleType.CONFIG.value: 0,
-            CapsuleType.NOTE.value: 0,
+            CapsuleType.MEMORY.value: 0,
         }
 
         # Code detection
@@ -328,12 +342,12 @@ class CapsuleAnalyzerOverlay(BaseOverlay):
         if any(word in lower for word in ["how to", "guide", "tutorial", "explanation", "overview"]):
             scores[CapsuleType.KNOWLEDGE.value] += 2
 
-        # Note is default low-content type
+        # Memory is default low-content type
         if len(content.split()) < 50:
-            scores[CapsuleType.NOTE.value] += 1
+            scores[CapsuleType.MEMORY.value] += 1
 
         # Get best classification
-        best_type = max(scores, key=scores.get)
+        best_type = max(scores, key=lambda k: scores[k])
         confidence = scores[best_type] / (sum(scores.values()) or 1)
 
         return {
@@ -344,7 +358,7 @@ class CapsuleAnalyzerOverlay(BaseOverlay):
             "should_reclassify": current_type != best_type and confidence > 0.6,
         }
 
-    async def _score_quality(self, data: dict) -> dict:
+    async def _score_quality(self, data: dict[str, Any]) -> dict[str, Any]:
         """Score content quality on multiple dimensions."""
         content = data.get("content", "")
 
@@ -415,7 +429,7 @@ class CapsuleAnalyzerOverlay(BaseOverlay):
             "improvement_suggestions": self._get_improvement_suggestions(scores),
         }
 
-    async def _find_similar(self, data: dict) -> dict:
+    async def _find_similar(self, data: dict[str, Any]) -> dict[str, Any]:
         """Find similar capsules based on content."""
         content = data.get("content", "")
         capsule_id = data.get("capsule_id")
@@ -429,7 +443,7 @@ class CapsuleAnalyzerOverlay(BaseOverlay):
         content_terms = {word for word in words if len(word) > 4 and word.isalpha()}
 
         # Find capsules with similar topics
-        similar: list[dict] = []
+        similar: list[dict[str, Any]] = []
 
         for topic in self._detect_topics(content):
             if topic in self._topic_index:
@@ -456,7 +470,7 @@ class CapsuleAnalyzerOverlay(BaseOverlay):
             "topics_searched": self._detect_topics(content),
         }
 
-    async def _get_trends(self, data: dict) -> dict:
+    async def _get_trends(self, data: dict[str, Any]) -> dict[str, Any]:
         """Get trending topics and terms."""
         top_n = data.get("top_n", 10)
 
@@ -480,7 +494,7 @@ class CapsuleAnalyzerOverlay(BaseOverlay):
             "total_unique_terms": len(self._term_frequency),
         }
 
-    async def _summarize_content(self, data: dict) -> dict:
+    async def _summarize_content(self, data: dict[str, Any]) -> dict[str, Any]:
         """Generate a summary of content."""
         content = data.get("content", "")
         max_sentences = data.get("max_sentences", 3)
@@ -496,9 +510,9 @@ class CapsuleAnalyzerOverlay(BaseOverlay):
             return {"summary": content[:200], "method": "truncation"}
 
         # Score sentences by importance (simple heuristic)
-        scored = []
+        scored: list[tuple[float, str]] = []
         for i, sentence in enumerate(sentences):
-            score = 0
+            score: float = 0.0
             # First sentences are often important
             if i < 2:
                 score += 2
@@ -603,8 +617,9 @@ class CapsuleAnalyzerOverlay(BaseOverlay):
     async def handle_event(self, event: Event) -> None:
         """Handle capsule events for auto-analysis."""
         if event.type in {EventType.CAPSULE_CREATED, EventType.CAPSULE_UPDATED}:
-            capsule_id = event.data.get("capsule_id")
-            content = event.data.get("content")
+            payload = event.payload or {}
+            capsule_id = payload.get("capsule_id")
+            content = payload.get("content")
 
             if capsule_id and content:
                 # Auto-analyze new/updated capsules
@@ -618,11 +633,17 @@ class CapsuleAnalyzerOverlay(BaseOverlay):
                     capsule_id=capsule_id,
                 )
 
-    async def health_check(self) -> bool:
+    async def health_check(self) -> OverlayHealthCheck:
         """Check overlay health."""
         try:
             # Test analysis functionality
             result = await self._analyze_content({"content": "Test content for health check."})
-            return "word_count" in result
+            healthy = "word_count" in result
         except Exception:
-            return False
+            healthy = False
+        return OverlayHealthCheck(
+            overlay_id=self.id,
+            level="L1",
+            healthy=healthy,
+            message=None if healthy else "Health check failed",
+        )

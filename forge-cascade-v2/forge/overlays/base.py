@@ -15,7 +15,7 @@ from uuid import uuid4
 
 import structlog
 
-from ..models.base import TrustLevel
+from ..models.base import OverlayState, TrustLevel
 from ..models.events import Event, EventType
 from ..models.overlay import (
     Capability,
@@ -23,7 +23,6 @@ from ..models.overlay import (
     Overlay,
     OverlayHealthCheck,
     OverlayManifest,
-    OverlayState,
 )
 
 logger = structlog.get_logger()
@@ -80,17 +79,17 @@ class OverlayResult:
     success: bool
     data: dict[str, Any] | None = None
     error: str | None = None
-    events_to_emit: list[dict] = field(default_factory=list)
+    events_to_emit: list[dict[str, Any]] = field(default_factory=list)
     metrics: dict[str, Any] = field(default_factory=dict)
     duration_ms: float = 0.0
 
     @classmethod
-    def ok(cls, data: dict[str, Any] | None = None, **kwargs) -> "OverlayResult":
+    def ok(cls, data: dict[str, Any] | None = None, **kwargs: Any) -> "OverlayResult":
         """Create a successful result."""
         return cls(success=True, data=data, **kwargs)
 
     @classmethod
-    def fail(cls, error: str, **kwargs) -> "OverlayResult":
+    def fail(cls, error: str, **kwargs: Any) -> "OverlayResult":
         """Create a failed result."""
         return cls(success=False, error=error, **kwargs)
 
@@ -153,7 +152,7 @@ class BaseOverlay(ABC):
     # Minimum trust level to use this overlay
     MIN_TRUST_LEVEL: TrustLevel = TrustLevel.STANDARD
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.id = str(uuid4())
         self.state = OverlayState.REGISTERED
         self.execution_count = 0
@@ -343,27 +342,30 @@ class BaseOverlay(ABC):
 
         return OverlayHealthCheck(
             overlay_id=self.id,
-            overlay_name=self.NAME,
+            level="L1",
             healthy=healthy,
-            state=self.state,
-            execution_count=self.execution_count,
-            error_count=self.error_count,
-            error_rate=error_rate,
-            last_execution=self.last_execution,
-            last_error=self.last_error,
-            checked_at=datetime.now(UTC)
+            message=self.last_error,
+            details={
+                "overlay_name": self.NAME,
+                "state": self.state.value,
+                "execution_count": self.execution_count,
+                "error_count": self.error_count,
+                "error_rate": error_rate,
+                "last_execution": self.last_execution.isoformat() if self.last_execution else None,
+            },
+            timestamp=datetime.now(UTC)
         )
 
     def get_manifest(self) -> OverlayManifest:
         """Get the overlay manifest describing capabilities and requirements."""
         return OverlayManifest(
+            id=self.id,
             name=self.NAME,
             version=self.VERSION,
             description=self.DESCRIPTION,
-            subscribed_events=[et.value for et in self.SUBSCRIBED_EVENTS],
-            required_capabilities=[c.value for c in self.REQUIRED_CAPABILITIES],
-            fuel_budget=self.DEFAULT_FUEL_BUDGET,
-            min_trust_level=self.MIN_TRUST_LEVEL.value
+            capabilities=self.REQUIRED_CAPABILITIES,
+            trust_required=self.MIN_TRUST_LEVEL.value,
+            fuel_budgets={"default": self.DEFAULT_FUEL_BUDGET},
         )
 
     def to_model(self) -> Overlay:
@@ -374,7 +376,7 @@ class BaseOverlay(ABC):
             version=self.VERSION,
             description=self.DESCRIPTION,
             state=self.state,
-            manifest=self.get_manifest()
+            capabilities=self.REQUIRED_CAPABILITIES,
         )
 
     # =========================================================================
@@ -383,13 +385,13 @@ class BaseOverlay(ABC):
 
     def should_handle(self, event: Event) -> bool:
         """Check if this overlay should handle an event."""
-        return event.event_type in self.SUBSCRIBED_EVENTS
+        return event.type in self.SUBSCRIBED_EVENTS
 
     def create_event_emission(
         self,
         event_type: EventType,
         payload: dict[str, Any]
-    ) -> dict:
+    ) -> dict[str, Any]:
         """
         Create an event emission for the result.
 
@@ -412,7 +414,7 @@ class BaseOverlay(ABC):
         trust_flame: int = 60,
         capabilities: set[Capability] | None = None,
         fuel_budget: FuelBudget | None = None,
-        **metadata
+        **metadata: Any
     ) -> OverlayContext:
         """
         Create an execution context.
@@ -454,7 +456,7 @@ class PassthroughOverlay(BaseOverlay):
         """Simply return input as output."""
         data = input_data or {}
         if event:
-            data["event_type"] = event.event_type.value
+            data["event_type"] = event.type.value
             data["event_payload"] = event.payload
 
         return OverlayResult.ok(data=data)
@@ -471,12 +473,12 @@ class CompositeOverlay(BaseOverlay):
     VERSION = "1.0.0"
     DESCRIPTION = "Composes multiple overlays"
 
-    def __init__(self, overlays: list[BaseOverlay]):
+    def __init__(self, overlays: list[BaseOverlay]) -> None:
         super().__init__()
         self.overlays = overlays
 
         # Aggregate subscribed events
-        self.SUBSCRIBED_EVENTS = set()
+        self.SUBSCRIBED_EVENTS: set[EventType] = set()
         for overlay in overlays:
             self.SUBSCRIBED_EVENTS.update(overlay.SUBSCRIBED_EVENTS)
 
@@ -501,8 +503,8 @@ class CompositeOverlay(BaseOverlay):
     ) -> OverlayResult:
         """Execute all child overlays in sequence."""
         current_data = input_data or {}
-        all_events = []
-        all_metrics = {}
+        all_events: list[dict[str, Any]] = []
+        all_metrics: dict[str, Any] = {}
         total_duration = 0.0
 
         for overlay in self.overlays:

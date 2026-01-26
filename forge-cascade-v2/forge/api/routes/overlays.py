@@ -135,7 +135,7 @@ class CanaryStatusResponse(BaseModel):
 async def list_overlays(
     user: ActiveUserDep,
     overlay_manager: OverlayManagerDep,
-) -> dict:
+) -> dict[str, Any]:
     """
     List all registered overlays.
     """
@@ -147,7 +147,7 @@ async def list_overlays(
 async def list_active_overlays(
     user: ActiveUserDep,
     overlay_manager: OverlayManagerDep,
-) -> dict:
+) -> dict[str, Any]:
     """
     List only active overlays.
     """
@@ -164,7 +164,13 @@ async def list_overlays_by_phase(
     """
     List overlays by their pipeline phase.
     """
-    overlays = overlay_manager.get_overlays_for_phase(phase)
+    # OverlayManager.get_overlays_for_phase expects an int, so convert via phase_map
+    phase_map = {
+        "validation": 2, "security": 2, "enrichment": 3, "processing": 3,
+        "governance": 4, "finalization": 5, "notification": 6,
+    }
+    phase_int = phase_map.get(phase.value, 1)
+    overlays = overlay_manager.get_overlays_for_phase(phase_int)
     return [OverlayResponse.from_overlay(o) for o in overlays]
 
 
@@ -245,7 +251,8 @@ async def deactivate_overlay(
     if not overlay:
         raise HTTPException(status_code=404, detail="Overlay not found")
 
-    if overlay.is_critical:
+    # BaseOverlay may not have is_critical attribute; safely access it
+    if getattr(overlay, 'is_critical', False):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot deactivate critical overlay",
@@ -331,7 +338,9 @@ async def get_overlay_metrics(
     if not overlay:
         raise HTTPException(status_code=404, detail="Overlay not found")
 
-    stats = overlay.get_stats() if hasattr(overlay, 'get_stats') else {}
+    # get_stats may not exist on all overlays; safely retrieve and cast to dict
+    stats_raw = overlay.get_stats() if hasattr(overlay, 'get_stats') else {}
+    stats: dict[str, Any] = stats_raw if isinstance(stats_raw, dict) else {}
 
     total = stats.get('total_executions', 0)
     successful = stats.get('successful_executions', 0)
@@ -342,12 +351,12 @@ async def get_overlay_metrics(
 
     return OverlayMetricsResponse(
         overlay_id=overlay_id,
-        total_executions=total,
-        successful_executions=successful,
-        failed_executions=failed,
-        average_duration_ms=stats.get('avg_execution_time_ms', 0),  # Map to frontend field name
-        error_rate=failed / total if total > 0 else 0,
-        last_executed=last_exec.isoformat() if last_exec else None,  # Map to frontend field name
+        total_executions=int(total),
+        successful_executions=int(successful),
+        failed_executions=int(failed),
+        average_duration_ms=float(stats.get('avg_execution_time_ms', 0)),
+        error_rate=failed / total if total > 0 else 0.0,
+        last_executed=last_exec.isoformat() if last_exec else None,
     )
 
 
@@ -355,18 +364,15 @@ async def get_overlay_metrics(
 async def get_all_overlay_metrics(
     user: ActiveUserDep,
     overlay_manager: OverlayManagerDep,
-) -> dict:
+) -> dict[str, Any]:
     """
     Get summary metrics for all overlays.
     """
     overlays = overlay_manager.list_all()
 
-    summary = {
-        "total_overlays": len(overlays),
-        "active_overlays": sum(1 for o in overlays if o.state == OverlayState.ACTIVE),
-        "by_phase": {},
-        "by_state": {},
-    }
+    # Use typed dicts for phase and state counts to satisfy mypy
+    by_phase: dict[str, int] = {}
+    by_state: dict[str, int] = {}
 
     for overlay in overlays:
         # Safely get phase - some overlays may not have this attribute
@@ -376,15 +382,15 @@ async def get_all_overlay_metrics(
             phase = "unknown"
         state = overlay.state.value if hasattr(overlay.state, 'value') else str(overlay.state)
 
-        if phase not in summary["by_phase"]:
-            summary["by_phase"][phase] = 0
-        summary["by_phase"][phase] += 1
+        by_phase[phase] = by_phase.get(phase, 0) + 1
+        by_state[state] = by_state.get(state, 0) + 1
 
-        if state not in summary["by_state"]:
-            summary["by_state"][state] = 0
-        summary["by_state"][state] += 1
-
-    return summary
+    return {
+        "total_overlays": len(overlays),
+        "active_overlays": sum(1 for o in overlays if o.state == OverlayState.ACTIVE),
+        "by_phase": by_phase,
+        "by_state": by_state,
+    }
 
 
 # =============================================================================
@@ -428,8 +434,8 @@ async def get_canary_status(
     if not overlay:
         raise HTTPException(status_code=404, detail="Overlay not found")
 
-    # Check if there's an active canary
-    deployment = canary_manager.get_deployment(overlay_id)
+    # Check if there's an active canary (get_deployment is async)
+    deployment = await canary_manager.get_deployment(overlay_id)
 
     if not deployment:
         # Return empty canary status when no deployment exists
@@ -469,19 +475,23 @@ async def start_canary_deployment(
     if not overlay:
         raise HTTPException(status_code=404, detail="Overlay not found")
 
-    # Check if already in canary
-    existing = canary_manager.get_deployment(overlay_id)
+    # Check if already in canary (get_deployment is async)
+    existing = await canary_manager.get_deployment(overlay_id)
     if existing:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Canary deployment already in progress",
         )
 
-    # Start canary
-    deployment = await canary_manager.start(
+    # Create and start canary deployment
+    # CanaryManager.start only accepts deployment_id; create_deployment first
+    deployment = await canary_manager.create_deployment(
+        name=f"overlay_{overlay_id}",
+        canary_version=overlay.config,
+        control_version=overlay.config,
         deployment_id=overlay_id,
-        target=overlay.config,
     )
+    await canary_manager.start(overlay_id)
 
     # Resilience: Record canary start metric
     record_canary_started(overlay_id)
@@ -508,7 +518,7 @@ async def advance_canary_deployment(
     """
     Manually advance a canary deployment to the next stage.
     """
-    deployment = canary_manager.get_deployment(overlay_id)
+    deployment = await canary_manager.get_deployment(overlay_id)
 
     if not deployment:
         raise HTTPException(
@@ -516,24 +526,32 @@ async def advance_canary_deployment(
             detail="No active canary deployment",
         )
 
-    await canary_manager.advance(overlay_id)
+    # CanaryManager uses manual_advance, not advance
+    await canary_manager.manual_advance(overlay_id)
 
     # Re-fetch deployment after advancing
-    deployment = canary_manager.get_deployment(overlay_id)
+    updated_deployment = await canary_manager.get_deployment(overlay_id)
 
     # Resilience: Record canary advance metric
-    record_canary_advanced(overlay_id, getattr(deployment, 'current_stage', 0))
+    record_canary_advanced(overlay_id, getattr(updated_deployment, 'current_stage', 0) if updated_deployment else 0)
 
     await audit_repo.log_action(
         action="canary_advanced",
         entity_type="overlay",
         entity_id=overlay_id,
         user_id=user.id,
-        details={"new_percentage": getattr(deployment, 'current_percentage', 0)},
+        details={"new_percentage": getattr(updated_deployment, 'current_percentage', 0) if updated_deployment else 0},
         correlation_id=correlation_id,
     )
 
-    return _canary_to_response(overlay_id, deployment)
+    # Return the updated deployment or raise error if it disappeared
+    if not updated_deployment:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Deployment lost after advancing",
+        )
+
+    return _canary_to_response(overlay_id, updated_deployment)
 
 
 @router.post("/{overlay_id}/canary/rollback")
@@ -543,11 +561,11 @@ async def rollback_canary_deployment(
     canary_manager: CanaryManagerDep,
     audit_repo: AuditRepoDep,
     correlation_id: CorrelationIdDep,
-) -> dict:
+) -> dict[str, str]:
     """
     Rollback a canary deployment.
     """
-    deployment = canary_manager.get_deployment(overlay_id)
+    deployment = await canary_manager.get_deployment(overlay_id)
 
     if not deployment:
         raise HTTPException(
@@ -555,7 +573,7 @@ async def rollback_canary_deployment(
             detail="No active canary deployment",
         )
 
-    await canary_manager.rollback(overlay_id)
+    await canary_manager.rollback(overlay_id, reason="Manual rollback via API")
 
     # Resilience: Record canary rollback metric
     record_canary_rolled_back(overlay_id)
@@ -581,7 +599,7 @@ async def reload_all_overlays(
     overlay_manager: OverlayManagerDep,
     audit_repo: AuditRepoDep,
     correlation_id: CorrelationIdDep,
-) -> dict:
+) -> dict[str, Any]:
     """
     Reload all overlays (admin action).
 

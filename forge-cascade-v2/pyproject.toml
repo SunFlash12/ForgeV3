@@ -133,7 +133,7 @@ disallow_untyped_defs = false  # Enable per-module below
 # Custom type stubs for external libraries (outside forge/ to avoid module conflicts)
 mypy_path = "stubs"
 
-# External libraries - using custom stubs in forge/stubs/
+# External libraries - using custom stubs in stubs/
 [[tool.mypy.overrides]]
 module = [
     "web3",
@@ -145,6 +145,8 @@ module = [
     "zxcvbn",
     "hvac",
     "hvac.*",
+    "openai",
+    "openai.*",
 ]
 ignore_missing_imports = false  # Use our custom stubs
 

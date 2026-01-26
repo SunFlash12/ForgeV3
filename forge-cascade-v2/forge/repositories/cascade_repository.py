@@ -69,6 +69,8 @@ class CascadeRepository:
             if isinstance(timestamp, str):
                 timestamp = datetime.fromisoformat(timestamp)
 
+            parsed_timestamp: datetime = timestamp if isinstance(timestamp, datetime) else self._now()
+
             return CascadeEvent(
                 id=data["id"],
                 source_overlay=data["source_overlay"],
@@ -78,7 +80,7 @@ class CascadeRepository:
                 max_hops=data.get("max_hops", 5),
                 visited_overlays=data.get("visited_overlays", []),
                 impact_score=data.get("impact_score", 0.0),
-                timestamp=timestamp,
+                timestamp=parsed_timestamp,
                 correlation_id=data.get("correlation_id"),
             )
         except Exception as e:
@@ -92,16 +94,17 @@ class CascadeRepository:
         if not data:
             return None
         try:
-            initiated_at = data.get("initiated_at")
-            if isinstance(initiated_at, str):
-                initiated_at = datetime.fromisoformat(initiated_at)
+            raw_initiated_at = data.get("initiated_at")
+            if isinstance(raw_initiated_at, str):
+                raw_initiated_at = datetime.fromisoformat(raw_initiated_at)
+            parsed_initiated_at: datetime = raw_initiated_at if isinstance(raw_initiated_at, datetime) else self._now()
 
             completed_at = data.get("completed_at")
             if isinstance(completed_at, str):
                 completed_at = datetime.fromisoformat(completed_at)
 
             # Deserialize events
-            event_list = []
+            event_list: list[CascadeEvent] = []
             if events:
                 for event_data in events:
                     event = self._deserialize_event(event_data)
@@ -111,7 +114,7 @@ class CascadeRepository:
             return CascadeChain(
                 cascade_id=data["cascade_id"],
                 initiated_by=data["initiated_by"],
-                initiated_at=initiated_at,
+                initiated_at=parsed_initiated_at,
                 events=event_list,
                 completed_at=completed_at,
                 total_hops=data.get("total_hops", 0),
@@ -345,11 +348,13 @@ class CascadeRepository:
 
         results = await self.client.execute(query, {})
 
-        chains = []
+        chains: list[CascadeChain] = []
         for result in results:
-            chain = self._deserialize_chain(result.get("chain"), result.get("events", []))
-            if chain:
-                chains.append(chain)
+            chain_data = result.get("chain")
+            if chain_data is not None:
+                chain = self._deserialize_chain(chain_data, result.get("events", []))
+                if chain:
+                    chains.append(chain)
 
         return chains
 
@@ -381,11 +386,13 @@ class CascadeRepository:
 
         results = await self.client.execute(query, {"limit": limit, "skip": skip})
 
-        chains = []
+        chains: list[CascadeChain] = []
         for result in results:
-            chain = self._deserialize_chain(result.get("chain"), result.get("events", []))
-            if chain:
-                chains.append(chain)
+            chain_data = result.get("chain")
+            if chain_data is not None:
+                chain = self._deserialize_chain(chain_data, result.get("events", []))
+                if chain:
+                    chains.append(chain)
 
         return chains
 

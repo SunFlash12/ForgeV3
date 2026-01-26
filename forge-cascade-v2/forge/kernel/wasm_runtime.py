@@ -243,7 +243,7 @@ class HostFunction(ABC):
     required_capability: Capability | None = None
 
     @abstractmethod
-    async def __call__(self, *args, **kwargs) -> Any:
+    async def __call__(self, *args: Any, **kwargs: Any) -> Any:
         """Execute the host function."""
         pass
 
@@ -309,7 +309,7 @@ class DatabaseReadHostFunction(HostFunction):
     def __init__(self, db_client: Any):
         self.db = db_client
 
-    async def __call__(self, query: str, params: dict | None = None) -> list[dict]:
+    async def __call__(self, query: str, params: dict[str, Any] | None = None) -> list[dict[str, Any]]:
         """Execute a read query."""
         # SECURITY FIX: Validate query for injection patterns
         _validate_cypher_query(query)
@@ -319,7 +319,8 @@ class DatabaseReadHostFunction(HostFunction):
         if any(kw in query_lower for kw in ["create", "merge", "set", "delete", "remove"]):
             raise PermissionError("Write operations not allowed with DATABASE_READ capability")
 
-        return await self.db.execute(query, params or {})
+        result: list[dict[str, Any]] = await self.db.execute(query, params or {})
+        return result
 
 
 class DatabaseWriteHostFunction(HostFunction):
@@ -331,11 +332,12 @@ class DatabaseWriteHostFunction(HostFunction):
     def __init__(self, db_client: Any):
         self.db = db_client
 
-    async def __call__(self, query: str, params: dict | None = None) -> list[dict]:
+    async def __call__(self, query: str, params: dict[str, Any] | None = None) -> list[dict[str, Any]]:
         """Execute a write query."""
         # SECURITY FIX: Validate query for injection patterns
         _validate_cypher_query(query)
-        return await self.db.execute(query, params or {})
+        result: list[dict[str, Any]] = await self.db.execute(query, params or {})
+        return result
 
 
 class EventPublishHostFunction(HostFunction):
@@ -348,7 +350,7 @@ class EventPublishHostFunction(HostFunction):
         self.event_bus = event_bus
         self.overlay_id = overlay_id
 
-    async def __call__(self, event_type: str, payload: dict) -> None:
+    async def __call__(self, event_type: str, payload: dict[str, Any]) -> None:
         """Publish an event."""
         from uuid import uuid4
 
@@ -356,7 +358,7 @@ class EventPublishHostFunction(HostFunction):
 
         event = Event(
             id=str(uuid4()),
-            event_type=EventType(event_type) if event_type in EventType.__members__ else EventType.SYSTEM_EVENT,
+            type=EventType(event_type) if event_type in EventType.__members__ else EventType.SYSTEM_EVENT,
             source=f"overlay:{self.overlay_id}",
             payload=payload,
         )
@@ -535,7 +537,7 @@ class WasmOverlayRuntime:
         self,
         instance_id: str,
         function: str,
-        payload: dict,
+        payload: dict[str, Any],
     ) -> dict[str, Any]:
         """
         Execute a function on an overlay instance.
@@ -761,11 +763,12 @@ def init_wasm_runtime(
 def shutdown_wasm_runtime() -> None:
     """Shutdown the global Wasm runtime."""
     global _wasm_runtime
-    if _wasm_runtime:
+    if _wasm_runtime is not None:
+        runtime = _wasm_runtime
         # SECURITY FIX (Audit 3): Track background tasks and handle exceptions
         async def _safe_terminate(instance_id: str) -> None:
             try:
-                await _wasm_runtime.terminate(instance_id)
+                await runtime.terminate(instance_id)
             except Exception as e:
                 import structlog
                 structlog.get_logger().error(
@@ -775,7 +778,7 @@ def shutdown_wasm_runtime() -> None:
                 )
 
         # Terminate all instances with exception handling
-        for instance_id in list(_wasm_runtime._instances.keys()):
+        for instance_id in list(runtime._instances.keys()):
             task = asyncio.create_task(_safe_terminate(instance_id))
             task.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
     _wasm_runtime = None

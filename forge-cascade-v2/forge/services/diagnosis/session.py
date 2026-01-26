@@ -107,11 +107,11 @@ class SessionController:
         config: SessionConfig | None = None,
         engine_config: EngineConfig | None = None,
         scoring_config: ScoringConfig | None = None,
-        primekg_overlay=None,
-        hpo_service=None,
-        genetic_service=None,
-        neo4j_client=None,
-    ):
+        primekg_overlay: Any = None,
+        hpo_service: Any = None,
+        genetic_service: Any = None,
+        neo4j_client: Any = None,
+    ) -> None:
         """
         Initialize the session controller.
 
@@ -142,7 +142,7 @@ class SessionController:
 
         # Active sessions
         self._sessions: dict[str, DiagnosisSession] = {}
-        self._session_tasks: dict[str, asyncio.Task] = {}
+        self._session_tasks: dict[str, asyncio.Task[Any]] = {}
         self._session_locks: dict[str, asyncio.Lock] = {}
 
         # Event subscribers
@@ -150,7 +150,7 @@ class SessionController:
         self._global_callbacks: list[EventCallback] = []
 
         # Background task for cleanup
-        self._cleanup_task: asyncio.Task | None = None
+        self._cleanup_task: asyncio.Task[None] | None = None
 
     async def start(self) -> None:
         """Start the session controller."""
@@ -218,7 +218,7 @@ class SessionController:
         self,
         session_id: str,
         phenotypes: list[str] | None = None,
-        genetic_variants: list[dict] | None = None,
+        genetic_variants: list[dict[str, Any]] | None = None,
         medical_history: list[str] | None = None,
         family_history: list[str] | None = None,
         demographics: dict[str, Any] | None = None,
@@ -723,16 +723,16 @@ class SessionController:
         cleanup_threshold = now - timedelta(hours=1)
 
         for session_id in expired_ids:
-            session = self._sessions.get(session_id)
-            if session and session.expires_at and session.expires_at < cleanup_threshold:
+            expired_session = self._sessions.get(session_id)
+            if expired_session and expired_session.expires_at and expired_session.expires_at < cleanup_threshold:
                 await self.delete_session(session_id)
                 cleanup_count += 1
 
         # Clean up completed but idle sessions older than 2 hours
         completed_cleanup_threshold = now - timedelta(hours=2)
         for session_id in idle_ids:
-            session = self._sessions.get(session_id)
-            if session and session.updated_at and session.updated_at < completed_cleanup_threshold:
+            idle_session = self._sessions.get(session_id)
+            if idle_session and idle_session.updated_at and idle_session.updated_at < completed_cleanup_threshold:
                 await self.delete_session(session_id)
                 cleanup_count += 1
 
@@ -762,7 +762,7 @@ class SessionController:
             Dictionary with session statistics
         """
         now = _utc_now()
-        states = {}
+        states: dict[str, int] = {}
         total_age = timedelta()
 
         for session in self._sessions.values():
@@ -789,10 +789,10 @@ def create_session_controller(
     config: SessionConfig | None = None,
     engine_config: EngineConfig | None = None,
     scoring_config: ScoringConfig | None = None,
-    primekg_overlay=None,
-    hpo_service=None,
-    genetic_service=None,
-    neo4j_client=None,
+    primekg_overlay: Any = None,
+    hpo_service: Any = None,
+    genetic_service: Any = None,
+    neo4j_client: Any = None,
 ) -> SessionController:
     """Create a session controller instance."""
     return SessionController(

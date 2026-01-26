@@ -110,7 +110,7 @@ class TieredLineageStorage:
     - Tier 2 -> Tier 3: Age > tier2_max_age_days OR trust < tier2_min_trust
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._config = get_resilience_config().lineage
         self._initialized = False
 
@@ -120,14 +120,14 @@ class TieredLineageStorage:
         self._tier3_storage: dict[str, str] = {}    # S3 keys
 
         # Statistics
-        self._stats = {
+        self._stats: dict[StorageTier, TierStats] = {
             StorageTier.HOT: TierStats(),
             StorageTier.WARM: TierStats(),
             StorageTier.COLD: TierStats(),
         }
 
         # Background migration task
-        self._migration_task: asyncio.Task | None = None
+        self._migration_task: asyncio.Task[None] | None = None
 
     async def initialize(self) -> None:
         """Initialize the tiered storage system."""
@@ -233,10 +233,10 @@ class TieredLineageStorage:
 
         # Check Tier 3
         if entry_id in self._tier3_storage:
-            entry = await self._retrieve_from_cold(self._tier3_storage[entry_id])
-            if entry:
-                entry.last_accessed = datetime.now(UTC)
-            return entry
+            cold_entry = await self._retrieve_from_cold(self._tier3_storage[entry_id])
+            if cold_entry:
+                cold_entry.last_accessed = datetime.now(UTC)
+            return cold_entry
 
         return None
 
@@ -255,9 +255,9 @@ class TieredLineageStorage:
         Returns:
             List of lineage entries in order
         """
-        chain = []
-        visited = set()
-        current_id = capsule_id
+        chain: list[LineageEntry] = []
+        visited: set[str] = set()
+        current_id: str | None = capsule_id
 
         for _ in range(depth):
             if not current_id or current_id in visited:

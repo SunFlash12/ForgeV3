@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 import structlog
+from pydantic import BaseModel
 
 from forge.database.client import Neo4jClient
 from forge.models.base import ProposalStatus
@@ -28,18 +29,12 @@ from forge.repositories.base import BaseRepository
 logger = structlog.get_logger(__name__)
 
 
-class ProposalUpdate:
+class ProposalUpdate(BaseModel):
     """Schema for updating a proposal."""
 
-    def __init__(
-        self,
-        title: str | None = None,
-        description: str | None = None,
-        action: dict[str, Any] | None = None,
-    ):
-        self.title = title
-        self.description = description
-        self.action = action
+    title: str | None = None
+    description: str | None = None
+    action: dict[str, Any] | None = None
 
 
 class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpdate]):
@@ -63,7 +58,8 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
 
     @property
     def model_class(self) -> type[Proposal]:
-        return Proposal  # type: ignore[no-any-return]
+        cls: type[Proposal] = Proposal
+        return cls
 
     # ═══════════════════════════════════════════════════════════════
     # PROPOSAL MANAGEMENT
@@ -142,7 +138,12 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
             proposer_id=proposer_id,
         )
 
-        return self._to_model(result["entity"])
+        if result is None:
+            raise RuntimeError("Failed to create proposal")
+        proposal = self._to_model(result["entity"])
+        if proposal is None:
+            raise RuntimeError("Failed to deserialize created proposal")
+        return proposal
 
     async def update(
         self,

@@ -848,7 +848,7 @@ class GhostCouncilService:
         proposal: Proposal,
         context: dict[str, Any] | None,
         constitutional_review: dict[str, Any] | None,
-        llm,
+        llm: Any,
     ) -> GhostCouncilVote:
         """
         Get a single member's vote with tri-perspective analysis.
@@ -1123,8 +1123,8 @@ Constitutional AI Review:
             strength = 0.5  # Split or uncertain
 
         # Collect key points from approvers/majority
-        key_points = []
-        dissenting = []
+        key_points: list[str] = []
+        dissenting: list[str] = []
 
         for vote in votes:
             if vote.vote == consensus_vote:
@@ -1285,7 +1285,7 @@ Constitutional AI Review:
         self,
         member: GhostCouncilMember,
         issue: SeriousIssue,
-        llm,
+        llm: Any,
     ) -> GhostCouncilVote:
         """
         Get a member's response to a serious issue with tri-perspective analysis.

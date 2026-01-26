@@ -53,11 +53,11 @@ class GeneticAgent(DiagnosticAgent):
     def __init__(
         self,
         config: GeneticAgentConfig | None = None,
-        genetic_service=None,
-        variant_annotator=None,
-        primekg_overlay=None,
-        neo4j_client=None,
-    ):
+        genetic_service: Any = None,
+        variant_annotator: Any = None,
+        primekg_overlay: Any = None,
+        neo4j_client: Any = None,
+    ) -> None:
         """
         Initialize the genetic agent.
 
@@ -80,8 +80,8 @@ class GeneticAgent(DiagnosticAgent):
         self._neo4j = neo4j_client
 
         # Analysis cache
-        self._gene_cache: dict[str, dict] = {}
-        self._variant_cache: dict[str, dict] = {}
+        self._gene_cache: dict[str, dict[str, Any]] = {}
+        self._variant_cache: dict[str, dict[str, Any]] = {}
 
     async def analyze(
         self,
@@ -387,7 +387,8 @@ class GeneticAgent(DiagnosticAgent):
         """Get disease associations for a gene."""
         cache_key = f"gene_assoc_{gene_symbol}"
         if cache_key in self._gene_cache:
-            return self._gene_cache[cache_key].get("associations", [])
+            cached: list[dict[str, Any]] = self._gene_cache[cache_key].get("associations", [])
+            return cached
 
         if not self._neo4j:
             return []
@@ -426,7 +427,8 @@ class GeneticAgent(DiagnosticAgent):
         """Get genes associated with a disease."""
         cache_key = f"disease_genes_{disease_id}"
         if cache_key in self._gene_cache:
-            return self._gene_cache[cache_key].get("genes", [])
+            cached_genes: list[str] = self._gene_cache[cache_key].get("genes", [])
+            return cached_genes
 
         if not self._neo4j:
             return []
@@ -448,13 +450,13 @@ class GeneticAgent(DiagnosticAgent):
     def _check_compound_heterozygosity(
         self,
         variants: list[dict[str, Any]],
-        gene_associations: dict[str, list[dict]],
+        gene_associations: dict[str, list[dict[str, Any]]],
     ) -> list[dict[str, Any]]:
         """Check for potential compound heterozygosity."""
         compound_het = []
 
         # Group variants by gene
-        by_gene: dict[str, list[dict]] = {}
+        by_gene: dict[str, list[dict[str, Any]]] = {}
         for v in variants:
             gene = v.get("code") or v.get("gene_symbol") or v.get("gene")
             if gene:
@@ -511,7 +513,7 @@ class GeneticAgent(DiagnosticAgent):
     def _identify_candidate_genes(
         self,
         variants: list[dict[str, Any]],
-        gene_associations: dict[str, list[dict]],
+        gene_associations: dict[str, list[dict[str, Any]]],
     ) -> list[dict[str, Any]]:
         """Identify candidate genes for disease."""
         candidates = []
@@ -572,10 +574,10 @@ class GeneticAgent(DiagnosticAgent):
 
 def create_genetic_agent(
     config: GeneticAgentConfig | None = None,
-    genetic_service=None,
-    variant_annotator=None,
-    primekg_overlay=None,
-    neo4j_client=None,
+    genetic_service: Any = None,
+    variant_annotator: Any = None,
+    primekg_overlay: Any = None,
+    neo4j_client: Any = None,
 ) -> GeneticAgent:
     """Create a genetic agent instance."""
     return GeneticAgent(

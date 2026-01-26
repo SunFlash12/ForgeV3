@@ -27,7 +27,7 @@ F = TypeVar('F', bound=Callable[..., Any])
 
 # Try to import OpenTelemetry, but allow graceful degradation
 try:
-    from opentelemetry import trace
+    from opentelemetry import trace as otel_trace
     from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
     from opentelemetry.sdk.resources import SERVICE_NAME, SERVICE_VERSION, Resource
     from opentelemetry.sdk.trace import TracerProvider
@@ -37,7 +37,7 @@ try:
     OTEL_AVAILABLE = True
 except ImportError:
     OTEL_AVAILABLE = False
-    trace = None
+    otel_trace = None
     TracerProvider = None
     BatchSpanProcessor = None
     Resource = None
@@ -86,10 +86,10 @@ class SpanContext:
 class NoOpSpan:
     """No-op span for when OpenTelemetry is not available."""
 
-    def __enter__(self):
+    def __enter__(self) -> NoOpSpan:
         return self
 
-    def __exit__(self, *args):
+    def __exit__(self, *args: Any) -> None:
         pass
 
     def set_attribute(self, key: str, value: Any) -> None:
@@ -101,17 +101,17 @@ class NoOpSpan:
     def record_exception(self, exception: Exception) -> None:
         pass
 
-    def add_event(self, name: str, attributes: dict | None = None) -> None:
+    def add_event(self, name: str, attributes: dict[str, Any] | None = None) -> None:
         pass
 
 
 class NoOpTracer:
     """No-op tracer for when OpenTelemetry is not available."""
 
-    def start_as_current_span(self, name: str, **kwargs):
+    def start_as_current_span(self, name: str, **kwargs: Any) -> NoOpSpan:
         return NoOpSpan()
 
-    def start_span(self, name: str, **kwargs):
+    def start_span(self, name: str, **kwargs: Any) -> NoOpSpan:
         return NoOpSpan()
 
 
@@ -123,11 +123,11 @@ class ForgeTracer:
     with automatic attribute enrichment.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._config = get_resilience_config().observability
-        self._tracer = None
+        self._tracer: NoOpTracer | Any = None
         self._initialized = False
-        self._propagator = None
+        self._propagator: Any = None
 
     def initialize(self) -> None:
         """Initialize the OpenTelemetry tracer."""
@@ -171,10 +171,10 @@ class ForgeTracer:
                 )
 
             # Set as global provider
-            trace.set_tracer_provider(provider)
+            otel_trace.set_tracer_provider(provider)
 
             # Get tracer
-            self._tracer = trace.get_tracer(
+            self._tracer = otel_trace.get_tracer(
                 self._config.service_name,
                 self._config.version
             )
@@ -200,7 +200,7 @@ class ForgeTracer:
         operation: str,
         kind: Any | None = None,
         attributes: dict[str, Any] | None = None
-    ) -> Generator:
+    ) -> Generator[Any, None, None]:
         """
         Create a trace span for an operation.
 
@@ -219,17 +219,18 @@ class ForgeTracer:
         if OTEL_AVAILABLE and span_kind is None:
             span_kind = SpanKind.INTERNAL
 
+        assert self._tracer is not None
         with self._tracer.start_as_current_span(
             operation,
             kind=span_kind,
             attributes=attributes or {}
-        ) as span:
+        ) as active_span:
             try:
-                yield span
+                yield active_span
             except Exception as e:
-                if OTEL_AVAILABLE and hasattr(span, 'record_exception'):
-                    span.record_exception(e)
-                    span.set_status(Status(StatusCode.ERROR, str(e)))
+                if OTEL_AVAILABLE and hasattr(active_span, 'record_exception'):
+                    active_span.record_exception(e)
+                    active_span.set_status(Status(StatusCode.ERROR, str(e)))
                 raise
 
     @contextmanager
@@ -238,10 +239,10 @@ class ForgeTracer:
         operation_type: OperationType,
         capsule_id: str | None = None,
         capsule_type: str | None = None,
-        **extra_attributes
-    ) -> Generator:
+        **extra_attributes: Any
+    ) -> Generator[Any, None, None]:
         """Create a span for capsule operations."""
-        attributes = {
+        attributes: dict[str, Any] = {
             "forge.operation": operation_type.value,
             **extra_attributes
         }
@@ -251,8 +252,8 @@ class ForgeTracer:
         if capsule_type:
             attributes["forge.capsule.type"] = capsule_type
 
-        with self.span(operation_type.value, attributes=attributes) as span:
-            yield span
+        with self.span(operation_type.value, attributes=attributes) as active_span:
+            yield active_span
 
     @contextmanager
     def lineage_span(
@@ -260,26 +261,26 @@ class ForgeTracer:
         capsule_id: str,
         depth: int,
         operation_type: OperationType = OperationType.LINEAGE_QUERY
-    ) -> Generator:
+    ) -> Generator[Any, None, None]:
         """Create a span for lineage operations."""
-        attributes = {
+        attributes: dict[str, Any] = {
             "forge.operation": operation_type.value,
             "forge.capsule.id": capsule_id,
             "forge.lineage.depth": depth,
         }
 
-        with self.span(operation_type.value, attributes=attributes) as span:
-            yield span
+        with self.span(operation_type.value, attributes=attributes) as active_span:
+            yield active_span
 
     @contextmanager
     def governance_span(
         self,
         operation_type: OperationType,
         proposal_id: str | None = None,
-        **extra_attributes
-    ) -> Generator:
+        **extra_attributes: Any
+    ) -> Generator[Any, None, None]:
         """Create a span for governance operations."""
-        attributes = {
+        attributes: dict[str, Any] = {
             "forge.operation": operation_type.value,
             **extra_attributes
         }
@@ -287,18 +288,18 @@ class ForgeTracer:
         if proposal_id:
             attributes["forge.proposal.id"] = proposal_id
 
-        with self.span(operation_type.value, attributes=attributes) as span:
-            yield span
+        with self.span(operation_type.value, attributes=attributes) as active_span:
+            yield active_span
 
     @contextmanager
     def db_span(
         self,
         operation: str,
         query_type: str = "cypher",
-        **extra_attributes
-    ) -> Generator:
+        **extra_attributes: Any
+    ) -> Generator[Any, None, None]:
         """Create a span for database operations."""
-        attributes = {
+        attributes: dict[str, Any] = {
             "db.system": "neo4j",
             "db.operation": operation,
             "db.query.type": query_type,
@@ -307,15 +308,16 @@ class ForgeTracer:
 
         span_kind = SpanKind.CLIENT if OTEL_AVAILABLE else None
 
-        with self.span(f"db.{operation}", kind=span_kind, attributes=attributes) as span:
-            yield span
+        with self.span(f"db.{operation}", kind=span_kind, attributes=attributes) as active_span:
+            yield active_span
 
     def extract_context(self, headers: dict[str, str]) -> Any:
         """Extract trace context from HTTP headers."""
         if not OTEL_AVAILABLE or not self._propagator:
             return None
 
-        return self._propagator.extract(carrier=headers)
+        result: Any = self._propagator.extract(carrier=headers)
+        return result
 
     def inject_context(self, headers: dict[str, str]) -> None:
         """Inject trace context into HTTP headers."""
@@ -329,7 +331,7 @@ class ForgeTracer:
         if not OTEL_AVAILABLE:
             return None
 
-        span = trace.get_current_span()
+        span: Any = otel_trace.get_current_span()
         if span:
             ctx = span.get_span_context()
             if ctx.is_valid:
@@ -367,20 +369,20 @@ def trace_operation(
     """
     def decorator(func: F) -> F:
         @functools.wraps(func)
-        async def async_wrapper(*args, **kwargs):
+        async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
             tracer = get_tracer()
             with tracer.span(operation, attributes=attributes):
                 return await func(*args, **kwargs)
 
         @functools.wraps(func)
-        def sync_wrapper(*args, **kwargs):
+        def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
             tracer = get_tracer()
             with tracer.span(operation, attributes=attributes):
                 return func(*args, **kwargs)
 
         import asyncio
         if asyncio.iscoroutinefunction(func):
-            return async_wrapper
-        return sync_wrapper
+            return async_wrapper  # type: ignore[return-value]
+        return sync_wrapper  # type: ignore[return-value]
 
     return decorator

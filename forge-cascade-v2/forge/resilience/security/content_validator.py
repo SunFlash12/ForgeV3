@@ -21,7 +21,7 @@ import structlog
 
 from forge.resilience.config import get_resilience_config
 
-logger = structlog.get_logger(__name__)
+logger: structlog.stdlib.BoundLogger = structlog.get_logger(__name__)
 
 
 class ThreatLevel(Enum):
@@ -100,10 +100,10 @@ class ContentValidator:
     5. Policy checks
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._config = get_resilience_config().content_validation
         self._patterns: list[ContentPattern] = []
-        self._custom_validators: list[Callable] = []
+        self._custom_validators: list[Callable[[str], ValidationIssue | None]] = []
         self._initialized = False
 
         # Statistics

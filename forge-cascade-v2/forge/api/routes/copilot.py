@@ -46,7 +46,7 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     """Response from chat endpoint."""
     content: str = Field(description="Assistant's response")
-    tool_calls: list[dict] = Field(
+    tool_calls: list[dict[str, Any]] = Field(
         default_factory=list,
         description="Tools that were called during response generation"
     )
@@ -62,7 +62,7 @@ class HistoryMessage(BaseModel):
     role: str = Field(description="Message role: 'user', 'assistant', or 'system'")
     content: str = Field(description="Message content")
     timestamp: str = Field(description="ISO timestamp of the message")
-    tool_calls: list[dict] = Field(default_factory=list)
+    tool_calls: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class HistoryResponse(BaseModel):
@@ -171,7 +171,7 @@ async def chat(
 
     Requires authentication.
     """
-    agent = await get_agent()
+    agent = await get_agent()  # type: ignore[no-untyped-call]
 
     try:
         response = await agent.chat(
@@ -198,7 +198,7 @@ async def chat(
 async def stream_chat(
     request: ChatRequest,
     current_user: ActiveUserDep,
-):
+) -> StreamingResponse:
     """
     Send a message and stream the response in real-time.
 
@@ -207,9 +207,9 @@ async def stream_chat(
 
     Requires authentication.
     """
-    agent = await get_agent()
+    agent = await get_agent()  # type: ignore[no-untyped-call]
 
-    async def generate():
+    async def generate() -> Any:
         try:
             async for chunk in agent.stream_chat(
                 message=request.message,
@@ -236,7 +236,7 @@ async def get_history(current_user: ActiveUserDep) -> HistoryResponse:
 
     Requires authentication.
     """
-    agent = await get_agent()
+    agent = await get_agent()  # type: ignore[no-untyped-call]
 
     messages = [
         HistoryMessage(
@@ -255,7 +255,7 @@ async def get_history(current_user: ActiveUserDep) -> HistoryResponse:
 
 
 @router.post("/clear")
-async def clear_history(current_user: ActiveUserDep):
+async def clear_history(current_user: ActiveUserDep) -> dict[str, str]:
     """
     Clear the conversation history.
 
@@ -263,7 +263,7 @@ async def clear_history(current_user: ActiveUserDep):
 
     Requires authentication.
     """
-    agent = await get_agent()
+    agent = await get_agent()  # type: ignore[no-untyped-call]
     agent.clear_history()
 
     return {"status": "ok", "message": "History cleared"}
@@ -304,7 +304,7 @@ async def get_status(current_user: ActiveUserDep) -> StatusResponse:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @router.websocket("/ws")
-async def websocket_chat(websocket: WebSocket):
+async def websocket_chat(websocket: WebSocket) -> None:
     """
     WebSocket endpoint for real-time chat.
 
@@ -342,9 +342,8 @@ async def websocket_chat(websocket: WebSocket):
             token = websocket.query_params.get("token")
             if token:
                 logger.warning(
-                    "websocket_token_in_query_param",
-                    path="/copilot/ws",
-                    warning="Token via query param is insecure. Use cookies or Authorization header.",
+                    "websocket_token_in_query_param: path=/copilot/ws, "
+                    "warning=Token via query param is insecure. Use cookies or Authorization header."
                 )
 
         if not token:
@@ -353,17 +352,17 @@ async def websocket_chat(websocket: WebSocket):
 
         # Validate token properly using verify_token
         payload = verify_token(token, expected_type="access")
-        if not payload or not payload.get("sub"):
+        if not payload or not payload.sub:
             await websocket.close(code=4001, reason="Invalid or expired token")
             return
 
         # Check if token is blacklisted (logged out)
-        jti = payload.get("jti")
+        jti = payload.jti
         if jti and await TokenBlacklist.is_blacklisted_async(jti):
             await websocket.close(code=4001, reason="Token has been revoked")
             return
 
-        user_id = payload.get("sub")
+        user_id = payload.sub
 
     except Exception as e:
         logger.warning(f"WebSocket authentication failed: {e}")
@@ -374,7 +373,7 @@ async def websocket_chat(websocket: WebSocket):
     logger.info(f"WebSocket connection established for user {user_id}")
 
     try:
-        agent = await get_agent()
+        agent = await get_agent()  # type: ignore[no-untyped-call]
 
         # Register event handler for tool calls
         def on_tool_call(event):

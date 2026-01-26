@@ -283,7 +283,7 @@ class SyncService:
         # Get edge changes since last sync
         edges = await self._get_edge_changes(
             since=peer.last_sync_at,
-            capsule_ids=[c.get("id") for c in capsules if c.get("id")],
+            capsule_ids=[str(c.get("id")) for c in capsules if c.get("id")],
         )
 
         # Create and send payload
@@ -361,8 +361,12 @@ class SyncService:
             source_id = remote_edge.get("source_id")
             target_id = remote_edge.get("target_id")
 
-            source_local = await self._resolve_to_local_id(peer.id, source_id)
-            target_local = await self._resolve_to_local_id(peer.id, target_id)
+            if not source_id or not target_id:
+                state.edges_skipped += 1
+                continue
+
+            source_local = await self._resolve_to_local_id(peer.id, str(source_id))
+            target_local = await self._resolve_to_local_id(peer.id, str(target_id))
 
             if source_local and target_local:
                 # Create local edge
@@ -474,9 +478,9 @@ class SyncService:
             # SECURITY FIX: Don't trust remote trust_level - use UNVERIFIED default
             merged["trust_level"] = 20  # UNVERIFIED - will be recalculated locally
             logger.info(
-                "remote_trust_rejected",
-                remote_claimed_trust=remote.get("trust_level"),
-                assigned_trust=20
+                "remote_trust_rejected: remote_claimed_trust=%s, assigned_trust=%s",
+                remote.get("trust_level"),
+                20,
             )
             return merged
 
@@ -487,11 +491,12 @@ class SyncService:
         # malicious peers. Keeping local trust_level unchanged.
         if remote.get("trust_level", 0) > local.get("trust_level", 0):
             logger.warning(
-                "remote_higher_trust_rejected",
-                capsule_id=local.get("id"),
-                local_trust=local.get("trust_level"),
-                remote_claimed_trust=remote.get("trust_level"),
-                reason="Trust levels must be calculated locally, not accepted from remote"
+                "remote_higher_trust_rejected: capsule_id=%s, local_trust=%s, "
+                "remote_claimed_trust=%s, reason=%s",
+                local.get("id"),
+                local.get("trust_level"),
+                remote.get("trust_level"),
+                "Trust levels must be calculated locally, not accepted from remote",
             )
             # Keep local trust - do NOT update from remote
 
@@ -538,7 +543,8 @@ class SyncService:
                 result = await session.run(query, {"id": capsule_id})
                 record = await result.single()
                 if record:
-                    return record["capsule"]
+                    capsule_data: dict[str, Any] | None = record["capsule"]
+                    return capsule_data
         except Exception as e:
             logger.error(f"Failed to get local capsule {capsule_id}: {e}")
 
@@ -925,9 +931,9 @@ class SyncService:
                     "sync_direction": peer.sync_direction.value if hasattr(peer.sync_direction, 'value') else str(peer.sync_direction),
                     "conflict_resolution": peer.conflict_resolution.value if hasattr(peer.conflict_resolution, 'value') else str(peer.conflict_resolution),
                     "last_sync_at": peer.last_sync_at.isoformat() if peer.last_sync_at else None,
-                    "created_at": peer.created_at.isoformat() if peer.created_at else None,
+                    "created_at": peer.registered_at.isoformat() if peer.registered_at else None,
                     "updated_at": datetime.now(UTC).isoformat(),
-                    "metadata": json.dumps(peer.metadata) if peer.metadata else None,
+                    "metadata": json.dumps({"description": peer.description}) if peer.description else None,
                 })
                 record = await result.single()
                 logger.info(f"Persisted peer {peer.name} to database")
@@ -966,18 +972,20 @@ class SyncService:
                         except (ValueError, TypeError):
                             bounded_trust = 0.3  # Default on invalid value
 
+                        metadata_raw = peer_data.get("metadata")
+                        metadata_dict: dict[str, Any] = json.loads(metadata_raw) if metadata_raw else {}
                         peer = FederatedPeer(
                             id=peer_data["id"],
                             name=peer_data["name"],
-                            endpoint=peer_data["endpoint"],
+                            url=peer_data["endpoint"],
                             public_key=peer_data.get("public_key", ""),
                             status=PeerStatus(peer_data.get("status", "pending")),
                             trust_score=bounded_trust,
                             sync_direction=SyncDirection(peer_data.get("sync_direction", "bidirectional")),
                             conflict_resolution=ConflictResolution(peer_data.get("conflict_resolution", "local_wins")),
                             last_sync_at=datetime.fromisoformat(peer_data["last_sync_at"]) if peer_data.get("last_sync_at") else None,
-                            created_at=datetime.fromisoformat(peer_data["created_at"]) if peer_data.get("created_at") else None,
-                            metadata=json.loads(peer_data["metadata"]) if peer_data.get("metadata") else {},
+                            registered_at=datetime.fromisoformat(peer_data["created_at"]) if peer_data.get("created_at") else datetime.now(UTC),
+                            description=metadata_dict.get("description"),
                         )
                         # Register in memory
                         self._peers[peer.id] = peer

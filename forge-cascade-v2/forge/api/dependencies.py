@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import ipaddress
 from collections.abc import Callable, Coroutine
-from typing import TYPE_CHECKING, Annotated
+from typing import TYPE_CHECKING, Annotated, Any
 
 from fastapi import Depends, HTTPException, Request, status
 
@@ -33,7 +33,8 @@ from forge.immune import (
 from forge.kernel.event_system import EventSystem
 from forge.kernel.overlay_manager import OverlayManager
 from forge.kernel.pipeline import CascadePipeline
-from forge.models.user import TrustLevel, User
+from forge.models.base import TrustLevel
+from forge.models.user import TokenPayload, User
 from forge.repositories.audit_repository import AuditRepository
 from forge.repositories.capsule_repository import CapsuleRepository
 from forge.repositories.governance_repository import GovernanceRepository
@@ -49,7 +50,7 @@ from forge.security.authorization import (
     TrustAuthorizer,
 )
 from forge.security.session_binding import SessionBindingService
-from forge.security.tokens import TokenPayload, verify_token
+from forge.security.tokens import verify_token
 from forge.services.embedding import EmbeddingService, get_embedding_service
 
 # Security scheme
@@ -72,14 +73,15 @@ SettingsDep = Annotated[Settings, Depends(get_app_settings)]
 # Forge App Access
 # =============================================================================
 
-def get_forge_app(request: Request) -> ForgeApp:
+def get_forge_app(request: Request) -> "ForgeApp":
     """Get the ForgeApp instance from request state."""
     if not hasattr(request.app.state, 'forge'):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Forge application not initialized",
         )
-    return request.app.state.forge
+    forge: ForgeApp = request.app.state.forge
+    return forge
 
 
 # =============================================================================
@@ -215,31 +217,55 @@ PipelineDep = Annotated[CascadePipeline, Depends(get_pipeline)]
 async def get_circuit_registry(request: Request) -> CircuitBreakerRegistry:
     """Get circuit breaker registry."""
     forge = get_forge_app(request)
-    return forge.circuit_registry
+    circuit_registry: CircuitBreakerRegistry | None = forge.circuit_registry
+    if circuit_registry is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Circuit breaker registry not initialized",
+        )
+    return circuit_registry
 
 
 async def get_health_checker(request: Request) -> ForgeHealthChecker:
     """Get health checker."""
     forge = get_forge_app(request)
-    return forge.health_checker
+    health_checker: ForgeHealthChecker | None = forge.health_checker
+    if health_checker is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Health checker not initialized",
+        )
+    return health_checker
 
 
 async def get_anomaly_system(request: Request) -> ForgeAnomalySystem:
     """Get anomaly detection system."""
     forge = get_forge_app(request)
-    return forge.anomaly_system
+    anomaly_system: ForgeAnomalySystem | None = forge.anomaly_system
+    if anomaly_system is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Anomaly detection system not initialized",
+        )
+    return anomaly_system
 
 
-async def get_canary_manager(request: Request) -> CanaryManager:
+async def get_canary_manager(request: Request) -> "CanaryManager[dict[str, Any]]":
     """Get canary deployment manager."""
     forge = get_forge_app(request)
-    return forge.canary_manager
+    canary_manager: CanaryManager[dict[str, Any]] | None = forge.canary_manager
+    if canary_manager is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Canary deployment manager not initialized",
+        )
+    return canary_manager
 
 
 CircuitRegistryDep = Annotated[CircuitBreakerRegistry, Depends(get_circuit_registry)]
 HealthCheckerDep = Annotated[ForgeHealthChecker, Depends(get_health_checker)]
 AnomalySystemDep = Annotated[ForgeAnomalySystem, Depends(get_anomaly_system)]
-CanaryManagerDep = Annotated[CanaryManager, Depends(get_canary_manager)]
+CanaryManagerDep = Annotated["CanaryManager[dict[str, Any]]", Depends(get_canary_manager)]
 
 
 # =============================================================================
@@ -401,7 +427,7 @@ def require_roles(*roles: str) -> Callable[[ActiveUserDep], Coroutine[object, ob
 def require_capabilities(*capabilities: str) -> Callable[[ActiveUserDep], Coroutine[object, object, User]]:
     """Dependency factory to require specific capabilities."""
     async def dependency(user: ActiveUserDep) -> User:
-        from forge.models.user import Capability
+        from forge.models.overlay import Capability
         caps = {Capability(c) for c in capabilities}
         authorizer = CapabilityAuthorizer(caps)
         if not authorizer.authorize(user):

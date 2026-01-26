@@ -318,12 +318,16 @@ def require_role(required_role: UserRole) -> Callable[[Callable[P, R]], Callable
     def decorator(func: Callable[P, R]) -> Callable[P, R]:
         @wraps(func)
         async def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
-            role = kwargs.get("role")
-            if role is None:
+            role_raw = kwargs.get("role")
+            if role_raw is None:
                 raise AuthorizationError("role not provided")
 
-            if isinstance(role, str):
-                role = UserRole(role)
+            if isinstance(role_raw, str):
+                role = UserRole(role_raw)
+            elif isinstance(role_raw, UserRole):
+                role = role_raw
+            else:
+                role = UserRole(str(role_raw))
 
             if not check_role(role, required_role):
                 role_value: str = role.value if hasattr(role, 'value') else str(role)

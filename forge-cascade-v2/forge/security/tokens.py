@@ -21,6 +21,7 @@ import threading
 import time
 from datetime import UTC, datetime, timedelta
 from typing import Any
+import types
 from uuid import uuid4
 
 # SECURITY FIX: Use PyJWT instead of abandoned python-jose
@@ -40,7 +41,7 @@ try:
     import redis.asyncio as aioredis
     REDIS_AVAILABLE = True
 except ImportError:
-    aioredis = None
+    aioredis: types.ModuleType | None = None  # type: ignore[no-redef]
     REDIS_AVAILABLE = False
 
 
@@ -116,7 +117,7 @@ class TokenBlacklist:
             return False
 
         try:
-            cls._redis_client = aioredis.from_url(
+            cls._redis_client = aioredis.from_url(  # type: ignore[no-untyped-call]
                 url,
                 encoding="utf-8",
                 decode_responses=True,
@@ -1389,8 +1390,10 @@ def get_token_expiry(token: str) -> datetime | None:
     """
     try:
         payload = decode_token(token, verify_exp=False)
-        if payload.exp:
-            return datetime.fromtimestamp(payload.exp)
+        if payload.exp is not None:
+            if isinstance(payload.exp, datetime):
+                return payload.exp
+            return datetime.fromtimestamp(float(payload.exp))
         return None
     except TokenError:
         return None

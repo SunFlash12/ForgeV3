@@ -16,6 +16,7 @@ import hashlib
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from collections.abc import Callable
 from typing import Any, Protocol
 
 import structlog
@@ -90,7 +91,8 @@ class OpenAIEmbeddingProvider:
             input=text,
             dimensions=self._dimensions,
         )
-        return response.data[0].embedding
+        embedding: list[float] = list(response.data[0].embedding)
+        return embedding
 
     async def embed_batch(self, texts: list[str]) -> list[list[float]]:
         """Generate embeddings for multiple texts (max 2048 per request)."""
@@ -125,8 +127,9 @@ class LocalEmbeddingProvider:
     ):
         try:
             from sentence_transformers import SentenceTransformer
-            self._model = SentenceTransformer(model_name)
-            self._dimensions = self._model.get_sentence_embedding_dimension()
+            self._model: Any = SentenceTransformer(model_name)
+            dim = self._model.get_sentence_embedding_dimension()
+            self._dimensions: int = int(dim) if dim is not None else 384
         except ImportError:
             raise ImportError("sentence-transformers package required for local embeddings")
 
@@ -138,9 +141,9 @@ class LocalEmbeddingProvider:
         """Generate embedding for a single text."""
         # Run in executor since sentence-transformers is sync
         loop = asyncio.get_event_loop()
-        embedding = await loop.run_in_executor(
+        embedding: list[float] = await loop.run_in_executor(
             None,
-            lambda: self._model.encode(text).tolist()
+            lambda: list(self._model.encode(text).tolist())
         )
         return embedding
 
@@ -150,9 +153,9 @@ class LocalEmbeddingProvider:
             return []
 
         loop = asyncio.get_event_loop()
-        embeddings = await loop.run_in_executor(
+        embeddings: list[list[float]] = await loop.run_in_executor(
             None,
-            lambda: self._model.encode(texts).tolist()
+            lambda: [list(e) for e in self._model.encode(texts).tolist()]
         )
         return embeddings
 
@@ -171,7 +174,7 @@ class PrimeKGEmbeddingService:
     def __init__(
         self,
         provider: EmbeddingProvider,
-        neo4j_client=None,
+        neo4j_client: Any = None,
         cache_dir: Path | None = None,
         batch_size: int = 100,
         rate_limit_per_minute: int = 3000,
@@ -254,7 +257,7 @@ class PrimeKGEmbeddingService:
     async def embed_texts(
         self,
         texts: list[str],
-        progress_callback=None,
+        progress_callback: Callable[[EmbeddingProgress], None] | None = None,
     ) -> list[list[float]]:
         """
         Generate embeddings for multiple texts.
@@ -330,7 +333,7 @@ class PrimeKGEmbeddingService:
         self,
         node_type: str | None = None,
         batch_size: int = 100,
-        progress_callback=None,
+        progress_callback: Callable[[EmbeddingProgress], None] | None = None,
     ) -> int:
         """
         Generate embeddings for PrimeKG nodes and store in Neo4j.
@@ -435,10 +438,14 @@ class PrimeKGEmbeddingService:
                 progress_callback(progress)
 
         progress.completed_at = datetime.now(UTC)
+        if progress.completed_at is not None and progress.started_at is not None:
+            duration = (progress.completed_at - progress.started_at).total_seconds()
+        else:
+            duration = 0.0
         logger.info(
             "primekg_nodes_embedded",
             count=embedded_count,
-            duration_seconds=(progress.completed_at - progress.started_at).total_seconds()
+            duration_seconds=duration
         )
 
         return embedded_count
@@ -579,7 +586,7 @@ class PrimeKGEmbeddingService:
 
 def create_openai_embedding_service(
     api_key: str,
-    neo4j_client=None,
+    neo4j_client: Any = None,
     model: str = "text-embedding-3-small",
 ) -> PrimeKGEmbeddingService:
     """Create embedding service with OpenAI provider."""
@@ -588,7 +595,7 @@ def create_openai_embedding_service(
 
 
 def create_local_embedding_service(
-    neo4j_client=None,
+    neo4j_client: Any = None,
     model_name: str = "all-MiniLM-L6-v2",
 ) -> PrimeKGEmbeddingService:
     """Create embedding service with local provider."""

@@ -17,7 +17,7 @@ from forge.models.user import AuthProvider, User, UserInDB
 logger = structlog.get_logger(__name__)
 
 
-class GoogleUserInfo(BaseModel):  # type: ignore[misc]
+class GoogleUserInfo(BaseModel):
     """User info from Google OAuth token."""
 
     sub: str = Field(description="Google user ID")

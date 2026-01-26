@@ -21,11 +21,8 @@ from typing import Any
 
 import structlog
 
-from forge.models.base import TrustLevel
-from forge.models.capsule import (
-    Capsule,
-    CapsuleType,
-)
+from forge.models.base import CapsuleType, TrustLevel
+from forge.models.capsule import Capsule
 from forge.services.embedding import (
     EmbeddingService,
     get_embedding_service,
@@ -324,6 +321,8 @@ class SearchService:
         """
 
         try:
+            if self._db is None:
+                return []
             results = await self._db.execute(query, params)
 
             return [
@@ -555,7 +554,7 @@ class SearchService:
 
         return highlights
 
-    def _dict_to_capsule(self, data: dict) -> Capsule:
+    def _dict_to_capsule(self, data: dict[str, Any]) -> Capsule:
         """Convert dict to Capsule model."""
         from forge.models.base import CapsuleType
         from forge.models.capsule import Capsule
@@ -582,6 +581,9 @@ class SearchService:
         else:
             capsule_type = CapsuleType.KNOWLEDGE
 
+        created_at_raw = data.get("created_at")
+        updated_at_raw = data.get("updated_at")
+
         return Capsule(
             id=data.get("id", ""),
             content=data.get("content", ""),
@@ -597,8 +599,8 @@ class SearchService:
             is_archived=data.get("is_archived", False),
             view_count=data.get("view_count", 0),
             fork_count=data.get("fork_count", 0),
-            created_at=data.get("created_at"),
-            updated_at=data.get("updated_at"),
+            created_at=created_at_raw,  # type: ignore[arg-type]
+            updated_at=updated_at_raw,  # type: ignore[arg-type]
         )
 
 

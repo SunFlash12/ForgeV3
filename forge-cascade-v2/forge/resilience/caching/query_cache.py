@@ -22,7 +22,7 @@ import structlog
 
 from forge.resilience.config import CacheConfig, get_resilience_config
 
-logger = structlog.get_logger(__name__)
+logger: structlog.stdlib.BoundLogger = structlog.get_logger(__name__)
 
 T = TypeVar('T')
 
@@ -31,7 +31,7 @@ try:
     import redis.asyncio as aioredis
     REDIS_AVAILABLE = True
 except ImportError:
-    aioredis = None
+    aioredis = None  # type: ignore[assignment]
     REDIS_AVAILABLE = False
 
 
@@ -82,14 +82,14 @@ class QueryCache:
     capsules change, using event subscriptions to detect modifications.
     """
 
-    def __init__(self, config: CacheConfig | None = None):
+    def __init__(self, config: CacheConfig | None = None) -> None:
         self._config = config or get_resilience_config().cache
-        self._redis: aioredis.Redis | None = None
+        self._redis: Any = None
         self._use_redis = False
         self._stats = CacheStats()
 
         # Fallback in-memory cache
-        self._memory_cache: dict[str, CacheEntry] = {}
+        self._memory_cache: dict[str, CacheEntry[Any]] = {}
 
         # Track which cache keys depend on which capsule IDs
         self._invalidation_subscriptions: dict[str, set[str]] = defaultdict(set)
@@ -102,7 +102,7 @@ class QueryCache:
 
         if REDIS_AVAILABLE and self._config.redis_url:
             try:
-                self._redis = aioredis.from_url(
+                self._redis = aioredis.from_url(  # type: ignore[no-untyped-call]
                     self._config.redis_url,
                     encoding="utf-8",
                     decode_responses=False  # We handle encoding ourselves
@@ -235,7 +235,7 @@ class QueryCache:
 
         try:
             if self._use_redis:
-                result = await self._redis.delete(key)
+                result: int = await self._redis.delete(key)
                 return result > 0
             else:
                 if key in self._memory_cache:
@@ -383,7 +383,7 @@ class QueryCache:
     async def get_or_compute_search(
         self,
         query: str,
-        filters: dict,
+        filters: dict[str, Any],
         compute_func: Callable[[], Any]
     ) -> Any:
         """
@@ -540,7 +540,7 @@ class QueryCache:
 
         return ids
 
-    def _hash_query(self, query: str, filters: dict) -> str:
+    def _hash_query(self, query: str, filters: dict[str, Any]) -> str:
         """Create a hash for a search query."""
         content = json.dumps({"query": query, "filters": filters}, sort_keys=True)
         return hashlib.sha256(content.encode()).hexdigest()[:16]

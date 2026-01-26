@@ -39,7 +39,8 @@ class ListingRepository(BaseRepository[CapsuleListing, CapsuleListing, CapsuleLi
 
     @property
     def model_class(self) -> type[CapsuleListing]:
-        return CapsuleListing  # type: ignore[no-any-return]
+        cls: type[CapsuleListing] = CapsuleListing
+        return cls
 
     async def create(self, data: CapsuleListing, **kwargs: Any) -> CapsuleListing:
         """Create a new listing."""
@@ -86,7 +87,12 @@ class ListingRepository(BaseRepository[CapsuleListing, CapsuleListing, CapsuleLi
             },
         )
 
-        return self._to_model(result["entity"])
+        if result is None:
+            raise RuntimeError("Failed to create listing")
+        listing = self._to_model(result["entity"])
+        if listing is None:
+            raise RuntimeError("Failed to deserialize created listing")
+        return listing
 
     async def update(self, entity_id: str, data: CapsuleListing) -> CapsuleListing | None:
         """Update an existing listing."""
@@ -177,7 +183,8 @@ class PurchaseRepository(BaseRepository[Purchase, Purchase, Purchase]):
 
     @property
     def model_class(self) -> type[Purchase]:
-        return Purchase  # type: ignore[no-any-return]
+        cls: type[Purchase] = Purchase
+        return cls
 
     async def create(self, data: Purchase, **kwargs: Any) -> Purchase:
         """Create a new purchase record."""
@@ -224,7 +231,12 @@ class PurchaseRepository(BaseRepository[Purchase, Purchase, Purchase]):
             },
         )
 
-        return self._to_model(result["entity"])
+        if result is None:
+            raise RuntimeError("Failed to create purchase")
+        purchase = self._to_model(result["entity"])
+        if purchase is None:
+            raise RuntimeError("Failed to deserialize created purchase")
+        return purchase
 
     async def update(self, entity_id: str, data: Purchase) -> Purchase | None:
         """Purchases are mostly immutable - only status can change for refunds."""
@@ -420,7 +432,8 @@ class LicenseRepository(BaseRepository[License, License, License]):
 
     @property
     def model_class(self) -> type[License]:
-        return License  # type: ignore[no-any-return]
+        cls: type[License] = License
+        return cls
 
     async def create(self, data: License, **kwargs: Any) -> License:
         """Create a new license."""
@@ -468,7 +481,12 @@ class LicenseRepository(BaseRepository[License, License, License]):
             },
         )
 
-        return self._to_model(result["entity"])
+        if result is None:
+            raise RuntimeError("Failed to create license")
+        license_obj = self._to_model(result["entity"])
+        if license_obj is None:
+            raise RuntimeError("Failed to deserialize created license")
+        return license_obj
 
     async def update(self, entity_id: str, data: License) -> License | None:
         """Update license (for revocation, access tracking)."""

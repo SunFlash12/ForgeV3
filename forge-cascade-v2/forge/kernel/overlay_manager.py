@@ -14,7 +14,8 @@ from uuid import uuid4
 import structlog
 
 from ..models.events import Event, EventType
-from ..models.overlay import Capability, FuelBudget, OverlayHealthCheck, OverlayState
+from ..models.base import OverlayState
+from ..models.overlay import Capability, FuelBudget, OverlayHealthCheck
 from ..overlays.base import BaseOverlay, OverlayContext, OverlayError, OverlayResult
 from .event_system import EventBus, get_event_bus
 
@@ -85,8 +86,8 @@ class OverlayManager:
         self._logger = logger.bind(component="overlay_manager")
 
         # Execution tracking
-        self._pending_executions: dict[str, asyncio.Task] = {}
-        self._execution_history: list[dict] = []
+        self._pending_executions: dict[str, asyncio.Task[Any]] = {}
+        self._execution_history: list[dict[str, Any]] = []
         self._max_history = 1000
 
         # Circuit breaker per overlay
@@ -163,7 +164,7 @@ class OverlayManager:
         self,
         name: str,
         auto_init: bool = True,
-        **kwargs
+        **kwargs: Any
     ) -> BaseOverlay:
         """
         Create and register a new overlay instance.
@@ -379,7 +380,7 @@ class OverlayManager:
                 self._phase_to_int(o.phase) == phase)
         ]
 
-    def _phase_to_int(self, phase) -> int:
+    def _phase_to_int(self, phase: Any) -> int:
         """Convert phase enum to integer."""
         phase_map = {
             "intake": 1, "validation": 2, "analysis": 3, "governance": 4,
@@ -389,7 +390,7 @@ class OverlayManager:
             return phase_map.get(phase.value.lower(), 0)
         return phase_map.get(str(phase).lower(), 0)
 
-    def get_registry_info(self) -> dict:
+    def get_registry_info(self) -> dict[str, Any]:
         """Get registry summary information."""
         return {
             "total_instances": len(self._registry.instances),
@@ -506,13 +507,12 @@ class OverlayManager:
             # Emit any events from result
             if result.events_to_emit and self._event_bus:
                 for event_data in result.events_to_emit:
-                    await self._event_bus.publish(Event(
-                        id=str(uuid4()),
+                    await self._event_bus.publish(
                         event_type=EventType(event_data["event_type"]),
+                        payload=event_data.get("payload", {}),
                         source=event_data.get("source", f"overlay:{overlay.NAME}"),
                         correlation_id=context.correlation_id,
-                        payload=event_data.get("payload", {})
-                    ))
+                    )
 
             return result
 
@@ -545,7 +545,7 @@ class OverlayManager:
         Returns:
             Dict mapping overlay_id to result
         """
-        overlays = self.get_by_event(event.event_type)
+        overlays = self.get_by_event(event.type)
         if not overlays:
             return {}
 
@@ -579,13 +579,13 @@ class OverlayManager:
         if not self._running:
             return
 
-        overlays = self.get_by_event(event.event_type)
+        overlays = self.get_by_event(event.type)
         if not overlays:
             return
 
         self._logger.debug(
             "routing_event_to_overlays",
-            event_type=event.event_type.value,
+            event_type=event.type.value,
             overlay_count=len(overlays)
         )
 
@@ -694,14 +694,17 @@ class OverlayManager:
             except Exception as e:
                 results[overlay_id] = OverlayHealthCheck(
                     overlay_id=overlay_id,
-                    overlay_name=overlay.NAME,
+                    level="L1",
                     healthy=False,
-                    state=overlay.state,
-                    execution_count=overlay.execution_count,
-                    error_count=overlay.error_count,
-                    error_rate=1.0,
-                    last_error=str(e),
-                    checked_at=datetime.now(UTC)
+                    message=str(e),
+                    details={
+                        "overlay_name": overlay.NAME,
+                        "state": overlay.state.value if overlay.state else "unknown",
+                        "execution_count": overlay.execution_count,
+                        "error_count": overlay.error_count,
+                        "error_rate": 1.0,
+                    },
+                    timestamp=datetime.now(UTC),
                 )
 
         return results
@@ -740,7 +743,7 @@ class OverlayManager:
     def get_execution_stats(
         self,
         overlay_id: str | None = None
-    ) -> dict:
+    ) -> dict[str, Any]:
         """
         Get execution statistics.
 
@@ -780,7 +783,7 @@ class OverlayManager:
         self,
         limit: int = 10,
         overlay_id: str | None = None
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """Get recent executions."""
         history = self._execution_history
         if overlay_id:

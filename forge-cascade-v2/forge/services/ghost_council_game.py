@@ -68,7 +68,7 @@ def create_analyze_proposal_function(council_service: GhostCouncilService) -> Fu
         proposal_id: str,
         perspective: str,
         focus_areas: str = "",
-    ) -> tuple[str, dict, dict]:
+    ) -> tuple[str, dict[str, Any], dict[str, Any]]:
         """
         Analyze a proposal from a specific perspective.
 
@@ -76,8 +76,7 @@ def create_analyze_proposal_function(council_service: GhostCouncilService) -> Fu
             (status, result_dict, state_update)
         """
         try:
-            # Get proposal details (would need to be passed via context/state)
-            result = {
+            result: dict[str, Any] = {
                 "proposal_id": proposal_id,
                 "perspective": perspective,
                 "focus_areas": focus_areas.split(",") if focus_areas else [],
@@ -121,7 +120,7 @@ def create_cast_vote_function() -> FunctionDefinition:
         vote: str,
         confidence: float,
         reasoning: str,
-    ) -> tuple[str, dict, dict]:
+    ) -> tuple[str, dict[str, Any], dict[str, Any]]:
         """
         Cast a vote on a proposal.
 
@@ -130,7 +129,7 @@ def create_cast_vote_function() -> FunctionDefinition:
         """
         try:
             vote_choice = VoteChoice(vote.upper())
-            result = {
+            result: dict[str, Any] = {
                 "proposal_id": proposal_id,
                 "vote": vote_choice.value,
                 "confidence": confidence,
@@ -177,9 +176,9 @@ def create_request_clarification_function() -> FunctionDefinition:
     async def request_clarification(
         proposal_id: str,
         questions: str,
-    ) -> tuple[str, dict, dict]:
+    ) -> tuple[str, dict[str, Any], dict[str, Any]]:
         """Request clarification on aspects of a proposal."""
-        result = {
+        result: dict[str, Any] = {
             "proposal_id": proposal_id,
             "questions": questions.split(";"),
             "status": "pending_response",
@@ -214,9 +213,9 @@ def create_consult_colleague_function() -> FunctionDefinition:
         colleague_id: str,
         topic: str,
         question: str,
-    ) -> tuple[str, dict, dict]:
+    ) -> tuple[str, dict[str, Any], dict[str, Any]]:
         """Consult another council member for their expertise."""
-        result = {
+        result: dict[str, Any] = {
             "colleague_id": colleague_id,
             "topic": topic,
             "question": question,
@@ -257,13 +256,12 @@ def create_search_precedents_function() -> FunctionDefinition:
         query: str,
         category: str = "",
         limit: int = 5,
-    ) -> tuple[str, dict, dict]:
+    ) -> tuple[str, dict[str, Any], dict[str, Any]]:
         """Search for relevant past decisions and precedents."""
-        # This would integrate with the actual governance repository
-        result = {
+        result: dict[str, Any] = {
             "query": query,
             "category": category,
-            "precedents_found": [],  # Would be populated from database
+            "precedents_found": [],
             "searched_at": datetime.now(UTC).isoformat(),
         }
         return ("DONE", result, {"last_search": result})
@@ -320,7 +318,7 @@ def create_council_member_worker(
     ]
 
     # State function that tracks deliberation progress
-    def get_worker_state(function_result: Any, current_state: dict) -> dict:
+    def get_worker_state(function_result: Any, current_state: dict[str, Any]) -> dict[str, Any]:
         new_state = current_state.copy()
 
         if function_result:
@@ -407,16 +405,12 @@ class GAMEGhostCouncilService:
         create_request = ForgeAgentCreate(
             name=f"GhostCouncil_{member.name}",
             personality=AgentPersonality(
-                bio=member.persona[:500],
-                lore=[
-                    f"Member of the Forge Ghost Council as {member.role}",
-                    f"Domain expertise: {member.domain}",
-                    f"Decision weight: {member.weight}",
-                ],
-                adjectives=["thoughtful", "analytical", "principled"],
-                knowledge=[
+                name=member.name,
+                description=member.persona[:500],
+                personality_traits=["thoughtful", "analytical", "principled"],
+                expertise_domains=[
+                    member.domain,
                     "Governance processes and procedures",
-                    f"Domain-specific knowledge in {member.domain}",
                     "Constitutional principles of the Forge system",
                 ],
             ),
@@ -429,9 +423,8 @@ class GAMEGhostCouncilService:
                 ],
             ),
             memory_config=AgentMemoryConfig(
-                short_term_window=10,
-                long_term_enabled=True,
-                summarization_enabled=True,
+                enable_long_term_memory=True,
+                max_working_memory_items=10,
             ),
         )
 
@@ -552,8 +545,9 @@ then cast your vote.
                         vote=VoteChoice.ABSTAIN,
                         confidence=0.0,
                         reasoning=f"Deliberation failed: {e}",
-                        weight=member.weight,
                         perspectives=[],
+                        primary_benefits=[],
+                        primary_concerns=[],
                     )
                 )
 
@@ -613,11 +607,15 @@ then cast your vote.
                 vote_result = result.get("result", {})
             elif result.get("function_name") == "analyze_proposal":
                 analysis = result.get("result", {})
-                perspective_type = analysis.get("perspective", "balanced")
+                perspective_str = analysis.get("perspective", "balanced")
+                try:
+                    perspective_type = PerspectiveType(perspective_str.lower())
+                except ValueError:
+                    perspective_type = PerspectiveType.BALANCED
                 perspectives.append(
                     PerspectiveAnalysis(
-                        perspective=PerspectiveType(perspective_type.upper()),
-                        analysis=result.get("reasoning", ""),
+                        perspective_type=perspective_type,
+                        assessment=result.get("reasoning", ""),
                         key_points=[],
                         confidence=0.7,
                     )
@@ -631,8 +629,9 @@ then cast your vote.
                 vote=VoteChoice(vote_result.get("vote", "ABSTAIN")),
                 confidence=vote_result.get("confidence", 0.5),
                 reasoning=vote_result.get("reasoning", ""),
-                weight=member.weight,
                 perspectives=perspectives,
+                primary_benefits=[],
+                primary_concerns=[],
             )
         else:
             # No explicit vote found - default to abstain
@@ -643,8 +642,9 @@ then cast your vote.
                 vote=VoteChoice.ABSTAIN,
                 confidence=0.3,
                 reasoning="Agent completed analysis but did not cast explicit vote",
-                weight=member.weight,
                 perspectives=perspectives,
+                primary_benefits=[],
+                primary_concerns=[],
             )
 
     def get_stats(self) -> dict[str, Any]:

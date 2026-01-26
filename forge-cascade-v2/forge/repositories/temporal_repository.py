@@ -313,6 +313,7 @@ class TemporalRepository:
             version_a_number=va.version_number,
             version_b_number=vb.version_number,
             diff=diff,
+            changes_between=0,
             trust_change=vb.trust_at_version - va.trust_at_version,
         )
 

@@ -14,7 +14,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import Enum
-from typing import Any
+from typing import Any, TypeVar
 
 import structlog
 
@@ -22,9 +22,12 @@ from forge.resilience.config import get_resilience_config
 
 logger = structlog.get_logger(__name__)
 
+# Type variable for decorator
+F = TypeVar('F', bound=Callable[..., Any])
+
 # Try to import OpenTelemetry metrics, but allow graceful degradation
 try:
-    from opentelemetry import metrics
+    from opentelemetry import metrics as otel_metrics
     from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
     from opentelemetry.sdk.metrics import MeterProvider
     from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
@@ -32,7 +35,7 @@ try:
     OTEL_METRICS_AVAILABLE = True
 except ImportError:
     OTEL_METRICS_AVAILABLE = False
-    metrics = None
+    otel_metrics = None
     MeterProvider = None
     PeriodicExportingMetricReader = None
     OTLPMetricExporter = None
@@ -89,34 +92,34 @@ class MetricValue:
 class NoOpCounter:
     """No-op counter for when OpenTelemetry is not available."""
 
-    def add(self, value: int, attributes: dict | None = None) -> None:
+    def add(self, value: int, attributes: dict[str, str] | None = None) -> None:
         pass
 
 
 class NoOpHistogram:
     """No-op histogram for when OpenTelemetry is not available."""
 
-    def record(self, value: float, attributes: dict | None = None) -> None:
+    def record(self, value: float, attributes: dict[str, str] | None = None) -> None:
         pass
 
 
 class NoOpGauge:
     """No-op gauge for when OpenTelemetry is not available."""
 
-    def set(self, value: float, attributes: dict | None = None) -> None:
+    def set(self, value: float, attributes: dict[str, str] | None = None) -> None:
         pass
 
 
 class NoOpMeter:
     """No-op meter for when OpenTelemetry is not available."""
 
-    def create_counter(self, name: str, **kwargs) -> NoOpCounter:
+    def create_counter(self, name: str, **kwargs: Any) -> NoOpCounter:
         return NoOpCounter()
 
-    def create_histogram(self, name: str, **kwargs) -> NoOpHistogram:
+    def create_histogram(self, name: str, **kwargs: Any) -> NoOpHistogram:
         return NoOpHistogram()
 
-    def create_up_down_counter(self, name: str, **kwargs) -> NoOpCounter:
+    def create_up_down_counter(self, name: str, **kwargs: Any) -> NoOpCounter:
         return NoOpCounter()
 
 
@@ -127,9 +130,9 @@ class ForgeMetrics:
     Provides counters, histograms, and gauges for key system metrics.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._config = get_resilience_config().observability
-        self._meter = None
+        self._meter: NoOpMeter | Any = None
         self._initialized = False
 
         # Metric instruments
@@ -139,7 +142,7 @@ class ForgeMetrics:
 
         # In-memory stats for when OTEL is not available
         self._local_counters: dict[str, int] = {}
-        self._local_histograms: dict[str, list] = {}
+        self._local_histograms: dict[str, list[float]] = {}
 
     def initialize(self) -> None:
         """Initialize the metrics collector."""
@@ -187,10 +190,10 @@ class ForgeMetrics:
                 provider = MeterProvider(resource=resource)
 
             # Set as global provider
-            metrics.set_meter_provider(provider)
+            otel_metrics.set_meter_provider(provider)
 
             # Get meter
-            self._meter = metrics.get_meter(
+            self._meter = otel_metrics.get_meter(
                 self._config.service_name,
                 self._config.version
             )
@@ -212,6 +215,7 @@ class ForgeMetrics:
 
     def _init_standard_metrics(self) -> None:
         """Initialize standard Forge metrics."""
+        assert self._meter is not None
         # Counters
         self._counters["capsules_created"] = self._meter.create_counter(
             "forge_capsules_created_total",
@@ -459,7 +463,7 @@ def get_metrics() -> ForgeMetrics:
     return _forge_metrics
 
 
-def timed(metric_name: str, labels: dict[str, str] | None = None) -> Callable:
+def timed(metric_name: str, labels: dict[str, str] | None = None) -> Callable[[F], F]:
     """
     Decorator to time function execution.
 
@@ -470,9 +474,9 @@ def timed(metric_name: str, labels: dict[str, str] | None = None) -> Callable:
     Returns:
         Decorated function
     """
-    def decorator(func: Callable) -> Callable:
+    def decorator(func: F) -> F:
         @functools.wraps(func)
-        async def async_wrapper(*args, **kwargs):
+        async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
             metrics_instance = get_metrics()
             start = time.perf_counter()
             try:
@@ -482,7 +486,7 @@ def timed(metric_name: str, labels: dict[str, str] | None = None) -> Callable:
                 metrics_instance.record_latency(metric_name, latency, labels)
 
         @functools.wraps(func)
-        def sync_wrapper(*args, **kwargs):
+        def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
             metrics_instance = get_metrics()
             start = time.perf_counter()
             try:
@@ -493,7 +497,7 @@ def timed(metric_name: str, labels: dict[str, str] | None = None) -> Callable:
 
         import asyncio
         if asyncio.iscoroutinefunction(func):
-            return async_wrapper
-        return sync_wrapper
+            return async_wrapper  # type: ignore[return-value]
+        return sync_wrapper  # type: ignore[return-value]
 
     return decorator

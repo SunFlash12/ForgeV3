@@ -132,13 +132,13 @@ class PartitionManager:
     - Partition lifecycle management
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._config = get_resilience_config().partitioning
         self._partitions: dict[str, Partition] = {}
         self._capsule_partition_map: dict[str, str] = {}
         self._rebalance_jobs: dict[str, RebalanceJob] = {}
         self._initialized = False
-        self._rebalance_task: asyncio.Task | None = None
+        self._rebalance_task: asyncio.Task[None] | None = None
 
     async def initialize(self) -> None:
         """Initialize the partition manager."""

@@ -354,7 +354,7 @@ class PhenotypeAgent(DiagnosticAgent):
                 suggestions.append({
                     "hpo_id": hpo_id,
                     "name": name,
-                    "discrimination_score": discrimination_score,
+                    "discrimination_score": float(discrimination_score),  # Ensure float for sorting
                     "present_in_hypotheses": present_count,
                     "hypotheses_affected": [
                         h["disease_id"] for h in hypotheses[:5]
@@ -363,13 +363,16 @@ class PhenotypeAgent(DiagnosticAgent):
                     ],
                 })
 
-        # Sort by discrimination score
-        suggestions.sort(key=lambda x: x["discrimination_score"], reverse=True)
+        # Sort by discrimination score (float cast for type safety)
+        def get_score(item: dict[str, object]) -> float:
+            score = item["discrimination_score"]
+            return float(score) if isinstance(score, (int, float)) else 0.0
+        suggestions.sort(key=get_score, reverse=True)
         return suggestions[:10]
 
     async def _normalize_phenotypes(
         self,
-        phenotypes: list[str | dict],
+        phenotypes: list[str | dict[str, Any]],
     ) -> list[dict[str, Any]]:
         """Normalize phenotype inputs to HPO terms."""
         normalized = []
@@ -570,7 +573,8 @@ class PhenotypeAgent(DiagnosticAgent):
         """Get expected phenotypes for a disease."""
         cache_key = f"disease_phenotypes_{disease_id}"
         if cache_key in self._phenotype_cache:
-            return self._phenotype_cache[cache_key].get("phenotypes", [])
+            cached_phenotypes: list[str] = self._phenotype_cache[cache_key].get("phenotypes", [])
+            return cached_phenotypes
 
         if not self._neo4j:
             return []

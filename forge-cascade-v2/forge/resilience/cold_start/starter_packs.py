@@ -8,6 +8,7 @@ Provides domain-specific capsules, overlays, and configurations.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import Enum
@@ -173,15 +174,15 @@ class StarterPackManager:
     - Rollback support
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._config = get_resilience_config().starter_packs
         self._packs: dict[str, StarterPack] = {}
         self._installations: dict[str, list[PackInstallation]] = {}  # user_id -> installations
         self._initialized = False
 
         # Callbacks for installation
-        self._create_capsule_callback = None
-        self._activate_overlay_callback = None
+        self._create_capsule_callback: Callable[..., Any] | None = None
+        self._activate_overlay_callback: Callable[..., Any] | None = None
 
     def initialize(self) -> None:
         """Initialize with default starter packs."""
@@ -327,11 +328,11 @@ class StarterPackManager:
         for pack in default_packs:
             self._packs[pack.pack_id] = pack
 
-    def set_capsule_callback(self, callback) -> None:
+    def set_capsule_callback(self, callback: Callable[..., Any]) -> None:
         """Set callback for creating capsules during installation."""
         self._create_capsule_callback = callback
 
-    def set_overlay_callback(self, callback) -> None:
+    def set_overlay_callback(self, callback: Callable[..., Any]) -> None:
         """Set callback for activating overlays during installation."""
         self._activate_overlay_callback = callback
 
@@ -483,7 +484,7 @@ class StarterPackManager:
                     )
                     return None
 
-                return await self._create_capsule_callback(
+                result: str | None = await self._create_capsule_callback(
                     content=sanitized_content,
                     capsule_type=template.capsule_type,
                     tags=template.tags,
@@ -491,6 +492,7 @@ class StarterPackManager:
                     trust_level=trust_level,
                     metadata={"from_pack_template": template.template_id}
                 )
+                return result
             except Exception as e:
                 logger.warning(
                     "pack_capsule_creation_failed",
@@ -577,11 +579,12 @@ class StarterPackManager:
         """Activate an overlay from pack configuration."""
         if self._activate_overlay_callback:
             try:
-                return await self._activate_overlay_callback(
+                overlay_result: str | None = await self._activate_overlay_callback(
                     overlay_type=overlay_config.overlay_type,
                     config=overlay_config.config,
                     user_id=user_id
                 )
+                return overlay_result
             except Exception as e:
                 logger.warning(
                     "pack_overlay_activation_failed",

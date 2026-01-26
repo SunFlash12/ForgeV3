@@ -108,17 +108,17 @@ async def get_current_user_wallet(
 
     try:
         # Verify token with Forge auth system
-        from forge.security.tokens import decode_access_token
+        from forge.security.tokens import decode_token
 
-        token_data = decode_access_token(credentials.credentials)
+        token_data = decode_token(credentials.credentials)
         if not token_data:
             raise HTTPException(status_code=401, detail="Invalid or expired token")
 
         # Extract wallet from token claims
-        wallet = token_data.get("wallet_address")
+        wallet: str | None = getattr(token_data, "wallet_address", None)
         if not wallet:
             # Fall back to user lookup if wallet not in token
-            user_id = token_data.get("sub") or token_data.get("user_id")
+            user_id: str | None = getattr(token_data, "sub", None) or getattr(token_data, "user_id", None)
             if user_id:
                 # This would need db injection in real implementation
                 raise HTTPException(
@@ -147,7 +147,7 @@ async def create_agent(
     request: ForgeAgentCreate,
     background_tasks: BackgroundTasks,
     wallet: str = Depends(get_current_user_wallet),
-):
+) -> APIResponse:
     """
     Create a new Forge agent on Virtuals Protocol.
 
@@ -170,7 +170,7 @@ async def create_agent(
 
         # Create basic workers for the agent
         # In production, workers would be configured based on request
-        workers = []
+        workers: list[Any] = []
 
         agent = await client.create_agent(
             create_request=request,
@@ -189,7 +189,7 @@ async def list_agents(
     per_page: int = Query(20, ge=1, le=100),
     status: str | None = None,
     wallet: str = Depends(get_current_user_wallet),
-):
+) -> PaginatedResponse:
     """
     List agents owned by the current user.
 
@@ -210,7 +210,7 @@ async def list_agents(
 async def get_agent(
     agent_id: str,
     wallet: str = Depends(get_current_user_wallet),
-):
+) -> APIResponse:
     """
     Get detailed information about a specific agent.
 
@@ -240,7 +240,7 @@ async def run_agent(
     context: str = Query(..., description="Context or query for the agent"),
     max_iterations: int = Query(10, ge=1, le=50),
     wallet: str = Depends(get_current_user_wallet),
-):
+) -> APIResponse:
     """
     Execute the agent's autonomous decision loop.
 
@@ -282,7 +282,7 @@ tokenization_router = APIRouter(prefix="/tokenization", tags=["Tokenization"])
 async def request_tokenization(
     request: TokenizationRequest,
     wallet: str = Depends(get_current_user_wallet),
-):
+) -> APIResponse:
     """
     Request tokenization of a Forge entity.
 
@@ -311,7 +311,7 @@ async def request_tokenization(
 async def get_tokenized_entity(
     entity_id: str,
     wallet: str = Depends(get_current_user_wallet),
-):
+) -> APIResponse:
     """
     Get tokenization status and details for an entity.
 
@@ -327,7 +327,7 @@ async def contribute_to_bonding_curve(
     entity_id: str,
     amount_virtual: float = Query(..., gt=0),
     wallet: str = Depends(get_current_user_wallet),
-):
+) -> APIResponse:
     """
     Contribute VIRTUAL to an entity's bonding curve.
 
@@ -362,7 +362,7 @@ async def create_governance_proposal(
     proposal_type: str,
     proposed_changes: dict[str, Any],
     wallet: str = Depends(get_current_user_wallet),
-):
+) -> APIResponse:
     """
     Create a governance proposal for token holders.
 
@@ -394,7 +394,7 @@ async def vote_on_proposal(
     proposal_id: str,
     vote: str = Query(..., regex="^(for|against|abstain)$"),
     wallet: str = Depends(get_current_user_wallet),
-):
+) -> APIResponse:
     """
     Cast a vote on a governance proposal.
 
@@ -427,7 +427,7 @@ async def register_offering(
     offering: JobOffering,
     agent_id: str,
     wallet: str = Depends(get_current_user_wallet),
-):
+) -> APIResponse:
     """
     Register a new service offering in the ACP registry.
 
@@ -458,7 +458,7 @@ async def search_offerings(
     max_fee: float | None = None,
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
-):
+) -> PaginatedResponse:
     """
     Search the ACP service registry for offerings.
 
@@ -492,7 +492,7 @@ async def search_offerings(
 async def create_job(
     request: ACPJobCreate,
     wallet: str = Depends(get_current_user_wallet),
-):
+) -> APIResponse:
     """
     Create a new ACP job from a service offering.
 
@@ -518,7 +518,7 @@ async def create_job(
 async def get_job(
     job_id: str,
     wallet: str = Depends(get_current_user_wallet),
-):
+) -> APIResponse:
     """
     Get detailed information about an ACP job.
 
@@ -534,7 +534,7 @@ async def respond_to_job(
     job_id: str,
     terms: ACPNegotiationTerms,
     wallet: str = Depends(get_current_user_wallet),
-):
+) -> APIResponse:
     """
     Provider responds to a job request with proposed terms.
 
@@ -561,7 +561,7 @@ async def respond_to_job(
 async def accept_job_terms(
     job_id: str,
     wallet: str = Depends(get_current_user_wallet),
-):
+) -> APIResponse:
     """
     Buyer accepts proposed terms and escrows payment.
 
@@ -588,7 +588,7 @@ async def submit_deliverable(
     job_id: str,
     deliverable: ACPDeliverable,
     wallet: str = Depends(get_current_user_wallet),
-):
+) -> APIResponse:
     """
     Provider submits deliverables for evaluation.
 
@@ -616,7 +616,7 @@ async def evaluate_deliverable(
     job_id: str,
     evaluation: ACPEvaluation,
     wallet: str = Depends(get_current_user_wallet),
-):
+) -> APIResponse:
     """
     Evaluate a deliverable and settle the transaction.
 
@@ -651,7 +651,7 @@ async def get_revenue_summary(
     start_date: datetime | None = None,
     end_date: datetime | None = None,
     wallet: str = Depends(get_current_user_wallet),
-):
+) -> APIResponse:
     """
     Get revenue summary with analytics.
 
@@ -680,7 +680,7 @@ async def get_entity_revenue(
     entity_id: str,
     entity_type: str,
     wallet: str = Depends(get_current_user_wallet),
-):
+) -> APIResponse:
     """
     Get detailed revenue for a specific entity.
 
@@ -709,7 +709,7 @@ async def get_entity_valuation(
     discount_rate: float = Query(0.1, ge=0, le=1),
     growth_rate: float = Query(0.05, ge=0, le=1),
     wallet: str = Depends(get_current_user_wallet),
-):
+) -> APIResponse:
     """
     Estimate the value of an entity based on revenue.
 

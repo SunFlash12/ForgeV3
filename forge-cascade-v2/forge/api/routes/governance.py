@@ -35,11 +35,12 @@ from forge.models.events import EventType
 from forge.models.governance import (
     Proposal,
     ProposalCreate,
-    ProposalStatus,
     ProposalType,
     Vote,
     VoteChoice,
+    VoteDelegation,
 )
+from forge.models.base import ProposalStatus
 
 # Resilience integration - caching, validation, metrics
 from forge.resilience.integration import (
@@ -281,7 +282,7 @@ async def list_proposals(
 async def get_active_proposals(
     user: ActiveUserDep,
     governance_repo: GovernanceRepoDep,
-) -> dict:
+) -> dict[str, Any]:
     """
     Get all active (votable) proposals.
     """
@@ -396,7 +397,7 @@ async def withdraw_proposal(
     governance_repo: GovernanceRepoDep,
     audit_repo: AuditRepoDep,
     correlation_id: CorrelationIdDep,
-):
+) -> None:
     """
     Withdraw a proposal (only by proposer, before voting ends).
     """
@@ -411,13 +412,13 @@ async def withdraw_proposal(
             detail="Only the proposer can withdraw",
         )
 
-    if proposal.status not in [ProposalStatus.PENDING, ProposalStatus.ACTIVE]:
+    if proposal.status not in [ProposalStatus.DRAFT, ProposalStatus.ACTIVE, ProposalStatus.VOTING]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot withdraw completed proposal",
         )
 
-    await governance_repo.update_proposal_status(proposal_id, ProposalStatus.WITHDRAWN)
+    await governance_repo.update_proposal_status(proposal_id, ProposalStatus.CANCELLED)
 
     # Resilience: Invalidate cache
     await invalidate_proposal_cache(proposal_id)
@@ -548,7 +549,7 @@ async def get_proposal_votes(
     proposal_id: str,
     user: ActiveUserDep,
     governance_repo: GovernanceRepoDep,
-) -> dict:
+) -> dict[str, Any]:
     """
     Get all votes on a proposal.
     """
@@ -898,7 +899,7 @@ async def resolve_serious_issue(
     user: CoreUserDep,  # CORE to resolve issues
     audit_repo: AuditRepoDep,
     correlation_id: CorrelationIdDep,
-) -> dict:
+) -> dict[str, str]:
     """
     Mark a serious issue as resolved.
 
@@ -927,7 +928,7 @@ async def resolve_serious_issue(
 @router.get("/ghost-council/stats")
 async def get_ghost_council_stats(
     user: ActiveUserDep,
-) -> dict:
+) -> dict[str, Any]:
     """
     Get Ghost Council statistics.
 
@@ -978,8 +979,8 @@ async def get_governance_metrics(
     )
 
     # Count by status
-    status_counts = {}
-    type_counts = {}
+    status_counts: dict[str, int] = {}
+    type_counts: dict[str, int] = {}
     total_votes = 0
     unique_voters = set()
     passed = 0
@@ -1039,7 +1040,7 @@ async def get_governance_metrics(
 async def get_active_policies(
     user: ActiveUserDep,
     governance_repo: GovernanceRepoDep,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """
     Get all active governance policies.
     """
@@ -1052,7 +1053,7 @@ async def get_policy(
     policy_id: str,
     user: ActiveUserDep,
     governance_repo: GovernanceRepoDep,
-) -> dict:
+) -> dict[str, Any]:
     """
     Get a specific policy.
     """
@@ -1131,6 +1132,12 @@ async def finalize_proposal(
         details={"new_status": status_val},
     )
 
+    if not updated:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update proposal status",
+        )
+
     return ProposalResponse.from_proposal(updated)
 
 
@@ -1147,7 +1154,7 @@ class ConstitutionalAnalysisResponse(BaseModel):
     safety_score: int
     transparency_score: int
     overall_score: float
-    concerns: list[dict]
+    concerns: list[dict[str, Any]]
     summary: str
     recommendation: str  # approve, review, reject
     confidence: float
@@ -1193,7 +1200,7 @@ async def get_constitutional_analysis(
     )
 
 
-async def _analyze_proposal_constitutionality(proposal) -> dict:
+async def _analyze_proposal_constitutionality(proposal: Proposal) -> dict[str, Any]:
     """
     Analyze proposal against constitutional principles.
 
@@ -1399,15 +1406,29 @@ async def create_delegation(
 
     delegation_id = f"del_{uuid4().hex[:12]}"
 
+    # Convert string proposal types to ProposalType enums if provided
+    proposal_types_enum: list[ProposalType] | None = None
+    if request.proposal_types is not None:
+        proposal_types_enum = [ProposalType(pt) for pt in request.proposal_types]
+
+    # Parse expires_at if provided
+    expires_at_dt: datetime | None = None
+    if request.expires_at:
+        expires_at_dt = datetime.fromisoformat(request.expires_at.replace('Z', '+00:00'))
+
+    # Create VoteDelegation object
+    delegation = VoteDelegation(
+        id=delegation_id,
+        delegator_id=user.id,
+        delegate_id=request.delegate_id,
+        proposal_types=proposal_types_enum,
+        is_active=True,
+        expires_at=expires_at_dt,
+        created_at=datetime.now(UTC),
+    )
+
     # Create delegation
-    await governance_repo.create_delegation({
-        "id": delegation_id,
-        "delegator_id": user.id,
-        "delegate_id": request.delegate_id,
-        "proposal_types": request.proposal_types,
-        "is_active": True,
-        "expires_at": request.expires_at,
-    })
+    await governance_repo.create_delegation(delegation)
 
     await audit_repo.log_governance_action(
         actor_id=user.id,
@@ -1438,12 +1459,17 @@ async def get_my_delegations(
     """Get delegations where I am either delegator or delegate."""
     delegations = await governance_repo.get_user_delegations(user.id)
 
+    def convert_proposal_types(types: list[ProposalType] | None) -> list[str] | None:
+        if types is None:
+            return None
+        return [pt.value if hasattr(pt, 'value') else str(pt) for pt in types]
+
     return [
         DelegationResponse(
             id=d.id,
             delegator_id=d.delegator_id,
             delegate_id=d.delegate_id,
-            proposal_types=d.proposal_types,
+            proposal_types=convert_proposal_types(d.proposal_types),
             is_active=d.is_active,
             created_at=d.created_at.isoformat() if d.created_at else "",
             expires_at=d.expires_at.isoformat() if d.expires_at else None,
@@ -1459,7 +1485,7 @@ async def revoke_delegation(
     governance_repo: GovernanceRepoDep,
     audit_repo: AuditRepoDep,
     correlation_id: CorrelationIdDep,
-) -> dict:
+) -> dict[str, str]:
     """Revoke a delegation."""
     delegation = await governance_repo.get_delegation(delegation_id)
 

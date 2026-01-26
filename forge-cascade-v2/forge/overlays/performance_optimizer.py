@@ -21,6 +21,7 @@ from typing import Any
 import structlog
 
 from forge.models.events import Event, EventType
+from forge.models.overlay import OverlayHealthCheck
 from forge.overlays.base import (
     BaseOverlay,
     OverlayContext,
@@ -88,13 +89,13 @@ class PerformanceOptimizerOverlay(BaseOverlay):
 
     SUBSCRIBED_EVENTS = {EventType.SYSTEM_EVENT, EventType.SYSTEM_ERROR}
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self._cache: dict[str, CacheEntry] = {}
         self._response_times: list[float] = []
         self._endpoint_metrics: dict[str, PerformanceMetrics] = defaultdict(PerformanceMetrics)
         self._optimization_history: list[OptimizationRecommendation] = []
-        self._cleanup_task: asyncio.Task | None = None
+        self._cleanup_task: asyncio.Task[None] | None = None
         self._stats: dict[str, Any] = {}
 
     async def initialize(self) -> bool:
@@ -164,7 +165,7 @@ class PerformanceOptimizerOverlay(BaseOverlay):
             self._logger.error("Performance optimizer error", error=str(e))
             return OverlayResult.fail(str(e))
 
-    async def _cache_get(self, data: dict) -> dict:
+    async def _cache_get(self, data: dict[str, Any]) -> dict[str, Any]:
         """Get value from cache."""
         key = data.get("key")
         if not key:
@@ -185,7 +186,7 @@ class PerformanceOptimizerOverlay(BaseOverlay):
             "hits": entry.hits,
         }
 
-    async def _cache_set(self, data: dict) -> dict:
+    async def _cache_set(self, data: dict[str, Any]) -> dict[str, Any]:
         """Set value in cache."""
         key = data.get("key")
         value = data.get("value")
@@ -201,7 +202,7 @@ class PerformanceOptimizerOverlay(BaseOverlay):
 
         return {"success": True, "key": key, "ttl": ttl}
 
-    async def _record_timing(self, data: dict) -> dict:
+    async def _record_timing(self, data: dict[str, Any]) -> dict[str, Any]:
         """Record response timing for analysis."""
         endpoint = data.get("endpoint", "unknown")
         response_time_ms = data.get("response_time_ms", 0)
@@ -234,7 +235,7 @@ class PerformanceOptimizerOverlay(BaseOverlay):
 
         return {"recorded": True, "endpoint": endpoint}
 
-    async def _get_metrics(self, data: dict) -> dict:
+    async def _get_metrics(self, data: dict[str, Any]) -> dict[str, Any]:
         """Get current performance metrics."""
         endpoint = data.get("endpoint")
 
@@ -263,7 +264,7 @@ class PerformanceOptimizerOverlay(BaseOverlay):
             "operations_processed": self._stats.get("operations_processed", 0),
         }
 
-    async def _get_optimized_llm_params(self, data: dict, context: OverlayContext) -> dict:
+    async def _get_optimized_llm_params(self, data: dict[str, Any], context: OverlayContext) -> dict[str, Any]:
         """
         Get optimized LLM parameters based on context.
 
@@ -317,9 +318,9 @@ class PerformanceOptimizerOverlay(BaseOverlay):
             "estimated_tokens": query_length * 3,  # Rough estimate
         }
 
-    async def _analyze_and_recommend(self, data: dict) -> dict:
+    async def _analyze_and_recommend(self, data: dict[str, Any]) -> dict[str, Any]:
         """Analyze system performance and generate recommendations."""
-        recommendations: list[dict] = []
+        recommendations: list[dict[str, Any]] = []
 
         # Check cache hit rate
         cache_hits = self._stats.get("cache_hits", 0)
@@ -374,24 +375,35 @@ class PerformanceOptimizerOverlay(BaseOverlay):
 
     async def handle_event(self, event: Event) -> None:
         """Handle subscribed events."""
-        if event.type == EventType.SYSTEM_ALERT:
+        if event.type == EventType.SYSTEM_ERROR:
             # Log performance-related alerts
             self._logger.warning(
                 "System alert received",
-                alert_type=event.data.get("type"),
-                details=event.data,
+                alert_type=event.payload.get("type"),
+                details=event.payload,
             )
 
-    async def health_check(self) -> bool:
+    async def health_check(self) -> OverlayHealthCheck:
         """Check overlay health."""
         try:
             # Verify cache is accessible
             await self._cache_set({"key": "_health_check", "value": "ok", "ttl": 60})
             result = await self._cache_get({"key": "_health_check"})
 
-            return result.get("hit", False)
-        except Exception:
-            return False
+            healthy: bool = bool(result.get("hit", False))
+            return OverlayHealthCheck(
+                overlay_id=self.id,
+                level="L1",
+                healthy=healthy,
+                message="Cache operational" if healthy else "Cache check failed",
+            )
+        except Exception as e:
+            return OverlayHealthCheck(
+                overlay_id=self.id,
+                level="L1",
+                healthy=False,
+                message=f"Health check failed: {e}",
+            )
 
     async def _cleanup_loop(self) -> None:
         """Periodically clean up expired cache entries."""

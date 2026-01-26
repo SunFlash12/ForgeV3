@@ -9,7 +9,7 @@ Provides query routing and result aggregation.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import Enum
@@ -18,6 +18,7 @@ from typing import Any
 import structlog
 
 from forge.resilience.config import get_resilience_config
+from forge.resilience.partitioning.partition_manager import PartitionManager
 
 logger = structlog.get_logger(__name__)
 
@@ -73,7 +74,7 @@ class PartitionRouter:
     - Search scope
     """
 
-    def __init__(self, partition_manager):
+    def __init__(self, partition_manager: PartitionManager) -> None:
         self._partition_manager = partition_manager
 
     def route_query(
@@ -155,13 +156,13 @@ class CrossPartitionQueryExecutor:
     - Partial result support
     """
 
-    def __init__(self, partition_manager):
+    def __init__(self, partition_manager: PartitionManager) -> None:
         self._partition_manager = partition_manager
         self._router = PartitionRouter(partition_manager)
         self._config = get_resilience_config().partitioning
 
         # Query execution callback (set by integration code)
-        self._query_callback: Callable | None = None
+        self._query_callback: Callable[[str, str, dict[str, Any]], Awaitable[list[dict[str, Any]]]] | None = None
 
         # Statistics
         self._stats = {
@@ -173,7 +174,7 @@ class CrossPartitionQueryExecutor:
 
     def set_query_callback(
         self,
-        callback: Callable[[str, str, dict], list[dict]]
+        callback: Callable[[str, str, dict[str, Any]], Awaitable[list[dict[str, Any]]]]
     ) -> None:
         """
         Set callback for executing queries on a partition.
@@ -268,20 +269,23 @@ class CrossPartitionQueryExecutor:
         max_results: int
     ) -> list[PartitionQueryResult]:
         """Execute query on multiple partitions in parallel."""
-        tasks = [
-            self._execute_on_partition(
-                partition_id,
-                query,
-                params,
-                max_results
+        async_tasks: list[asyncio.Task[PartitionQueryResult]] = [
+            asyncio.create_task(
+                self._execute_on_partition(
+                    partition_id,
+                    query,
+                    params,
+                    max_results
+                )
             )
             for partition_id in partition_ids
         ]
 
         # Execute with timeout
+        results: list[PartitionQueryResult | BaseException]
         try:
             results = await asyncio.wait_for(
-                asyncio.gather(*tasks, return_exceptions=True),
+                asyncio.gather(*async_tasks, return_exceptions=True),
                 timeout=timeout_ms / 1000
             )
         except TimeoutError:
@@ -291,7 +295,7 @@ class CrossPartitionQueryExecutor:
             )
             # Return partial results
             results = []
-            for task in tasks:
+            for task in async_tasks:
                 if task.done():
                     try:
                         results.append(task.result())
@@ -458,7 +462,7 @@ class CrossPartitionQueryExecutor:
 async def execute_cross_partition_search(
     query: str,
     filters: dict[str, Any],
-    partition_manager,
+    partition_manager: PartitionManager,
     max_results: int = 100
 ) -> list[dict[str, Any]]:
     """

@@ -21,9 +21,11 @@ import structlog
 
 from ..models.events import Event, EventType
 from ..models.graph_analysis import (
+    AlgorithmType,
     CentralityRequest,
     CommunityDetectionRequest,
     GraphBackend,
+    GraphMetrics,
     PageRankRequest,
 )
 from ..models.overlay import Capability
@@ -42,7 +44,7 @@ class GraphAlgorithmError(OverlayError):
 class CachedResult:
     """Cached algorithm result with TTL."""
     key: str
-    data: Any
+    data: dict[str, Any]
     computed_at: datetime
     ttl_seconds: int = 300  # 5 minutes default
 
@@ -124,7 +126,7 @@ class GraphAlgorithmsOverlay(BaseOverlay):
         self._detected_backend: GraphBackend | None = None
 
         # Statistics
-        self._stats = {
+        self._stats: dict[str, int] = {
             "pagerank_computations": 0,
             "centrality_computations": 0,
             "community_detections": 0,
@@ -188,7 +190,7 @@ class GraphAlgorithmsOverlay(BaseOverlay):
                 return OverlayResult.fail(f"Unknown operation: {operation}")
 
             # Emit analysis complete event if significant
-            events_to_emit = []
+            events_to_emit: list[dict[str, Any]] = []
             if operation in ("pagerank", "communities"):
                 events_to_emit.append(
                     self.create_event_emission(
@@ -221,14 +223,16 @@ class GraphAlgorithmsOverlay(BaseOverlay):
 
     async def _compute_pagerank(
         self,
-        data: dict,
+        data: dict[str, Any],
         context: OverlayContext
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Compute PageRank for nodes."""
+        assert self._graph_repository is not None
+
         # Check cache
         cache_key = f"pagerank:{data.get('node_label', 'Capsule')}:{data.get('relationship_type', 'DERIVED_FROM')}"
         cached = self._get_cached(cache_key)
-        if cached:
+        if cached is not None:
             return cached
 
         request = PageRankRequest(
@@ -239,12 +243,12 @@ class GraphAlgorithmsOverlay(BaseOverlay):
             tolerance=data.get("tolerance", self._config.pagerank_tolerance)
         )
 
-        rankings = await self._graph_repository.compute_pagerank(request)
+        ranking_result = await self._graph_repository.provider.compute_pagerank(request)
         self._stats["pagerank_computations"] += 1
 
-        result = {
+        result: dict[str, Any] = {
             "operation": "pagerank",
-            "count": len(rankings),
+            "count": len(ranking_result.rankings),
             "rankings": [
                 {
                     "node_id": r.node_id,
@@ -252,7 +256,7 @@ class GraphAlgorithmsOverlay(BaseOverlay):
                     "score": round(r.score, 6),
                     "rank": r.rank
                 }
-                for r in rankings[:data.get("limit", 100)]
+                for r in ranking_result.rankings[:data.get("limit", 100)]
             ],
             "backend": self._detected_backend.value if self._detected_backend else "unknown"
         }
@@ -262,30 +266,40 @@ class GraphAlgorithmsOverlay(BaseOverlay):
 
     async def _compute_centrality(
         self,
-        data: dict,
+        data: dict[str, Any],
         context: OverlayContext
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Compute centrality metrics."""
+        assert self._graph_repository is not None
+
         centrality_type = data.get("centrality_type", "degree")
         cache_key = f"centrality:{centrality_type}:{data.get('node_label', 'Capsule')}"
         cached = self._get_cached(cache_key)
-        if cached:
+        if cached is not None:
             return cached
 
+        # Map centrality_type string to AlgorithmType
+        algo_map: dict[str, AlgorithmType] = {
+            "degree": AlgorithmType.DEGREE_CENTRALITY,
+            "betweenness": AlgorithmType.BETWEENNESS_CENTRALITY,
+            "closeness": AlgorithmType.CLOSENESS_CENTRALITY,
+            "eigenvector": AlgorithmType.EIGENVECTOR_CENTRALITY,
+        }
+        algorithm = algo_map.get(centrality_type, AlgorithmType.DEGREE_CENTRALITY)
+
         request = CentralityRequest(
+            algorithm=algorithm,
             node_label=data.get("node_label", "Capsule"),
             relationship_type=data.get("relationship_type", "DERIVED_FROM"),
-            centrality_type=centrality_type,
-            sample_size=self._config.centrality_sample_size
         )
 
-        rankings = await self._graph_repository.compute_centrality(request)
+        ranking_result = await self._graph_repository.provider.compute_centrality(request)
         self._stats["centrality_computations"] += 1
 
-        result = {
+        result: dict[str, Any] = {
             "operation": "centrality",
             "centrality_type": centrality_type,
-            "count": len(rankings),
+            "count": len(ranking_result.rankings),
             "rankings": [
                 {
                     "node_id": r.node_id,
@@ -293,7 +307,7 @@ class GraphAlgorithmsOverlay(BaseOverlay):
                     "score": round(r.score, 6),
                     "rank": r.rank
                 }
-                for r in rankings[:data.get("limit", 100)]
+                for r in ranking_result.rankings[:data.get("limit", 100)]
             ],
             "backend": self._detected_backend.value if self._detected_backend else "unknown"
         }
@@ -303,27 +317,31 @@ class GraphAlgorithmsOverlay(BaseOverlay):
 
     async def _detect_communities(
         self,
-        data: dict,
+        data: dict[str, Any],
         context: OverlayContext
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Detect communities in the graph."""
+        assert self._graph_repository is not None
+
         algorithm = data.get("algorithm", self._config.community_algorithm)
         cache_key = f"communities:{algorithm}"
         cached = self._get_cached(cache_key)
-        if cached:
+        if cached is not None:
             return cached
 
         request = CommunityDetectionRequest(
             node_label=data.get("node_label", "Capsule"),
             relationship_type=data.get("relationship_type", "DERIVED_FROM"),
-            algorithm=algorithm,
+            algorithm=AlgorithmType.COMMUNITY_LOUVAIN if algorithm == "louvain" else AlgorithmType.COMMUNITY_LABEL_PROPAGATION,
             min_community_size=data.get("min_size", self._config.community_min_size)
         )
 
-        communities = await self._graph_repository.detect_communities(request)
+        community_result = await self._graph_repository.provider.detect_communities(request)
         self._stats["community_detections"] += 1
 
-        result = {
+        communities = community_result.communities
+
+        result: dict[str, Any] = {
             "operation": "communities",
             "algorithm": algorithm,
             "count": len(communities),
@@ -333,7 +351,7 @@ class GraphAlgorithmsOverlay(BaseOverlay):
                     "size": c.size,
                     "density": round(c.density, 4),
                     "dominant_type": c.dominant_type,
-                    "node_ids": c.node_ids[:20]  # Limit for response size
+                    "node_ids": [m.node_id for m in c.members[:20]]  # Limit for response size
                 }
                 for c in communities[:data.get("limit", 50)]
             ],
@@ -346,49 +364,57 @@ class GraphAlgorithmsOverlay(BaseOverlay):
 
     async def _compute_trust_transitivity(
         self,
-        data: dict,
+        data: dict[str, Any],
         context: OverlayContext
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Compute transitive trust between two nodes."""
+        assert self._graph_repository is not None
+
         source_id = data.get("source_id")
         target_id = data.get("target_id")
 
         if not source_id or not target_id:
             return {"error": "source_id and target_id are required"}
 
-        result = await self._graph_repository.compute_trust_transitivity(
-            source_id=source_id,
-            target_id=target_id,
+        from ..models.graph_analysis import TrustTransitivityRequest
+
+        request = TrustTransitivityRequest(
+            source_id=str(source_id),
+            target_id=str(target_id),
             max_hops=data.get("max_hops", self._config.trust_max_hops),
-            decay_factor=data.get("decay_factor", self._config.trust_decay_factor)
+            decay_rate=data.get("decay_factor", self._config.trust_decay_factor),
         )
+
+        trust_result = await self._graph_repository.provider.compute_trust_transitivity(request)
         self._stats["trust_calculations"] += 1
 
         return {
             "operation": "trust_transitivity",
             "source_id": source_id,
             "target_id": target_id,
-            "trust_score": round(result.trust_score, 4),
-            "path_count": result.path_count,
-            "best_path": result.best_path,
-            "best_path_length": result.best_path_length,
-            "computation_time_ms": result.computation_time_ms
+            "trust_score": round(trust_result.transitive_trust, 4),
+            "path_count": trust_result.paths_found,
+            "best_path": trust_result.best_path.path_nodes if trust_result.best_path else [],
+            "best_path_length": trust_result.best_path.path_length if trust_result.best_path else 0,
+            "computation_time_ms": 0.0,
         }
 
     async def _get_graph_metrics(
         self,
-        data: dict,
+        data: dict[str, Any],
         context: OverlayContext
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Get overall graph metrics."""
+        assert self._graph_repository is not None
+
         cache_key = "metrics:overall"
         cached = self._get_cached(cache_key)
-        if cached:
+        if cached is not None:
             return cached
 
-        metrics = await self._graph_repository.get_graph_metrics()
+        metrics: GraphMetrics = await self._graph_repository.get_graph_metrics()
 
-        result = {
+        result: dict[str, Any] = {
             "operation": "metrics",
             "total_nodes": metrics.total_nodes,
             "total_edges": metrics.total_edges,
@@ -396,8 +422,8 @@ class GraphAlgorithmsOverlay(BaseOverlay):
             "avg_clustering": round(metrics.avg_clustering, 4),
             "connected_components": metrics.connected_components,
             "diameter": metrics.diameter,
-            "node_distribution": metrics.node_distribution,
-            "edge_distribution": metrics.edge_distribution
+            "node_distribution": metrics.nodes_by_type,
+            "edge_distribution": metrics.edges_by_type,
         }
 
         self._set_cached(cache_key, result)
@@ -405,9 +431,9 @@ class GraphAlgorithmsOverlay(BaseOverlay):
 
     async def _refresh_all(
         self,
-        data: dict,
+        data: dict[str, Any],
         context: OverlayContext
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Refresh all cached computations."""
         self._cache.clear()
 
@@ -424,7 +450,7 @@ class GraphAlgorithmsOverlay(BaseOverlay):
             "top_5_communities": communities.get("communities", [])
         }
 
-    def _get_cached(self, key: str) -> dict | None:
+    def _get_cached(self, key: str) -> dict[str, Any] | None:
         """Get cached result if not expired."""
         if not self._config.enable_caching:
             self._stats["cache_misses"] += 1
@@ -438,7 +464,7 @@ class GraphAlgorithmsOverlay(BaseOverlay):
         self._stats["cache_misses"] += 1
         return None
 
-    def _set_cached(self, key: str, data: dict) -> None:
+    def _set_cached(self, key: str, data: dict[str, Any]) -> None:
         """Cache a result."""
         if not self._config.enable_caching:
             return
@@ -461,7 +487,7 @@ class GraphAlgorithmsOverlay(BaseOverlay):
         self._cache.clear()
         return count
 
-    def get_stats(self) -> dict:
+    def get_stats(self) -> dict[str, Any]:
         """Get algorithm execution statistics."""
         return {
             **self._stats,
@@ -474,7 +500,7 @@ class GraphAlgorithmsOverlay(BaseOverlay):
 def create_graph_algorithms_overlay(
     graph_repository: GraphRepository | None = None,
     cache_ttl: int = 300,
-    **kwargs
+    **kwargs: Any
 ) -> GraphAlgorithmsOverlay:
     """
     Create a graph algorithms overlay.

@@ -62,9 +62,9 @@ class BackgroundScheduler:
     Runs periodic tasks without blocking the main event loop.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._tasks: dict[str, ScheduledTask] = {}
-        self._running_tasks: dict[str, asyncio.Task] = {}
+        self._running_tasks: dict[str, asyncio.Task[None]] = {}
         self._stats = SchedulerStats()
         self._shutdown_event = asyncio.Event()
         self._logger = logger.bind(service="scheduler")
@@ -386,10 +386,10 @@ async def setup_scheduler() -> BackgroundScheduler:
     return scheduler
 
 
-def _create_graph_snapshot_task() -> Callable[[], Coroutine[Any, Any, Any]]:
+def _create_graph_snapshot_task() -> Callable[[], Coroutine[Any, Any, None]]:
     """Create the graph snapshot task function with circuit breaker protection."""
 
-    async def task():
+    async def task() -> None:
         """Create a periodic graph snapshot."""
         from forge.database.client import Neo4jClient
         from forge.repositories.graph_repository import GraphRepository
@@ -401,7 +401,7 @@ def _create_graph_snapshot_task() -> Callable[[], Coroutine[Any, Any, Any]]:
         neo4j_circuit = await ForgeCircuits.neo4j()
 
         # Inner function for circuit breaker to wrap
-        async def do_snapshot():
+        async def do_snapshot() -> Any:
             client = None
             try:
                 client = Neo4jClient()
@@ -443,10 +443,10 @@ def _create_graph_snapshot_task() -> Callable[[], Coroutine[Any, Any, Any]]:
     return task
 
 
-def _create_version_compaction_task() -> Callable[[], Coroutine[Any, Any, Any]]:
+def _create_version_compaction_task() -> Callable[[], Coroutine[Any, Any, None]]:
     """Create the version compaction task function with circuit breaker protection."""
 
-    async def task():
+    async def task() -> None:
         """Compact old version diffs into full snapshots."""
         from forge.database.client import Neo4jClient
         from forge.repositories.temporal_repository import TemporalRepository
@@ -456,7 +456,7 @@ def _create_version_compaction_task() -> Callable[[], Coroutine[Any, Any, Any]]:
         # Get circuit breaker for Neo4j operations
         neo4j_circuit = await ForgeCircuits.neo4j()
 
-        async def do_compaction():
+        async def do_compaction() -> int:
             client = None
             try:
                 client = Neo4jClient()
@@ -497,10 +497,10 @@ def _create_version_compaction_task() -> Callable[[], Coroutine[Any, Any, Any]]:
     return task
 
 
-def _create_cache_cleanup_task() -> Callable[[], Coroutine[Any, Any, Any]]:
+def _create_cache_cleanup_task() -> Callable[[], Coroutine[Any, Any, None]]:
     """Create the cache cleanup task function."""
 
-    async def task():
+    async def task() -> None:
         """Clean up expired query cache entries."""
         from forge.services.query_cache import get_query_cache
 

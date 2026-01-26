@@ -192,7 +192,7 @@ class NonceStore:
             },
         )
 
-    async def cleanup_expired(self) -> dict[str, int]:
+    async def cleanup_expired(self) -> dict[str, int | str]:
         """
         Clean up expired entries from memory cache.
 
@@ -285,7 +285,7 @@ async def init_nonce_store(
         try:
             import redis.asyncio as redis
 
-            redis_client = redis.from_url(
+            redis_client = redis.from_url(  # type: ignore[no-untyped-call]
                 redis_url,
                 password=redis_password,
                 decode_responses=True,

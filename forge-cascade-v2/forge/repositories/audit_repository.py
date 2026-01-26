@@ -115,6 +115,8 @@ class AuditRepository:
         }
 
         record = await self.db.execute_single(query, params)
+        if record is None:
+            raise RuntimeError("Failed to create audit event")
         return self._to_audit_event(record["a"])
 
     async def log_capsule_action(

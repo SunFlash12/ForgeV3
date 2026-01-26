@@ -14,7 +14,7 @@ from enum import Enum
 from typing import Any
 from uuid import uuid4
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, ValidationInfo, field_validator
 
 from .base import TokenInfo, TokenizationStatus, VirtualsBaseModel
 
@@ -75,7 +75,7 @@ class TokenDistribution(BaseModel):
 
     @field_validator('creator_allocation_percent')
     @classmethod
-    def validate_total(cls, v, info):
+    def validate_total(cls, v: float, info: ValidationInfo) -> float:
         """Ensure allocations don't exceed 100%."""
         data = info.data
         total = (data.get('public_circulation_percent', 60) +

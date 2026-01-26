@@ -449,7 +449,7 @@ async def register_peer(
     protocol: FederationProtocol = Depends(get_protocol),
     sync_service: SyncService = Depends(get_sync_service),
     trust_manager: PeerTrustManager = Depends(get_trust_manager),
-):
+) -> PeerResponse:
     """
     Register a new federated peer.
 
@@ -534,7 +534,7 @@ async def list_peers(
     status: PeerStatus | None = None,
     sync_service: SyncService = Depends(get_sync_service),
     trust_manager: PeerTrustManager = Depends(get_trust_manager),
-):
+) -> list[PeerResponse]:
     """List all registered peers, optionally filtered by status."""
     peers = await sync_service.list_peers()
 
@@ -578,7 +578,7 @@ async def get_peer(
     current_user: AdminUserDep,  # SECURITY FIX: Require authentication
     sync_service: SyncService = Depends(get_sync_service),
     trust_manager: PeerTrustManager = Depends(get_trust_manager),
-):
+) -> PeerResponse:
     """Get details for a specific peer."""
     peer = await sync_service.get_peer(peer_id)
     if not peer:
@@ -619,7 +619,7 @@ async def update_peer(
     current_user: AdminUserDep,  # SECURITY FIX: Require authentication
     sync_service: SyncService = Depends(get_sync_service),
     trust_manager: PeerTrustManager = Depends(get_trust_manager),
-):
+) -> PeerResponse:
     """Update peer settings. Requires admin authentication."""
     # SECURITY FIX: Require admin role for peer modification
     require_admin_role(current_user)
@@ -680,7 +680,7 @@ async def remove_peer(
     peer_id: str,
     current_user: AdminUserDep,  # SECURITY FIX: Require authentication
     sync_service: SyncService = Depends(get_sync_service),
-):
+) -> dict[str, str]:
     """Remove a federated peer. Requires admin authentication."""
     # SECURITY FIX: Require admin role for peer removal
     require_admin_role(current_user)
@@ -705,7 +705,7 @@ async def adjust_peer_trust(
     current_user: AdminUserDep,  # SECURITY FIX: Require authentication
     sync_service: SyncService = Depends(get_sync_service),
     trust_manager: PeerTrustManager = Depends(get_trust_manager),
-):
+) -> dict[str, Any]:
     """Manually adjust a peer's trust score. Requires admin authentication."""
     # SECURITY FIX: Require admin role for trust adjustment
     require_admin_role(current_user)
@@ -736,7 +736,7 @@ async def get_peer_trust_history(
     current_user: AdminUserDep,  # SECURITY FIX: Require authentication
     limit: int = Query(default=50, le=200),
     trust_manager: PeerTrustManager = Depends(get_trust_manager),
-):
+) -> dict[str, Any]:
     """Get trust adjustment history for a peer."""
     history = await trust_manager.get_trust_history(peer_id, limit)
 
@@ -760,7 +760,7 @@ async def get_peer_permissions(
     current_user: AdminUserDep,  # SECURITY FIX: Require authentication
     sync_service: SyncService = Depends(get_sync_service),
     trust_manager: PeerTrustManager = Depends(get_trust_manager),
-):
+) -> dict[str, Any]:
     """Get sync permissions for a peer based on their trust tier."""
     peer = await sync_service.get_peer(peer_id)
     if not peer:
@@ -779,7 +779,7 @@ async def trigger_sync(
     peer_id: str,
     request: SyncTriggerRequest,
     sync_service: SyncService = Depends(get_sync_service),
-):
+) -> SyncStateResponse:
     """Trigger a sync with a specific peer."""
     peer = await sync_service.get_peer(peer_id)
     if not peer:
@@ -815,7 +815,7 @@ async def trigger_sync(
 @router.post("/sync/all")
 async def trigger_sync_all(
     sync_service: SyncService = Depends(get_sync_service),
-):
+) -> dict[str, Any]:
     """Trigger sync with all active peers."""
     sync_ids = await sync_service.schedule_sync_all()
     return {
@@ -830,7 +830,7 @@ async def get_sync_status(
     peer_id: str | None = None,
     limit: int = Query(default=20, le=100),
     sync_service: SyncService = Depends(get_sync_service),
-):
+) -> dict[str, Any]:
     """Get recent sync history."""
     history = await sync_service.get_sync_history(peer_id, limit)
 
@@ -857,7 +857,7 @@ async def get_sync_details(
     sync_id: str,
     current_user: AdminUserDep,  # SECURITY FIX: Require authentication
     sync_service: SyncService = Depends(get_sync_service),
-):
+) -> SyncStateResponse:
     """Get details for a specific sync operation."""
     state = await sync_service.get_sync_state(sync_id)
     if not state:
@@ -896,7 +896,7 @@ async def get_federation_stats(
     current_user: AdminUserDep,  # SECURITY FIX: Require authentication
     sync_service: SyncService = Depends(get_sync_service),
     trust_manager: PeerTrustManager = Depends(get_trust_manager),
-):
+) -> FederationStatsResponse:
     """Get overall federation statistics."""
     peers = await sync_service.list_peers()
     stats = await trust_manager.get_federation_stats(peers)
@@ -926,7 +926,7 @@ async def get_federation_stats(
 async def handle_handshake(
     handshake: PeerHandshake,
     protocol: FederationProtocol = Depends(get_protocol),
-):
+) -> dict[str, Any]:
     """
     Handle incoming handshake from a peer.
     Returns our handshake response.
@@ -942,7 +942,7 @@ async def handle_handshake(
 
 
 @router.get("/health", dependencies=[Depends(check_federation_rate_limit)])
-async def federation_health():
+async def federation_health() -> dict[str, Any]:
     """Health check endpoint for peers."""
     return {
         "status": "healthy",
@@ -961,7 +961,7 @@ async def get_changes(
     protocol: FederationProtocol = Depends(get_protocol),
     sync_service: SyncService = Depends(get_sync_service),
     capsule_repo: CapsuleRepository = Depends(get_capsule_repository),
-):
+) -> dict[str, Any]:
     """
     Get changes for a peer to pull.
     Requires signed request with valid peer public key.
@@ -974,7 +974,7 @@ async def get_changes(
 
     # Verify the request signature
     import json
-    params = {"limit": limit}
+    params: dict[str, int | str] = {"limit": limit}
     if since:
         params["since"] = since.isoformat()
     if types:
@@ -1062,7 +1062,7 @@ async def receive_capsules(
     protocol: FederationProtocol = Depends(get_protocol),
     sync_service: SyncService = Depends(get_sync_service),
     capsule_repo: CapsuleRepository = Depends(get_capsule_repository),
-):
+) -> dict[str, int]:
     """
     Receive capsules pushed from a peer.
     Verifies signature before processing.

@@ -21,7 +21,7 @@ from forge.models.capsule import Capsule
 from forge.models.semantic_edges import SemanticEdge, SemanticRelationType
 from forge.repositories.capsule_repository import CapsuleRepository
 from forge.services.embedding import EmbeddingService, get_embedding_service
-from forge.services.llm import LLMMessage, get_llm_service
+from forge.services.llm import LLMMessage, LLMService, get_llm_service
 
 logger = structlog.get_logger(__name__)
 
@@ -126,10 +126,10 @@ Only return the JSON object, no other text."""
         self.capsule_repo = capsule_repo
         self.embedding_service = embedding_service or get_embedding_service()
         self.config = config or DetectionConfig()
-        self._llm = None
+        self._llm: LLMService | None = None
 
     @property
-    def llm(self):
+    def llm(self) -> LLMService:
         """Lazy load LLM service."""
         if self._llm is None:
             self._llm = get_llm_service()
@@ -223,14 +223,20 @@ Only return the JSON object, no other text."""
         capsule: Capsule,
     ) -> list[tuple[Capsule, float]]:
         """Find capsules similar to the given one via embedding."""
-        if not capsule.embedding:
+        embedding_vector: list[float]
+        capsule_embedding: list[float] | None = getattr(capsule, 'embedding', None)
+        if not capsule_embedding:
             # Generate embedding if not present
-            content = f"{capsule.title}\n{capsule.content}"
-            capsule.embedding = await self.embedding_service.embed(content)
+            title_str = capsule.title or ""
+            content = f"{title_str}\n{capsule.content}"
+            embedding_result = await self.embedding_service.embed(content)
+            embedding_vector = embedding_result.embedding
+        else:
+            embedding_vector = capsule_embedding
 
         # Search for similar capsules
         similar = await self.capsule_repo.find_similar_by_embedding(
-            embedding=capsule.embedding,
+            embedding=embedding_vector,
             limit=self.config.max_candidates + 1,  # +1 to account for self
             min_similarity=self.config.similarity_threshold,
         )
@@ -253,7 +259,7 @@ Only return the JSON object, no other text."""
         # SECURITY FIX (Audit 4): Sanitize all user-provided content
         from forge.security.prompt_sanitization import sanitize_for_prompt
 
-        safe_source_title = sanitize_for_prompt(source.title, field_name="source_title", max_length=500)
+        safe_source_title = sanitize_for_prompt(source.title or "", field_name="source_title", max_length=500)
         safe_source_type = sanitize_for_prompt(
             source.type.value if hasattr(source.type, 'value') else str(source.type),
             field_name="source_type",
@@ -261,7 +267,7 @@ Only return the JSON object, no other text."""
         )
         safe_source_content = sanitize_for_prompt(source.content[:2000], field_name="source_content", max_length=2000)
 
-        safe_target_title = sanitize_for_prompt(target.title, field_name="target_title", max_length=500)
+        safe_target_title = sanitize_for_prompt(target.title or "", field_name="target_title", max_length=500)
         safe_target_type = sanitize_for_prompt(
             target.type.value if hasattr(target.type, 'value') else str(target.type),
             field_name="target_type",
@@ -314,7 +320,7 @@ Only return the JSON object, no other text."""
             )
 
         except (json.JSONDecodeError, ValueError, KeyError) as e:
-            logger.warning("classification_parse_error", error=str(e), response=response.text[:200])
+            logger.warning("classification_parse_error", error=str(e), response=response.content[:200])
             return RelationshipClassification(
                 relationship_type=None,
                 confidence=0.0,

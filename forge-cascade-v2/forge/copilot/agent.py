@@ -35,9 +35,11 @@ Example:
     ```
 """
 
+from __future__ import annotations
+
 import asyncio
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import Enum
@@ -91,7 +93,7 @@ class ChatMessage:
     role: str  # "user", "assistant", "system"
     content: str
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
-    tool_calls: list[dict] = field(default_factory=list)
+    tool_calls: list[dict[str, Any]] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
@@ -99,7 +101,7 @@ class ChatMessage:
 class ChatResponse:
     """Response from a chat interaction."""
     content: str
-    tool_calls: list[dict] = field(default_factory=list)
+    tool_calls: list[dict[str, Any]] = field(default_factory=list)
     reasoning: str | None = None
     tokens_used: int = 0
     latency_ms: float = 0
@@ -159,7 +161,7 @@ When creating capsules, ensure they are well-structured with appropriate tags an
         self,
         config: CopilotConfig | None = None,
         tool_registry: ForgeToolRegistry | None = None,
-    ):
+    ) -> None:
         """
         Initialize the Copilot Forge agent.
 
@@ -169,11 +171,11 @@ When creating capsules, ensure they are well-structured with appropriate tags an
         """
         self.config = config or CopilotConfig()
         self._tool_registry = tool_registry or ForgeToolRegistry()
-        self._client = None
-        self._session = None
+        self._client: Any = None
+        self._session: Any = None
         self._state = AgentState.STOPPED
         self._history: list[ChatMessage] = []
-        self._event_handlers: list[callable] = []
+        self._event_handlers: list[Callable[..., Any]] = []
 
     @property
     def state(self) -> AgentState:
@@ -192,10 +194,10 @@ When creating capsules, ensure they are well-structured with appropriate tags an
 
     async def start(
         self,
-        db_client=None,
-        search_service=None,
-        capsule_service=None,
-        overlay_manager=None,
+        db_client: Any = None,
+        search_service: Any = None,
+        capsule_service: Any = None,
+        overlay_manager: Any = None,
     ) -> None:
         """
         Start the Copilot agent and initialize services.
@@ -221,6 +223,7 @@ When creating capsules, ensure they are well-structured with appropriate tags an
             # Try to import Copilot SDK
             try:
                 from copilot import CopilotClient
+                from copilot.types import CopilotClientOptions
             except ImportError:
                 raise RuntimeError(
                     "GitHub Copilot SDK not installed. "
@@ -238,12 +241,12 @@ When creating capsules, ensure they are well-structured with appropriate tags an
             )
 
             # Create Copilot client
-            client_config = {
-                "use_stdio": self.config.use_stdio,
-                "log_level": self.config.log_level,
-                "auto_restart": self.config.auto_restart,
-                "auto_start": True,
-            }
+            client_config = CopilotClientOptions(
+                use_stdio=self.config.use_stdio,
+                log_level=self.config.log_level,  # type: ignore[typeddict-item]
+                auto_restart=self.config.auto_restart,
+                auto_start=True,
+            )
 
             # Set CLI path - use config, env var, or auto-discover
             cli_path = self.config.cli_path
@@ -256,10 +259,11 @@ When creating capsules, ensure they are well-structured with appropriate tags an
                 cli_path = shutil.which("copilot")
                 if not cli_path:
                     # Check npm global install location on Windows
-                    npm_path = os.path.expandvars(
+                    import os as _os
+                    npm_path = _os.path.expandvars(
                         r"%APPDATA%\npm\copilot.cmd"
                     )
-                    if os.path.exists(npm_path):
+                    if _os.path.exists(npm_path):
                         cli_path = npm_path
 
             if cli_path:
@@ -271,7 +275,7 @@ When creating capsules, ensure they are well-structured with appropriate tags an
 
             # Create session with Forge tools
             system_prompt = self.config.system_prompt or self.DEFAULT_SYSTEM_PROMPT
-            session_config = {
+            session_config: dict[str, Any] = {
                 "model": self.config.model,
                 "streaming": self.config.streaming,
                 "tools": self._tool_registry.get_copilot_tools(),
@@ -316,7 +320,7 @@ When creating capsules, ensure they are well-structured with appropriate tags an
             logger.error(f"Error stopping agent: {e}")
             raise
 
-    async def chat(self, message: str, metadata: dict | None = None) -> ChatResponse:
+    async def chat(self, message: str, metadata: dict[str, Any] | None = None) -> ChatResponse:
         """
         Send a message and get a complete response.
 
@@ -343,12 +347,12 @@ When creating capsules, ensure they are well-structured with appropriate tags an
         ))
 
         # Set up response collection
-        response_content = []
-        reasoning_content = []
-        tool_calls = []
+        response_content: list[str] = []
+        reasoning_content: list[str] = []
+        tool_calls: list[dict[str, Any]] = []
         done = asyncio.Event()
 
-        def collect_response(event):
+        def collect_response(event: Any) -> None:
             if event.type.value == "assistant.message":
                 response_content.append(event.data.content)
             elif event.type.value == "assistant.reasoning":
@@ -404,7 +408,7 @@ When creating capsules, ensure they are well-structured with appropriate tags an
     async def stream_chat(
         self,
         message: str,
-        metadata: dict | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> AsyncIterator[str]:
         """
         Send a message and stream the response.
@@ -436,11 +440,11 @@ When creating capsules, ensure they are well-structured with appropriate tags an
         ))
 
         # Queue for streaming chunks
-        chunk_queue = asyncio.Queue()
+        chunk_queue: asyncio.Queue[str | None] = asyncio.Queue()
         done = asyncio.Event()
-        full_response = []
+        full_response: list[str] = []
 
-        def stream_collector(event):
+        def stream_collector(event: Any) -> None:
             if event.type.value == "assistant.message_delta":
                 delta = event.data.delta_content or ""
                 if delta:
@@ -475,7 +479,7 @@ When creating capsules, ensure they are well-structured with appropriate tags an
             content="".join(full_response),
         ))
 
-    def on_event(self, handler: callable) -> None:
+    def on_event(self, handler: Callable[..., Any]) -> None:
         """
         Register an event handler for Copilot events.
 
@@ -489,7 +493,7 @@ When creating capsules, ensure they are well-structured with appropriate tags an
         self._history.clear()
         logger.info("Conversation history cleared")
 
-    async def get_session_messages(self) -> list[dict]:
+    async def get_session_messages(self) -> list[dict[str, Any]]:
         """
         Get messages from the Copilot session.
 
@@ -500,13 +504,13 @@ When creating capsules, ensure they are well-structured with appropriate tags an
             return []
 
         try:
-            messages = await self._session.get_messages()
+            messages: list[dict[str, Any]] = await self._session.get_messages()
             return messages
         except Exception as e:
             logger.error(f"Failed to get session messages: {e}")
             return []
 
-    def _handle_event(self, event) -> None:
+    def _handle_event(self, event: Any) -> None:
         """Internal event handler that dispatches to registered handlers."""
         # Log certain events
         if event.type.value == "tool.call":
@@ -535,7 +539,7 @@ class CopilotForgeAgentPool:
         config: CopilotConfig | None = None,
         min_agents: int = 1,
         max_agents: int = 5,
-    ):
+    ) -> None:
         """
         Initialize the agent pool.
 
@@ -548,10 +552,10 @@ class CopilotForgeAgentPool:
         self._min_agents = min_agents
         self._max_agents = max_agents
         self._agents: list[CopilotForgeAgent] = []
-        self._available: asyncio.Queue = asyncio.Queue()
+        self._available: asyncio.Queue[CopilotForgeAgent] = asyncio.Queue()
         self._initialized = False
 
-    async def initialize(self, **services) -> None:
+    async def initialize(self, **services: Any) -> None:
         """Initialize the agent pool with minimum agents."""
         for _ in range(self._min_agents):
             agent = CopilotForgeAgent(self.config)

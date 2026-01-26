@@ -8,6 +8,7 @@ Provides endpoints for:
 - Administrative operations
 """
 
+import asyncio
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -63,14 +64,16 @@ def is_maintenance_mode() -> bool:
     """Check if maintenance mode is enabled."""
     # SECURITY FIX (Audit 3): Acquire lock for consistent read
     with _maintenance_lock:
-        return _maintenance_state["enabled"]
+        enabled = _maintenance_state["enabled"]
+        return bool(enabled)
 
 
 def get_maintenance_message() -> str:
     """Get the maintenance mode message."""
     # SECURITY FIX (Audit 3): Acquire lock for consistent read
     with _maintenance_lock:
-        return _maintenance_state["message"]
+        message = _maintenance_state["message"]
+        return str(message) if message else "System is under maintenance. Please try again later."
 
 
 def set_maintenance_mode(enabled: bool, user_id: str | None = None, message: str | None = None) -> None:
@@ -78,7 +81,7 @@ def set_maintenance_mode(enabled: bool, user_id: str | None = None, message: str
     with _maintenance_lock:
         _maintenance_state["enabled"] = enabled
         if enabled:
-            _maintenance_state["enabled_at"] = datetime.now(UTC)
+            _maintenance_state["enabled_at"] = datetime.now(UTC)  # type: ignore[assignment]
             _maintenance_state["enabled_by"] = user_id
             if message:
                 _maintenance_state["message"] = message
@@ -266,9 +269,8 @@ async def get_health(
     record_health_check_access()
 
     # Calculate uptime from event system start
-    uptime = (
-        datetime.now(UTC) - event_system._start_time
-    ).total_seconds() if hasattr(event_system, "_start_time") else 0.0
+    start_time = getattr(event_system, "_start_time", None)
+    uptime = (datetime.now(UTC) - start_time).total_seconds() if start_time else 0.0
 
     # Component status
     components = {}
@@ -290,33 +292,38 @@ async def get_health(
         checks["database"] = False
 
     # Event system health
-    event_healthy = event_system._running if hasattr(event_system, "_running") else True
+    event_healthy: bool = getattr(event_system, "_running", True)
+    event_queue = getattr(event_system, "_queue", None)
+    queue_size = event_queue.qsize() if event_queue else 0
     components["event_system"] = {
         "status": "healthy" if event_healthy else "degraded",
-        "queue_size": event_system._queue.qsize() if hasattr(event_system, "_queue") else 0
+        "queue_size": str(queue_size)
     }
     checks["event_system"] = event_healthy
 
     # Overlay manager health
-    overlay_count = len(overlay_manager._overlays) if hasattr(overlay_manager, "_overlays") else 0
-    active_count = len([o for o in overlay_manager._overlays.values() if o.enabled]) if hasattr(overlay_manager, "_overlays") else 0
+    overlays_dict = getattr(overlay_manager, "_overlays", {})
+    overlay_count = len(overlays_dict)
+    active_count = len([o for o in overlays_dict.values() if o.enabled])
     components["overlay_manager"] = {
         "status": "healthy",
-        "total_overlays": overlay_count,
-        "active_overlays": active_count
+        "total_overlays": str(overlay_count),
+        "active_overlays": str(active_count)
     }
     checks["overlay_manager"] = True
 
     # Circuit breakers health
+    breakers_dict = getattr(circuit_registry, "_breakers", {})
     open_breakers = sum(
-        1 for cb in circuit_registry._breakers.values()
+        1 for cb in breakers_dict.values()
         if cb.state.name == "OPEN"
-    ) if hasattr(circuit_registry, "_breakers") else 0
+    )
 
+    total_breakers = len(breakers_dict)
     components["circuit_breakers"] = {
         "status": "degraded" if open_breakers > 0 else "healthy",
-        "total": len(circuit_registry._breakers) if hasattr(circuit_registry, "_breakers") else 0,
-        "open": open_breakers
+        "total": str(total_breakers),
+        "open": str(open_breakers)
     }
     checks["circuit_breakers"] = open_breakers == 0
 
@@ -335,8 +342,8 @@ async def get_health(
 
     components["anomaly_detection"] = {
         "status": anomaly_status,
-        "unresolved": unresolved,
-        "critical": critical_anomalies
+        "unresolved": str(unresolved),
+        "critical": str(critical_anomalies)
     }
     checks["anomaly_detection"] = critical_anomalies == 0
 
@@ -428,23 +435,27 @@ async def list_circuit_breakers(
     open_count = 0
     half_open_count = 0
 
-    for name, cb in circuit_registry._breakers.items():
+    breakers_dict = getattr(circuit_registry, "_breakers", {})
+    for name, cb in breakers_dict.items():
         state_name = cb.state.name
         if state_name == "OPEN":
             open_count += 1
         elif state_name == "HALF_OPEN":
             half_open_count += 1
 
+        # Access circuit breaker stats and config for status
+        stats = cb.stats
+        config = cb.config
         breakers.append(CircuitBreakerStatus(
             name=name,
             state=state_name,
-            failure_count=cb._failure_count,
-            success_count=cb._success_count,
-            last_failure_time=cb._last_failure_time,
-            last_success_time=cb._last_success_time,
-            reset_timeout=cb._reset_timeout,
-            failure_threshold=cb._failure_threshold,
-            success_threshold=cb._success_threshold
+            failure_count=stats.failed_calls,
+            success_count=stats.successful_calls,
+            last_failure_time=datetime.fromtimestamp(stats.last_failure_time, tz=UTC) if stats.last_failure_time else None,
+            last_success_time=datetime.fromtimestamp(stats.last_success_time, tz=UTC) if stats.last_success_time else None,
+            reset_timeout=config.recovery_timeout,
+            failure_threshold=config.failure_threshold,
+            success_threshold=config.success_threshold
         ))
 
     return CircuitBreakerListResponse(
@@ -468,22 +479,24 @@ async def reset_circuit_breaker(
 ) -> dict[str, str]:
     """Manually reset a circuit breaker."""
 
-    if name not in circuit_registry._breakers:
+    breakers_dict = getattr(circuit_registry, "_breakers", {})
+    if name not in breakers_dict:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Circuit breaker '{name}' not found"
         )
 
-    cb = circuit_registry._breakers[name]
-    cb.reset()
+    cb = breakers_dict[name]
+    await cb.reset()
 
     # Resilience: Record circuit breaker reset metric
     record_circuit_breaker_reset(name)
 
     # Emit event
     await event_system.emit(
-        "CIRCUIT_BREAKER_RESET",
+        EventType.IMMUNE_EVENT,
         {
+            "event_name": "CIRCUIT_BREAKER_RESET",
             "circuit_name": name,
             "reset_by": str(user.id),
             "previous_state": cb.state.name
@@ -613,12 +626,19 @@ async def acknowledge_anomaly(
     # Get the updated anomaly to return
     anomaly = anomaly_system.get_anomaly(anomaly_id)
 
+    if anomaly is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Anomaly '{anomaly_id}' not found after acknowledgment"
+        )
+
     # Resilience: Record anomaly acknowledgment metric
     record_anomaly_acknowledged(anomaly_id, anomaly.severity.name)
 
     await event_system.emit(
-        "ANOMALY_ACKNOWLEDGED",
+        EventType.ANOMALY_DETECTED,
         {
+            "event_name": "ANOMALY_ACKNOWLEDGED",
             "anomaly_id": anomaly_id,
             "acknowledged_by": str(user.id),
             "notes": request.notes
@@ -668,12 +688,19 @@ async def resolve_anomaly(
     # Get the updated anomaly to return
     anomaly = anomaly_system.get_anomaly(anomaly_id)
 
+    if anomaly is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Anomaly '{anomaly_id}' not found after resolution"
+        )
+
     # Resilience: Record anomaly resolution metric
     record_anomaly_resolved(anomaly_id, anomaly.severity.name)
 
     await event_system.emit(
-        "ANOMALY_RESOLVED",
+        EventType.ANOMALY_DETECTED,
         {
+            "event_name": "ANOMALY_RESOLVED",
             "anomaly_id": anomaly_id,
             "resolved_by": str(user.id)
         }
@@ -709,13 +736,13 @@ async def record_metric(
 ) -> dict[str, Any]:
     """Record a metric value for anomaly detection."""
 
-    anomaly = anomaly_system.record_metric(
+    anomaly = await anomaly_system.record_metric(
         metric_name=request.metric_name,
         value=request.value,
         context=request.context
     )
 
-    response = {"recorded": True, "metric_name": request.metric_name}
+    response: dict[str, Any] = {"recorded": True, "metric_name": request.metric_name}
 
     if anomaly:
         response["anomaly_detected"] = True
@@ -755,20 +782,33 @@ async def list_canary_deployments(
 
     deployments = []
 
-    for overlay_id, deployment in canary_manager._deployments.items():
+    deployments_dict = getattr(canary_manager, "_deployments", {})
+    for overlay_id, deployment in deployments_dict.items():
+        # Map CanaryDeployment attributes to response model
+        started = deployment.started_at or deployment.created_at
+        step_started = datetime.fromtimestamp(deployment.step_started_at, tz=UTC) if deployment.step_started_at else started
+
+        # Calculate total stages based on config (linear strategy increments)
+        config = deployment.config
+        total_stages = int((config.max_percentage - config.initial_percentage) / config.increment_percentage) + 1
+
+        # Check if complete and can advance
+        is_complete = deployment.state.name in ("SUCCEEDED", "FAILED")
+        can_advance = deployment.state.name == "RUNNING" and deployment.current_percentage < config.max_percentage
+
         deployments.append(CanaryDeploymentResponse(
             overlay_id=overlay_id,
-            current_stage=deployment.current_stage,
-            total_stages=len(deployment.stages),
-            traffic_percentage=deployment.get_traffic_percentage(),
-            started_at=deployment.started_at,
-            current_stage_started_at=deployment.current_stage_started_at,
-            last_advanced_at=deployment.last_advanced_at,
-            success_count=deployment.success_count,
-            failure_count=deployment.failure_count,
-            rollback_on_failure=deployment.rollback_on_failure,
-            is_complete=deployment.is_complete(),
-            can_advance=deployment.can_advance()
+            current_stage=deployment.current_step,
+            total_stages=total_stages,
+            traffic_percentage=deployment.current_percentage,
+            started_at=started,
+            current_stage_started_at=step_started,
+            last_advanced_at=step_started if deployment.current_step > 0 else None,
+            success_count=deployment.metrics.canary_requests - deployment.metrics.canary_errors,
+            failure_count=deployment.metrics.canary_errors,
+            rollback_on_failure=config.auto_rollback,
+            is_complete=is_complete,
+            can_advance=can_advance
         ))
 
     return CanaryListResponse(
@@ -805,10 +845,11 @@ async def get_system_metrics(
     events_processed = getattr(event_system, "_events_processed", 0)
 
     # Overlay metrics
+    overlays_dict_metrics = getattr(overlay_manager, "_overlays", {})
     active_overlays = len([
-        o for o in overlay_manager._overlays.values()
+        o for o in overlays_dict_metrics.values()
         if o.enabled
-    ]) if hasattr(overlay_manager, "_overlays") else 0
+    ])
 
     # Pipeline metrics
     pipeline_executions = getattr(pipeline, "_execution_count", 0)
@@ -819,16 +860,18 @@ async def get_system_metrics(
     )
 
     # Circuit breaker metrics
+    breakers_dict_metrics = getattr(circuit_registry, "_breakers", {})
     open_breakers = sum(
-        1 for cb in circuit_registry._breakers.values()
+        1 for cb in breakers_dict_metrics.values()
         if cb.state.name == "OPEN"
-    ) if hasattr(circuit_registry, "_breakers") else 0
+    )
 
     # Anomaly metrics
     active_anomalies = len(anomaly_system.get_unresolved_anomalies())
 
     # Canary metrics
-    canary_count = len(canary_manager._deployments) if hasattr(canary_manager, "_deployments") else 0
+    deployments_dict_metrics = getattr(canary_manager, "_deployments", {})
+    canary_count = len(deployments_dict_metrics)
 
     # Database check
     try:
@@ -959,16 +1002,19 @@ async def enable_maintenance_mode(
     record_maintenance_mode_changed(enabled=True)
 
     await event_system.emit(
-        "MAINTENANCE_MODE_ENABLED",
+        EventType.SYSTEM_EVENT,
         {
+            "event_name": "MAINTENANCE_MODE_ENABLED",
             "enabled_by": str(user.id),
             "message": custom_message or get_maintenance_message()
         }
     )
 
+    with _maintenance_lock:
+        enabled_at_val = _maintenance_state["enabled_at"]
     return MaintenanceModeResponse(
         enabled=True,
-        enabled_at=_maintenance_state["enabled_at"],
+        enabled_at=enabled_at_val if isinstance(enabled_at_val, datetime) else None,
         enabled_by=str(user.id),
         message=get_maintenance_message()
     )
@@ -993,8 +1039,11 @@ async def disable_maintenance_mode(
     record_maintenance_mode_changed(enabled=False)
 
     await event_system.emit(
-        "MAINTENANCE_MODE_DISABLED",
-        {"disabled_by": str(user.id)}
+        EventType.SYSTEM_EVENT,
+        {
+            "event_name": "MAINTENANCE_MODE_DISABLED",
+            "disabled_by": str(user.id)
+        }
     )
 
     return MaintenanceModeResponse(
@@ -1013,11 +1062,15 @@ async def disable_maintenance_mode(
 )
 async def get_maintenance_status() -> MaintenanceModeResponse:
     """Get current maintenance mode status."""
+    with _maintenance_lock:
+        enabled_val = bool(_maintenance_state["enabled"])
+        enabled_at_val = _maintenance_state["enabled_at"]
+        enabled_by_val = _maintenance_state["enabled_by"]
     return MaintenanceModeResponse(
-        enabled=_maintenance_state["enabled"],
-        enabled_at=_maintenance_state["enabled_at"],
-        enabled_by=_maintenance_state["enabled_by"],
-        message=get_maintenance_message() if _maintenance_state["enabled"] else "System is operational"
+        enabled=enabled_val,
+        enabled_at=enabled_at_val if isinstance(enabled_at_val, datetime) else None,
+        enabled_by=str(enabled_by_val) if enabled_by_val else None,
+        message=get_maintenance_message() if enabled_val else "System is operational"
     )
 
 
@@ -1070,20 +1123,30 @@ async def clear_caches(
     if clear_all or "token_blacklist" in (requested_caches or []):
         try:
             from forge.security.tokens import TokenBlacklist
-            with TokenBlacklist._lock:
-                count = len(TokenBlacklist._blacklist)
-                TokenBlacklist._blacklist.clear()
-                TokenBlacklist._expiry_times.clear()
-                cleared.append(f"token_blacklist ({count} entries)")
+            blacklist_lock = getattr(TokenBlacklist, "_lock", None)
+            if blacklist_lock:
+                with blacklist_lock:
+                    blacklist = getattr(TokenBlacklist, "_blacklist", None)
+                    expiry_times = getattr(TokenBlacklist, "_expiry_times", None)
+                    count = len(blacklist) if blacklist else 0
+                    if blacklist:
+                        blacklist.clear()
+                    if expiry_times:
+                        expiry_times.clear()
+                    cleared.append(f"token_blacklist ({count} entries)")
+            else:
+                cleared.append("token_blacklist (no lock)")
         except Exception as e:
             errors.append(f"token_blacklist: {str(e)}")
 
     # Clear query cache (from resilience integration)
     if clear_all or "query_cache" in (requested_caches or []):
         try:
-            from forge.resilience.integration import clear_query_cache
-            count = clear_query_cache()
-            cleared.append(f"query_cache ({count} entries)")
+            import forge.resilience.integration as resilience_module
+            clear_query_cache_fn = getattr(resilience_module, "clear_query_cache", None)
+            if clear_query_cache_fn:
+                count = clear_query_cache_fn()
+                cleared.append(f"query_cache ({count} entries)")
         except ImportError:
             # Function not available
             pass
@@ -1094,9 +1157,10 @@ async def clear_caches(
     if clear_all or "health_cache" in (requested_caches or []):
         try:
             # Clear the cached health status
-            from forge.resilience.integration import _health_cache
-            if hasattr(_health_cache, "clear"):
-                _health_cache.clear()
+            import forge.resilience.integration as resilience_module
+            health_cache = getattr(resilience_module, "_health_cache", None)
+            if health_cache and hasattr(health_cache, "clear"):
+                health_cache.clear()
                 cleared.append("health_cache")
         except ImportError:
             pass
@@ -1106,9 +1170,10 @@ async def clear_caches(
     # Clear metrics cache
     if clear_all or "metrics_cache" in (requested_caches or []):
         try:
-            from forge.resilience.integration import _metrics_cache
-            if hasattr(_metrics_cache, "clear"):
-                _metrics_cache.clear()
+            import forge.resilience.integration as resilience_module
+            metrics_cache = getattr(resilience_module, "_metrics_cache", None)
+            if metrics_cache and hasattr(metrics_cache, "clear"):
+                metrics_cache.clear()
                 cleared.append("metrics_cache")
         except ImportError:
             pass
@@ -1120,9 +1185,12 @@ async def clear_caches(
         try:
             from forge.services.embedding import get_embedding_service
             svc = get_embedding_service()
-            if hasattr(svc, "_cache") and svc._cache is not None:
-                count = len(svc._cache)
-                svc._cache.clear()
+            cache = getattr(svc, "_cache", None)
+            if cache is not None:
+                count = len(cache) if hasattr(cache, "__len__") else 0
+                clear_method = getattr(cache, "clear", None)
+                if clear_method:
+                    await clear_method() if asyncio.iscoroutinefunction(clear_method) else clear_method()
                 cleared.append(f"embedding_cache ({count} entries)")
         except Exception as e:
             errors.append(f"embedding_cache: {str(e)}")
@@ -1198,9 +1266,8 @@ async def get_system_status(
     """Get simplified system status."""
 
     # Calculate uptime
-    uptime = (
-        datetime.now(UTC) - event_system._start_time
-    ).total_seconds() if hasattr(event_system, "_start_time") else 0.0
+    start_time_status = getattr(event_system, "_start_time", None)
+    uptime = (datetime.now(UTC) - start_time_status).total_seconds() if start_time_status else 0.0
 
     services = {}
 
@@ -1212,14 +1279,15 @@ async def get_system_status(
         services["database"] = "down"
 
     # Event system status
-    event_running = event_system._running if hasattr(event_system, "_running") else True
+    event_running: bool = getattr(event_system, "_running", True)
     services["event_system"] = "operational" if event_running else "degraded"
 
     # Circuit breakers status
+    breakers_dict_status = getattr(circuit_registry, "_breakers", {})
     open_breakers = sum(
-        1 for cb in circuit_registry._breakers.values()
+        1 for cb in breakers_dict_status.values()
         if cb.state.name == "OPEN"
-    ) if hasattr(circuit_registry, "_breakers") else 0
+    )
     services["circuit_breakers"] = "degraded" if open_breakers > 0 else "operational"
 
     # API is operational if we got here
@@ -1299,7 +1367,7 @@ async def get_audit_log(
         filters["user_id"] = user_id
 
     # Query audit logs
-    entries, total = await audit_repo.list(
+    entries, total = await audit_repo.list_events(
         offset=offset,
         limit=limit,
         filters=filters,

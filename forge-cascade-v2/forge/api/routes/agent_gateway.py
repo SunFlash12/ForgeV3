@@ -535,7 +535,7 @@ async def websocket_stream(
     websocket: WebSocket,
     api_key: str = Query(...),
     gateway: AgentGatewayService = GatewayDep,
-):
+) -> None:
     """
     WebSocket endpoint for streaming query responses.
 
@@ -593,9 +593,9 @@ async def websocket_stream(
                 })
 
     except WebSocketDisconnect:
-        logger.info("agent_websocket_disconnected", session_id=session.id)
+        logger.info("agent_websocket_disconnected session_id=%s", session.id)
     except Exception as e:
-        logger.exception("agent_websocket_error", session_id=session.id)
+        logger.exception("agent_websocket_error session_id=%s", session.id)
         await websocket.close(code=4000, reason=str(e))
 
 

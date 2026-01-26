@@ -13,15 +13,16 @@ from collections.abc import Callable
 from typing import Any, TypeVar
 
 import structlog
-from fastapi import Request, Response
-from starlette.middleware.base import BaseHTTPMiddleware
+from fastapi import FastAPI, Request, Response
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 
 from forge.resilience.caching.cache_invalidation import CacheInvalidator, get_cache_invalidator
 from forge.resilience.caching.query_cache import QueryCache, get_query_cache
 from forge.resilience.config import get_resilience_config
-from forge.resilience.observability.metrics import get_metrics
-from forge.resilience.observability.tracing import get_tracer
+from forge.resilience.observability.metrics import ForgeMetrics, get_metrics
+from forge.resilience.observability.tracing import ForgeTracer, get_tracer
 from forge.resilience.security.content_validator import (
+    ContentValidator,
     ThreatLevel,
     ValidationResult,
     get_content_validator,
@@ -40,7 +41,7 @@ class ObservabilityMiddleware(BaseHTTPMiddleware):
     with every HTTP request.
     """
 
-    async def dispatch(self, request: Request, call_next) -> Response:
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         tracer = get_tracer()
         metrics = get_metrics()
 
@@ -60,7 +61,7 @@ class ObservabilityMiddleware(BaseHTTPMiddleware):
             }
         ) as span:
             try:
-                response = await call_next(request)
+                response: Response = await call_next(request)
 
                 # Record success
                 latency = time.perf_counter() - start_time
@@ -109,13 +110,13 @@ class ResilienceState:
     Attached to FastAPI app.state for access in routes.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.cache: QueryCache | None = None
         self.invalidator: CacheInvalidator | None = None
-        self.validator = None
-        self.tracer = None
-        self.metrics = None
-        self.initialized = False
+        self.validator: ContentValidator | None = None
+        self.tracer: ForgeTracer | None = None
+        self.metrics: ForgeMetrics | None = None
+        self.initialized: bool = False
 
     async def initialize(self) -> None:
         """Initialize all resilience components."""
@@ -167,14 +168,14 @@ async def get_resilience_state() -> ResilienceState:
     return _resilience_state
 
 
-async def initialize_resilience(app) -> None:
+async def initialize_resilience(app: FastAPI) -> None:
     """Initialize resilience components for a FastAPI app."""
     state = await get_resilience_state()
     app.state.resilience = state
     logger.info("resilience_attached_to_app")
 
 
-async def shutdown_resilience(app) -> None:
+async def shutdown_resilience(app: FastAPI) -> None:
     """Shutdown resilience components."""
     if hasattr(app.state, 'resilience'):
         await app.state.resilience.close()
@@ -185,7 +186,7 @@ async def shutdown_resilience(app) -> None:
 # Caching Helpers
 # =============================================================================
 
-async def get_cached_capsule(capsule_id: str) -> dict | None:
+async def get_cached_capsule(capsule_id: str) -> dict[str, Any] | None:
     """Get a capsule from cache."""
     state = await get_resilience_state()
     if not state.cache:
@@ -196,7 +197,7 @@ async def get_cached_capsule(capsule_id: str) -> dict | None:
     return await state.cache.get(key)
 
 
-async def cache_capsule(capsule_id: str, capsule_data: dict, ttl: int = 300) -> bool:
+async def cache_capsule(capsule_id: str, capsule_data: dict[str, Any], ttl: int = 300) -> bool:
     """Cache a capsule."""
     state = await get_resilience_state()
     if not state.cache:
@@ -223,7 +224,7 @@ async def invalidate_capsule_cache(capsule_id: str) -> int:
     return 1
 
 
-async def get_cached_search(query_hash: str) -> list | None:
+async def get_cached_search(query_hash: str) -> list[Any] | None:
     """Get search results from cache."""
     state = await get_resilience_state()
     if not state.cache:
@@ -236,7 +237,7 @@ async def get_cached_search(query_hash: str) -> list | None:
 
 async def cache_search_results(
     query_hash: str,
-    results: list,
+    results: list[Any],
     ttl: int = 600
 ) -> bool:
     """Cache search results."""
@@ -249,11 +250,12 @@ async def cache_search_results(
 
     # Extract capsule IDs for invalidation tracking
     # Handle both dict results and string IDs
-    capsule_ids = []
+    capsule_ids: list[str] = []
     for r in results:
         if isinstance(r, dict):
-            if r.get('id'):
-                capsule_ids.append(r.get('id'))
+            capsule_id_val: Any = r.get('id')
+            if capsule_id_val and isinstance(capsule_id_val, str):
+                capsule_ids.append(capsule_id_val)
         elif isinstance(r, str):
             capsule_ids.append(r)
 
@@ -266,7 +268,7 @@ async def cache_search_results(
     )
 
 
-async def get_cached_lineage(capsule_id: str, depth: int) -> dict | None:
+async def get_cached_lineage(capsule_id: str, depth: int) -> dict[str, Any] | None:
     """Get lineage from cache."""
     state = await get_resilience_state()
     if not state.cache:
@@ -280,7 +282,7 @@ async def get_cached_lineage(capsule_id: str, depth: int) -> dict | None:
 async def cache_lineage(
     capsule_id: str,
     depth: int,
-    lineage_data: dict,
+    lineage_data: dict[str, Any],
     ttl: int = 1800
 ) -> bool:
     """Cache lineage data."""
@@ -328,7 +330,8 @@ async def validate_capsule_content(
             threat_level=ThreatLevel.NONE,
         )
 
-    return await state.validator.validate(content, content_type)
+    result: ValidationResult = await state.validator.validate(content, content_type)
+    return result
 
 
 def check_content_validation(result: ValidationResult) -> None:
@@ -403,7 +406,7 @@ def record_cache_miss(cache_type: str = "query") -> None:
 # Governance Caching Helpers
 # =============================================================================
 
-async def get_cached_proposal(proposal_id: str) -> dict | None:
+async def get_cached_proposal(proposal_id: str) -> dict[str, Any] | None:
     """Get a proposal from cache."""
     state = await get_resilience_state()
     if not state.cache:
@@ -413,7 +416,7 @@ async def get_cached_proposal(proposal_id: str) -> dict | None:
     return await state.cache.get(key)
 
 
-async def cache_proposal(proposal_id: str, proposal_data: dict, ttl: int = 300) -> bool:
+async def cache_proposal(proposal_id: str, proposal_data: dict[str, Any], ttl: int = 300) -> bool:
     """Cache a proposal."""
     state = await get_resilience_state()
     if not state.cache:
@@ -444,7 +447,7 @@ async def invalidate_proposal_cache(proposal_id: str) -> int:
     return 1
 
 
-async def get_cached_proposals_list(cache_key: str) -> dict | None:
+async def get_cached_proposals_list(cache_key: str) -> dict[str, Any] | None:
     """Get proposals list from cache."""
     state = await get_resilience_state()
     if not state.cache:
@@ -453,7 +456,7 @@ async def get_cached_proposals_list(cache_key: str) -> dict | None:
     return await state.cache.get(f"proposals:list:{cache_key}")
 
 
-async def cache_proposals_list(cache_key: str, data: dict, ttl: int = 120) -> bool:
+async def cache_proposals_list(cache_key: str, data: dict[str, Any], ttl: int = 120) -> bool:
     """Cache proposals list."""
     state = await get_resilience_state()
     if not state.cache:
@@ -467,7 +470,7 @@ async def cache_proposals_list(cache_key: str, data: dict, ttl: int = 120) -> bo
     )
 
 
-async def get_cached_governance_metrics() -> dict | None:
+async def get_cached_governance_metrics() -> dict[str, Any] | None:
     """Get governance metrics from cache."""
     state = await get_resilience_state()
     if not state.cache:
@@ -476,7 +479,7 @@ async def get_cached_governance_metrics() -> dict | None:
     return await state.cache.get("governance:metrics")
 
 
-async def cache_governance_metrics(data: dict, ttl: int = 60) -> bool:
+async def cache_governance_metrics(data: dict[str, Any], ttl: int = 60) -> bool:
     """Cache governance metrics (short TTL as metrics change frequently)."""
     state = await get_resilience_state()
     if not state.cache:
@@ -602,7 +605,7 @@ def record_overlays_reloaded(count: int) -> None:
 # Overlay Caching Helpers
 # =============================================================================
 
-async def get_cached_overlay_list() -> list | None:
+async def get_cached_overlay_list() -> list[Any] | None:
     """Get overlay list from cache."""
     state = await get_resilience_state()
     if not state.cache:
@@ -611,7 +614,7 @@ async def get_cached_overlay_list() -> list | None:
     return await state.cache.get("overlays:list")
 
 
-async def cache_overlay_list(overlays: list, ttl: int = 60) -> bool:
+async def cache_overlay_list(overlays: list[Any], ttl: int = 60) -> bool:
     """Cache overlay list (short TTL as overlays can change)."""
     state = await get_resilience_state()
     if not state.cache:
@@ -681,7 +684,7 @@ def record_cache_cleared(caches: list[str]) -> None:
 # System Caching Helpers
 # =============================================================================
 
-async def get_cached_system_metrics() -> dict | None:
+async def get_cached_system_metrics() -> dict[str, Any] | None:
     """Get system metrics from cache."""
     state = await get_resilience_state()
     if not state.cache:
@@ -690,7 +693,7 @@ async def get_cached_system_metrics() -> dict | None:
     return await state.cache.get("system:metrics")
 
 
-async def cache_system_metrics(metrics_data: dict, ttl: int = 30) -> bool:
+async def cache_system_metrics(metrics_data: dict[str, Any], ttl: int = 30) -> bool:
     """Cache system metrics (short TTL for freshness)."""
     state = await get_resilience_state()
     if not state.cache:
@@ -704,7 +707,7 @@ async def cache_system_metrics(metrics_data: dict, ttl: int = 30) -> bool:
     )
 
 
-async def get_cached_health_status() -> dict | None:
+async def get_cached_health_status() -> dict[str, Any] | None:
     """Get health status from cache."""
     state = await get_resilience_state()
     if not state.cache:
@@ -713,7 +716,7 @@ async def get_cached_health_status() -> dict | None:
     return await state.cache.get("system:health")
 
 
-async def cache_health_status(health_data: dict, ttl: int = 15) -> bool:
+async def cache_health_status(health_data: dict[str, Any], ttl: int = 15) -> bool:
     """Cache health status (very short TTL for accuracy)."""
     state = await get_resilience_state()
     if not state.cache:
@@ -760,7 +763,7 @@ def record_pipeline_executed(pipeline_id: str, status: str, duration_ms: float) 
 # Cascade Caching Helpers
 # =============================================================================
 
-async def get_cached_active_cascades() -> list | None:
+async def get_cached_active_cascades() -> list[Any] | None:
     """Get active cascades from cache."""
     state = await get_resilience_state()
     if not state.cache:
@@ -769,7 +772,7 @@ async def get_cached_active_cascades() -> list | None:
     return await state.cache.get("cascade:active")
 
 
-async def cache_active_cascades(cascades: list, ttl: int = 30) -> bool:
+async def cache_active_cascades(cascades: list[Any], ttl: int = 30) -> bool:
     """Cache active cascades (short TTL for real-time accuracy)."""
     state = await get_resilience_state()
     if not state.cache:
@@ -783,7 +786,7 @@ async def cache_active_cascades(cascades: list, ttl: int = 30) -> bool:
     )
 
 
-async def get_cached_cascade_metrics() -> dict | None:
+async def get_cached_cascade_metrics() -> dict[str, Any] | None:
     """Get cascade metrics from cache."""
     state = await get_resilience_state()
     if not state.cache:
@@ -792,7 +795,7 @@ async def get_cached_cascade_metrics() -> dict | None:
     return await state.cache.get("cascade:metrics")
 
 
-async def cache_cascade_metrics(metrics_data: dict, ttl: int = 60) -> bool:
+async def cache_cascade_metrics(metrics_data: dict[str, Any], ttl: int = 60) -> bool:
     """Cache cascade metrics."""
     state = await get_resilience_state()
     if not state.cache:

@@ -19,7 +19,7 @@ from forge.api.dependencies import (
     UserRepoDep,
 )
 from forge.api.routes.auth import UserResponse
-from forge.models.base import UserRole
+from forge.models.user import UserRole
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -125,7 +125,7 @@ async def search_users(
                 id=u.id,
                 username=u.username,
                 display_name=u.display_name,
-                trust_level=TrustLevel.from_flame(u.trust_flame).name if u.trust_flame is not None else "UNKNOWN",
+                trust_level=TrustLevel.from_value(u.trust_flame).name if u.trust_flame is not None else "UNKNOWN",
                 created_at=u.created_at.isoformat() if u.created_at else "",
             )
             for u in users
@@ -149,13 +149,13 @@ async def list_users(
     """
     offset = (page - 1) * per_page
 
-    filters = {}
+    filters: dict[str, str | bool] = {}
     if role:
         filters["role"] = role.value
     if is_active is not None:
         filters["is_active"] = is_active
 
-    users, total = await user_repo.list(offset=offset, limit=per_page, filters=filters)
+    users, total = await user_repo.list_users(offset=offset, limit=per_page, filters=filters)
 
     return UserListResponse(
         users=[UserResponse.from_user(u) for u in users],
@@ -217,8 +217,8 @@ async def admin_update_user(
             detail="User not found",
         )
 
-    # Build updates
-    updates = {}
+    # Build updates dict for audit logging and track if anything changed
+    updates: dict[str, Any] = {}
     if request.role is not None:
         updates["role"] = request.role.value
     if request.is_active is not None:
@@ -232,7 +232,12 @@ async def admin_update_user(
             detail="No updates provided",
         )
 
-    updated = await user_repo.update(user_id, updates)
+    # Apply individual field updates since UserUpdate only covers profile fields
+    updated_user = user
+    for field_name, field_value in updates.items():
+        result = await user_repo.update_field(user_id, field_name, field_value)
+        if result is not None:
+            updated_user = result
 
     # Audit log
     await audit_repo.log_action(
@@ -244,7 +249,7 @@ async def admin_update_user(
         correlation_id=correlation_id,
     )
 
-    return UserResponse.from_user(updated)
+    return UserResponse.from_user(updated_user)
 
 
 @router.get("/{user_id}/capsules", response_model=UserCapsulesResponse)
@@ -279,7 +284,7 @@ async def get_user_capsules(
         )
 
     # Get capsules
-    capsules, total = await capsule_repo.list(
+    capsules, total = await capsule_repo.list_capsules(
         offset=0,
         limit=limit,
         filters={"owner_id": user_id},
@@ -331,22 +336,22 @@ async def get_user_activity(
         )
 
     # Get activity from audit log
-    activities = await audit_repo.get_user_activity(user_id, limit=limit)
+    audit_events = await audit_repo.get_by_actor(actor_id=user_id, limit=limit)
 
     return UserActivityResponse(
         user_id=user_id,
         activities=[
             UserActivityItem(
-                id=a.get("id", ""),
-                action=a.get("action", ""),
-                entity_type=a.get("entity_type", ""),
-                entity_id=a.get("entity_id"),
-                details=a.get("details", {}),
-                timestamp=a.get("timestamp", ""),
+                id=a.id,
+                action=a.action,
+                entity_type=a.resource_type,
+                entity_id=a.resource_id,
+                details=a.details,
+                timestamp=a.timestamp.isoformat() if a.timestamp else "",
             )
-            for a in activities
+            for a in audit_events
         ],
-        total=len(activities),
+        total=len(audit_events),
     )
 
 
@@ -385,10 +390,10 @@ async def get_user_governance(
         )
 
     # Get proposals created by user
-    proposals = await governance_repo.get_proposals_by_user(user_id, limit=limit)
+    proposals = await governance_repo.get_by_proposer(proposer_id=user_id, limit=limit)
 
     # Get votes cast by user
-    votes = await governance_repo.get_votes_by_user(user_id, limit=limit)
+    votes = await governance_repo.get_voter_history(voter_id=user_id, limit=limit)
 
     return UserGovernanceResponse(
         user_id=user_id,
@@ -438,11 +443,25 @@ async def update_user_trust(
     old_trust = user.trust_flame
 
     # Update trust
-    updated = await user_repo.adjust_trust_flame(
+    adjustment = await user_repo.adjust_trust_flame(
         user_id,
         request.trust_flame - old_trust,  # Adjustment amount
         reason=request.reason,
     )
+
+    if adjustment is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to adjust trust flame",
+        )
+
+    # Re-fetch user to get the updated state
+    updated_user = await user_repo.get_by_id(user_id)
+    if updated_user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found after trust update",
+        )
 
     # Audit log
     await audit_repo.log_action(
@@ -458,4 +477,4 @@ async def update_user_trust(
         correlation_id=correlation_id,
     )
 
-    return UserResponse.from_user(updated)
+    return UserResponse.from_user(updated_user)

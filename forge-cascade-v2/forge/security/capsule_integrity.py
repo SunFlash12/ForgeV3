@@ -414,7 +414,8 @@ class CapsuleIntegrityService:
             Dictionary with verification results
         """
         now = datetime.now(UTC)
-        result = {
+        errors: list[str] = []
+        result: dict[str, Any] = {
             "capsule_id": capsule.id,
             "checked_at": now,
             "content_hash_valid": False,
@@ -423,7 +424,7 @@ class CapsuleIntegrityService:
             "signature_valid": None,
             "merkle_root_valid": None,
             "overall_valid": False,
-            "errors": [],
+            "errors": errors,
         }
 
         # 1. Verify content hash

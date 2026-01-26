@@ -25,8 +25,9 @@ from uuid import uuid4
 
 import structlog
 
+from ..models.base import OverlayState
 from ..models.events import Event, EventType
-from ..models.overlay import Capability, FuelBudget, OverlayState
+from ..models.overlay import Capability, FuelBudget
 from ..overlays.base import OverlayContext, OverlayError, OverlayResult
 from .event_system import EventBus, get_event_bus
 from .overlay_manager import OverlayManager, get_overlay_manager
@@ -126,7 +127,7 @@ class PipelineContext:
     # Metadata
     metadata: dict[str, Any] = field(default_factory=dict)
 
-    def get_phase_data(self, phase: PipelinePhase) -> dict:
+    def get_phase_data(self, phase: PipelinePhase) -> dict[str, Any]:
         """Get data from a completed phase."""
         if phase in self.phase_results:
             return self.phase_results[phase].data
@@ -260,9 +261,9 @@ class Pipeline:
         self._pipeline_history: deque[PipelineResult] = deque(maxlen=self._max_history)
 
         # Hooks for extensibility
-        self._pre_phase_hooks: list[Callable] = []
-        self._post_phase_hooks: list[Callable] = []
-        self._pipeline_complete_hooks: list[Callable] = []
+        self._pre_phase_hooks: list[Callable[..., Any]] = []
+        self._post_phase_hooks: list[Callable[..., Any]] = []
+        self._pipeline_complete_hooks: list[Callable[..., Any]] = []
 
     def _get_overlay_manager(self) -> OverlayManager:
         """Get the overlay manager instance."""
@@ -369,7 +370,7 @@ class Pipeline:
             PipelineResult with execution details
         """
         pipeline_id = str(uuid4())
-        correlation_id = event.correlation_id if event else str(uuid4())
+        correlation_id = (event.correlation_id if event and event.correlation_id else str(uuid4()))
 
         # Create context
         context = PipelineContext(
@@ -397,8 +398,8 @@ class Pipeline:
         )
 
         # Execute phases
-        errors = []
-        events_emitted = []
+        errors: list[str] = []
+        events_emitted: list[str] = []
         start_time = asyncio.get_running_loop().time()
 
         try:
@@ -654,13 +655,13 @@ class Pipeline:
                 for name, task in tasks:
                     if task in done:
                         try:
-                            result = task.result()
-                            results.append(result)
+                            overlay_result: OverlayResult = task.result()
+                            results.append(overlay_result)
                             executed.append(name)
-                            if result.success and result.data:
-                                merged_data.update(result.data)
-                            elif not result.success:
-                                errors.append(f"{name}: {result.error}")
+                            if overlay_result.success and overlay_result.data:
+                                merged_data.update(overlay_result.data)
+                            elif not overlay_result.success:
+                                errors.append(f"{name}: {overlay_result.error}")
                         except Exception as e:
                             errors.append(f"{name}: {str(e)}")
             else:
@@ -685,17 +686,17 @@ class Pipeline:
                     )
 
                     try:
-                        result = await asyncio.wait_for(
+                        overlay_result = await asyncio.wait_for(
                             overlay.run(overlay_ctx, context.trigger_event, merged_data),
                             timeout=config.timeout_ms / 1000
                         )
-                        results.append(result)
+                        results.append(overlay_result)
                         executed.append(overlay.NAME)
 
-                        if result.success and result.data:
-                            merged_data.update(result.data)
-                        elif not result.success:
-                            errors.append(f"{overlay.NAME}: {result.error}")
+                        if overlay_result.success and overlay_result.data:
+                            merged_data.update(overlay_result.data)
+                        elif not overlay_result.success:
+                            errors.append(f"{overlay.NAME}: {overlay_result.error}")
                             if config.required:
                                 break
 
@@ -745,10 +746,11 @@ class Pipeline:
     ) -> PhaseResult:
         """Run a custom phase handler."""
         if asyncio.iscoroutinefunction(handler):
-            return await handler(context)
+            phase_result: PhaseResult = await handler(context)
+            return phase_result
         return handler(context)
 
-    async def _run_hook(self, hook: Callable, *args) -> None:
+    async def _run_hook(self, hook: Callable[..., Any], *args: Any) -> None:
         """Run a hook function."""
         if asyncio.iscoroutinefunction(hook):
             await hook(*args)
@@ -800,9 +802,10 @@ class Pipeline:
         limit: int = 10
     ) -> list[PipelineResult]:
         """Get recent pipeline results."""
-        return self._pipeline_history[-limit:][::-1]
+        history_list = list(self._pipeline_history)
+        return history_list[-limit:][::-1]
 
-    def get_pipeline_stats(self) -> dict:
+    def get_pipeline_stats(self) -> dict[str, Any]:
         """Get pipeline execution statistics."""
         if not self._pipeline_history:
             return {

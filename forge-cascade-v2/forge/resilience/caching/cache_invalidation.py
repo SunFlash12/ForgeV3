@@ -19,7 +19,7 @@ import structlog
 
 from forge.resilience.caching.query_cache import QueryCache, get_query_cache
 
-logger = structlog.get_logger(__name__)
+logger: structlog.stdlib.BoundLogger = structlog.get_logger(__name__)
 
 
 class InvalidationStrategy(Enum):
@@ -64,7 +64,7 @@ class CacheInvalidator:
         cache: QueryCache | None = None,
         strategy: InvalidationStrategy = InvalidationStrategy.IMMEDIATE,
         debounce_seconds: float = 0.5
-    ):
+    ) -> None:
         self._cache = cache
         self._strategy = strategy
         self._debounce_seconds = debounce_seconds
@@ -72,7 +72,7 @@ class CacheInvalidator:
 
         # Pending invalidations for debouncing
         self._pending: dict[str, InvalidationEvent] = {}
-        self._debounce_task: asyncio.Task | None = None
+        self._debounce_task: asyncio.Task[None] | None = None
 
         # Callbacks for custom invalidation logic
         self._callbacks: list[Callable[[InvalidationEvent], None]] = []
@@ -115,7 +115,7 @@ class CacheInvalidator:
     async def on_capsule_created(
         self,
         capsule_id: str,
-        metadata: dict | None = None
+        metadata: dict[str, Any] | None = None
     ) -> None:
         """Handle capsule creation event."""
         event = InvalidationEvent(
@@ -128,7 +128,7 @@ class CacheInvalidator:
     async def on_capsule_updated(
         self,
         capsule_id: str,
-        metadata: dict | None = None
+        metadata: dict[str, Any] | None = None
     ) -> None:
         """Handle capsule update event."""
         event = InvalidationEvent(
@@ -141,7 +141,7 @@ class CacheInvalidator:
     async def on_capsule_deleted(
         self,
         capsule_id: str,
-        metadata: dict | None = None
+        metadata: dict[str, Any] | None = None
     ) -> None:
         """Handle capsule deletion event."""
         event = InvalidationEvent(
@@ -155,7 +155,7 @@ class CacheInvalidator:
         self,
         capsule_id: str,
         parent_ids: list[str],
-        metadata: dict | None = None
+        metadata: dict[str, Any] | None = None
     ) -> None:
         """Handle lineage relationship change."""
         # Invalidate cache for all affected capsules

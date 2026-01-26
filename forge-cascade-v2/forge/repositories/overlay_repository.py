@@ -8,6 +8,7 @@ Supports the WebAssembly isolation model with health monitoring.
 from typing import Any
 
 import structlog
+from pydantic import BaseModel
 
 from forge.database.client import Neo4jClient
 from forge.models.base import OverlayState, TrustLevel
@@ -24,27 +25,19 @@ from forge.repositories.base import BaseRepository
 logger = structlog.get_logger(__name__)
 
 
-class OverlayCreate(OverlayManifest):  # type: ignore[misc]
+class OverlayCreate(OverlayManifest):
     """Schema for registering an overlay."""
     pass
 
 
-class OverlayUpdate:
+class OverlayUpdate(BaseModel):
     """Schema for updating an overlay."""
 
-    def __init__(
-        self,
-        name: str | None = None,
-        description: str | None = None,
-        version: str | None = None,
-        capabilities: set[Capability] | None = None,
-        trust_level: TrustLevel | None = None,
-    ):
-        self.name = name
-        self.description = description
-        self.version = version
-        self.capabilities = capabilities
-        self.trust_level = trust_level
+    name: str | None = None
+    description: str | None = None
+    version: str | None = None
+    capabilities: set[Capability] | None = None
+    trust_level: TrustLevel | None = None
 
 
 class OverlayRepository(BaseRepository[Overlay, OverlayCreate, OverlayUpdate]):
@@ -68,7 +61,8 @@ class OverlayRepository(BaseRepository[Overlay, OverlayCreate, OverlayUpdate]):
 
     @property
     def model_class(self) -> type[Overlay]:
-        return Overlay  # type: ignore[no-any-return]
+        cls: type[Overlay] = Overlay
+        return cls
 
     def _compute_content_hash(self, content: bytes) -> str:
         """
@@ -188,7 +182,12 @@ class OverlayRepository(BaseRepository[Overlay, OverlayCreate, OverlayUpdate]):
             version=data.version,
         )
 
-        return self._to_model(result["entity"])
+        if result is None:
+            raise RuntimeError("Failed to create overlay")
+        overlay = self._to_model(result["entity"])
+        if overlay is None:
+            raise RuntimeError("Failed to deserialize created overlay")
+        return overlay
 
     async def update(
         self,

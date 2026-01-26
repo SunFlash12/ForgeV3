@@ -142,7 +142,7 @@ def cached(
     cache: QueryCache,
     key_func: Callable[..., str],
     ttl_seconds: int | None = None,
-):
+) -> Callable[..., Any]:
     """
     Decorator to cache async function results.
 
@@ -151,9 +151,9 @@ def cached(
         key_func: Function to generate cache key from args
         ttl_seconds: Optional TTL override
     """
-    def decorator(func: Callable[..., T]) -> Callable[..., T]:
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         @wraps(func)
-        async def wrapper(*args, **kwargs) -> T:
+        async def wrapper(*args: Any, **kwargs: Any) -> Any:
             key = key_func(*args, **kwargs)
             cached_value = cache.get(key)
             if cached_value is not None:
@@ -254,8 +254,8 @@ class RequestBatcher:
         """
         self._batch_size = batch_size
         self._timeout = batch_timeout_ms / 1000
-        self._pending: list[dict] = []
-        self._results: dict[int, asyncio.Future] = {}
+        self._pending: list[dict[str, Any]] = []
+        self._results: dict[int, asyncio.Future[Any]] = {}
         self._lock = asyncio.Lock()
         self._request_id = 0
 
@@ -335,10 +335,10 @@ class ParallelExecutor:
     async def execute(
         self,
         chain: ChainNetwork,
-        func: Callable[..., T],
-        *args,
-        **kwargs,
-    ) -> T:
+        func: Callable[..., Any],
+        *args: Any,
+        **kwargs: Any,
+    ) -> Any:
         """
         Execute function with concurrency control.
 
@@ -351,11 +351,12 @@ class ParallelExecutor:
             Function result
         """
         async with self._semaphores[chain]:
-            return await func(*args, **kwargs)
+            result: Any = await func(*args, **kwargs)
+            return result
 
     async def execute_multi(
         self,
-        tasks: list[tuple[ChainNetwork, Callable, tuple, dict]],
+        tasks: list[tuple[ChainNetwork, Callable[..., Any], tuple[Any, ...], dict[str, Any]]],
     ) -> list[Any]:
         """
         Execute multiple tasks across chains in parallel.
@@ -366,7 +367,12 @@ class ParallelExecutor:
         Returns:
             List of results in order
         """
-        async def run_task(chain, func, args, kwargs):
+        async def run_task(
+            chain: ChainNetwork,
+            func: Callable[..., Any],
+            args: tuple[Any, ...],
+            kwargs: dict[str, Any],
+        ) -> Any:
             return await self.execute(chain, func, *args, **kwargs)
 
         coroutines = [
@@ -421,12 +427,12 @@ class ChainQueryOptimizer:
     async def query(
         self,
         chain: ChainNetwork,
-        func: Callable[..., T],
+        func: Callable[..., Any],
         cache_key: str | None = None,
         cache_ttl: int | None = None,
-        *args,
-        **kwargs,
-    ) -> T:
+        *args: Any,
+        **kwargs: Any,
+    ) -> Any:
         """
         Execute an optimized query.
 
@@ -444,10 +450,10 @@ class ChainQueryOptimizer:
 
         # Check cache
         if cache_key:
-            cached = self.cache.get(cache_key)
-            if cached is not None:
+            cached_result = self.cache.get(cache_key)
+            if cached_result is not None:
                 self._cached_requests += 1
-                return cached
+                return cached_result
 
         # Rate limit
         limiter = self.get_rate_limiter(chain)
@@ -471,7 +477,7 @@ class ChainQueryOptimizer:
 
     async def query_multi(
         self,
-        queries: list[dict],
+        queries: list[dict[str, Any]],
     ) -> list[Any]:
         """
         Execute multiple queries in parallel.
@@ -489,7 +495,7 @@ class ChainQueryOptimizer:
         Returns:
             List of results
         """
-        async def run_query(q):
+        async def run_query(q: dict[str, Any]) -> Any:
             args = q.get("args", ())
             kwargs = q.get("kwargs", {})
             return await self.query(

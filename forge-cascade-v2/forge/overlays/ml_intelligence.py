@@ -16,7 +16,7 @@ import hashlib
 import math
 import re
 from collections import defaultdict
-from collections.abc import Callable
+from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -141,8 +141,8 @@ class MLIntelligenceOverlay(BaseOverlay):
         enable_pattern_detection: bool = True,
         enable_sentiment: bool = True,
         custom_categories: dict[str, list[str]] | None = None,
-        embedding_provider: Callable | None = None
-    ):
+        embedding_provider: Callable[[str], Coroutine[Any, Any, list[float]]] | None = None
+    ) -> None:
         """
         Initialize the ML Intelligence overlay.
 
@@ -169,7 +169,7 @@ class MLIntelligenceOverlay(BaseOverlay):
             self._categories.update(custom_categories)
 
         # External provider
-        self._embedding_provider = embedding_provider
+        self._embedding_provider: Callable[[str], Coroutine[Any, Any, list[float]]] | None = embedding_provider
 
         # Cache for embeddings
         self._embedding_cache: dict[str, list[float]] = {}
@@ -276,7 +276,7 @@ class MLIntelligenceOverlay(BaseOverlay):
             self._logger.error("ml_analysis_error", error=str(e))
             return OverlayResult.fail(error=f"ML analysis failed: {str(e)}")
 
-    def _extract_content(self, data: dict) -> str:
+    def _extract_content(self, data: dict[str, Any]) -> str:
         """Extract text content from data."""
         # Try common content fields
         for field_name in ["content", "text", "body", "message", "title", "description"]:
@@ -606,7 +606,7 @@ class MLIntelligenceOverlay(BaseOverlay):
         words = [w for w in words if w not in stopwords]
 
         # Count frequencies
-        freq = defaultdict(int)
+        freq: defaultdict[str, int] = defaultdict(int)
         for word in words:
             freq[word] += 1
 
@@ -672,7 +672,7 @@ class MLIntelligenceOverlay(BaseOverlay):
 
         return summary
 
-    def get_stats(self) -> dict:
+    def get_stats(self) -> dict[str, Any]:
         """Get processing statistics."""
         return {
             **self._stats,
@@ -713,7 +713,7 @@ class MLIntelligenceOverlay(BaseOverlay):
 # Convenience function
 def create_ml_intelligence(
     production_mode: bool = False,
-    **kwargs
+    **kwargs: Any,
 ) -> MLIntelligenceOverlay:
     """
     Create an ML Intelligence overlay.

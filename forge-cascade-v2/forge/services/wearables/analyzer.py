@@ -76,62 +76,59 @@ class WearableAnalyzer:
         Returns:
             Analysis results
         """
-        results = {
-            "session_id": session.id,
-            "analysis_timestamp": datetime.now(UTC).isoformat(),
-            "data_summary": self._generate_data_summary(session),
-            "heart_analysis": None,
-            "sleep_analysis": None,
-            "activity_analysis": None,
-            "oxygen_analysis": None,
-            "abnormalities": [],
-            "health_indicators": {},
-            "phenotypes": [],
-        }
+        abnormalities: list[dict[str, Any]] = []
+        heart_analysis: dict[str, Any] | None = None
+        sleep_analysis: dict[str, Any] | None = None
+        activity_analysis: dict[str, Any] | None = None
+        oxygen_analysis: dict[str, Any] | None = None
 
         # Analyze heart rate data
         if session.heart_rate_data:
-            results["heart_analysis"] = self._analyze_heart_rate(session.heart_rate_data)
-            results["abnormalities"].extend(
-                results["heart_analysis"].get("abnormalities", [])
-            )
+            heart_analysis = self._analyze_heart_rate(session.heart_rate_data)
+            abnormalities.extend(heart_analysis.get("abnormalities", []))
 
         # Analyze sleep data
         if session.sleep_data:
-            results["sleep_analysis"] = self._analyze_sleep(session.sleep_data)
-            results["abnormalities"].extend(
-                results["sleep_analysis"].get("abnormalities", [])
-            )
+            sleep_analysis = self._analyze_sleep(session.sleep_data)
+            abnormalities.extend(sleep_analysis.get("abnormalities", []))
 
         # Analyze activity data
         if session.activity_data:
-            results["activity_analysis"] = self._analyze_activity(session.activity_data)
-            results["abnormalities"].extend(
-                results["activity_analysis"].get("abnormalities", [])
-            )
+            activity_analysis = self._analyze_activity(session.activity_data)
+            abnormalities.extend(activity_analysis.get("abnormalities", []))
 
         # Analyze oxygen data
         if session.oxygen_data:
-            results["oxygen_analysis"] = self._analyze_oxygen(session)
-            results["abnormalities"].extend(
-                results["oxygen_analysis"].get("abnormalities", [])
-            )
+            oxygen_analysis = self._analyze_oxygen(session)
+            abnormalities.extend(oxygen_analysis.get("abnormalities", []))
+
+        # Convert to phenotypes
+        phenotypes = self._converter.convert_session(session)
+
+        results: dict[str, Any] = {
+            "session_id": session.id,
+            "analysis_timestamp": datetime.now(UTC).isoformat(),
+            "data_summary": self._generate_data_summary(session),
+            "heart_analysis": heart_analysis,
+            "sleep_analysis": sleep_analysis,
+            "activity_analysis": activity_analysis,
+            "oxygen_analysis": oxygen_analysis,
+            "abnormalities": abnormalities,
+            "health_indicators": {},
+            "phenotypes": phenotypes,
+        }
 
         # Calculate health indicators
         results["health_indicators"] = self._calculate_health_indicators(results)
 
-        # Convert to phenotypes
-        phenotypes = self._converter.convert_session(session)
-        results["phenotypes"] = phenotypes
-
         # Update session
-        session.abnormalities = results["abnormalities"]
+        session.abnormalities = abnormalities
         session.phenotypes = phenotypes
 
         logger.info(
             "wearable_analysis_complete",
             session_id=session.id,
-            abnormalities=len(results["abnormalities"]),
+            abnormalities=len(abnormalities),
             phenotypes=len(phenotypes),
         )
 
@@ -166,16 +163,13 @@ class WearableAnalyzer:
         resting_values = [d.resting_hr for d in data if d.resting_hr]
         hrv_values = [d.hrv_rmssd for d in data if d.hrv_rmssd is not None]
 
-        analysis = {
-            "reading_count": len(data),
-            "statistics": {},
-            "abnormalities": [],
-            "trends": {},
-        }
+        statistics: dict[str, Any] = {}
+        abnormalities: list[dict[str, Any]] = []
+        trends: dict[str, Any] = {}
 
         # Heart rate statistics
         if hr_values:
-            analysis["statistics"]["heart_rate"] = {
+            statistics["heart_rate"] = {
                 "mean": sum(hr_values) / len(hr_values),
                 "min": min(hr_values),
                 "max": max(hr_values),
@@ -185,7 +179,7 @@ class WearableAnalyzer:
         # Resting heart rate
         if resting_values:
             avg_resting = sum(resting_values) / len(resting_values)
-            analysis["statistics"]["resting_hr"] = {
+            statistics["resting_hr"] = {
                 "mean": avg_resting,
                 "min": min(resting_values),
                 "max": max(resting_values),
@@ -193,7 +187,7 @@ class WearableAnalyzer:
 
             # Check for elevated resting HR
             if avg_resting > 85:
-                analysis["abnormalities"].append({
+                abnormalities.append({
                     "type": "elevated_resting_hr",
                     "severity": "moderate" if avg_resting > 100 else "mild",
                     "value": avg_resting,
@@ -203,14 +197,14 @@ class WearableAnalyzer:
         # HRV analysis
         if hrv_values:
             avg_hrv = sum(hrv_values) / len(hrv_values)
-            analysis["statistics"]["hrv"] = {
+            statistics["hrv"] = {
                 "mean_rmssd": avg_hrv,
                 "min_rmssd": min(hrv_values),
                 "max_rmssd": max(hrv_values),
             }
 
             if avg_hrv < 20:
-                analysis["abnormalities"].append({
+                abnormalities.append({
                     "type": "low_hrv",
                     "severity": "moderate",
                     "value": avg_hrv,
@@ -220,7 +214,7 @@ class WearableAnalyzer:
         # Check for arrhythmia indicators
         irregular_count = sum(1 for d in data if d.is_irregular)
         if irregular_count > 0:
-            analysis["abnormalities"].append({
+            abnormalities.append({
                 "type": "irregular_rhythm",
                 "severity": "moderate" if irregular_count > 5 else "mild",
                 "count": irregular_count,
@@ -229,9 +223,14 @@ class WearableAnalyzer:
 
         # Trend analysis
         if len(hr_values) >= 14:  # At least 2 weeks of data
-            analysis["trends"] = self._calculate_hr_trends(data)
+            trends = self._calculate_hr_trends(data)
 
-        return analysis
+        return {
+            "reading_count": len(data),
+            "statistics": statistics,
+            "abnormalities": abnormalities,
+            "trends": trends,
+        }
 
     def _analyze_sleep(
         self,
@@ -241,16 +240,13 @@ class WearableAnalyzer:
         if not data:
             return {"message": "No sleep data"}
 
-        analysis = {
-            "session_count": len(data),
-            "statistics": {},
-            "abnormalities": [],
-            "patterns": {},
-        }
+        statistics: dict[str, Any] = {}
+        abnormalities: list[dict[str, Any]] = []
+        patterns: dict[str, Any] = {}
 
         # Duration statistics
         durations = [d.total_duration_minutes for d in data]
-        analysis["statistics"]["duration"] = {
+        statistics["duration"] = {
             "mean_hours": sum(durations) / len(durations) / 60,
             "min_hours": min(durations) / 60,
             "max_hours": max(durations) / 60,
@@ -259,13 +255,13 @@ class WearableAnalyzer:
         # Efficiency
         efficiencies = [d.sleep_efficiency for d in data]
         avg_efficiency = sum(efficiencies) / len(efficiencies)
-        analysis["statistics"]["efficiency"] = {
+        statistics["efficiency"] = {
             "mean": avg_efficiency,
             "min": min(efficiencies),
         }
 
         if avg_efficiency < 0.75:
-            analysis["abnormalities"].append({
+            abnormalities.append({
                 "type": "poor_sleep_efficiency",
                 "severity": "moderate",
                 "value": avg_efficiency,
@@ -275,12 +271,12 @@ class WearableAnalyzer:
         # Deep sleep
         deep_pcts = [d.deep_sleep_percentage for d in data]
         avg_deep = sum(deep_pcts) / len(deep_pcts)
-        analysis["statistics"]["deep_sleep"] = {
+        statistics["deep_sleep"] = {
             "mean_percent": avg_deep,
         }
 
         if avg_deep < 10:
-            analysis["abnormalities"].append({
+            abnormalities.append({
                 "type": "low_deep_sleep",
                 "severity": "mild",
                 "value": avg_deep,
@@ -290,7 +286,7 @@ class WearableAnalyzer:
         # Sleep apnea indicators
         apnea_nights = sum(1 for d in data if d.possible_apnea or d.spo2_dips_count > 5)
         if apnea_nights > 0:
-            analysis["abnormalities"].append({
+            abnormalities.append({
                 "type": "sleep_apnea_indicator",
                 "severity": "moderate" if apnea_nights > len(data) * 0.3 else "mild",
                 "nights_affected": apnea_nights,
@@ -299,9 +295,14 @@ class WearableAnalyzer:
 
         # Wake patterns
         avg_wakes = sum(d.wake_count for d in data) / len(data)
-        analysis["patterns"]["avg_wake_episodes"] = avg_wakes
+        patterns["avg_wake_episodes"] = avg_wakes
 
-        return analysis
+        return {
+            "session_count": len(data),
+            "statistics": statistics,
+            "abnormalities": abnormalities,
+            "patterns": patterns,
+        }
 
     def _analyze_activity(
         self,
@@ -311,17 +312,14 @@ class WearableAnalyzer:
         if not data:
             return {"message": "No activity data"}
 
-        analysis = {
-            "day_count": len(data),
-            "statistics": {},
-            "abnormalities": [],
-            "trends": {},
-        }
+        statistics: dict[str, Any] = {}
+        abnormalities: list[dict[str, Any]] = []
+        trends: dict[str, Any] = {}
 
         # Steps
         steps = [d.steps for d in data]
         avg_steps = sum(steps) / len(steps)
-        analysis["statistics"]["steps"] = {
+        statistics["steps"] = {
             "mean": avg_steps,
             "min": min(steps),
             "max": max(steps),
@@ -330,7 +328,7 @@ class WearableAnalyzer:
 
         if avg_steps < 5000:
             severity = "moderate" if avg_steps < 2500 else "mild"
-            analysis["abnormalities"].append({
+            abnormalities.append({
                 "type": "low_activity",
                 "severity": severity,
                 "value": avg_steps,
@@ -343,14 +341,14 @@ class WearableAnalyzer:
             for d in data
         ]
         avg_active = sum(active_mins) / len(active_mins)
-        analysis["statistics"]["active_minutes"] = {
+        statistics["active_minutes"] = {
             "mean": avg_active,
             "min": min(active_mins),
             "max": max(active_mins),
         }
 
         if avg_active < 30:
-            analysis["abnormalities"].append({
+            abnormalities.append({
                 "type": "insufficient_active_time",
                 "severity": "moderate",
                 "value": avg_active,
@@ -360,17 +358,22 @@ class WearableAnalyzer:
         # Sedentary time
         sedentary = [d.sedentary_minutes for d in data]
         avg_sedentary = sum(sedentary) / len(sedentary)
-        analysis["statistics"]["sedentary_hours"] = avg_sedentary / 60
+        statistics["sedentary_hours"] = avg_sedentary / 60
 
         if avg_sedentary > 600:  # 10 hours
-            analysis["abnormalities"].append({
+            abnormalities.append({
                 "type": "excessive_sedentary",
                 "severity": "mild",
                 "value": avg_sedentary / 60,
                 "message": f"High sedentary time: {avg_sedentary/60:.1f} hours/day",
             })
 
-        return analysis
+        return {
+            "day_count": len(data),
+            "statistics": statistics,
+            "abnormalities": abnormalities,
+            "trends": trends,
+        }
 
     def _analyze_oxygen(
         self,
@@ -381,20 +384,21 @@ class WearableAnalyzer:
         if not data:
             return {"message": "No oxygen data"}
 
-        analysis = {
-            "reading_count": len(data),
-            "statistics": {},
-            "abnormalities": [],
-        }
+        statistics: dict[str, Any] = {}
+        abnormalities: list[dict[str, Any]] = []
 
         spo2_values = [d.spo2_percent for d in data if d.spo2_percent > 0]
         if not spo2_values:
-            return analysis
+            return {
+                "reading_count": len(data),
+                "statistics": statistics,
+                "abnormalities": abnormalities,
+            }
 
         avg_spo2 = sum(spo2_values) / len(spo2_values)
         min_spo2 = min(spo2_values)
 
-        analysis["statistics"]["spo2"] = {
+        statistics["spo2"] = {
             "mean": avg_spo2,
             "min": min_spo2,
             "max": max(spo2_values),
@@ -404,7 +408,7 @@ class WearableAnalyzer:
         low_count = sum(1 for v in spo2_values if v < 94)
         if low_count > 0 or min_spo2 < 92:
             severity = "severe" if min_spo2 < 90 else "moderate" if min_spo2 < 92 else "mild"
-            analysis["abnormalities"].append({
+            abnormalities.append({
                 "type": "hypoxemia",
                 "severity": severity,
                 "min_value": min_spo2,
@@ -419,14 +423,18 @@ class WearableAnalyzer:
             if sleep_spo2:
                 min_sleep_spo2 = min(sleep_spo2)
                 if min_sleep_spo2 < 94:
-                    analysis["abnormalities"].append({
+                    abnormalities.append({
                         "type": "nocturnal_hypoxemia",
                         "severity": "moderate",
                         "min_value": min_sleep_spo2,
                         "message": f"Nocturnal oxygen desaturation: minimum {min_sleep_spo2:.0f}%",
                     })
 
-        return analysis
+        return {
+            "reading_count": len(data),
+            "statistics": statistics,
+            "abnormalities": abnormalities,
+        }
 
     def _calculate_hr_trends(
         self,

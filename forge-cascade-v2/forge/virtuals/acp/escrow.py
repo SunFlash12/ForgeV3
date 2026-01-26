@@ -245,7 +245,7 @@ class EscrowService:
 
         if self._chain_manager is None:
             self._chain_manager = ChainManager()
-            await self._chain_manager.initialize_chain(ChainNetwork.BASE)
+            await self._chain_manager.initialize(ChainNetwork.BASE)  # type: ignore[call-arg]
 
         if not self._escrow_contract:
             logger.warning(
@@ -339,12 +339,17 @@ class EscrowService:
         """Create escrow on blockchain."""
         import hashlib
 
+        if self._chain_manager is None:
+            raise EscrowError("Chain manager not initialized")
+
         client = self._chain_manager.get_client(ChainNetwork.BASE)
 
         # Hash job ID for on-chain reference
         job_hash = hashlib.sha256(escrow.job_id.encode()).digest()
 
         # Convert deadline to Unix timestamp
+        if escrow.deadline is None:
+            raise EscrowError("Escrow deadline is required for on-chain creation")
         deadline_timestamp = int(escrow.deadline.timestamp())
 
         # Convert amount to wei (18 decimals)
@@ -354,13 +359,16 @@ class EscrowService:
         virtual_token = self._config.get_contract_address(
             ChainNetwork.BASE, "virtual_token"
         )
+        if not self._escrow_contract:
+            raise EscrowError("Escrow contract address not configured")
         await client.approve_tokens(
-            token_address=virtual_token,
+            token_address=virtual_token or "",
             spender_address=self._escrow_contract,
             amount=float(escrow.amount + escrow.fee_amount),
         )
 
         # Create the escrow
+        escrow_abi: list[dict[str, Any]] = ESCROW_ABI  # type: ignore[assignment]
         tx_record = await client.execute_contract(
             contract_address=self._escrow_contract,
             function_name="createEscrow",
@@ -370,7 +378,7 @@ class EscrowService:
                 deadline_timestamp,
                 job_hash,
             ],
-            abi=ESCROW_ABI,
+            abi=escrow_abi,
         )
 
         return tx_record
@@ -402,12 +410,15 @@ class EscrowService:
 
             try:
                 if self._escrow_contract and escrow.escrow_id_onchain:
+                    if self._chain_manager is None:
+                        raise EscrowError("Chain manager not initialized")
                     client = self._chain_manager.get_client(ChainNetwork.BASE)
+                    escrow_abi: list[dict[str, Any]] = ESCROW_ABI  # type: ignore[assignment]
                     tx_record = await client.execute_contract(
                         contract_address=self._escrow_contract,
                         function_name="releaseToProvider",
                         args=[escrow.escrow_id_onchain],
-                        abi=ESCROW_ABI,
+                        abi=escrow_abi,
                     )
                     escrow.release_tx_hash = tx_record.tx_hash
 
@@ -450,12 +461,15 @@ class EscrowService:
 
             try:
                 if self._escrow_contract and escrow.escrow_id_onchain:
+                    if self._chain_manager is None:
+                        raise EscrowError("Chain manager not initialized")
                     client = self._chain_manager.get_client(ChainNetwork.BASE)
+                    escrow_abi: list[dict[str, Any]] = ESCROW_ABI  # type: ignore[assignment]
                     tx_record = await client.execute_contract(
                         contract_address=self._escrow_contract,
                         function_name="refundToBuyer",
                         args=[escrow.escrow_id_onchain],
-                        abi=ESCROW_ABI,
+                        abi=escrow_abi,
                     )
                     escrow.release_tx_hash = tx_record.tx_hash
 
@@ -536,14 +550,17 @@ class EscrowService:
 
             try:
                 if self._escrow_contract and escrow.escrow_id_onchain:
+                    if self._chain_manager is None:
+                        raise EscrowError("Chain manager not initialized")
                     client = self._chain_manager.get_client(ChainNetwork.BASE)
                     # Convert percentage to basis points
                     buyer_share_bps = buyer_share_pct * 100
+                    escrow_abi: list[dict[str, Any]] = ESCROW_ABI  # type: ignore[assignment]
                     tx_record = await client.execute_contract(
                         contract_address=self._escrow_contract,
                         function_name="resolveDispute",
                         args=[escrow.escrow_id_onchain, buyer_share_bps],
-                        abi=ESCROW_ABI,
+                        abi=escrow_abi,
                     )
                     escrow.release_tx_hash = tx_record.tx_hash
 

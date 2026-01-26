@@ -38,8 +38,8 @@ from .base_client import (
 )
 
 # Lazy imports for optional blockchain dependencies
-EVMChainClient = None
-SolanaChainClient = None
+EVMChainClient: type | None = None
+SolanaChainClient: type | None = None
 
 try:
     from .evm_client import EVMChainClient

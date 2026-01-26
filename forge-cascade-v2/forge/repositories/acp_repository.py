@@ -16,10 +16,9 @@ import structlog
 from forge.database.client import Neo4jClient
 from forge.virtuals.models.acp import (
     ACPJob,
-    ACPJobStatus,
-    ACPPhase,
     JobOffering,
 )
+from forge.virtuals.models.base import ACPJobStatus, ACPPhase
 
 logger = structlog.get_logger(__name__)
 
@@ -135,7 +134,7 @@ class OfferingRepository:
         ORDER BY o.created_at DESC
         """
 
-        results = await self.client.execute_read(query, {"agent_id": agent_id})
+        results = await self.client.execute(query, {"agent_id": agent_id})
 
         return [self._to_model(r.get("o", r)) for r in results if r]
 
@@ -188,7 +187,7 @@ class OfferingRepository:
         LIMIT $limit
         """
 
-        results = await self.client.execute_read(cypher, params)
+        results = await self.client.execute(cypher, params)
 
         return [self._to_model(r.get("o", r)) for r in results if r]
 
@@ -518,7 +517,7 @@ class ACPJobRepository:
         LIMIT $limit
         """
 
-        results = await self.client.execute_read(query, params)
+        results = await self.client.execute(query, params)
 
         return [self._to_model(r.get("j", r)) for r in results if r]
 
@@ -546,7 +545,7 @@ class ACPJobRepository:
         LIMIT $limit
         """
 
-        results = await self.client.execute_read(query, params)
+        results = await self.client.execute(query, params)
 
         return [self._to_model(r.get("j", r)) for r in results if r]
 
@@ -605,7 +604,7 @@ class ACPJobRepository:
         ORDER BY j.updated_at DESC
         """
 
-        results = await self.client.execute_read(query, {"agent_id": agent_id})
+        results = await self.client.execute(query, {"agent_id": agent_id})
 
         return [self._to_model(r.get("j", r)) for r in results if r]
 
@@ -625,7 +624,7 @@ class ACPJobRepository:
         RETURN j
         """
 
-        results = await self.client.execute_read(query, {"now": now})
+        results = await self.client.execute(query, {"now": now})
 
         return [self._to_model(r.get("j", r)) for r in results if r]
 

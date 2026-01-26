@@ -123,16 +123,18 @@ class BaseChainClient(ABC):
         pass
 
     @abstractmethod
-    async def create_wallet(self) -> WalletInfo:
+    async def create_wallet(self) -> tuple[WalletInfo, str]:
         """
         Create a new wallet on this chain.
 
         Returns:
-            WalletInfo object containing the new wallet details
+            Tuple of (WalletInfo, private_key_string)
+            - WalletInfo: Wallet metadata
+            - private_key_string: The private key as string (STORE SECURELY!)
 
-        Note:
-            The private key will be stored securely and not returned
-            directly. Use the secure key management system to access it.
+        Security Warning:
+            The private key is returned ONLY ONCE.
+            NEVER log or store in plaintext. Use HSM or encrypted key storage.
         """
         pass
 
@@ -278,7 +280,7 @@ class BaseChainClient(ABC):
         contract_address: str,
         function_name: str,
         args: list[Any],
-        abi: list[dict] | None = None,
+        abi: list[dict[str, Any]] | None = None,
     ) -> Any:
         """
         Call a read-only contract function.
@@ -301,7 +303,7 @@ class BaseChainClient(ABC):
         function_name: str,
         args: list[Any],
         value: float = 0,
-        abi: list[dict] | None = None,
+        abi: list[dict[str, Any]] | None = None,
     ) -> TransactionRecord:
         """
         Execute a state-changing contract function.
@@ -372,7 +374,7 @@ class MultiChainManager:
     cross-chain coordination.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the multi-chain manager."""
         self.config = get_virtuals_config()
         self._clients: dict[ChainNetwork, BaseChainClient] = {}
@@ -389,6 +391,7 @@ class MultiChainManager:
         from .solana_client import SolanaChainClient
 
         for chain in self.config.enabled_chains:
+            client: BaseChainClient
             if chain in [ChainNetwork.SOLANA, ChainNetwork.SOLANA_DEVNET]:
                 client = SolanaChainClient(chain)
             else:

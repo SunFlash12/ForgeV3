@@ -16,8 +16,9 @@ from __future__ import annotations
 
 import logging
 import sys
+from collections.abc import Iterator
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, MutableMapping
 
 import structlog
 from structlog.typing import EventDict, WrappedLogger
@@ -121,7 +122,8 @@ def sanitize_sensitive_data(
             return [_sanitize(item, depth + 1) for item in obj]
         return obj
 
-    return _sanitize(event_dict)
+    result: EventDict = _sanitize(event_dict)
+    return result
 
 
 def drop_color_codes(
@@ -141,7 +143,8 @@ def drop_color_codes(
             return [_clean(item) for item in obj]
         return obj
 
-    return _clean(event_dict)
+    result: EventDict = _clean(event_dict)
+    return result
 
 
 # =============================================================================
@@ -166,7 +169,7 @@ def configure_logging(
         sanitize_logs: Remove sensitive data
     """
     # Build processor chain
-    processors: list = [
+    processors: list[Any] = [
         structlog.stdlib.filter_by_level,
         structlog.stdlib.add_logger_name,
         structlog.stdlib.add_log_level,
@@ -232,19 +235,20 @@ def get_logger(name: str | None = None) -> structlog.BoundLogger:
     Returns:
         Configured structlog logger
     """
-    return structlog.get_logger(name)
+    bound_logger: structlog.BoundLogger = structlog.get_logger(name)
+    return bound_logger
 
 
 # =============================================================================
 # Context Management
 # =============================================================================
 
-def bind_context(**kwargs) -> None:
+def bind_context(**kwargs: Any) -> None:
     """Bind context variables that will appear in all subsequent logs."""
     structlog.contextvars.bind_contextvars(**kwargs)
 
 
-def unbind_context(*keys) -> None:
+def unbind_context(*keys: str) -> None:
     """Remove context variables."""
     structlog.contextvars.unbind_contextvars(*keys)
 
@@ -270,10 +274,10 @@ class LoggingContextMiddleware:
     - method
     """
 
-    def __init__(self, app):
+    def __init__(self, app: Any) -> None:
         self.app = app
 
-    async def __call__(self, scope, receive, send):
+    async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
@@ -353,8 +357,8 @@ def log_duration(
     logger: structlog.BoundLogger,
     operation: str,
     level: str = "info",
-    **extra_context,
-):
+    **extra_context: Any,
+) -> Iterator[None]:
     """
     Context manager to log operation duration.
 

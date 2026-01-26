@@ -189,7 +189,10 @@ class ChatService:
 
         room = await self._chat_repo.update_room(room_id, data)
 
-        if room and self._audit_repo:
+        if room is None:
+            raise ChatPermissionError("update_room", "room not found")
+
+        if self._audit_repo:
             await self._audit_repo.log_user_action(
                 actor_id=user_id,
                 target_user_id=user_id,
@@ -259,7 +262,8 @@ class ChatService:
         Returns:
             List of (room, user_role) tuples
         """
-        rooms: list[tuple[ChatRoom, RoomRole | None]] = await self._chat_repo.get_user_rooms(
+        # list invariance: repo returns list[tuple[ChatRoom, RoomRole]] but we need RoomRole | None
+        rooms: list[tuple[ChatRoom, RoomRole | None]] = await self._chat_repo.get_user_rooms(  # type: ignore[assignment]
             user_id, include_public, limit
         )
         return rooms

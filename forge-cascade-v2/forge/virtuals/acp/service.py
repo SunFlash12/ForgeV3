@@ -39,6 +39,7 @@ from ..models import (
     ACPPhase,
     ACPRegistryEntry,
     JobOffering,
+    TransactionRecord,
 )
 from .nonce_store import NonceStore, init_nonce_store
 
@@ -93,7 +94,7 @@ class ACPService:
         self.config = get_virtuals_config()
         self._job_repo = job_repository
         self._offering_repo = offering_repository
-        self._chain_manager = None
+        self._chain_manager: Any = None
         # SECURITY FIX (Audit 4): Persistent nonce storage for replay attack prevention
         # Nonces are now stored in Redis (with in-memory fallback) to survive restarts
         self._nonce_store = nonce_store
@@ -197,7 +198,7 @@ class ACPService:
             List of matching offerings sorted by relevance/reputation
         """
         # Query local repository with filters
-        offerings = await self._offering_repo.search(
+        offerings: list[JobOffering] = await self._offering_repo.search(
             service_type=service_type,
             query=query,
             max_fee=max_fee,
@@ -320,7 +321,7 @@ class ACPService:
         Returns:
             Updated job in NEGOTIATION phase
         """
-        job = await self._job_repo.get_by_id(job_id)
+        job: ACPJob | None = await self._job_repo.get_by_id(job_id)
         if not job:
             raise ACPServiceError(f"Job {job_id} not found")
 
@@ -375,7 +376,7 @@ class ACPService:
         Returns:
             Updated job in TRANSACTION phase with escrow active
         """
-        job = await self._job_repo.get_by_id(job_id)
+        job: ACPJob | None = await self._job_repo.get_by_id(job_id)
         if not job:
             raise ACPServiceError(f"Job {job_id} not found")
 
@@ -449,7 +450,7 @@ class ACPService:
         Returns:
             Updated job awaiting evaluation
         """
-        job = await self._job_repo.get_by_id(job_id)
+        job: ACPJob | None = await self._job_repo.get_by_id(job_id)
         if not job:
             raise ACPServiceError(f"Job {job_id} not found")
 
@@ -509,7 +510,7 @@ class ACPService:
         Returns:
             Completed job with evaluation recorded
         """
-        job = await self._job_repo.get_by_id(job_id)
+        job: ACPJob | None = await self._job_repo.get_by_id(job_id)
         if not job:
             raise ACPServiceError(f"Job {job_id} not found")
 
@@ -588,7 +589,7 @@ class ACPService:
         about terms, deliverables, or evaluation. The dispute triggers
         a resolution process that may involve arbitration.
         """
-        job = await self._job_repo.get_by_id(job_id)
+        job: ACPJob | None = await self._job_repo.get_by_id(job_id)
         if not job:
             raise ACPServiceError(f"Job {job_id} not found")
 
@@ -711,9 +712,8 @@ class ACPService:
         if not private_key:
             # Mark as unsigned if no private key provided
             logger.warning(
-                "memo_unsigned",
-                sender_address=sender_address,
-                warning="No private key provided - memo is UNSIGNED and should not be trusted",
+                "memo_unsigned: sender_address=%s - No private key provided - memo is UNSIGNED and should not be trusted",
+                sender_address,
             )
             return f"UNSIGNED:{content_hash[:32]}"
 
@@ -732,26 +732,26 @@ class ACPService:
         """Sign using EVM ECDSA (secp256k1)."""
         try:
             from eth_account import Account
-            from eth_account.messages import encode_defunct
+            from eth_account.messages import encode_defunct  # type: ignore[import-not-found]
 
             # Create signable message
             signable = encode_defunct(primitive=message_bytes)
 
             # Sign with private key
-            signed = Account.sign_message(signable, private_key_hex)
+            signed = Account.sign_message(signable, private_key_hex)  # type: ignore[arg-type]
 
             # Return signature as hex
-            return signed.signature.hex()
+            return str(signed.signature.hex())  # type: ignore[attr-defined]
 
         except Exception as e:
-            logger.error("evm_signing_error", error=str(e))
+            logger.error("evm_signing_error: %s", str(e))
             raise ValueError(f"Failed to sign with EVM key: {e}")
 
     async def _sign_solana(self, message_bytes: bytes, private_key_base58: str) -> str:
         """Sign using Solana Ed25519."""
         try:
-            import base58
-            from solders.keypair import Keypair
+            import base58  # type: ignore[import-not-found]
+            from solders.keypair import Keypair  # type: ignore[import-not-found]
 
             # Decode private key
             secret_bytes = base58.b58decode(private_key_base58)
@@ -761,10 +761,11 @@ class ACPService:
             signature = keypair.sign_message(message_bytes)
 
             # Return signature as base58
-            return base58.b58encode(bytes(signature)).decode('ascii')
+            result: str = base58.b58encode(bytes(signature)).decode('ascii')
+            return result
 
         except Exception as e:
-            logger.error("solana_signing_error", error=str(e))
+            logger.error("solana_signing_error: %s", str(e))
             raise ValueError(f"Failed to sign with Solana key: {e}")
 
     async def verify_memo_signature(
@@ -778,7 +779,7 @@ class ACPService:
             True if signature is valid and matches sender_address
         """
         if memo.sender_signature.startswith("UNSIGNED:"):
-            logger.warning("verify_unsigned_memo", memo_type=memo.memo_type)
+            logger.warning("verify_unsigned_memo: memo_type=%s", memo.memo_type)
             return False
 
         content_json = json.dumps(memo.content, sort_keys=True)
@@ -810,7 +811,7 @@ class ACPService:
             from eth_account.messages import encode_defunct
 
             signable = encode_defunct(primitive=message_bytes)
-            recovered_address = Account.recover_message(
+            recovered_address: str = Account.recover_message(
                 signable,
                 signature=bytes.fromhex(signature_hex.removeprefix("0x"))
             )
@@ -818,7 +819,7 @@ class ACPService:
             return recovered_address.lower() == expected_address.lower()
 
         except Exception as e:
-            logger.error("evm_verify_error", error=str(e))
+            logger.error("evm_verify_error: %s", str(e))
             return False
 
     async def _verify_solana_signature(
@@ -830,18 +831,19 @@ class ACPService:
         """Verify Solana Ed25519 signature."""
         try:
             import base58
-            from solders.pubkey import Pubkey
-            from solders.signature import Signature
+            from solders.pubkey import Pubkey  # type: ignore[import-not-found]
+            from solders.signature import Signature  # type: ignore[import-not-found]
 
             pubkey = Pubkey.from_string(expected_pubkey)
             sig_bytes = base58.b58decode(signature_base58)
             signature = Signature.from_bytes(sig_bytes)
 
             # Verify signature
-            return signature.verify(pubkey, message_bytes)
+            result: bool = signature.verify(pubkey, message_bytes)
+            return result
 
         except Exception as e:
-            logger.error("solana_verify_error", error=str(e))
+            logger.error("solana_verify_error: %s", str(e))
             return False
 
     async def _lock_escrow(
@@ -849,7 +851,7 @@ class ACPService:
         job_id: str,
         payer_wallet: str,
         amount_virtual: float,
-    ):
+    ) -> TransactionRecord:
         """Lock funds in escrow for a job."""
 
         # This would interact with the ACP escrow contract
@@ -874,7 +876,7 @@ class ACPService:
         job_id: str,
         recipient_wallet: str,
         amount_virtual: float,
-    ):
+    ) -> TransactionRecord:
         """Release escrowed funds to the provider."""
 
         # This would interact with the ACP escrow contract

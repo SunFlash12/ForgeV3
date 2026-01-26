@@ -373,7 +373,7 @@ class QueryCompiler:
             # Return a basic fallback intent
             return self._create_fallback_intent(question)
 
-    def _parse_json_response(self, content: str) -> dict:
+    def _parse_json_response(self, content: str) -> dict[str, Any]:
         """Parse JSON from LLM response, handling markdown code blocks."""
         import json
 
@@ -385,15 +385,17 @@ class QueryCompiler:
             content = "\n".join(lines[1:-1])
 
         try:
-            return json.loads(content)
+            result: dict[str, Any] = json.loads(content)
+            return result
         except json.JSONDecodeError:
             # Try to extract JSON from the response
             match = re.search(r'\{[\s\S]*\}', content)
             if match:
-                return json.loads(match.group())
+                result = json.loads(match.group())
+                return result
             raise ValueError("Could not parse JSON from LLM response")
 
-    def _to_query_intent(self, data: dict) -> QueryIntent:
+    def _to_query_intent(self, data: dict[str, Any]) -> QueryIntent:
         """Convert parsed JSON to QueryIntent model."""
         entities = []
         for e in data.get("entities", []):
