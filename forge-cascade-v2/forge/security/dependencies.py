@@ -5,7 +5,7 @@ Provides dependency injection for authentication and authorization
 in FastAPI route handlers.
 """
 
-from typing import Annotated, Any
+from typing import Annotated, Any, Callable
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -34,7 +34,8 @@ async def get_token(
     """Extract bearer token from request."""
     if credentials is None:
         return None
-    return credentials.credentials
+    token: str = credentials.credentials
+    return token
 
 
 async def get_optional_auth_context(
@@ -141,7 +142,7 @@ CurrentUserId = Annotated[str, Depends(get_current_user_id)]
 # Trust Level Dependencies
 # =============================================================================
 
-def require_trust(required_level: TrustLevel):
+def require_trust(required_level: TrustLevel) -> Callable[..., Any]:
     """
     Create dependency that requires minimum trust level.
 
@@ -177,7 +178,7 @@ RequireCoreTrust = Annotated[AuthorizationContext, Depends(require_trust(TrustLe
 # Role Dependencies
 # =============================================================================
 
-def require_role_dep(required_role: UserRole):
+def require_role_dep(required_role: UserRole) -> Callable[..., Any]:
     """
     Create dependency that requires minimum role.
 
@@ -212,7 +213,7 @@ RequireSystem = Annotated[AuthorizationContext, Depends(require_role_dep(UserRol
 # Capability Dependencies
 # =============================================================================
 
-def require_capability_dep(required_capability: Capability):
+def require_capability_dep(required_capability: Capability) -> Callable[..., Any]:
     """
     Create dependency that requires a specific capability.
 
@@ -237,7 +238,7 @@ def require_capability_dep(required_capability: Capability):
     return dependency
 
 
-def require_any_capability_dep(*capabilities: Capability):
+def require_any_capability_dep(*capabilities: Capability) -> Callable[..., Any]:
     """
     Create dependency that requires ANY of the specified capabilities.
     """
@@ -254,7 +255,7 @@ def require_any_capability_dep(*capabilities: Capability):
     return dependency
 
 
-def require_all_capabilities_dep(*capabilities: Capability):
+def require_all_capabilities_dep(*capabilities: Capability) -> Callable[..., Any]:
     """
     Create dependency that requires ALL of the specified capabilities.
     """
@@ -298,8 +299,8 @@ class ResourceAccessChecker:
 
     def __init__(
         self,
-        get_owner_id: callable,
-        get_trust_level: callable = None,
+        get_owner_id: Callable[..., Any],
+        get_trust_level: Callable[..., Any] | None = None,
         require_ownership: bool = False
     ):
         self.get_owner_id = get_owner_id
@@ -401,14 +402,17 @@ async def get_client_ip(request: Request) -> str | None:
         ips = [ip.strip() for ip in forwarded_for.split(",")]
         for ip in reversed(ips):
             if _is_valid_ip(ip) and not _is_trusted_proxy(ip):
-                return ip
+                valid_ip: str = ip
+                return valid_ip
         # If all are proxies, take the leftmost (original client)
         if ips and _is_valid_ip(ips[0]):
-            return ips[0]
+            first_ip: str = ips[0]
+            return first_ip
 
     real_ip = request.headers.get("X-Real-IP")
     if real_ip and _is_valid_ip(real_ip):
-        return real_ip
+        valid_real_ip: str = real_ip
+        return valid_real_ip
 
     # Direct connection
     return direct_ip
@@ -416,7 +420,8 @@ async def get_client_ip(request: Request) -> str | None:
 
 async def get_user_agent(request: Request) -> str | None:
     """Extract user agent from request."""
-    return request.headers.get("User-Agent")
+    user_agent: str | None = request.headers.get("User-Agent")
+    return user_agent
 
 
 # Type aliases

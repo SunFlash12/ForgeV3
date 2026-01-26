@@ -39,7 +39,7 @@ class ListingRepository(BaseRepository[CapsuleListing, CapsuleListing, CapsuleLi
 
     @property
     def model_class(self) -> type[CapsuleListing]:
-        return CapsuleListing
+        return CapsuleListing  # type: ignore[no-any-return]
 
     async def create(self, data: CapsuleListing, **kwargs: Any) -> CapsuleListing:
         """Create a new listing."""
@@ -177,7 +177,7 @@ class PurchaseRepository(BaseRepository[Purchase, Purchase, Purchase]):
 
     @property
     def model_class(self) -> type[Purchase]:
-        return Purchase
+        return Purchase  # type: ignore[no-any-return]
 
     async def create(self, data: Purchase, **kwargs: Any) -> Purchase:
         """Create a new purchase record."""
@@ -420,7 +420,7 @@ class LicenseRepository(BaseRepository[License, License, License]):
 
     @property
     def model_class(self) -> type[License]:
-        return License
+        return License  # type: ignore[no-any-return]
 
     async def create(self, data: License, **kwargs: Any) -> License:
         """Create a new license."""

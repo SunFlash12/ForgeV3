@@ -16,7 +16,7 @@ for IP and User-Agent tracking.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from .session_binding import SessionBindingService
@@ -139,16 +139,16 @@ class IPRateLimiter:
     _REDIS_ATTEMPTS_PREFIX = "forge:ratelimit:ip:attempts:"
     _REDIS_LOCKOUT_PREFIX = "forge:ratelimit:ip:lockout:"
 
-    def __init__(self):
+    def __init__(self) -> None:
         # In-memory fallback storage
         self._attempts: OrderedDict[str, list[datetime]] = OrderedDict()
         self._lockouts: dict[str, datetime] = {}
         self._lock = threading.Lock()
         # Redis client (initialized lazily)
-        self._redis_client = None
+        self._redis_client: Any = None
         self._redis_initialized = False
 
-    async def _get_redis(self):
+    async def _get_redis(self) -> Any:
         """Get or initialize Redis client."""
         if self._redis_initialized:
             return self._redis_client
@@ -351,7 +351,7 @@ class IPRateLimiter:
 
 
 # Global IP rate limiter instance
-_ip_rate_limiter = IPRateLimiter()
+_ip_rate_limiter: IPRateLimiter = IPRateLimiter()
 
 
 def get_ip_rate_limiter() -> IPRateLimiter:
@@ -751,7 +751,7 @@ class AuthService:
 
         if not totp_valid:
             # Try backup code if TOTP fails
-            backup_valid = await mfa_service.use_backup_code(user_id, code)
+            backup_valid = await mfa_service.verify_backup_code(user_id, code)
 
             if not backup_valid:
                 # Both failed - log and reject
@@ -1528,7 +1528,8 @@ class AuthService:
                 changed_by=adjusted_by
             )
 
-        return new_trust
+        return_value: int = int(new_trust) if new_trust else 0
+        return return_value
 
     # =========================================================================
     # Session Info

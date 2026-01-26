@@ -316,7 +316,7 @@ class TemporalRepository:
             trust_change=vb.trust_at_version - va.trust_at_version,
         )
 
-    async def _get_latest_version(self, capsule_id: str) -> dict | None:
+    async def _get_latest_version(self, capsule_id: str) -> dict[str, Any] | None:
         """Get the latest version info for a capsule."""
         query = """
         MATCH (c:Capsule {id: $capsule_id})-[:HAS_VERSION]->(v:CapsuleVersion)
@@ -330,12 +330,14 @@ class TemporalRepository:
                count(all) AS version_count
         """
 
-        return await self.client.execute_single(query, {"capsule_id": capsule_id})
+        result = await self.client.execute_single(query, {"capsule_id": capsule_id})
+        return dict(result) if result else None
 
     async def _reconstruct_content(self, version: CapsuleVersion) -> str | None:
         """Reconstruct content from diff chain."""
         if version.snapshot_type == SnapshotType.FULL:
-            return version.content_snapshot
+            content_snapshot = version.content_snapshot
+            return str(content_snapshot) if content_snapshot is not None else None
 
         # Walk back to find a full snapshot
         query = """
@@ -354,7 +356,7 @@ class TemporalRepository:
 
         # Apply diffs in order (from snapshot forward)
         chain = list(reversed(result["chain"]))
-        content = chain[0].get("content_snapshot", "")
+        content: str = str(chain[0].get("content_snapshot", ""))
 
         for node in chain[1:]:
             diff_json = node.get("diff_from_previous")
@@ -428,7 +430,7 @@ class TemporalRepository:
         else:
             return f"{major}.{minor}.{patch + 1}"
 
-    def _to_version(self, record: dict) -> CapsuleVersion:
+    def _to_version(self, record: dict[str, Any]) -> CapsuleVersion:
         """Convert a Neo4j record to CapsuleVersion."""
         diff_json = record.get("diff_from_previous")
         diff = None
@@ -623,7 +625,7 @@ class TemporalRepository:
         self,
         entity_id: str,
         entity_type: str,
-    ) -> dict | None:
+    ) -> dict[str, Any] | None:
         """Get the most recent trust snapshot for an entity."""
         query = """
         MATCH (t:TrustSnapshot {entity_id: $entity_id, entity_type: $entity_type})
@@ -632,12 +634,13 @@ class TemporalRepository:
         LIMIT 1
         """
 
-        return await self.client.execute_single(
+        result = await self.client.execute_single(
             query,
             {"entity_id": entity_id, "entity_type": entity_type},
         )
+        return dict(result) if result else None
 
-    def _to_trust_snapshot(self, record: dict) -> TrustSnapshot:
+    def _to_trust_snapshot(self, record: dict[str, Any]) -> TrustSnapshot:
         """Convert a Neo4j record to TrustSnapshot."""
         return TrustSnapshot(
             id=record["id"],
@@ -780,7 +783,7 @@ class TemporalRepository:
             if r.get("snapshot")
         ]
 
-    def _to_graph_snapshot(self, record: dict) -> GraphSnapshot:
+    def _to_graph_snapshot(self, record: dict[str, Any]) -> GraphSnapshot:
         """Convert a Neo4j record to GraphSnapshot."""
         return GraphSnapshot(
             id=record["id"],
@@ -803,30 +806,32 @@ class TemporalRepository:
             updated_at=self._parse_datetime(record.get("updated_at")),
         )
 
-    def _parse_dict(self, value: Any) -> dict:
+    def _parse_dict(self, value: Any) -> dict[str, Any]:
         """Parse a dictionary from various formats (handles Neo4j serialization)."""
         if value is None:
             return {}
         if isinstance(value, dict):
-            return value
+            return dict(value)
         if isinstance(value, str):
             try:
                 import json
-                return json.loads(value)
+                parsed: dict[str, Any] = json.loads(value)
+                return parsed
             except (json.JSONDecodeError, TypeError):
                 return {}
         return {}
 
-    def _parse_list(self, value: Any) -> list:
+    def _parse_list(self, value: Any) -> list[Any]:
         """Parse a list from various formats (handles Neo4j serialization)."""
         if value is None:
             return []
         if isinstance(value, list):
-            return value
+            return list(value)
         if isinstance(value, str):
             try:
                 import json
-                return json.loads(value)
+                parsed: list[Any] = json.loads(value)
+                return parsed
             except (json.JSONDecodeError, TypeError):
                 return []
         return []
@@ -917,7 +922,8 @@ class TemporalRepository:
         if isinstance(value, datetime):
             return value
         if hasattr(value, "to_native"):
-            return value.to_native()
+            result: datetime = value.to_native()
+            return result
         if isinstance(value, str):
             return datetime.fromisoformat(value.replace("Z", "+00:00"))
         return self._now()

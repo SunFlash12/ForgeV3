@@ -33,6 +33,7 @@ import struct
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from typing import Any
 from urllib.parse import quote
 
 import structlog
@@ -92,10 +93,10 @@ class MFAService:
 
     def __init__(
         self,
-        db_client=None,
+        db_client: Any = None,
         encryption_key: str | None = None,
         use_memory_storage: bool = False,
-    ):
+    ) -> None:
         """
         Initialize MFA service.
 
@@ -155,12 +156,12 @@ class MFAService:
             import base64
 
             from cryptography.fernet import Fernet
-            # Derive a valid Fernet key from the encryption key
             key = base64.urlsafe_b64encode(
                 hashlib.sha256(self._encryption_key.encode()).digest()
             )
             f = Fernet(key)
-            return f.encrypt(secret.encode()).decode()
+            encrypted: str = f.encrypt(secret.encode()).decode()
+            return encrypted
         except ImportError:
             logger.warning("cryptography not installed, storing unencrypted")
             return secret
@@ -177,7 +178,8 @@ class MFAService:
                 hashlib.sha256(self._encryption_key.encode()).digest()
             )
             f = Fernet(key)
-            return f.decrypt(encrypted.encode()).decode()
+            decrypted: str = f.decrypt(encrypted.encode()).decode()
+            return decrypted
         except ImportError:
             return encrypted
         except Exception as e:
@@ -220,7 +222,7 @@ class MFAService:
             )
         logger.info("mfa_data_persisted", user_id=user_id)
 
-    async def _load_mfa_data(self, user_id: str) -> dict | None:
+    async def _load_mfa_data(self, user_id: str) -> dict[str, Any] | None:
         """Load MFA data from database."""
         if not self._use_db:
             return None
@@ -739,7 +741,7 @@ _mfa_service: MFAService | None = None
 _mfa_db_client = None
 
 
-def get_mfa_service(db_client=None, encryption_key: str | None = None) -> MFAService:
+def get_mfa_service(db_client: Any = None, encryption_key: str | None = None) -> MFAService:
     """
     Get or create the MFA service singleton.
 

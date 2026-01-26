@@ -24,7 +24,7 @@ from forge.repositories.base import BaseRepository
 logger = structlog.get_logger(__name__)
 
 
-class OverlayCreate(OverlayManifest):
+class OverlayCreate(OverlayManifest):  # type: ignore[misc]
     """Schema for registering an overlay."""
     pass
 
@@ -68,7 +68,7 @@ class OverlayRepository(BaseRepository[Overlay, OverlayCreate, OverlayUpdate]):
 
     @property
     def model_class(self) -> type[Overlay]:
-        return Overlay
+        return Overlay  # type: ignore[no-any-return]
 
     def _compute_content_hash(self, content: bytes) -> str:
         """
@@ -83,7 +83,7 @@ class OverlayRepository(BaseRepository[Overlay, OverlayCreate, OverlayUpdate]):
         import hashlib
         return hashlib.sha256(content).hexdigest()
 
-    async def create(
+    async def create(  # type: ignore[override]
         self,
         data: OverlayCreate,
         wasm_content: bytes | None = None,

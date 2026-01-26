@@ -62,7 +62,7 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
 
     @property
     def model_class(self) -> type[Capsule]:
-        return Capsule
+        return Capsule  # type: ignore[no-any-return]
 
     def _to_model(self, record: dict[str, Any]) -> Capsule | None:
         """
@@ -82,7 +82,7 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
 
         return super()._to_model(record)
 
-    async def create(
+    async def create(  # type: ignore[override]
         self,
         data: CapsuleCreate,
         owner_id: str,
@@ -609,7 +609,7 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
             if r.get("node") and r["node"].get("id")
         ]
 
-    async def list(
+    async def list_capsules(
         self,
         offset: int = 0,
         limit: int = 20,
@@ -1335,7 +1335,7 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
         self,
         edge_id: str,
         confidence: float | None = None,
-        properties: dict | None = None,
+        properties: dict[str, Any] | None = None,
     ) -> SemanticEdge | None:
         """
         Update a semantic edge.
@@ -1407,7 +1407,7 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
             return self._to_semantic_edge(result["edge"])
         return None
 
-    def _to_semantic_edge(self, record: dict) -> SemanticEdge:
+    def _to_semantic_edge(self, record: dict[str, Any]) -> SemanticEdge:
         """Convert a Neo4j record to SemanticEdge."""
         properties = record.get("properties", "{}")
         if isinstance(properties, str):
@@ -1438,7 +1438,8 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
         if isinstance(value, datetime):
             return value
         if hasattr(value, "to_native"):
-            return value.to_native()
+            result: datetime = value.to_native()
+            return result
         if isinstance(value, str):
             return datetime.fromisoformat(value.replace("Z", "+00:00"))
         return self._now()
@@ -1660,7 +1661,7 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
             ContentHashMismatchError: If raise_on_failure=True and hash mismatch
         """
         # Get the capsule
-        capsule = await self.get(capsule_id)
+        capsule = await self.get_by_id(capsule_id)
 
         if not capsule:
             return None, None

@@ -459,9 +459,9 @@ class TokenVersionCache:
         # Cache miss - fetch from database
         if db_fallback:
             try:
-                version = await db_fallback(user_id)
-                await cls.set_version(user_id, version)
-                return version
+                db_version: int = await db_fallback(user_id)
+                await cls.set_version(user_id, db_version)
+                return db_version
             except Exception as e:
                 logger.warning(
                     "token_version_db_fetch_error",
@@ -742,11 +742,11 @@ class KeyRotationManager:
         cls,
         token: str,
         algorithms: list[str],
-        options: dict | None = None,
+        options: dict[str, Any] | None = None,
         issuer: str | None = None,
         audience: str | None = None,
         leeway: int = 0,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """
         Decode a token, trying all valid keys.
 
@@ -786,11 +786,12 @@ class KeyRotationManager:
             if kid and kid in cls._keys:
                 # Try the specific key first
                 try:
-                    return pyjwt.decode(
+                    result: dict[str, Any] = pyjwt.decode(
                         token,
                         cls._keys[kid],
                         **decode_kwargs
                     )
+                    return result
                 except (InvalidTokenError, DecodeError):
                     pass  # Fall through to try all keys
         except Exception:
@@ -800,11 +801,12 @@ class KeyRotationManager:
         last_error = None
         for key in cls.get_all_keys():
             try:
-                return pyjwt.decode(
+                decoded: dict[str, Any] = pyjwt.decode(
                     token,
                     key,
                     **decode_kwargs
                 )
+                return decoded
             except ExpiredSignatureError:
                 raise  # Don't try other keys for expired tokens
             except (InvalidTokenError, DecodeError) as e:
@@ -815,7 +817,7 @@ class KeyRotationManager:
         raise InvalidTokenError(f"Token verification failed: {last_error}")
 
     @classmethod
-    def get_rotation_status(cls) -> dict:
+    def get_rotation_status(cls) -> dict[str, Any]:
         """
         Get current key rotation status.
 
@@ -881,12 +883,13 @@ def create_access_token(
 
     # SECURITY FIX (Audit 3): Use KeyRotationManager for signing
     key_id, secret = KeyRotationManager.get_current_key()
-    return pyjwt.encode(
+    encoded: str = pyjwt.encode(
         payload,
         secret,
         algorithm=settings.jwt_algorithm,
         headers={"kid": key_id}  # Include key ID in header for rotation support
     )
+    return encoded
 
 
 def create_refresh_token(
@@ -924,12 +927,13 @@ def create_refresh_token(
 
     # SECURITY FIX (Audit 3): Use KeyRotationManager for signing
     key_id, secret = KeyRotationManager.get_current_key()
-    return pyjwt.encode(
+    encoded: str = pyjwt.encode(
         payload,
         secret,
         algorithm=settings.jwt_algorithm,
         headers={"kid": key_id}
     )
+    return encoded
 
 
 def create_mfa_pending_token(
@@ -975,12 +979,13 @@ def create_mfa_pending_token(
         payload["ip_hash"] = hashlib.sha256(ip_address.encode()).hexdigest()[:16]
 
     key_id, secret = KeyRotationManager.get_current_key()
-    return pyjwt.encode(
+    encoded: str = pyjwt.encode(
         payload,
         secret,
         algorithm=settings.jwt_algorithm,
         headers={"kid": key_id}
     )
+    return encoded
 
 
 def verify_mfa_pending_token(
@@ -1294,7 +1299,7 @@ def get_token_claims(token: str) -> dict[str, Any]:
     try:
         # SECURITY FIX: Use PyJWT with algorithm whitelist even for extraction
         # NOTE: Intentionally skip iss/aud validation for claim extraction
-        payload = pyjwt.decode(
+        payload: dict[str, Any] = pyjwt.decode(
             token,
             settings.jwt_secret_key,
             algorithms=ALLOWED_JWT_ALGORITHMS,
@@ -1438,7 +1443,7 @@ def extract_token_from_header(authorization: str) -> str:
     return token
 
 
-def verify_token(token: str, secret_key: str = None, expected_type: str = "access") -> TokenPayload:
+def verify_token(token: str, secret_key: str | None = None, expected_type: str = "access") -> TokenPayload:
     """
     Verify a JWT token.
 
@@ -1472,17 +1477,17 @@ class TokenService:
     """
 
     @staticmethod
-    def create_access_token(user_id: str, **kwargs) -> str:
+    def create_access_token(user_id: str, **kwargs: Any) -> str:
         """Create an access token."""
         return create_access_token(user_id, **kwargs)
 
     @staticmethod
-    def create_refresh_token(user_id: str) -> str:
+    def create_refresh_token(user_id: str, username: str) -> str:
         """Create a refresh token."""
-        return create_refresh_token(user_id)
+        return create_refresh_token(user_id, username)
 
     @staticmethod
-    def create_token_pair(user_id: str, **kwargs) -> "Token":
+    def create_token_pair(user_id: str, **kwargs: Any) -> "Token":
         """Create an access/refresh token pair."""
         return create_token_pair(user_id, **kwargs)
 

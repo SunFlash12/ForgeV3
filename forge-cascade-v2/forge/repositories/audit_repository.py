@@ -815,7 +815,7 @@ class AuditRepository:
     # Helper Methods
     # =========================================================================
 
-    def _to_audit_event(self, node: dict) -> AuditEvent:
+    def _to_audit_event(self, node: dict[str, Any]) -> AuditEvent:
         """Convert Neo4j node to AuditEvent model."""
         import json
 
@@ -842,11 +842,16 @@ class AuditRepository:
                 new_value = {"raw": node["new_value"]}
 
         # Handle datetime conversion
-        timestamp = node.get("timestamp")
-        if hasattr(timestamp, 'to_native'):
-            timestamp = timestamp.to_native()
-        elif isinstance(timestamp, str):
-            timestamp = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+        timestamp_raw = node.get("timestamp")
+        timestamp: datetime
+        if hasattr(timestamp_raw, 'to_native'):
+            timestamp = timestamp_raw.to_native()  # type: ignore[union-attr]
+        elif isinstance(timestamp_raw, str):
+            timestamp = datetime.fromisoformat(timestamp_raw.replace('Z', '+00:00'))
+        elif isinstance(timestamp_raw, datetime):
+            timestamp = timestamp_raw
+        else:
+            timestamp = datetime.now(UTC)
 
         return AuditEvent(
             id=node["id"],
@@ -865,11 +870,11 @@ class AuditRepository:
             timestamp=timestamp
         )
 
-    async def list(
+    async def list_events(
         self,
         offset: int = 0,
         limit: int = 50,
-        filters: dict | None = None,
+        filters: dict[str, Any] | None = None,
     ) -> tuple[list[AuditEvent], int]:
         """
         List audit events with filtering and pagination.

@@ -333,10 +333,12 @@ class ACPJobRepository:
         """
 
         # Serialize memos to JSON
-        def serialize_memo(memo):
+        def serialize_memo(memo: object) -> str | None:
             if memo is None:
                 return None
-            return json.dumps(memo.model_dump(), default=str)
+            if hasattr(memo, "model_dump"):
+                return json.dumps(memo.model_dump(), default=str)
+            return None
 
         params = {
             "id": job.id,
@@ -411,10 +413,12 @@ class ACPJobRepository:
         """Update a job."""
         now = datetime.now(UTC)
 
-        def serialize_memo(memo):
+        def serialize_memo(memo: object) -> str | None:
             if memo is None:
                 return None
-            return json.dumps(memo.model_dump(), default=str)
+            if hasattr(memo, "model_dump"):
+                return json.dumps(memo.model_dump(), default=str)
+            return None
 
         query = """
         MATCH (j:ACPJob {id: $id})

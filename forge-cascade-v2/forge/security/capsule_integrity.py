@@ -18,7 +18,7 @@ import base64
 import hashlib
 import secrets
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import structlog
 from cryptography.hazmat.primitives.asymmetric.ed25519 import (
@@ -401,7 +401,7 @@ class CapsuleIntegrityService:
         capsule: Capsule,
         public_key_b64: str | None = None,
         parent_merkle_root: str | None = None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """
         Perform comprehensive integrity verification on a capsule.
 

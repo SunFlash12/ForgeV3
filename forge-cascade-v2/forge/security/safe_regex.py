@@ -17,8 +17,8 @@ import re
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FuturesTimeoutError
 from functools import lru_cache
-from re import Pattern
-from typing import Any
+from re import Match, Pattern
+from typing import Any, Callable
 
 import structlog
 
@@ -105,12 +105,12 @@ def validate_pattern(pattern: str) -> tuple[bool, str | None]:
 
 
 @lru_cache(maxsize=1000)
-def _compile_pattern_cached(pattern: str, flags: int = 0) -> Pattern:
+def _compile_pattern_cached(pattern: str, flags: int = 0) -> Pattern[str]:
     """Cache compiled patterns to avoid recompilation."""
     return re.compile(pattern, flags)
 
 
-def safe_compile(pattern: str, flags: int = 0, validate: bool = True) -> Pattern:
+def safe_compile(pattern: str, flags: int = 0, validate: bool = True) -> Pattern[str]:
     """
     Safely compile a regex pattern with validation.
 
@@ -136,7 +136,7 @@ def safe_compile(pattern: str, flags: int = 0, validate: bool = True) -> Pattern
         raise RegexValidationError(f"Failed to compile pattern: {e}")
 
 
-def _run_with_timeout(func, *args, timeout: float = DEFAULT_REGEX_TIMEOUT) -> Any:
+def _run_with_timeout(func: Callable[..., Any], *args: Any, timeout: float = DEFAULT_REGEX_TIMEOUT) -> Any:
     """
     Run a function with a timeout.
 
@@ -166,7 +166,7 @@ def safe_match(
     flags: int = 0,
     timeout: float = DEFAULT_REGEX_TIMEOUT,
     validate: bool = True
-) -> re.Match | None:
+) -> Match[str] | None:
     """
     Safely perform re.match with timeout and validation.
 
@@ -191,7 +191,8 @@ def safe_match(
         logger.warning("regex_input_truncated", original_length=original_length, max_length=MAX_INPUT_LENGTH)
 
     compiled = safe_compile(pattern, flags, validate)
-    return _run_with_timeout(compiled.match, string, timeout=timeout)
+    result: Match[str] | None = _run_with_timeout(compiled.match, string, timeout=timeout)
+    return result
 
 
 def safe_search(
@@ -200,7 +201,7 @@ def safe_search(
     flags: int = 0,
     timeout: float = DEFAULT_REGEX_TIMEOUT,
     validate: bool = True
-) -> re.Match | None:
+) -> Match[str] | None:
     """
     Safely perform re.search with timeout and validation.
 
@@ -225,7 +226,8 @@ def safe_search(
         logger.warning("regex_input_truncated", original_length=original_length, max_length=MAX_INPUT_LENGTH)
 
     compiled = safe_compile(pattern, flags, validate)
-    return _run_with_timeout(compiled.search, string, timeout=timeout)
+    result: Match[str] | None = _run_with_timeout(compiled.search, string, timeout=timeout)
+    return result
 
 
 def safe_findall(
@@ -235,7 +237,7 @@ def safe_findall(
     timeout: float = DEFAULT_REGEX_TIMEOUT,
     validate: bool = True,
     max_results: int = 1000
-) -> list:
+) -> list[Any]:
     """
     Safely perform re.findall with timeout and validation.
 
@@ -261,12 +263,13 @@ def safe_findall(
         logger.warning("regex_input_truncated", original_length=original_length, max_length=MAX_INPUT_LENGTH)
 
     compiled = safe_compile(pattern, flags, validate)
-    results = _run_with_timeout(compiled.findall, string, timeout=timeout)
+    results: list[Any] = _run_with_timeout(compiled.findall, string, timeout=timeout)
 
     # Limit result count
     if len(results) > max_results:
         logger.warning("regex_results_truncated", original_count=len(results), max_results=max_results)
-        return results[:max_results]
+        truncated: list[Any] = results[:max_results]
+        return truncated
 
     return results
 
@@ -306,7 +309,8 @@ def safe_sub(
         logger.warning("regex_input_truncated", original_length=original_length, max_length=MAX_INPUT_LENGTH)
 
     compiled = safe_compile(pattern, flags, validate)
-    return _run_with_timeout(compiled.sub, repl, string, count, timeout=timeout)
+    result: str = _run_with_timeout(compiled.sub, repl, string, count, timeout=timeout)
+    return result
 
 
 def shutdown_executor() -> None:

@@ -8,11 +8,14 @@ they can access.
 
 from collections.abc import Callable
 from functools import wraps
-from typing import Any
+from typing import Any, ParamSpec, TypeVar
 
 from ..models.base import TrustLevel
 from ..models.overlay import Capability
 from ..models.user import UserRole
+
+P = ParamSpec("P")
+R = TypeVar("R")
 
 
 class AuthorizationError(Exception):
@@ -162,7 +165,8 @@ def is_admin(user: Any) -> bool:
     if role is None:
         return False
     normalized = normalize_role(role)
-    return normalized == UserRole.ADMIN
+    result: bool = normalized == UserRole.ADMIN
+    return result
 
 
 def check_trust_level(user_trust: int, required_level: TrustLevel) -> bool:
@@ -180,7 +184,7 @@ def check_trust_level(user_trust: int, required_level: TrustLevel) -> bool:
     return TRUST_LEVEL_VALUES[user_level] >= TRUST_LEVEL_VALUES[required_level]
 
 
-def require_trust_level(required_level: TrustLevel):
+def require_trust_level(required_level: TrustLevel) -> Callable[[Callable[P, R]], Callable[P, R]]:
     """
     Decorator to require minimum trust level for a function.
 
@@ -191,13 +195,14 @@ def require_trust_level(required_level: TrustLevel):
         async def create_proposal(trust_flame: int, ...):
             ...
     """
-    def decorator(func: Callable):
+    def decorator(func: Callable[P, R]) -> Callable[P, R]:
         @wraps(func)
-        async def wrapper(*args, **kwargs):
-            trust_flame = kwargs.get("trust_flame")
-            if trust_flame is None:
+        async def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+            trust_flame_raw = kwargs.get("trust_flame")
+            if trust_flame_raw is None:
                 raise AuthorizationError("trust_flame not provided")
 
+            trust_flame = int(str(trust_flame_raw))
             if not check_trust_level(trust_flame, required_level):
                 user_level = get_trust_level_from_score(trust_flame)
                 raise InsufficientTrustError(
@@ -205,8 +210,8 @@ def require_trust_level(required_level: TrustLevel):
                     f"user has {user_level.name}"
                 )
 
-            return await func(*args, **kwargs)
-        return wrapper
+            return await func(*args, **kwargs)  # type: ignore[misc, no-any-return]
+        return wrapper  # type: ignore[return-value]
     return decorator
 
 
@@ -304,15 +309,15 @@ def check_role(user_role: UserRole, required_role: UserRole) -> bool:
     return ROLE_HIERARCHY.get(user_role, 0) >= ROLE_HIERARCHY.get(required_role, 0)
 
 
-def require_role(required_role: UserRole):
+def require_role(required_role: UserRole) -> Callable[[Callable[P, R]], Callable[P, R]]:
     """
     Decorator to require minimum role for a function.
 
     The decorated function must receive role as a keyword argument.
     """
-    def decorator(func: Callable):
+    def decorator(func: Callable[P, R]) -> Callable[P, R]:
         @wraps(func)
-        async def wrapper(*args, **kwargs):
+        async def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
             role = kwargs.get("role")
             if role is None:
                 raise AuthorizationError("role not provided")
@@ -321,13 +326,14 @@ def require_role(required_role: UserRole):
                 role = UserRole(role)
 
             if not check_role(role, required_role):
+                role_value: str = role.value if hasattr(role, 'value') else str(role)
                 raise InsufficientRoleError(
                     f"Operation requires {required_role.value} role, "
-                    f"user has {role.value}"
+                    f"user has {role_value}"
                 )
 
-            return await func(*args, **kwargs)
-        return wrapper
+            return await func(*args, **kwargs)  # type: ignore[misc, no-any-return]
+        return wrapper  # type: ignore[return-value]
     return decorator
 
 
@@ -468,35 +474,37 @@ def check_any_capability(
     return bool(required_capabilities.intersection(user_capabilities))
 
 
-def require_capability(required_capability: Capability):
+def require_capability(required_capability: Capability) -> Callable[[Callable[P, R]], Callable[P, R]]:
     """
     Decorator to require a specific capability.
 
     The decorated function must receive capabilities as a keyword argument.
     """
-    def decorator(func: Callable):
+    def decorator(func: Callable[P, R]) -> Callable[P, R]:
         @wraps(func)
-        async def wrapper(*args, **kwargs):
-            capabilities = kwargs.get("capabilities", set())
+        async def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+            capabilities_raw = kwargs.get("capabilities")
+            capabilities: set[Capability] = set(capabilities_raw) if capabilities_raw else set()  # type: ignore[call-overload]
 
             if not check_capability(capabilities, required_capability):
                 raise MissingCapabilityError(
                     f"Operation requires {required_capability.value} capability"
                 )
 
-            return await func(*args, **kwargs)
-        return wrapper
+            return await func(*args, **kwargs)  # type: ignore[misc, no-any-return]
+        return wrapper  # type: ignore[return-value]
     return decorator
 
 
-def require_capabilities(*required_capabilities: Capability):
+def require_capabilities(*required_capabilities: Capability) -> Callable[[Callable[P, R]], Callable[P, R]]:
     """
     Decorator to require multiple capabilities (ALL must be present).
     """
-    def decorator(func: Callable):
+    def decorator(func: Callable[P, R]) -> Callable[P, R]:
         @wraps(func)
-        async def wrapper(*args, **kwargs):
-            capabilities = kwargs.get("capabilities", set())
+        async def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+            capabilities_raw = kwargs.get("capabilities")
+            capabilities: set[Capability] = set(capabilities_raw) if capabilities_raw else set()  # type: ignore[call-overload]
 
             missing = set(required_capabilities) - capabilities
             if missing:
@@ -504,8 +512,8 @@ def require_capabilities(*required_capabilities: Capability):
                     f"Operation requires capabilities: {[c.value for c in missing]}"
                 )
 
-            return await func(*args, **kwargs)
-        return wrapper
+            return await func(*args, **kwargs)  # type: ignore[misc, no-any-return]
+        return wrapper  # type: ignore[return-value]
     return decorator
 
 
@@ -684,9 +692,11 @@ class TrustAuthorizer:
         Returns:
             True if user meets minimum trust level
         """
-        trust_flame = getattr(user, 'trust_score', None) or getattr(user, 'trust_flame', 0)
+        trust_flame_raw = getattr(user, 'trust_score', None) or getattr(user, 'trust_flame', 0)
+        trust_flame: int = int(trust_flame_raw) if trust_flame_raw is not None else 0
         user_level = get_trust_level_from_score(trust_flame)
-        return user_level.value >= self.min_level.value
+        result: bool = user_level.value >= self.min_level.value
+        return result
 
 
 class RoleAuthorizer:
@@ -745,11 +755,11 @@ class CapabilityAuthorizer:
         Returns:
             True if user has all required capabilities
         """
-        trust_flame = getattr(user, 'trust_score', None) or getattr(user, 'trust_flame', 0)
+        trust_flame_raw = getattr(user, 'trust_score', None) or getattr(user, 'trust_flame', 0)
+        trust_flame: int = int(trust_flame_raw) if trust_flame_raw is not None else 0
         user_capabilities = get_capabilities_for_trust(trust_flame)
 
-        # Also check explicit capabilities if set on user
-        explicit_caps = getattr(user, 'capabilities', set())
+        explicit_caps: set[Capability] = getattr(user, 'capabilities', set())
         if explicit_caps:
             user_capabilities = user_capabilities | explicit_caps
 

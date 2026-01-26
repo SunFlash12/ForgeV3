@@ -398,7 +398,8 @@ class SessionBindingService:
         if not session or session.user_id != user_id:
             return False
 
-        success = await self._repo.revoke_session(session_jti, reason)
+        result = await self._repo.revoke_session(session_jti, reason)
+        success: bool = bool(result)
 
         if success:
             self.logger.info(
@@ -427,9 +428,10 @@ class SessionBindingService:
         Returns:
             Number of sessions revoked
         """
-        count = await self._repo.revoke_user_sessions(
+        result = await self._repo.revoke_user_sessions(
             user_id, except_current_jti, reason
         )
+        count: int = int(result)
 
         if count > 0:
             self.logger.info(
@@ -444,4 +446,6 @@ class SessionBindingService:
 
     async def get_active_session_count(self, user_id: str) -> int:
         """Get count of active sessions for a user."""
-        return await self._repo.count_active_sessions(user_id)
+        result = await self._repo.count_active_sessions(user_id)
+        count: int = int(result)
+        return count

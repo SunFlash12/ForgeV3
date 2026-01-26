@@ -16,8 +16,8 @@ class SecretResponse(TypedDict):
     warnings: list[str] | None
     auth: dict[str, Any] | None
 
-class KVv2:
-    """KV v2 secrets engine."""
+class KVv2Methods:
+    """KV v2 secrets engine methods."""
 
     def read_secret_version(
         self,
@@ -68,13 +68,27 @@ class KVv2:
         mount_point: str = "secret",
     ) -> dict[str, list[str]]: ...
 
+class KVv2:
+    """KV v2 secrets engine with v2 property for compatibility."""
+    v2: KVv2Methods
+
 class Secrets:
     """Secrets engines."""
-
     kv: KVv2
+
+class AppRole:
+    """AppRole authentication method."""
+    def login(
+        self,
+        role_id: str,
+        secret_id: str | None = None,
+        use_token: bool = True,
+        mount_point: str = "approle",
+    ) -> dict[str, Any]: ...
 
 class AuthMethods:
     """Authentication methods."""
+    approle: AppRole
 
     def token(self) -> dict[str, Any]: ...
 

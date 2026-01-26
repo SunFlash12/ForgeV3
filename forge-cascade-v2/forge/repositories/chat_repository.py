@@ -822,6 +822,7 @@ class ChatRepository:
 
         if result and result.get("code"):
             self.logger.info("invite_code_regenerated", room_id=room_id)
-            return result["code"]
+            code: str = result["code"]
+            return code
 
         return None

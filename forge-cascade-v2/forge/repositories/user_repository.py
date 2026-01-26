@@ -52,7 +52,7 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
 
     @property
     def model_class(self) -> type[User]:
-        return User
+        return User  # type: ignore[no-any-return]
 
     def _to_model(self, record: dict[str, Any]) -> User | None:
         """
@@ -79,7 +79,7 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
             )
             return None
 
-    async def create(
+    async def create(  # type: ignore[override]
         self,
         data: UserCreate,
         password_hash: str,
@@ -630,7 +630,8 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
             return False
 
         # SECURITY FIX: Compare hash of incoming token with stored hash
-        return verify_refresh_token_hash(token, stored_hash)
+        valid: bool = verify_refresh_token_hash(token, stored_hash)
+        return valid
 
     # =========================================================================
     # Token Version Management (SECURITY FIX - Audit 6)
@@ -669,7 +670,7 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
         if result is None:
             raise RuntimeError(f"Failed to increment token version: user {user_id} not found")
 
-        new_version = result.get("token_version", 2)
+        new_version: int = result.get("token_version", 2)
         self.logger.info(
             "Token version incremented",
             user_id=user_id,
@@ -702,7 +703,8 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
             # Token validation will fail anyway when user lookup fails
             return 1
 
-        return result.get("token_version", 1)
+        version: int = result.get("token_version", 1)
+        return version
 
     # =========================================================================
     # Password Reset Token Management

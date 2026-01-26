@@ -11,6 +11,7 @@ Includes:
 
 import hmac
 import re
+from typing import Any, Callable
 
 import bcrypt
 import structlog
@@ -20,6 +21,7 @@ from ..config import get_settings
 logger = structlog.get_logger(__name__)
 
 # SECURITY FIX (Audit 5): Optional zxcvbn integration for entropy-based validation
+zxcvbn_check: Callable[[str, list[str] | None], Any] | None
 try:
     from zxcvbn import zxcvbn as zxcvbn_check
     ZXCVBN_AVAILABLE = True
@@ -201,7 +203,7 @@ def validate_password_strength(password: str, username: str | None = None, email
             if "@" in email:
                 user_inputs.append(email.split("@")[0])
 
-        result = zxcvbn_check(password, user_inputs=user_inputs)
+        result = zxcvbn_check(password, user_inputs)
         # zxcvbn score: 0=very weak, 1=weak, 2=fair, 3=strong, 4=very strong
         # Require minimum score of 2 (fair)
         if result["score"] < 2:
@@ -326,7 +328,8 @@ def needs_rehash(hashed_password: str) -> bool:
         parts = hashed_password.split('$')
         if len(parts) >= 3:
             stored_rounds = int(parts[2])
-            return stored_rounds < _bcrypt_rounds
+            result: bool = stored_rounds < _bcrypt_rounds
+            return result
     except (ValueError, IndexError):
         pass
     return False
@@ -418,7 +421,7 @@ def update_password_history(
     return new_history[:max_history]
 
 
-def get_password_strength(password: str, username: str | None = None, email: str | None = None) -> dict:
+def get_password_strength(password: str, username: str | None = None, email: str | None = None) -> dict[str, Any]:
     """
     Evaluate password strength.
 
@@ -443,7 +446,7 @@ def get_password_strength(password: str, username: str | None = None, email: str
             if "@" in email:
                 user_inputs.append(email.split("@")[0])
 
-        result = zxcvbn_check(password, user_inputs=user_inputs)
+        result = zxcvbn_check(password, user_inputs)
         feedback_obj = result.get("feedback", {})
 
         # Map zxcvbn score (0-4) to labels
@@ -470,49 +473,59 @@ def get_password_strength(password: str, username: str | None = None, email: str
         }
 
     # Fallback: Pattern-based evaluation
-    strength = {
-        "length": len(password),
-        "has_uppercase": any(c.isupper() for c in password),
-        "has_lowercase": any(c.islower() for c in password),
-        "has_digit": any(c.isdigit() for c in password),
-        "has_special": any(not c.isalnum() for c in password),
-        "score": 0,
-        "feedback": [],
-        "entropy_based": False,
-    }
+    length: int = len(password)
+    has_uppercase: bool = any(c.isupper() for c in password)
+    has_lowercase: bool = any(c.islower() for c in password)
+    has_digit: bool = any(c.isdigit() for c in password)
+    has_special: bool = any(not c.isalnum() for c in password)
+    score: int = 0
+    feedback: list[str] = []
 
     # Calculate score (0-5)
-    if strength["length"] >= 8:
-        strength["score"] += 1
-    if strength["length"] >= 12:
-        strength["score"] += 1
-    if strength["has_uppercase"]:
-        strength["score"] += 1
-    if strength["has_lowercase"]:
-        strength["score"] += 1
-    if strength["has_digit"]:
-        strength["score"] += 1
-    if strength["has_special"]:
-        strength["score"] += 1
+    if length >= 8:
+        score += 1
+    if length >= 12:
+        score += 1
+    if has_uppercase:
+        score += 1
+    if has_lowercase:
+        score += 1
+    if has_digit:
+        score += 1
+    if has_special:
+        score += 1
 
     # Generate feedback
-    if strength["length"] < 8:
-        strength["feedback"].append("Password should be at least 8 characters")
-    if not strength["has_uppercase"]:
-        strength["feedback"].append("Add uppercase letters")
-    if not strength["has_lowercase"]:
-        strength["feedback"].append("Add lowercase letters")
-    if not strength["has_digit"]:
-        strength["feedback"].append("Add numbers")
-    if not strength["has_special"]:
-        strength["feedback"].append("Add special characters for extra security")
+    if length < 8:
+        feedback.append("Password should be at least 8 characters")
+    if not has_uppercase:
+        feedback.append("Add uppercase letters")
+    if not has_lowercase:
+        feedback.append("Add lowercase letters")
+    if not has_digit:
+        feedback.append("Add numbers")
+    if not has_special:
+        feedback.append("Add special characters for extra security")
 
     # Strength label (map 0-6 score to labels)
-    if strength["score"] <= 2:
-        strength["label"] = "weak"
-    elif strength["score"] <= 4:
-        strength["label"] = "moderate"
+    label: str
+    if score <= 2:
+        label = "weak"
+    elif score <= 4:
+        label = "moderate"
     else:
-        strength["label"] = "strong"
+        label = "strong"
+
+    strength: dict[str, Any] = {
+        "length": length,
+        "has_uppercase": has_uppercase,
+        "has_lowercase": has_lowercase,
+        "has_digit": has_digit,
+        "has_special": has_special,
+        "score": score,
+        "feedback": feedback,
+        "entropy_based": False,
+        "label": label,
+    }
 
     return strength

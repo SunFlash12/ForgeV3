@@ -63,17 +63,17 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
 
     @property
     def model_class(self) -> type[Proposal]:
-        return Proposal
+        return Proposal  # type: ignore[no-any-return]
 
     # ═══════════════════════════════════════════════════════════════
     # PROPOSAL MANAGEMENT
     # ═══════════════════════════════════════════════════════════════
 
-    async def create(
+    async def create(  # type: ignore[override]
         self,
         data: ProposalCreate,
         proposer_id: str,
-        **kwargs: Any,
+        **kwargs: object,
     ) -> Proposal:
         """
         Create a new proposal.
@@ -726,7 +726,8 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
             {"delegator_id": delegator_id, "delegate_id": delegate_id},
         )
 
-        return result and result.get("deleted", 0) > 0
+        deleted: int = result.get("deleted", 0) if result else 0
+        return deleted > 0
 
     async def get_delegates(self, delegator_id: str) -> list[VoteDelegation]:
         """Get all delegations from a user."""
@@ -1114,7 +1115,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
         """Get all votes on a proposal (alias for get_votes)."""
         return await self.get_votes(proposal_id)
 
-    async def get_active_policies(self) -> list[dict]:
+    async def get_active_policies(self) -> list[dict[str, Any]]:
         """
         Get all active governance policies.
 
@@ -1148,7 +1149,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
             },
         ]
 
-    async def get_policy(self, policy_id: str) -> dict | None:
+    async def get_policy(self, policy_id: str) -> dict[str, Any] | None:
         """
         Get a specific policy.
 
@@ -1164,7 +1165,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
                 return policy
         return None
 
-    async def create_delegation_from_dict(self, data: dict[str, Any]) -> dict:
+    async def create_delegation_from_dict(self, data: dict[str, Any]) -> dict[str, Any]:
         """
         Create a vote delegation from a dict.
 
@@ -1202,7 +1203,8 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
         )
 
         if result and result.get("delegation"):
-            return result["delegation"]
+            delegation: dict[str, Any] = result["delegation"]
+            return delegation
         return data
 
     async def get_stats(self) -> GovernanceStats:
@@ -1291,4 +1293,5 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
             {"delegation_id": delegation_id},
         )
 
-        return result and result.get("updated", 0) > 0
+        updated: int = result.get("updated", 0) if result else 0
+        return updated > 0

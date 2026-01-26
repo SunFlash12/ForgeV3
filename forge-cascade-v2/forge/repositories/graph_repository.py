@@ -588,7 +588,7 @@ class GraphAlgorithmProvider:
             )
 
             # Group by community
-            communities_map: dict[int, list[dict]] = {}
+            communities_map: dict[int, list[dict[str, Any]]] = {}
             for r in results:
                 cid = r["community_id"]
                 if cid not in communities_map:
@@ -1345,8 +1345,9 @@ class GraphRepository:
             max_iterations=max_iterations,
             limit=limit,
         )
-        result = await self.provider.compute_pagerank(request)
-        return result.rankings
+        result: NodeRankingResult = await self.provider.compute_pagerank(request)
+        rankings: list[NodeRanking] = result.rankings
+        return rankings
 
     async def compute_betweenness_centrality(
         self,
@@ -1359,8 +1360,9 @@ class GraphRepository:
             node_label=node_label,
             limit=limit,
         )
-        result = await self.provider.compute_centrality(request)
-        return result.rankings
+        result: NodeRankingResult = await self.provider.compute_centrality(request)
+        rankings: list[NodeRanking] = result.rankings
+        return rankings
 
     async def detect_communities(
         self,
@@ -1377,8 +1379,9 @@ class GraphRepository:
             algorithm=algo,
             min_community_size=min_size,
         )
-        result = await self.provider.detect_communities(request)
-        return result.communities
+        result: CommunityDetectionResult = await self.provider.detect_communities(request)
+        communities: list[Community] = result.communities
+        return communities
 
     async def compute_trust_transitivity(
         self,
@@ -1392,8 +1395,9 @@ class GraphRepository:
             target_id=target_id,
             max_hops=max_hops,
         )
-        result = await self.provider.compute_trust_transitivity(request)
-        return result.transitive_trust
+        result: TrustTransitivityResult = await self.provider.compute_trust_transitivity(request)
+        trust: float = result.transitive_trust
+        return trust
 
     async def get_metrics(self) -> GraphMetrics:
         """Get comprehensive graph metrics."""
@@ -1415,8 +1419,9 @@ class GraphRepository:
             top_k=top_k,
             similarity_cutoff=min_similarity,
         )
-        result = await self.provider.compute_node_similarity(request)
-        return result.similar_nodes
+        result: NodeSimilarityResult = await self.provider.compute_node_similarity(request)
+        similar: list[SimilarNode] = result.similar_nodes
+        return similar
 
     async def find_shortest_path(
         self,

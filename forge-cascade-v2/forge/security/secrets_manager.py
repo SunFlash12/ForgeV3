@@ -21,7 +21,11 @@ import warnings
 from datetime import UTC, datetime
 from enum import Enum
 from functools import lru_cache
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    import boto3
+    import hvac
 
 logger = logging.getLogger(__name__)
 
@@ -189,9 +193,9 @@ class VaultSecretsManager(BaseSecretsManager):
         self._vault_token = vault_token or os.environ.get("VAULT_TOKEN")
         self._vault_namespace = vault_namespace or os.environ.get("VAULT_NAMESPACE")
         self._secrets_path = secrets_path
-        self._client = None
+        self._client: hvac.Client | None = None
 
-    def _get_client(self):
+    def _get_client(self) -> "hvac.Client":
         """Lazily initialize Vault client."""
         if self._client is None:
             try:
@@ -201,7 +205,7 @@ class VaultSecretsManager(BaseSecretsManager):
                     "hvac package required for Vault integration. Install with: pip install hvac"
                 )
 
-            self._client = hvac.Client(
+            client = hvac.Client(
                 url=self._vault_addr,
                 token=self._vault_token,
                 namespace=self._vault_namespace,
@@ -212,10 +216,11 @@ class VaultSecretsManager(BaseSecretsManager):
                 role_id = os.environ.get("VAULT_ROLE_ID")
                 secret_id = os.environ.get("VAULT_SECRET_ID")
                 if role_id and secret_id:
-                    self._client.auth.approle.login(
+                    client.auth.approle.login(
                         role_id=role_id,
                         secret_id=secret_id,
                     )
+            self._client = client
 
         return self._client
 
@@ -229,7 +234,8 @@ class VaultSecretsManager(BaseSecretsManager):
                 path=f"{self._secrets_path}/{key}",
                 raise_on_deleted_version=True,
             )
-            return secret["data"]["data"]["value"]
+            result: str = secret["data"]["data"]["value"]
+            return result
         except Exception as e:
             if "404" in str(e) or "secret not found" in str(e).lower():
                 raise SecretNotFoundError(f"Secret '{key}' not found in Vault")
@@ -260,7 +266,7 @@ class VaultSecretsManager(BaseSecretsManager):
         """Check Vault connectivity and authentication."""
         try:
             client = self._get_client()
-            return await asyncio.to_thread(client.is_authenticated)
+            return await asyncio.to_thread(lambda: client.is_authenticated)
         except Exception as e:
             logger.error(f"Vault health check failed: {e}")
             return False
@@ -278,9 +284,9 @@ class AWSSecretsManager(BaseSecretsManager):
     def __init__(self, region_name: str | None = None, secret_prefix: str = "forge/"):
         self._region_name = region_name or os.environ.get("AWS_REGION", "us-east-1")
         self._secret_prefix = secret_prefix
-        self._client = None
+        self._client: boto3.client | None = None
 
-    def _get_client(self):
+    def _get_client(self) -> "boto3.client":
         """Lazily initialize AWS client."""
         if self._client is None:
             try:
@@ -301,7 +307,8 @@ class AWSSecretsManager(BaseSecretsManager):
                 client.get_secret_value,
                 SecretId=secret_name,
             )
-            return response["SecretString"]
+            result: str = response["SecretString"]
+            return result
         except Exception as e:
             if "ResourceNotFoundException" in str(type(e).__name__):
                 raise SecretNotFoundError(f"Secret '{key}' not found in AWS Secrets Manager")
@@ -378,7 +385,7 @@ def _detect_backend() -> SecretsBackend:
 
 def create_secrets_manager(
     backend: SecretsBackend | None = None,
-    **kwargs,
+    **kwargs: Any,
 ) -> BaseSecretsManager:
     """
     Create a secrets manager instance.

@@ -17,7 +17,7 @@ from forge.models.user import AuthProvider, User, UserInDB
 logger = structlog.get_logger(__name__)
 
 
-class GoogleUserInfo(BaseModel):
+class GoogleUserInfo(BaseModel):  # type: ignore[misc]
     """User info from Google OAuth token."""
 
     sub: str = Field(description="Google user ID")
@@ -41,7 +41,7 @@ class GoogleOAuthService:
     GOOGLE_TOKEN_INFO_URL = "https://oauth2.googleapis.com/tokeninfo"
     GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v3/userinfo"
 
-    def __init__(self):
+    def __init__(self) -> None:
         settings = get_settings()
         self.client_id = settings.google_client_id
         self.client_secret = settings.google_client_secret

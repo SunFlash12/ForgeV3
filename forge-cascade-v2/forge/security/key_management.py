@@ -19,7 +19,7 @@ from __future__ import annotations
 import base64
 import os
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import structlog
 from cryptography.hazmat.primitives import hashes
@@ -83,7 +83,7 @@ class SigningKeyInfo:
         self.created_at = created_at
         self.can_sign = can_sign
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "strategy": self.strategy.value,
             "public_key": self.public_key_b64,
@@ -159,7 +159,8 @@ class KeyManagementService:
             Raw public key bytes (32 bytes)
         """
         private = Ed25519PrivateKey.from_private_bytes(private_key)
-        return private.public_key().public_bytes_raw()
+        result: bytes = private.public_key().public_bytes_raw()
+        return result
 
     # ═══════════════════════════════════════════════════════════════════════════
     # SERVER CUSTODY (Strategy 1)
@@ -184,7 +185,8 @@ class KeyManagementService:
             salt=salt,
             info=b"forge-key-encryption-v1",
         )
-        return hkdf.derive(password.encode("utf-8"))
+        result: bytes = hkdf.derive(password.encode("utf-8"))
+        return result
 
     @staticmethod
     def encrypt_private_key(private_key: bytes, password: str) -> str:
@@ -251,16 +253,16 @@ class KeyManagementService:
 
             # Decrypt
             aesgcm = AESGCM(enc_key)
-            private_key = aesgcm.decrypt(nonce, ciphertext, None)
+            result: bytes = aesgcm.decrypt(nonce, ciphertext, None)
 
-            return private_key
+            return result
 
         except Exception as e:
             logger.warning("key_decryption_failed", error=str(e))
             raise KeyDecryptionError("Failed to decrypt private key") from e
 
     @classmethod
-    def setup_server_custody(cls, password: str) -> dict:
+    def setup_server_custody(cls, password: str) -> dict[str, Any]:
         """
         Set up signing keys with server custody.
 
@@ -291,7 +293,7 @@ class KeyManagementService:
     # ═══════════════════════════════════════════════════════════════════════════
 
     @classmethod
-    def setup_client_only(cls, public_key_b64: str) -> dict:
+    def setup_client_only(cls, public_key_b64: str) -> dict[str, Any]:
         """
         Set up signing keys with client-only storage.
 
@@ -369,7 +371,7 @@ class KeyManagementService:
         )
 
     @classmethod
-    def setup_password_derived(cls, password: str) -> dict:
+    def setup_password_derived(cls, password: str) -> dict[str, Any]:
         """
         Set up signing keys derived from password.
 
@@ -422,7 +424,7 @@ class KeyManagementService:
         strategy: KeyStorageStrategy,
         password: str | None = None,
         public_key_b64: str | None = None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """
         Set up signing keys using the specified strategy.
 
