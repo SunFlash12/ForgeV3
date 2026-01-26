@@ -248,7 +248,7 @@ class CertificatePinStore:
                         if pin_data.get("next_valid_from") else None,
                 )
             logger.info(f"Loaded {len(self._pins)} certificate pins from {pin_file}")
-        except (OSError, IOError, json.JSONDecodeError, ValueError, KeyError, TypeError) as e:
+        except (OSError, json.JSONDecodeError, ValueError, KeyError, TypeError) as e:
             logger.error(f"Failed to load certificate pins: {e}")
 
     def _save_pins(self) -> None:
@@ -274,7 +274,7 @@ class CertificatePinStore:
             with open(pin_file, 'w') as f:
                 json.dump(data, f, indent=2)
             logger.debug(f"Saved {len(data)} certificate pins to {pin_file}")
-        except (OSError, IOError, TypeError, ValueError) as e:
+        except (OSError, TypeError, ValueError) as e:
             logger.error(f"Failed to save certificate pins: {e}")
 
     def pin_certificate(
@@ -961,7 +961,7 @@ class FederationProtocol:
                 f.write(public_pem)
 
             logger.info(f"Federation keys saved to {private_key_path.parent}")
-        except (OSError, IOError, ValueError, TypeError, RuntimeError) as e:
+        except (OSError, ValueError, TypeError, RuntimeError) as e:
             logger.error(f"Failed to save federation keys: {e}")
             # Don't raise - keys work in memory, just won't persist
 

@@ -5,7 +5,8 @@ Provides dependency injection for authentication and authorization
 in FastAPI route handlers.
 """
 
-from typing import Annotated, Any, Callable
+from collections.abc import Callable
+from typing import Annotated, Any
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer

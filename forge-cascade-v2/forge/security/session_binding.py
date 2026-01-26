@@ -14,7 +14,6 @@ from forge.config import get_settings
 from forge.models.session import (
     Session,
     SessionBindingMode,
-    SessionBindingWarning,
     SessionCreate,
     SessionListResponse,
     SessionPublic,

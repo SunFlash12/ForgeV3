@@ -19,7 +19,6 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from forge.database.client import Neo4jClient
     from forge.immune.health_checker import (
-        CircuitBreakerRegistryProtocol,
         EventSystemProtocol,
         OverlayManagerProtocol,
     )

@@ -23,12 +23,13 @@ from .import_service import ImportProgress, ImportResult, PrimeKGImportService
 from .models import (
     PrimeKGDisease,
     PrimeKGDrug,
+    PrimeKGEdge,
     PrimeKGEdgeType,
     PrimeKGGene,
+    PrimeKGNode,
     PrimeKGNodeType,
     PrimeKGPhenotype,
 )
-from .models import PrimeKGEdge, PrimeKGNode
 from .parser import PrimeKGParser
 
 __all__ = [

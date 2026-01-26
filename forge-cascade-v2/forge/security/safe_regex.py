@@ -14,11 +14,12 @@ untrusted input to prevent ReDoS attacks.
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FuturesTimeoutError
 from functools import lru_cache
 from re import Match, Pattern
-from typing import Any, Callable
+from typing import Any
 
 import structlog
 

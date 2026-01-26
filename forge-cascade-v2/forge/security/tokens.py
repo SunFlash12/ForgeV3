@@ -19,9 +19,9 @@ import asyncio
 import hashlib
 import threading
 import time
+import types
 from datetime import UTC, datetime, timedelta
 from typing import Any
-import types
 from uuid import uuid4
 
 # SECURITY FIX: Use PyJWT instead of abandoned python-jose

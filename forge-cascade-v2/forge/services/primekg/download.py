@@ -450,7 +450,7 @@ class PrimeKGDownloader:
                 results[name] = True
                 logger.info("primekg_file_verified", file=name, size=size)
 
-            except (OSError, IOError, ValueError, UnicodeDecodeError) as e:
+            except (OSError, ValueError, UnicodeDecodeError) as e:
                 logger.error("primekg_verification_error", file=name, error=str(e))
                 results[name] = False
 

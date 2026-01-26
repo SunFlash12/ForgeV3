@@ -21,7 +21,13 @@ import structlog
 
 from ..models.events import Event
 from ..models.overlay import Capability
-from ..models.query import CompiledQuery, GraphSchema, QueryResult, QueryResultRow, get_default_schema
+from ..models.query import (
+    CompiledQuery,
+    GraphSchema,
+    QueryResult,
+    QueryResultRow,
+    get_default_schema,
+)
 from ..services.query_compiler import (
     CypherSecurityError,
     CypherValidator,

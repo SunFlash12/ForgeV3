@@ -719,7 +719,7 @@ class PrimeKGImportService:
             with open(self.progress_file, "w") as f:
                 json.dump(data, f)
 
-        except (OSError, IOError, ValueError, TypeError) as e:
+        except (OSError, ValueError, TypeError) as e:
             logger.warning("primekg_progress_save_error", error=str(e))
 
     def _load_progress(self) -> dict[str, Any] | None:
@@ -729,7 +729,7 @@ class PrimeKGImportService:
                 with open(self.progress_file) as f:
                     result: dict[str, Any] = json.load(f)
                     return result
-        except (OSError, IOError, ValueError, KeyError) as e:
+        except (OSError, ValueError, KeyError) as e:
             logger.warning("primekg_progress_load_error", error=str(e))
         return None
 
@@ -738,5 +738,5 @@ class PrimeKGImportService:
         try:
             if self.progress_file.exists():
                 self.progress_file.unlink()
-        except (OSError, IOError) as e:
+        except OSError as e:
             logger.warning("primekg_progress_clear_error", error=str(e))

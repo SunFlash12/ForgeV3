@@ -173,7 +173,7 @@ class HealthCheck(ABC):
                 break
             except TimeoutError:
                 last_error = TimeoutError(f"Health check timed out after {self.config.timeout_seconds}s")
-            except (ConnectionError, TimeoutError, OSError, RuntimeError, ValueError) as e:
+            except (ConnectionError, OSError, RuntimeError, ValueError) as e:
                 last_error = e
 
             if attempt < self.config.retry_count:
@@ -489,8 +489,8 @@ class CircuitBreakerHealthCheck(HealthCheck):
             total_val = summary.get("total_circuits", 0)
             summary.get("health_score", 1.0)
 
-            open_circuits_count = int(open_circuits_val) if isinstance(open_circuits_val, (int, float)) else 0
-            total_count = int(total_val) if isinstance(total_val, (int, float)) else 0
+            open_circuits_count = int(open_circuits_val) if isinstance(open_circuits_val, int | float) else 0
+            total_count = int(total_val) if isinstance(total_val, int | float) else 0
 
             if open_circuits_count > 0:
                 health_status = HealthStatus.DEGRADED

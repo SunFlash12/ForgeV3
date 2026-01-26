@@ -73,7 +73,7 @@ SettingsDep = Annotated[Settings, Depends(get_app_settings)]
 # Forge App Access
 # =============================================================================
 
-def get_forge_app(request: Request) -> "ForgeApp":
+def get_forge_app(request: Request) -> ForgeApp:
     """Get the ForgeApp instance from request state."""
     if not hasattr(request.app.state, 'forge'):
         raise HTTPException(
@@ -250,7 +250,7 @@ async def get_anomaly_system(request: Request) -> ForgeAnomalySystem:
     return anomaly_system
 
 
-async def get_canary_manager(request: Request) -> "CanaryManager[dict[str, Any]]":
+async def get_canary_manager(request: Request) -> CanaryManager[dict[str, Any]]:
     """Get canary deployment manager."""
     forge = get_forge_app(request)
     canary_manager: CanaryManager[dict[str, Any]] | None = forge.canary_manager

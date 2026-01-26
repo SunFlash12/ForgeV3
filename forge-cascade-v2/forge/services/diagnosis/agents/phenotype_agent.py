@@ -366,7 +366,7 @@ class PhenotypeAgent(DiagnosticAgent):
         # Sort by discrimination score (float cast for type safety)
         def get_score(item: dict[str, object]) -> float:
             score = item["discrimination_score"]
-            return float(score) if isinstance(score, (int, float)) else 0.0
+            return float(score) if isinstance(score, int | float) else 0.0
         suggestions.sort(key=get_score, reverse=True)
         return suggestions[:10]
 

@@ -12,7 +12,7 @@ import structlog
 from pydantic import BaseModel, EmailStr, Field
 
 from forge.config import get_settings
-from forge.models.user import AuthProvider, User, UserInDB
+from forge.models.user import UserInDB
 
 logger = structlog.get_logger(__name__)
 
