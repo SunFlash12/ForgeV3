@@ -262,8 +262,7 @@ class ChatService:
         Returns:
             List of (room, user_role) tuples
         """
-        # list invariance: repo returns list[tuple[ChatRoom, RoomRole]] but we need RoomRole | None
-        rooms: list[tuple[ChatRoom, RoomRole | None]] = await self._chat_repo.get_user_rooms(  # type: ignore[assignment]
+        rooms: list[tuple[ChatRoom, RoomRole | None]] = await self._chat_repo.get_user_rooms(
             user_id, include_public, limit
         )
         return rooms
