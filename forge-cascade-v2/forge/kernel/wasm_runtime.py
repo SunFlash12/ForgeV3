@@ -479,6 +479,28 @@ class WasmOverlayRuntime:
         Raises:
             SecurityError: If Python overlay is provided without proper trust settings
         """
+        # SECURITY FIX (Audit 7 - Session 2): Validate source_hash integrity when provided
+        if manifest.wasm_path and manifest.source_hash:
+            import hashlib
+            try:
+                wasm_bytes = manifest.wasm_path.read_bytes()
+                computed_hash = hashlib.sha256(wasm_bytes).hexdigest()
+                if computed_hash != manifest.source_hash:
+                    raise SecurityError(
+                        f"WASM module integrity check failed for '{manifest.name}'. "
+                        f"Expected hash: {manifest.source_hash[:16]}..., "
+                        f"got: {computed_hash[:16]}..."
+                    )
+                logger.info(
+                    "wasm_integrity_verified",
+                    overlay_name=manifest.name,
+                    hash=computed_hash[:16],
+                )
+            except FileNotFoundError:
+                raise SecurityError(
+                    f"WASM module not found at {manifest.wasm_path} for '{manifest.name}'"
+                )
+
         # SECURITY FIX (Audit 4): Validate security settings at load time
         if python_overlay is not None:
             if manifest.security_mode != OverlaySecurityMode.PYTHON_TRUSTED:

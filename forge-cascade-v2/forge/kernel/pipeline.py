@@ -57,15 +57,36 @@ class PipelineStatus(str, Enum):
 
 
 class PipelineError(OverlayError):
-    """Pipeline execution error."""
-    pass
+    """Pipeline execution error with structured context.
+
+    SECURITY FIX (Audit 7 - Session 2): Includes phase, overlay, and capsule
+    context for production debugging.
+    """
+    def __init__(
+        self,
+        message: str,
+        phase: str | None = None,
+        overlay: str | None = None,
+        capsule_id: str | None = None,
+    ):
+        self.phase = phase
+        self.overlay = overlay
+        self.capsule_id = capsule_id
+        context_parts = []
+        if phase:
+            context_parts.append(f"phase={phase}")
+        if overlay:
+            context_parts.append(f"overlay={overlay}")
+        if capsule_id:
+            context_parts.append(f"capsule={capsule_id}")
+        context_str = f" [{', '.join(context_parts)}]" if context_parts else ""
+        super().__init__(f"{message}{context_str}")
 
 
 class PhaseError(PipelineError):
     """Error in a specific phase."""
-    def __init__(self, phase: PipelinePhase, message: str):
-        self.phase = phase
-        super().__init__(f"[{phase.value}] {message}")
+    def __init__(self, phase: PipelinePhase, message: str, overlay: str | None = None, capsule_id: str | None = None):
+        super().__init__(message, phase=phase.value, overlay=overlay, capsule_id=capsule_id)
 
 
 @dataclass
@@ -260,6 +281,11 @@ class Pipeline:
         self._max_history = 100
         self._pipeline_history: deque[PipelineResult] = deque(maxlen=self._max_history)
 
+        # SECURITY FIX (Audit 7 - Session 2): Limit concurrent pipeline executions
+        # to prevent resource exhaustion from parallel pipeline flood
+        self._max_concurrent = 50
+        self._semaphore = asyncio.Semaphore(self._max_concurrent)
+
         # Hooks for extensibility
         self._pre_phase_hooks: list[Callable[..., Any]] = []
         self._post_phase_hooks: list[Callable[..., Any]] = []
@@ -369,6 +395,44 @@ class Pipeline:
         Returns:
             PipelineResult with execution details
         """
+        # SECURITY FIX (Audit 7 - Session 2): Enforce concurrent pipeline limit
+        if self._semaphore.locked():
+            self._logger.warning(
+                "pipeline_concurrency_limit_reached",
+                max_concurrent=self._max_concurrent,
+                active=len(self._active_pipelines),
+            )
+
+        async with self._semaphore:
+            return await self._execute_inner(
+                input_data=input_data,
+                triggered_by=triggered_by,
+                event=event,
+                user_id=user_id,
+                trust_flame=trust_flame,
+                capsule_id=capsule_id,
+                proposal_id=proposal_id,
+                capabilities=capabilities,
+                fuel_budget=fuel_budget,
+                metadata=metadata,
+                skip_phases=skip_phases,
+            )
+
+    async def _execute_inner(
+        self,
+        input_data: dict[str, Any],
+        triggered_by: str = "manual",
+        event: Event | None = None,
+        user_id: str | None = None,
+        trust_flame: int = 60,
+        capsule_id: str | None = None,
+        proposal_id: str | None = None,
+        capabilities: set[Capability] | None = None,
+        fuel_budget: FuelBudget | None = None,
+        metadata: dict[str, Any] | None = None,
+        skip_phases: set[PipelinePhase] | None = None,
+    ) -> PipelineResult:
+        """Inner execution logic (called under semaphore)."""
         pipeline_id = str(uuid4())
         correlation_id = (event.correlation_id if event and event.correlation_id else str(uuid4()))
 

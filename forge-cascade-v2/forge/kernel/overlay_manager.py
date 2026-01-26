@@ -6,6 +6,7 @@ Acts as the central coordinator for all overlay instances.
 """
 
 import asyncio
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
@@ -13,8 +14,8 @@ from uuid import uuid4
 
 import structlog
 
-from ..models.events import Event, EventType
 from ..models.base import OverlayState
+from ..models.events import Event, EventType
 from ..models.overlay import Capability, FuelBudget, OverlayHealthCheck
 from ..overlays.base import BaseOverlay, OverlayContext, OverlayError, OverlayResult
 from .event_system import EventBus, get_event_bus
@@ -87,8 +88,9 @@ class OverlayManager:
 
         # Execution tracking
         self._pending_executions: dict[str, asyncio.Task[Any]] = {}
-        self._execution_history: list[dict[str, Any]] = []
+        # SECURITY FIX (Audit 7 - Session 2): Use deque for automatic memory bounding
         self._max_history = 1000
+        self._execution_history: deque[dict[str, Any]] = deque(maxlen=self._max_history)
 
         # Circuit breaker per overlay
         self._failure_counts: dict[str, int] = {}
@@ -729,7 +731,7 @@ class OverlayManager:
         duration_ms: float,
         error: str | None = None
     ) -> None:
-        """Record execution in history."""
+        """Record execution in history (deque auto-trims at maxlen)."""
         self._execution_history.append({
             "overlay_id": overlay_id,
             "execution_id": execution_id,
@@ -738,10 +740,6 @@ class OverlayManager:
             "error": error,
             "timestamp": datetime.now(UTC).isoformat()
         })
-
-        # Trim history
-        if len(self._execution_history) > self._max_history:
-            self._execution_history = self._execution_history[-self._max_history:]
 
     def get_execution_stats(
         self,
@@ -756,7 +754,7 @@ class OverlayManager:
         Returns:
             Statistics dict
         """
-        history = self._execution_history
+        history: list[dict[str, Any]] = list(self._execution_history)
         if overlay_id:
             history = [e for e in history if e["overlay_id"] == overlay_id]
 
@@ -788,7 +786,7 @@ class OverlayManager:
         overlay_id: str | None = None
     ) -> list[dict[str, Any]]:
         """Get recent executions."""
-        history = self._execution_history
+        history: list[dict[str, Any]] = list(self._execution_history)
         if overlay_id:
             history = [e for e in history if e["overlay_id"] == overlay_id]
 

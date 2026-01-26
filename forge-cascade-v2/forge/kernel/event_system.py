@@ -94,6 +94,8 @@ class EventBus:
 
     # SECURITY FIX (Audit 4 - H13): Maximum dead letter queue size to prevent memory exhaustion
     MAX_DEAD_LETTER_QUEUE_SIZE = 1000
+    # SECURITY FIX (Audit 7 - Session 2): Maximum subscribers to prevent memory exhaustion
+    MAX_SUBSCRIBERS = 10000
 
     def __init__(
         self,
@@ -101,6 +103,7 @@ class EventBus:
         max_retries: int = 3,
         retry_delay_seconds: float = 1.0,
         max_dead_letter_size: int = 1000,
+        max_subscribers: int = 10000,
         cascade_repository: "CascadeRepository | None" = None,
     ):
         self._subscriptions: dict[str, Subscription] = {}
@@ -113,6 +116,7 @@ class EventBus:
         self._metrics = EventMetrics()
         self._max_retries = max_retries
         self._retry_delay = retry_delay_seconds
+        self._max_subscribers = max_subscribers
         self._running = False
         self._worker_task: asyncio.Task[None] | None = None
 
@@ -145,6 +149,18 @@ class EventBus:
         Returns:
             Subscription ID for unsubscribing
         """
+        # SECURITY FIX (Audit 7 - Session 2): Enforce subscriber limit
+        if len(self._subscriptions) >= self._max_subscribers:
+            logger.error(
+                "event_subscriber_limit_reached",
+                current=len(self._subscriptions),
+                max=self._max_subscribers,
+            )
+            raise RuntimeError(
+                f"Maximum subscriber limit ({self._max_subscribers}) reached. "
+                "Cannot add more subscriptions."
+            )
+
         sub_id = str(uuid4())
 
         subscription = Subscription(
@@ -244,8 +260,30 @@ class EventBus:
             timestamp=datetime.now(UTC)
         )
 
-        await self._event_queue.put(event)
+        # SECURITY FIX (Audit 7 - Session 2): Backpressure - timeout if queue full
+        try:
+            await asyncio.wait_for(self._event_queue.put(event), timeout=10.0)
+        except TimeoutError:
+            logger.error(
+                "event_queue_backpressure",
+                event_type=event_type.value,
+                queue_size=self._event_queue.qsize(),
+                detail="Event queue full - publish timed out after 10s",
+            )
+            raise RuntimeError(
+                f"Event queue full ({self._event_queue.qsize()} events). "
+                "Backpressure timeout exceeded."
+            )
         self._metrics.events_published += 1
+
+        # Alert if dead letter queue is getting full
+        dlq_size = self._dead_letter_queue.qsize()
+        if dlq_size > 0 and dlq_size % 100 == 0:
+            logger.warning(
+                "dead_letter_queue_filling",
+                dlq_size=dlq_size,
+                max_size=self.MAX_DEAD_LETTER_QUEUE_SIZE,
+            )
 
         logger.debug(
             "event_published",
