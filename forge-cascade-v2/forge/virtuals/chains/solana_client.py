@@ -256,11 +256,17 @@ class SolanaChainClient(BaseChainClient):
         if not self._keypair:
             raise ChainClientError("No operator keypair configured")
 
+        if value < 0:
+            raise ValueError("Transaction value cannot be negative")
+
         keypair: Any = self._keypair
 
         from solana.transaction import Transaction  # type: ignore[import-not-found]
         from solders.pubkey import Pubkey
-        from solders.system_program import TransferParams, transfer  # type: ignore[import-not-found]
+        from solders.system_program import (  # type: ignore[import-not-found]
+            TransferParams,
+            transfer,
+        )
 
         to_pubkey: Any = Pubkey.from_string(to_address)
         lamports: int = int(value * 1_000_000_000)  # SOL to lamports
@@ -384,7 +390,7 @@ class SolanaChainClient(BaseChainClient):
 
             block_time: Any = tx.block_time
             timestamp: datetime = (
-                datetime.fromtimestamp(int(block_time))
+                datetime.fromtimestamp(int(block_time), tz=UTC)
                 if block_time
                 else datetime.now(UTC)
             )
@@ -462,9 +468,10 @@ class SolanaChainClient(BaseChainClient):
         token_mint: Any = Pubkey.from_string(token_address)
         to_pubkey: Any = Pubkey.from_string(to_address)
 
-        # Get decimals for the token
+        # Get decimals for the token (use Decimal for precision)
+        from decimal import Decimal
         decimals: int = await self._get_token_decimals(token_address)
-        amount_raw: int = int(amount * (10 ** decimals))
+        amount_raw: int = int(Decimal(str(amount)) * Decimal(10 ** decimals))
 
         # Find associated token accounts
         source_ata: Any = self._get_associated_token_address(
@@ -965,7 +972,7 @@ class SolanaChainClient(BaseChainClient):
         client: Any = self._get_client()
         response: Any = await client.get_block_time(block_number)
         if response.value:
-            return datetime.fromtimestamp(int(response.value))
+            return datetime.fromtimestamp(int(response.value), tz=UTC)
         return datetime.now(UTC)
 
     # ==================== Helper Methods ====================

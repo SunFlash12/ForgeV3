@@ -333,6 +333,9 @@ class EVMChainClient(BaseChainClient):
         if not self._operator_account:
             raise ChainClientError("No operator account configured")
 
+        if value < 0:
+            raise ValueError("Transaction value cannot be negative")
+
         operator_account: LocalAccount = self._operator_account
 
         to_address = w3.to_checksum_address(to_address)
@@ -435,7 +438,7 @@ class EVMChainClient(BaseChainClient):
                         tx_hash=tx_hash,
                         chain=self.chain.value,
                         block_number=receipt['blockNumber'],
-                        timestamp=datetime.fromtimestamp(block['timestamp']),
+                        timestamp=datetime.fromtimestamp(block['timestamp'], tz=UTC),
                         from_address=tx_detail['from'],
                         to_address=tx_detail['to'] or "",
                         value=float(w3.from_wei(tx_detail['value'], 'ether')),
@@ -464,7 +467,7 @@ class EVMChainClient(BaseChainClient):
             if receipt:
                 block: Any = await w3.eth.get_block(receipt['blockNumber'])
                 status: str = "success" if receipt['status'] == 1 else "failed"
-                timestamp: datetime = datetime.fromtimestamp(block['timestamp'])
+                timestamp: datetime = datetime.fromtimestamp(block['timestamp'], tz=UTC)
             else:
                 status = "pending"
                 timestamp = datetime.now(UTC)
@@ -527,9 +530,10 @@ class EVMChainClient(BaseChainClient):
         token_address = w3.to_checksum_address(token_address)
         to_address = w3.to_checksum_address(to_address)
 
-        # Get decimals and convert amount
+        # Get decimals and convert amount using Decimal for precision
+        from decimal import Decimal
         decimals: int = await self._get_token_decimals(token_address)
-        amount_raw: int = int(amount * (10 ** decimals))
+        amount_raw: int = int(Decimal(str(amount)) * Decimal(10 ** decimals))
 
         # Encode the transfer function call
         contract: Any = self._get_token_contract(token_address)
@@ -729,7 +733,7 @@ class EVMChainClient(BaseChainClient):
         self._ensure_initialized()
         w3 = self._get_w3()
         block: Any = await w3.eth.get_block(block_number)
-        return datetime.fromtimestamp(block['timestamp'])
+        return datetime.fromtimestamp(block['timestamp'], tz=UTC)
 
     # ==================== Helper Methods ====================
 

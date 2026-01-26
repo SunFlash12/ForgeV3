@@ -19,7 +19,7 @@ import asyncio
 import logging
 from collections.abc import Callable, Coroutine
 from datetime import UTC, datetime, timedelta
-from typing import Any, Union
+from typing import Any
 
 import httpx
 
@@ -75,10 +75,7 @@ class FunctionDefinition:
         name: str,
         description: str,
         arguments: list[dict[str, Any]],
-        executable: Union[
-            Callable[..., tuple[str, Any, dict[str, Any]]],
-            Callable[..., Coroutine[Any, Any, tuple[str, Any, dict[str, Any]]]],
-        ],
+        executable: Callable[..., tuple[str, Any, dict[str, Any]]] | Callable[..., Coroutine[Any, Any, tuple[str, Any, dict[str, Any]]]],
         returns_description: str = "",
     ) -> None:
         """
@@ -343,7 +340,7 @@ class GAMESDKClient:
                 self._rate_limit_remaining = int(response.headers["X-RateLimit-Remaining"])
             if "X-RateLimit-Reset" in response.headers:
                 reset_timestamp = int(response.headers["X-RateLimit-Reset"])
-                self._rate_limit_reset = datetime.fromtimestamp(reset_timestamp)
+                self._rate_limit_reset = datetime.fromtimestamp(reset_timestamp, tz=UTC)
 
             response.raise_for_status()
             data: dict[str, Any] = response.json()
