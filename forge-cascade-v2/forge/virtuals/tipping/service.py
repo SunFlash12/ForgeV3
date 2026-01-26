@@ -21,7 +21,7 @@ from uuid import uuid4
 from pydantic import BaseModel, Field
 
 from ..chains import MultiChainManager as ChainManager
-from ..config import ChainNetwork
+from ..config import ChainNetwork, VirtualsEnvironment, get_virtuals_config
 from ..models import TransactionRecord
 from ..tokenization.contracts import ContractAddresses
 
@@ -133,6 +133,14 @@ class FrowgTippingService:
         if self._initialized:
             return
 
+        config = get_virtuals_config()
+
+        # LOCAL simulation mode - skip chain manager setup
+        if config.environment == VirtualsEnvironment.LOCAL:
+            logger.info("[SIMULATED] FROWG tipping service initialized in LOCAL mode")
+            self._initialized = True
+            return
+
         if self._chain_manager is None:
             self._chain_manager = ChainManager()
             await self._chain_manager.initialize()
@@ -201,6 +209,19 @@ class FrowgTippingService:
             related_entity_id=related_entity_id,
             metadata=metadata or {},
         )
+
+        # LOCAL simulation mode - return simulated tip without blockchain
+        config = get_virtuals_config()
+        if config.environment == VirtualsEnvironment.LOCAL:
+            logger.info(
+                f"[SIMULATED] Tip: {amount} FROWG from {sender_address[:8]}... "
+                f"to {recipient_address[:8]}..."
+            )
+            tip.tx_hash = f"sim_tip_{tip.id[:16]}"
+            tip.status = TipStatus.CONFIRMED
+            tip.confirmed_at = datetime.now(UTC)
+            self._tip_history.append(tip)
+            return tip
 
         try:
             # Get Solana client

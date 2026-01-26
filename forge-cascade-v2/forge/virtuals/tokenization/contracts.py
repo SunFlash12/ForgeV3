@@ -54,15 +54,20 @@ class ContractAddresses:
         "multisend": "0x40A2aCCbd92BCA938b02010E17A5b8929b49130D",  # Gnosis Safe
     }
 
-    # Base Sepolia (Testnet)
+    # Base Sepolia (Testnet) — deployed 2026-01-26 via deploy-testnet-lifecycle.ts
     BASE_SEPOLIA = {
-        "virtual_token": None,  # TODO: Get testnet deployment
+        "virtual_token": "0x5bE85bc7df67A94F2f1591DA3D7343996Ebbd567",  # tVIRTUAL MockERC20
         "agent_factory": None,
         "agent_nft": None,
         "acp_registry": None,
         "vault": None,
         "bridge": None,
         "multisend": "0x40A2aCCbd92BCA938b02010E17A5b8929b49130D",
+        # Testnet lifecycle contracts
+        "capsule_registry": "0xDd24a3e584E756C00657928fF77f638915a3e454",
+        "simple_escrow": "0x33F3f8fB08e5C3863ec23abaeb0a88cE5FB9E5eC",
+        "got_token": "0xdE635a7e3db567eD0202fd01F8ED48c645893fb6",  # Genomic Ontology Token
+        "vct_token": "0x8255d1fE1f2A3cF1F97694286Ab6fF0B6F229C04",  # Variant Classifier Token
     }
 
     # Ethereum Mainnet

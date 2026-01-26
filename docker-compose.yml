@@ -38,6 +38,8 @@ services:
       - APP_ENV=${APP_ENV:-production}
       - PYTHONUNBUFFERED=1
     depends_on:
+      neo4j:
+        condition: service_healthy
       redis:
         condition: service_healthy
     networks:
@@ -197,6 +199,39 @@ services:
   # Infrastructure
   # ==========================================================================
 
+  neo4j:
+    image: neo4j:5.15-community
+    container_name: forge-neo4j
+    ports:
+      - "127.0.0.1:7687:7687"
+      - "127.0.0.1:7474:7474"
+    environment:
+      # SECURITY: NEO4J_USERNAME and NEO4J_PASSWORD must be set in environment
+      - NEO4J_AUTH=${NEO4J_USERNAME:?NEO4J_USERNAME required}/${NEO4J_PASSWORD:?NEO4J_PASSWORD required}
+      - NEO4J_PLUGINS=["apoc"]
+      - NEO4J_dbms_security_procedures_unrestricted=apoc.*
+    volumes:
+      - neo4j-data:/data
+    networks:
+      - forge-network
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:7474 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
   redis:
     # SECURITY FIX: Pin image version instead of using floating tag
     image: redis:7.4.1-alpine
@@ -308,4 +343,5 @@ networks:
     driver: bridge
 
 volumes:
+  neo4j-data:
   redis-data:

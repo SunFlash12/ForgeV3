@@ -24,8 +24,8 @@ BLOCKCHAIN INTEGRATION REQUIREMENTS:
 - Wallet signing: Uses SecretsManager for secure key retrieval
 - Operator key: VIRTUALS_OPERATOR_PRIVATE_KEY must be configured
 
-IMPORTANT: This service requires real blockchain connectivity.
-Simulation mode has been removed - all operations require proper configuration.
+IMPORTANT: This service requires real blockchain connectivity in production/testnet.
+In LOCAL environment, operations return simulated TransactionRecords for testing.
 """
 
 import asyncio
@@ -33,9 +33,10 @@ import logging
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
+from uuid import uuid4
 
 from ..chains import MultiChainManager, get_chain_manager
-from ..config import get_virtuals_config
+from ..config import VirtualsEnvironment, get_virtuals_config
 from ..models import (
     BondingCurveContribution,
     TokenHolderGovernanceVote,
@@ -720,6 +721,28 @@ class TokenizationService:
         ) external returns (address tokenAddress);
         ```
         """
+        # LOCAL simulation mode - return simulated record without blockchain
+        if self.config.environment == VirtualsEnvironment.LOCAL:
+            logger.info(
+                f"[SIMULATED] Token deployment for {entity.token_info.name} "
+                f"({entity.token_info.symbol}), stake={initial_stake}"
+            )
+            sim_address = f"0xsim_{entity.id[:8]}{'0' * 24}"
+            entity.token_info.token_address = sim_address
+            return TransactionRecord(
+                tx_hash=f"0xsim_deploy_{uuid4().hex[:16]}",
+                chain=self.config.primary_chain.value,
+                block_number=0,
+                timestamp=datetime.now(UTC),
+                from_address=owner_wallet,
+                to_address=sim_address,
+                value=initial_stake,
+                gas_used=0,
+                status="simulated",
+                transaction_type="token_deploy",
+                related_entity_id=entity.id,
+            )
+
         client = self._get_chain_manager().primary_client
         chain = self.config.primary_chain.value
 
@@ -852,6 +875,26 @@ class TokenizationService:
         function contribute(uint256 amount) external returns (uint256 tokensReceived);
         ```
         """
+        # LOCAL simulation mode
+        if self.config.environment == VirtualsEnvironment.LOCAL:
+            logger.info(
+                f"[SIMULATED] Bonding curve contribution: {amount_virtual} VIRTUAL "
+                f"to entity {entity.id}"
+            )
+            return TransactionRecord(
+                tx_hash=f"0xsim_contribute_{uuid4().hex[:16]}",
+                chain=self.config.primary_chain.value,
+                block_number=0,
+                timestamp=datetime.now(UTC),
+                from_address=contributor_wallet,
+                to_address=entity.token_info.token_address or "bonding_curve",
+                value=amount_virtual,
+                gas_used=0,
+                status="simulated",
+                transaction_type="bonding_contribution",
+                related_entity_id=entity.id,
+            )
+
         client = self._get_chain_manager().primary_client
         chain = self.config.primary_chain.value
         token_address = entity.token_info.token_address
@@ -1005,6 +1048,24 @@ class TokenizationService:
         function graduate() external returns (address poolAddress);
         ```
         """
+        # LOCAL simulation mode
+        if self.config.environment == VirtualsEnvironment.LOCAL:
+            logger.info(f"[SIMULATED] Token graduation for entity {entity.id}")
+            entity.liquidity_pool_address = f"0xsim_pool_{entity.id[:8]}{'0' * 24}"
+            return TransactionRecord(
+                tx_hash=f"0xsim_graduate_{uuid4().hex[:16]}",
+                chain=self.config.primary_chain.value,
+                block_number=0,
+                timestamp=datetime.now(UTC),
+                from_address="operator",
+                to_address=entity.token_info.token_address or "bonding_curve",
+                value=0.0,
+                gas_used=0,
+                status="simulated",
+                transaction_type="graduation",
+                related_entity_id=entity.id,
+            )
+
         client = self._get_chain_manager().primary_client
 
         if not hasattr(client, "web3"):
@@ -1117,6 +1178,30 @@ class TokenizationService:
         - Execute batch transfer via multi-send contract
         - Or set up Merkle root for claim-based distribution
         """
+        # LOCAL simulation mode
+        if self.config.environment == VirtualsEnvironment.LOCAL:
+            logger.info(
+                f"[SIMULATED] Revenue distribution for entity {entity.id}: "
+                f"{len(distributions)} recipients"
+            )
+            return [
+                TransactionRecord(
+                    tx_hash=f"0xsim_dist_{uuid4().hex[:16]}",
+                    chain=self.config.primary_chain.value,
+                    block_number=0,
+                    timestamp=datetime.now(UTC),
+                    from_address="treasury",
+                    to_address=recipient,
+                    value=amount,
+                    gas_used=0,
+                    status="simulated",
+                    transaction_type="distribution",
+                    related_entity_id=entity.id,
+                )
+                for recipient, amount in distributions.items()
+                if amount > 0
+            ]
+
         client = self._get_chain_manager().primary_client
 
         if hasattr(client, "web3"):
@@ -1291,6 +1376,25 @@ class TokenizationService:
         This implements deflationary tokenomics by using revenue
         to reduce circulating supply, increasing value for holders.
         """
+        # LOCAL simulation mode
+        if self.config.environment == VirtualsEnvironment.LOCAL:
+            logger.info(
+                f"[SIMULATED] Buyback-burn of {amount} VIRTUAL for entity {entity.id}"
+            )
+            return TransactionRecord(
+                tx_hash=f"0xsim_buyback_{uuid4().hex[:16]}",
+                chain=self.config.primary_chain.value,
+                block_number=0,
+                timestamp=datetime.now(UTC),
+                from_address="treasury",
+                to_address="0x000000000000000000000000000000000000dEaD",
+                value=amount,
+                gas_used=0,
+                status="simulated",
+                transaction_type="buyback_burn",
+                related_entity_id=entity.id,
+            )
+
         client = self._get_chain_manager().primary_client
 
         if not entity.token_info.token_address or not entity.liquidity_pool_address:

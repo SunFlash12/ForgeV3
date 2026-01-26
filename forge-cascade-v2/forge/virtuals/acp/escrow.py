@@ -245,14 +245,15 @@ class EscrowService:
         if self._initialized:
             return
 
-        if self._chain_manager is None:
-            self._chain_manager = ChainManager()
-            await self._chain_manager.initialize(ChainNetwork.BASE)  # type: ignore[call-arg]
-
         if not self._escrow_contract:
+            # Simulated mode — no blockchain connectivity needed
             logger.warning(
                 "No escrow contract address configured. Escrow operations will use simulated mode."
             )
+        elif self._chain_manager is None:
+            # Real mode — connect to blockchain
+            self._chain_manager = ChainManager()
+            await self._chain_manager.initialize(ChainNetwork.BASE)  # type: ignore[call-arg]
 
         self._initialized = True
         logger.info("Escrow service initialized")

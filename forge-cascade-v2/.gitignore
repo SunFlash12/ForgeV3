@@ -83,6 +83,7 @@ Thumbs.db
 .env
 .env.local
 .env.*.local
+.env.testnet
 secrets/
 *.pem
 *.key
@@ -95,6 +96,7 @@ scripts/.seed_credentials
 
 # API tokens and responses
 *_response.json
+*_results.json
 *.token
 .tokens/
 

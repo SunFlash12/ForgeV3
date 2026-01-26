@@ -15,6 +15,7 @@ coverage.json
 .env
 .env.local
 .env.*.local
+.env.testnet
 
 # IDE
 .idea/

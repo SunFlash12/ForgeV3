@@ -22,6 +22,7 @@ import hashlib
 import json
 import logging
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from typing import Any
 from uuid import uuid4
 
@@ -41,6 +42,7 @@ from ..models import (
     JobOffering,
     TransactionRecord,
 )
+from .escrow import EscrowService
 from .nonce_store import NonceStore, init_nonce_store
 
 logger = logging.getLogger(__name__)
@@ -85,6 +87,7 @@ class ACPService:
         job_repository: Any,  # Would be Forge's ACPJobRepository
         offering_repository: Any,  # Would be Forge's OfferingRepository
         nonce_store: NonceStore | None = None,
+        escrow_service: EscrowService | None = None,
     ):
         """
         Initialize the ACP service.
@@ -93,6 +96,7 @@ class ACPService:
             job_repository: Repository for storing and retrieving ACP jobs
             offering_repository: Repository for service offerings
             nonce_store: Optional nonce store for replay protection (initialized if not provided)
+            escrow_service: Optional escrow service for managing escrow operations
         """
         self.config = get_virtuals_config()
         self._job_repo = job_repository
@@ -101,6 +105,7 @@ class ACPService:
         # SECURITY FIX (Audit 4): Persistent nonce storage for replay attack prevention
         # Nonces are now stored in Redis (with in-memory fallback) to survive restarts
         self._nonce_store = nonce_store
+        self._escrow_service = escrow_service
 
     async def initialize(self) -> None:
         """Initialize the service and chain connections."""
@@ -849,22 +854,29 @@ class ACPService:
         payer_wallet: str,
         amount_virtual: float,
     ) -> TransactionRecord:
-        """Lock funds in escrow for a job."""
+        """Lock funds in escrow for a job via EscrowService."""
+        if self._escrow_service is None:
+            self._escrow_service = EscrowService()
+            await self._escrow_service.initialize()
 
-        # This would interact with the ACP escrow contract
-        # For now, return a mock transaction
-        from ..models import TransactionRecord
+        escrow_record = await self._escrow_service.create_escrow(
+            job_id=job_id,
+            buyer_address=payer_wallet,
+            provider_address="",  # Set during negotiation
+            amount=Decimal(str(amount_virtual)),
+            deadline_hours=self.config.acp_escrow_timeout_hours,
+        )
 
         return TransactionRecord(
-            tx_hash=f"0x{'0' * 64}",
+            tx_hash=escrow_record.funding_tx_hash or f"sim_escrow_{escrow_record.id[:16]}",
             chain=self.config.primary_chain.value,
             block_number=0,
-            timestamp=datetime.now(UTC),
+            timestamp=escrow_record.funded_at or datetime.now(UTC),
             from_address=payer_wallet,
             to_address="escrow_contract",
             value=amount_virtual,
             gas_used=0,
-            status="pending",
+            status=escrow_record.status.value,
             transaction_type="escrow_lock",
             related_entity_id=job_id,
         )
@@ -875,21 +887,46 @@ class ACPService:
         recipient_wallet: str,
         amount_virtual: float,
     ) -> TransactionRecord:
-        """Release escrowed funds to the provider."""
+        """Release escrowed funds to the provider via EscrowService."""
+        if self._escrow_service is None:
+            self._escrow_service = EscrowService()
+            await self._escrow_service.initialize()
 
-        # This would interact with the ACP escrow contract
-        from ..models import TransactionRecord
+        # Find the escrow record for this job
+        escrow_record = None
+        for esc in self._escrow_service._escrows.values():
+            if esc.job_id == job_id:
+                escrow_record = esc
+                break
+
+        if escrow_record is None:
+            logger.warning(f"No escrow found for job {job_id}, creating release record")
+            return TransactionRecord(
+                tx_hash=f"sim_release_{job_id[:16]}",
+                chain=self.config.primary_chain.value,
+                block_number=0,
+                timestamp=datetime.now(UTC),
+                from_address="escrow_contract",
+                to_address=recipient_wallet,
+                value=amount_virtual,
+                gas_used=0,
+                status="simulated",
+                transaction_type="escrow_release",
+                related_entity_id=job_id,
+            )
+
+        released = await self._escrow_service.release_escrow(escrow_record.id)
 
         return TransactionRecord(
-            tx_hash=f"0x{'1' * 64}",
+            tx_hash=released.release_tx_hash or f"sim_release_{released.id[:16]}",
             chain=self.config.primary_chain.value,
             block_number=0,
-            timestamp=datetime.now(UTC),
+            timestamp=released.resolved_at or datetime.now(UTC),
             from_address="escrow_contract",
             to_address=recipient_wallet,
             value=amount_virtual,
             gas_used=0,
-            status="pending",
+            status=released.status.value,
             transaction_type="escrow_release",
             related_entity_id=job_id,
         )
