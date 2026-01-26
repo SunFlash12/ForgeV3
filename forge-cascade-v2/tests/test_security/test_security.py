@@ -187,7 +187,10 @@ class TestMFA:
 
         assert result.secret
         assert result.provisioning_uri.startswith("otpauth://totp/")
-        assert "user%40example.com" in result.provisioning_uri or "user@example.com" in result.provisioning_uri
+        assert (
+            "user%40example.com" in result.provisioning_uri
+            or "user@example.com" in result.provisioning_uri
+        )
         assert len(result.backup_codes) == 10
 
     @pytest.mark.asyncio

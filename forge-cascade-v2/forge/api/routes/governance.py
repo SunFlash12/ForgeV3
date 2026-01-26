@@ -413,7 +413,9 @@ async def submit_proposal_for_voting(
     return ProposalResponse.from_proposal(updated)
 
 
-@router.delete("/proposals/{proposal_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
+@router.delete(
+    "/proposals/{proposal_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None
+)
 async def withdraw_proposal(
     proposal_id: str,
     user: ActiveUserDep,
