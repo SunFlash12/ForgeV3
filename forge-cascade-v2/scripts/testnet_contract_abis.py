@@ -69,8 +69,8 @@ CAPSULE_REGISTRY_ABI = [
                 "components": [
                     {"internalType": "bytes32", "name": "contentHash", "type": "bytes32"},
                     {"internalType": "bytes32", "name": "merkleRoot", "type": "bytes32"},
+                    {"internalType": "uint40", "name": "anchoredAt", "type": "uint40"},
                     {"internalType": "uint8", "name": "capsuleType", "type": "uint8"},
-                    {"internalType": "uint256", "name": "anchoredAt", "type": "uint256"},
                     {"internalType": "address", "name": "anchoredBy", "type": "address"},
                 ],
                 "internalType": "struct CapsuleRegistry.CapsuleRecord",
@@ -172,12 +172,12 @@ SIMPLE_ESCROW_ABI = [
             {
                 "components": [
                     {"internalType": "address", "name": "buyer", "type": "address"},
-                    {"internalType": "address", "name": "provider", "type": "address"},
-                    {"internalType": "uint256", "name": "amount", "type": "uint256"},
-                    {"internalType": "uint256", "name": "deadline", "type": "uint256"},
-                    {"internalType": "bytes32", "name": "jobHash", "type": "bytes32"},
                     {"internalType": "uint8", "name": "state", "type": "uint8"},
-                    {"internalType": "uint256", "name": "createdAt", "type": "uint256"},
+                    {"internalType": "uint40", "name": "createdAt", "type": "uint40"},
+                    {"internalType": "address", "name": "provider", "type": "address"},
+                    {"internalType": "uint40", "name": "deadline", "type": "uint40"},
+                    {"internalType": "uint256", "name": "amount", "type": "uint256"},
+                    {"internalType": "bytes32", "name": "jobHash", "type": "bytes32"},
                 ],
                 "internalType": "struct SimpleEscrow.Escrow",
                 "name": "",

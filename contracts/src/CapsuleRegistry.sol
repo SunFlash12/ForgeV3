@@ -8,7 +8,12 @@ import "@openzeppelin/contracts/access/Ownable.sol";
  * @notice On-chain capsule hash anchoring for Forge knowledge capsules.
  *         Stores (capsuleId, contentHash, merkleRoot, capsuleType) per capsule
  *         and emits events for off-chain indexing and verification.
- * @dev Deployed to Base Sepolia for testnet lifecycle validation.
+ *
+ * Gas optimizations:
+ *   - Struct packed to 3 slots (down from 5): uint40 timestamp + uint8 type + address = 1 slot
+ *   - unchecked arithmetic for counter increments (no overflow risk on uint256)
+ *   - Batch anchor updates capsuleCount once instead of per-iteration
+ *   - calldata arrays avoid memory copies
  */
 contract CapsuleRegistry is Ownable {
     // ═══════════════════════════════════════════════════════════════════════
@@ -16,11 +21,11 @@ contract CapsuleRegistry is Ownable {
     // ═══════════════════════════════════════════════════════════════════════
 
     struct CapsuleRecord {
-        bytes32 contentHash;
-        bytes32 merkleRoot;
-        uint8 capsuleType;
-        uint256 anchoredAt;
-        address anchoredBy;
+        bytes32 contentHash;   // slot 0: 32 bytes
+        bytes32 merkleRoot;    // slot 1: 32 bytes
+        uint40 anchoredAt;     // slot 2: 5 bytes  (unix ts — good until year 36812)
+        uint8 capsuleType;     // slot 2: 1 byte   (packed)
+        address anchoredBy;    // slot 2: 20 bytes  (packed) — total 26/32 bytes
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -90,15 +95,17 @@ contract CapsuleRegistry is Ownable {
             revert CapsuleAlreadyAnchored(capsuleId);
         }
 
+        uint40 ts = uint40(block.timestamp);
+
         capsules[capsuleId] = CapsuleRecord({
             contentHash: contentHash,
             merkleRoot: merkleRoot,
+            anchoredAt: ts,
             capsuleType: capsuleType,
-            anchoredAt: block.timestamp,
             anchoredBy: msg.sender
         });
 
-        capsuleCount++;
+        unchecked { capsuleCount++; }
 
         emit CapsuleAnchored(
             capsuleId,
@@ -106,7 +113,7 @@ contract CapsuleRegistry is Ownable {
             merkleRoot,
             capsuleType,
             msg.sender,
-            block.timestamp
+            ts
         );
     }
 
@@ -133,34 +140,39 @@ contract CapsuleRegistry is Ownable {
             revert ArrayLengthMismatch();
         }
 
-        for (uint256 i = 0; i < len; i++) {
+        uint40 ts = uint40(block.timestamp);
+
+        for (uint256 i; i < len; ) {
             bytes32 cid = capsuleIds[i];
-            if (contentHashes[i] == bytes32(0)) revert InvalidContentHash();
+            bytes32 ch = contentHashes[i];
+            if (ch == bytes32(0)) revert InvalidContentHash();
             if (capsules[cid].anchoredAt != 0) {
                 revert CapsuleAlreadyAnchored(cid);
             }
 
             capsules[cid] = CapsuleRecord({
-                contentHash: contentHashes[i],
+                contentHash: ch,
                 merkleRoot: merkleRoots[i],
+                anchoredAt: ts,
                 capsuleType: capsuleTypes[i],
-                anchoredAt: block.timestamp,
                 anchoredBy: msg.sender
             });
 
-            capsuleCount++;
-
             emit CapsuleAnchored(
                 cid,
-                contentHashes[i],
+                ch,
                 merkleRoots[i],
                 capsuleTypes[i],
                 msg.sender,
-                block.timestamp
+                ts
             );
+
+            unchecked { ++i; }
         }
 
-        emit BatchAnchored(len, msg.sender, block.timestamp);
+        unchecked { capsuleCount += len; }
+
+        emit BatchAnchored(len, msg.sender, ts);
     }
 
     // ═══════════════════════════════════════════════════════════════════════

@@ -36,7 +36,7 @@ class ContractAddresses:
 
     # Base Mainnet (verified from whitepaper.virtuals.io)
     BASE_MAINNET = {
-        # Core tokens
+        # Core tokens — the REAL VIRTUAL token on Base L2
         "virtual_token": "0x0b3e328455c4059EEb9e3f84b5543F74E24e7E1b",
         "ve_virtual": "0x14559863b6E695A8aa4B7e68541d240ac1BBeB2f",  # Voting token
         # Factory contracts - PENDING: Contact Virtuals Protocol
@@ -52,22 +52,25 @@ class ContractAddresses:
         # Third-party
         "bridge": "0x3154Cf16ccdb4C6d922629664174b904d80F2C35",
         "multisend": "0x40A2aCCbd92BCA938b02010E17A5b8929b49130D",  # Gnosis Safe
+        # Forge lifecycle contracts — deploy via: npx hardhat run scripts/deploy-testnet-lifecycle.ts --network base
+        "capsule_registry": None,  # Deploy CapsuleRegistry to Base mainnet
+        "simple_escrow": None,  # Deploy SimpleEscrow to Base mainnet
     }
 
-    # Base Sepolia (Testnet) — deployed 2026-01-26 via deploy-testnet-lifecycle.ts
+    # Base Sepolia (Testnet) — gas-optimized v2, deployed 2026-01-26
     BASE_SEPOLIA = {
-        "virtual_token": "0x5bE85bc7df67A94F2f1591DA3D7343996Ebbd567",  # tVIRTUAL MockERC20
+        "virtual_token": "0x832F65733f8DB2B4f6FA3370acD5Fa7EA585A0A4",  # tVIRTUAL MockERC20
         "agent_factory": None,
         "agent_nft": None,
         "acp_registry": None,
         "vault": None,
         "bridge": None,
         "multisend": "0x40A2aCCbd92BCA938b02010E17A5b8929b49130D",
-        # Testnet lifecycle contracts
-        "capsule_registry": "0xDd24a3e584E756C00657928fF77f638915a3e454",
-        "simple_escrow": "0x33F3f8fB08e5C3863ec23abaeb0a88cE5FB9E5eC",
-        "got_token": "0xdE635a7e3db567eD0202fd01F8ED48c645893fb6",  # Genomic Ontology Token
-        "vct_token": "0x8255d1fE1f2A3cF1F97694286Ab6fF0B6F229C04",  # Variant Classifier Token
+        # Testnet lifecycle contracts (gas-optimized: packed structs, unchecked math)
+        "capsule_registry": "0x6C42f2DaA3Cf1E63E8C1d6eaB74A4Af32948bC34",
+        "simple_escrow": "0x0E661dCfd4d0c7C167198aA01B56Ec48f620bB8d",
+        "got_token": "0x7787f952A167AF7CE55b0dc948184A7AB2e7166b",  # Genomic Ontology Token
+        "vct_token": "0x24D7E56A397F8c30CF962E6d7375B1C9b9869DD6",  # Variant Classifier Token
     }
 
     # Ethereum Mainnet

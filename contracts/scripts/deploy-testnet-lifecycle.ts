@@ -74,8 +74,10 @@ async function main() {
   // 2. Deploy SimpleEscrow
   // ═══════════════════════════════════════════════════════════════════════
   console.log("\n[2/5] Deploying SimpleEscrow...");
+  const maxEscrowAmount = ethers.parseEther("0.01"); // Configurable — owner can change post-deploy
+  console.log(`  Max escrow amount: ${ethers.formatEther(maxEscrowAmount)} ETH`);
   const SimpleEscrow = await ethers.getContractFactory("SimpleEscrow");
-  const escrow = await SimpleEscrow.deploy();
+  const escrow = await SimpleEscrow.deploy(maxEscrowAmount);
   await escrow.waitForDeployment();
   const escrowAddress = await escrow.getAddress();
   const escrowTx = escrow.deploymentTransaction()?.hash;
@@ -179,7 +181,7 @@ async function main() {
 
     const verifyConfigs = [
       { name: "CapsuleRegistry", address: registryAddress, args: [] },
-      { name: "SimpleEscrow", address: escrowAddress, args: [] },
+      { name: "SimpleEscrow", address: escrowAddress, args: [maxEscrowAmount] },
       ...TOKEN_CONFIGS.map((cfg) => ({
         name: cfg.symbol,
         address: tokenAddresses[cfg.symbol],

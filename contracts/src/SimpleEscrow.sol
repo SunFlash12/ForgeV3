@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 
 /**
  * @title SimpleEscrow
@@ -9,9 +10,18 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
  *         Buyer locks ETH when creating an escrow. The buyer can release funds
  *         to the provider upon job completion, or the provider/buyer can trigger
  *         a refund if the job is rejected or the deadline passes.
- * @dev Deployed to Base Sepolia for testnet lifecycle validation.
+ *
+ * Gas optimizations:
+ *   - Struct packed to 4 slots (down from 7):
+ *       slot 0: buyer(20) + state(1) + createdAt(5) = 26 bytes
+ *       slot 1: provider(20) + deadline(5) = 25 bytes
+ *       slot 2: amount(32)
+ *       slot 3: jobHash(32)
+ *   - unchecked arithmetic for counter (no overflow on uint256)
+ *   - Local variable caching for storage reads
+ *   - maxEscrowAmount configurable by owner (not hardcoded constant)
  */
-contract SimpleEscrow is ReentrancyGuard {
+contract SimpleEscrow is ReentrancyGuard, Ownable {
     // ═══════════════════════════════════════════════════════════════════════
     // Types
     // ═══════════════════════════════════════════════════════════════════════
@@ -23,13 +33,13 @@ contract SimpleEscrow is ReentrancyGuard {
     }
 
     struct Escrow {
-        address buyer;
-        address provider;
-        uint256 amount;
-        uint256 deadline;
-        bytes32 jobHash;
-        EscrowState state;
-        uint256 createdAt;
+        address buyer;         // slot 0: 20 bytes
+        EscrowState state;     // slot 0: 1 byte   (packed)
+        uint40 createdAt;      // slot 0: 5 bytes   (packed) — good until year 36812
+        address provider;      // slot 1: 20 bytes
+        uint40 deadline;       // slot 1: 5 bytes   (packed)
+        uint256 amount;        // slot 2: 32 bytes
+        bytes32 jobHash;       // slot 3: 32 bytes
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -42,8 +52,8 @@ contract SimpleEscrow is ReentrancyGuard {
     /// @notice Auto-incrementing escrow counter
     uint256 public escrowCount;
 
-    /// @notice Maximum ETH per escrow (safety guard for testnet)
-    uint256 public constant MAX_ESCROW_AMOUNT = 0.01 ether;
+    /// @notice Maximum ETH per escrow (configurable by owner)
+    uint256 public maxEscrowAmount;
 
     // ═══════════════════════════════════════════════════════════════════════
     // Events
@@ -70,6 +80,11 @@ contract SimpleEscrow is ReentrancyGuard {
         uint256 amount
     );
 
+    event MaxEscrowAmountUpdated(
+        uint256 oldAmount,
+        uint256 newAmount
+    );
+
     // ═══════════════════════════════════════════════════════════════════════
     // Errors
     // ═══════════════════════════════════════════════════════════════════════
@@ -83,6 +98,34 @@ contract SimpleEscrow is ReentrancyGuard {
     error NotBuyerOrProvider();
     error DeadlineNotPassed();
     error TransferFailed();
+    error InvalidMaxAmount();
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Constructor
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /**
+     * @param _maxEscrowAmount Initial maximum ETH per escrow (e.g. 0.01 ether for testnet)
+     */
+    constructor(uint256 _maxEscrowAmount) Ownable(msg.sender) {
+        if (_maxEscrowAmount == 0) revert InvalidMaxAmount();
+        maxEscrowAmount = _maxEscrowAmount;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Owner Functions
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /**
+     * @notice Update the maximum ETH allowed per escrow.
+     * @param _newMax New maximum amount in wei
+     */
+    function setMaxEscrowAmount(uint256 _newMax) external onlyOwner {
+        if (_newMax == 0) revert InvalidMaxAmount();
+        uint256 oldMax = maxEscrowAmount;
+        maxEscrowAmount = _newMax;
+        emit MaxEscrowAmountUpdated(oldMax, _newMax);
+    }
 
     // ═══════════════════════════════════════════════════════════════════════
     // External Functions
@@ -104,18 +147,20 @@ contract SimpleEscrow is ReentrancyGuard {
         if (provider == msg.sender) revert InvalidAddress();
         if (deadline <= block.timestamp) revert InvalidDeadline();
         if (msg.value == 0) revert NoETHSent();
-        if (msg.value > MAX_ESCROW_AMOUNT) revert AmountTooLarge();
+        if (msg.value > maxEscrowAmount) revert AmountTooLarge();
 
-        escrowId = escrowCount++;
+        uint256 count;
+        unchecked { count = escrowCount++; }
+        escrowId = count;
 
         escrows[escrowId] = Escrow({
             buyer: msg.sender,
-            provider: provider,
-            amount: msg.value,
-            deadline: deadline,
-            jobHash: jobHash,
             state: EscrowState.Active,
-            createdAt: block.timestamp
+            createdAt: uint40(block.timestamp),
+            provider: provider,
+            deadline: uint40(deadline),
+            amount: msg.value,
+            jobHash: jobHash
         });
 
         emit EscrowCreated(
@@ -139,10 +184,13 @@ contract SimpleEscrow is ReentrancyGuard {
 
         e.state = EscrowState.Released;
 
-        (bool success, ) = payable(e.provider).call{value: e.amount}("");
+        uint256 amt = e.amount;
+        address provider = e.provider;
+
+        (bool success, ) = payable(provider).call{value: amt}("");
         if (!success) revert TransferFailed();
 
-        emit EscrowReleased(escrowId, e.provider, e.amount);
+        emit EscrowReleased(escrowId, provider, amt);
     }
 
     /**
@@ -155,21 +203,24 @@ contract SimpleEscrow is ReentrancyGuard {
         Escrow storage e = escrows[escrowId];
         if (e.state != EscrowState.Active) revert EscrowNotActive();
 
+        address buyer = e.buyer;
         if (msg.sender == e.provider) {
             // Provider can refund anytime (job rejection)
-        } else if (msg.sender == e.buyer) {
+        } else if (msg.sender == buyer) {
             // Buyer can only refund after deadline
-            if (block.timestamp <= e.deadline) revert DeadlineNotPassed();
+            if (block.timestamp <= uint256(e.deadline)) revert DeadlineNotPassed();
         } else {
             revert NotBuyerOrProvider();
         }
 
         e.state = EscrowState.Refunded;
 
-        (bool success, ) = payable(e.buyer).call{value: e.amount}("");
+        uint256 amt = e.amount;
+
+        (bool success, ) = payable(buyer).call{value: amt}("");
         if (!success) revert TransferFailed();
 
-        emit EscrowRefunded(escrowId, e.buyer, e.amount);
+        emit EscrowRefunded(escrowId, buyer, amt);
     }
 
     // ═══════════════════════════════════════════════════════════════════════
