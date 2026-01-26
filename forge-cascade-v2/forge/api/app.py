@@ -60,9 +60,9 @@ _settings = get_settings()
 
 
 def _sentry_before_send(
-    event: "SentryEvent",
+    event: SentryEvent,
     hint: dict[str, Any],
-) -> "SentryEvent | None":
+) -> SentryEvent | None:
     """Filter out health check endpoint errors from Sentry."""
     request_data = event.get("request")
     url = ""
@@ -416,9 +416,13 @@ class ForgeApp:
             diagnostic_coordinator=self.diagnostic_coordinator,
         )
 
-    async def shutdown(self) -> None:
-        """Gracefully shutdown all components."""
-        logger.info("forge_shutting_down")
+    async def shutdown(self, timeout_seconds: float = 30.0) -> None:
+        """Gracefully shutdown all components with timeout.
+
+        SECURITY FIX (Audit 7 - Session 5): Added per-component timeout
+        to prevent shutdown hanging indefinitely.
+        """
+        logger.info("forge_shutting_down", timeout_seconds=timeout_seconds)
 
         self.is_ready = False
 
@@ -527,14 +531,26 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     Application lifespan handler.
 
     Initializes and shuts down all components.
+    SECURITY FIX (Audit 7 - Session 5): Enforces shutdown timeout to prevent hanging.
     """
     # Startup
     try:
         await forge_app.initialize()
         yield
     finally:
-        # Shutdown
-        await forge_app.shutdown()
+        # Shutdown with timeout to prevent hanging
+        shutdown_timeout = 30.0
+        try:
+            await asyncio.wait_for(
+                forge_app.shutdown(timeout_seconds=shutdown_timeout),
+                timeout=shutdown_timeout + 5.0,  # Extra grace period
+            )
+        except TimeoutError:
+            logger.error(
+                "forge_shutdown_timeout",
+                timeout_seconds=shutdown_timeout,
+                detail="Forced shutdown after timeout. Some resources may not be cleaned up."
+            )
 
 
 def create_app(
@@ -560,6 +576,11 @@ def create_app(
         Configured FastAPI application
     """
     settings = get_settings()
+
+    # SECURITY FIX (Audit 7 - Session 5): Disable API docs in production
+    if settings.app_env == "production":
+        docs_url = None
+        redoc_url = None
 
     app = FastAPI(
         title=title,
@@ -881,15 +902,32 @@ def create_app(
             "status": "healthy" if forge_app.is_ready else "starting",
         }
 
-    # Readiness check (full check)
+    # Readiness check (full check including DB connectivity)
+    # SECURITY FIX (Audit 7 - Session 5): Verify actual DB connectivity, not just flag
     @app.get("/ready", include_in_schema=False)
-    async def ready() -> dict[str, str] | JSONResponse:
+    async def ready() -> Response:
         if not forge_app.is_ready:
             return JSONResponse(
                 status_code=503,
                 content={"status": "not_ready"},
             )
-        return {"status": "ready"}
+        # Verify database is actually reachable
+        if forge_app.db_client:
+            try:
+                db_ok = await forge_app.db_client.verify_connection()
+                if not db_ok:
+                    return JSONResponse(
+                        status_code=503,
+                        content={"status": "degraded", "reason": "database_unreachable"},
+                        headers={"Retry-After": "5"},
+                    )
+            except (ServiceUnavailable, SessionExpired, TransientError, OSError, RuntimeError):
+                return JSONResponse(
+                    status_code=503,
+                    content={"status": "degraded", "reason": "database_check_failed"},
+                    headers={"Retry-After": "5"},
+                )
+        return JSONResponse(content={"status": "ready"})
 
     # Prometheus metrics endpoint
     # Returns metrics in Prometheus text format for scraping

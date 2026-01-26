@@ -230,19 +230,24 @@ class Settings(BaseSettings):
         if v == v[0] * len(v):
             raise ValueError("JWT secret key cannot be a repeated character")
 
-        # Security warning for production
+        # SECURITY FIX (Audit 7 - Session 5): Fail-fast in production with env-based secrets
         environment = os.environ.get("APP_ENV", os.environ.get("ENVIRONMENT", "development"))
         secrets_backend = os.environ.get("SECRETS_BACKEND", "environment")
 
         if environment == "production" and secrets_backend == "environment":
-            logger.critical(
-                "SECURITY CRITICAL: JWT secret loaded from environment variable in production! "
+            raise ValueError(
+                "SECURITY: JWT secret loaded from environment variable in production. "
                 "Configure SECRETS_BACKEND=vault or SECRETS_BACKEND=aws_secrets_manager "
-                "for secure secrets management."
+                "for secure secrets management. Set SECRETS_BACKEND env var to proceed."
+            )
+
+        if environment == "staging" and secrets_backend == "environment":
+            logger.warning(
+                "JWT secret loaded from environment variable in staging. "
+                "Consider using a secrets manager (set SECRETS_BACKEND)."
             )
             warnings.warn(
-                "JWT secret loaded from environment variable in production. "
-                "This is insecure! Use a secrets manager (set SECRETS_BACKEND).",
+                "JWT secret loaded from environment variable in staging.",
                 SecurityWarning,
                 stacklevel=2,
             )
@@ -314,6 +319,79 @@ class Settings(BaseSettings):
                 "embedding_api_key_format_warning: OpenAI API keys typically start with 'sk-'"
             )
 
+        return v
+
+    @field_validator("base_private_key")
+    @classmethod
+    def validate_base_private_key(cls, v: str | None, info: ValidationInfo) -> str | None:
+        """SECURITY FIX (Audit 7 - Session 5): Validate blockchain private key safety."""
+        if v is None:
+            return v
+
+        # Reject obviously insecure/default private keys
+        insecure_patterns = {
+            "0" * 64,  # All zeros
+            "1" * 64,  # All ones
+            "deadbeef" * 8,  # Common test pattern
+            "0x" + "0" * 64,
+            "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",  # Hardhat account #0
+        }
+        normalized = v.lower().replace("0x", "")
+        if normalized in insecure_patterns or v.lower() in insecure_patterns:
+            environment = os.environ.get("APP_ENV", "development")
+            if environment in ("production", "staging"):
+                raise ValueError(
+                    "SECURITY: base_private_key appears to be a default/test key. "
+                    "Use a securely generated private key in production."
+                )
+            logger.warning("base_private_key_insecure: Using known test private key")
+
+        return v
+
+    @field_validator("solana_private_key")
+    @classmethod
+    def validate_solana_private_key(cls, v: str | None, info: ValidationInfo) -> str | None:
+        """SECURITY FIX (Audit 7 - Session 5): Validate Solana private key safety."""
+        if v is None:
+            return v
+
+        # Reject very short keys (base58 encoded Solana keys are typically 88 chars)
+        if len(v) < 32:
+            environment = os.environ.get("APP_ENV", "development")
+            if environment in ("production", "staging"):
+                raise ValueError(
+                    "SECURITY: solana_private_key is too short to be valid. "
+                    "Solana private keys are typically 88 characters (base58)."
+                )
+            logger.warning("solana_private_key_short: length=%d", len(v))
+
+        return v
+
+    @field_validator("google_redirect_uri_cascade", "google_redirect_uri_shop")
+    @classmethod
+    def validate_redirect_uris(cls, v: str, info: ValidationInfo) -> str:
+        """SECURITY FIX (Audit 7 - Session 5): Enforce HTTPS for OAuth redirect URIs in production."""
+        environment = os.environ.get("APP_ENV", "development")
+        if environment == "production" and not v.startswith("https://"):
+            raise ValueError(
+                f"SECURITY: OAuth redirect URI must use HTTPS in production: {v}"
+            )
+        return v
+
+    @field_validator("cors_origins")
+    @classmethod
+    def validate_cors_origins_format(cls, v: str) -> str:
+        """SECURITY FIX (Audit 7 - Session 5): Validate CORS origins format."""
+        environment = os.environ.get("APP_ENV", "development")
+        if environment == "production":
+            origins = [o.strip() for o in v.split(",") if o.strip()]
+            for origin in origins:
+                if origin == "*":
+                    raise ValueError("SECURITY: Wildcard CORS origin not allowed in production")
+                if not origin.startswith("https://"):
+                    raise ValueError(
+                        f"SECURITY: CORS origin must use HTTPS in production: {origin}"
+                    )
         return v
 
     # ═══════════════════════════════════════════════════════════════

@@ -113,6 +113,17 @@ def init_all_services(
                         hint="Set OPENAI_API_KEY or install sentence-transformers",
                     )
 
+    # SECURITY FIX (Audit 7 - Session 5): Fail-fast in production with mock embedding
+    if (
+        selected_embedding_provider == EmbeddingProvider.MOCK
+        and settings.app_env == "production"
+    ):
+        raise RuntimeError(
+            "STARTUP FAILURE: Embedding provider resolved to 'mock' in production. "
+            "Configure EMBEDDING_API_KEY or install sentence-transformers. "
+            "Mock embeddings produce zero-vectors and will break semantic search."
+        )
+
     embedding_config = EmbeddingConfig(
         provider=selected_embedding_provider,
         model=selected_embedding_model,
@@ -185,6 +196,14 @@ def init_all_services(
                     reason="No LLM API key configured",
                     hint="Set OPENAI_API_KEY, ANTHROPIC_API_KEY, or LLM_API_KEY",
                 )
+
+    # SECURITY FIX (Audit 7 - Session 5): Fail-fast in production with mock LLM
+    if selected_provider == LLMProvider.MOCK and settings.app_env == "production":
+        raise RuntimeError(
+            "STARTUP FAILURE: LLM provider resolved to 'mock' in production. "
+            "Configure LLM_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY. "
+            "Mock LLM returns empty responses and will break Ghost Council governance."
+        )
 
     llm_config = LLMConfig(
         provider=selected_provider,

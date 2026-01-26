@@ -100,6 +100,22 @@ class Neo4jClient:
             self._connected = False
             logger.info("Neo4j connection closed")
 
+    async def reconnect(self) -> None:
+        """SECURITY FIX (Audit 7 - Session 5): Reconnect to Neo4j with backoff.
+
+        Closes existing connection and re-establishes. Used by health monitoring
+        when the connection pool becomes unhealthy.
+        """
+        logger.warning("neo4j_reconnecting")
+        try:
+            await self.close()
+        except (ServiceUnavailable, OSError, RuntimeError) as e:
+            logger.warning("neo4j_close_during_reconnect_failed", error=str(e))
+        # Reset driver so connect() creates a new one
+        self._driver = None
+        self._connected = False
+        await self.connect()
+
     @property
     def is_connected(self) -> bool:
         """Check if client is connected."""
