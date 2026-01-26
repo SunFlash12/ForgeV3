@@ -232,11 +232,15 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
     setState('disconnected');
   }, [clearTimers]);
 
-  // Auto-connect on mount
+  // Auto-connect on mount (deferred to avoid synchronous setState in effect body)
   useEffect(() => {
-    if (autoConnect) {
-      connectWs();
-    }
+    if (!autoConnect) return;
+    const timer = setTimeout(connectWs, 0);
+    return () => clearTimeout(timer);
+  }, [autoConnect, connectWs]);
+
+  // Clean up on unmount
+  useEffect(() => {
     return () => {
       intentionalCloseRef.current = true;
       clearTimers();
@@ -246,7 +250,7 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
         wsRef.current = null;
       }
     };
-  }, [autoConnect, connectWs, clearTimers]);
+  }, [clearTimers]);
 
   return { state, send, connect: connectWs, disconnect, error };
 }
@@ -436,6 +440,15 @@ export function useChatRoom(options: UseChatRoomOptions) {
   const [participants, setParticipants] = useState<ChatParticipant[]>([]);
   const [roomInfo, setRoomInfo] = useState<RoomInfo | null>(null);
 
+  // Reset state when room changes (render-phase adjustment per React docs)
+  const [prevRoomId, setPrevRoomId] = useState(roomId);
+  if (roomId !== prevRoomId) {
+    setPrevRoomId(roomId);
+    setMessages([]);
+    setParticipants([]);
+    setRoomInfo(null);
+  }
+
   // Build URL with query params
   const params = new URLSearchParams();
   if (displayName) params.set('display_name', displayName);
@@ -519,13 +532,6 @@ export function useChatRoom(options: UseChatRoomOptions) {
     (messageId: string) => ws.send({ type: 'delete_message', message_id: messageId }),
     [ws],
   );
-
-  // Reset state when room changes
-  useEffect(() => {
-    setMessages([]);
-    setParticipants([]);
-    setRoomInfo(null);
-  }, [roomId]);
 
   return {
     ...ws,
