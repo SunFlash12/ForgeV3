@@ -189,7 +189,9 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
         RETURN p {{.*}} AS entity
         """
 
-        result = await self.client.execute_single(query, params, timeout=self.timeout_config.write_timeout)
+        result = await self.client.execute_single(
+            query, params, timeout=self.timeout_config.write_timeout
+        )
 
         if result and result.get("entity"):
             return self._to_model(result["entity"])
@@ -418,7 +420,9 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
         MATCH (p:Proposal {id: $id})
         RETURN p.status AS status, p.execution_allowed_after AS timelock
         """
-        check_result = await self.client.execute_single(check_query, {"id": proposal_id}, timeout=self.timeout_config.read_timeout)
+        check_result = await self.client.execute_single(
+            check_query, {"id": proposal_id}, timeout=self.timeout_config.read_timeout
+        )
 
         if check_result:
             status = check_result.get("status")
@@ -517,7 +521,9 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
         MATCH (u:User {id: $voter_id})
         RETURN u.trust_flame AS trust_flame
         """
-        verify_result = await self.client.execute_single(verify_query, {"voter_id": voter_id}, timeout=self.timeout_config.read_timeout)
+        verify_result = await self.client.execute_single(
+            verify_query, {"voter_id": voter_id}, timeout=self.timeout_config.read_timeout
+        )
 
         if not verify_result:
             self.logger.warning(
@@ -893,7 +899,9 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
         ORDER BY p.voting_ends_at ASC
         """
 
-        results = await self.client.execute(query, {"now": now}, timeout=self.timeout_config.read_timeout)
+        results = await self.client.execute(
+            query, {"now": now}, timeout=self.timeout_config.read_timeout
+        )
         return self._to_models([r["entity"] for r in results if r.get("entity")])
 
     async def get_by_proposer(
@@ -1004,7 +1012,9 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
         WHERE {where_clause}
         RETURN count(p) AS total
         """
-        count_result = await self.client.execute_single(count_query, params, timeout=self.timeout_config.read_timeout)
+        count_result = await self.client.execute_single(
+            count_query, params, timeout=self.timeout_config.read_timeout
+        )
         total = count_result.get("total", 0) if count_result else 0
 
         # Get paginated results

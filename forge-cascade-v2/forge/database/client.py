@@ -191,9 +191,7 @@ class Neo4jClient:
             List of result records as dictionaries
         """
         async with self.session() as session:
-            result = await session.run(
-                query, parameters or {}, timeout=timeout
-            )
+            result = await session.run(query, parameters or {}, timeout=timeout)
             records = [dict(record) async for record in result]
             return records
 
@@ -222,9 +220,7 @@ class Neo4jClient:
             Single result record or None
         """
         async with self.session() as session:
-            result = await session.run(
-                query, parameters or {}, timeout=timeout
-            )
+            result = await session.run(query, parameters or {}, timeout=timeout)
             record = await result.single()
             return dict(record) if record else None
 
@@ -253,9 +249,7 @@ class Neo4jClient:
             Query result summary
         """
         async with self.session() as session:
-            result = await session.run(
-                query, parameters or {}, timeout=timeout
-            )
+            result = await session.run(query, parameters or {}, timeout=timeout)
             summary = await result.consume()
             return {
                 "nodes_created": summary.counters.nodes_created,

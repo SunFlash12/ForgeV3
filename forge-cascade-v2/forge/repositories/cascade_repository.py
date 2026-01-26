@@ -14,7 +14,7 @@ import structlog
 
 from forge.database.client import Neo4jClient
 from forge.models.events import CascadeChain, CascadeEvent
-from forge.repositories.base import QueryTimeoutConfig, DEFAULT_QUERY_TIMEOUT
+from forge.repositories.base import DEFAULT_QUERY_TIMEOUT, QueryTimeoutConfig
 
 logger = structlog.get_logger(__name__)
 
@@ -175,9 +175,7 @@ class CascadeRepository:
             "errors_encountered": chain.errors_encountered,
         }
 
-        await self.client.execute_single(
-            query, params, timeout=self.timeout_config.write_timeout
-        )
+        await self.client.execute_single(query, params, timeout=self.timeout_config.write_timeout)
 
         # Create events if any
         for i, event in enumerate(chain.events):
@@ -212,7 +210,8 @@ class CascadeRepository:
             RETURN count(e) AS count
             """
             result = await self.client.execute_single(
-                count_query, {"cascade_id": cascade_id},
+                count_query,
+                {"cascade_id": cascade_id},
                 timeout=self.timeout_config.read_timeout,
             )
             order = result["count"] if result else 0
@@ -342,7 +341,8 @@ class CascadeRepository:
         """
 
         result = await self.client.execute_single(
-            query, {"cascade_id": cascade_id},
+            query,
+            {"cascade_id": cascade_id},
             timeout=self.timeout_config.read_timeout,
         )
 
@@ -369,9 +369,7 @@ class CascadeRepository:
         ORDER BY c.initiated_at DESC
         """
 
-        results = await self.client.execute(
-            query, {}, timeout=self.timeout_config.read_timeout
-        )
+        results = await self.client.execute(query, {}, timeout=self.timeout_config.read_timeout)
 
         chains: list[CascadeChain] = []
         for result in results:
@@ -412,7 +410,8 @@ class CascadeRepository:
         """
 
         results = await self.client.execute(
-            query, {"limit": limit, "skip": skip},
+            query,
+            {"limit": limit, "skip": skip},
             timeout=self.timeout_config.read_timeout,
         )
 
@@ -444,7 +443,8 @@ class CascadeRepository:
         """
 
         result = await self.client.execute_single(
-            query, {"cascade_id": cascade_id},
+            query,
+            {"cascade_id": cascade_id},
             timeout=self.timeout_config.write_timeout,
         )
 
@@ -482,7 +482,8 @@ class CascadeRepository:
         """
 
         result = await self.client.execute_single(
-            query, {"days_old": days_old},
+            query,
+            {"days_old": days_old},
             timeout=self.timeout_config.write_timeout,
         )
 

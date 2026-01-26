@@ -73,7 +73,6 @@ def validate_relationship_pattern(rel_types: list[str]) -> str:
 
 
 from forge.database.client import Neo4jClient
-from forge.repositories.base import QueryTimeoutConfig, DEFAULT_QUERY_TIMEOUT
 from forge.models.graph_analysis import (
     AlgorithmType,
     CentralityRequest,
@@ -98,6 +97,7 @@ from forge.models.graph_analysis import (
     TrustTransitivityRequest,
     TrustTransitivityResult,
 )
+from forge.repositories.base import DEFAULT_QUERY_TIMEOUT, QueryTimeoutConfig
 
 logger = structlog.get_logger(__name__)
 
@@ -1450,9 +1450,7 @@ class GraphRepository:
     ):
         self.client = client
         self.timeout_config = timeout_config or DEFAULT_QUERY_TIMEOUT
-        self.provider = GraphAlgorithmProvider(
-            client, timeout_config=self.timeout_config
-        )
+        self.provider = GraphAlgorithmProvider(client, timeout_config=self.timeout_config)
         self.logger = structlog.get_logger(self.__class__.__name__)
 
     async def compute_pagerank(

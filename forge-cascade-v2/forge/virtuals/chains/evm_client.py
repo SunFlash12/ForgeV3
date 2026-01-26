@@ -511,7 +511,6 @@ class EVMChainClient(BaseChainClient):
         the token's smallest unit based on its decimals.
         """
         self._ensure_initialized()
-        w3 = self._get_w3()
 
         # --- Input validation ---
         token_address = self._validate_address(token_address)
@@ -563,7 +562,6 @@ class EVMChainClient(BaseChainClient):
             ValueError: If unlimited approval requested without allow_unlimited=True
         """
         self._ensure_initialized()
-        w3 = self._get_w3()
 
         # --- Input validation ---
         token_address = self._validate_address(token_address)
@@ -777,15 +775,11 @@ class EVMChainClient(BaseChainClient):
         if not isinstance(value, bytes):
             raise ValueError(f"Expected str or bytes, got {type(value).__name__}")
         if len(value) != 32:
-            raise ValueError(
-                f"bytes32 value must be exactly 32 bytes, got {len(value)}"
-            )
+            raise ValueError(f"bytes32 value must be exactly 32 bytes, got {len(value)}")
         return value
 
     @staticmethod
-    def _validate_amount(
-        amount: int | float, max_amount: float | None = None
-    ) -> None:
+    def _validate_amount(amount: int | float, max_amount: float | None = None) -> None:
         """
         Validate that a transaction amount is positive and within bounds.
 
@@ -796,14 +790,12 @@ class EVMChainClient(BaseChainClient):
         Raises:
             ValueError: If amount is not positive or exceeds max_amount
         """
-        if not isinstance(amount, (int, float)):
+        if not isinstance(amount, int | float):
             raise ValueError(f"Amount must be numeric, got {type(amount).__name__}")
         if amount <= 0:
             raise ValueError(f"Amount must be greater than zero, got {amount}")
         if max_amount is not None and amount > max_amount:
-            raise ValueError(
-                f"Amount {amount} exceeds maximum allowed {max_amount}"
-            )
+            raise ValueError(f"Amount {amount} exceeds maximum allowed {max_amount}")
 
     # ==================== Helper Methods ====================
 

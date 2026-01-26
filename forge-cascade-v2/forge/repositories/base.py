@@ -248,9 +248,7 @@ class BaseRepository(ABC, Generic[T, CreateT, UpdateT]):
         """
         # Safe: self.node_label validated at __init__ time
         query = f"MATCH (n:{self.node_label}) RETURN count(n) AS count"
-        result = await self.client.execute_single(
-            query, timeout=self.timeout_config.read_timeout
-        )
+        result = await self.client.execute_single(query, timeout=self.timeout_config.read_timeout)
         return result.get("count", 0) if result else 0
 
     async def exists(self, entity_id: str) -> bool:

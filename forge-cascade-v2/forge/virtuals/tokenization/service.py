@@ -1378,9 +1378,7 @@ class TokenizationService:
         """
         # LOCAL simulation mode
         if self.config.environment == VirtualsEnvironment.LOCAL:
-            logger.info(
-                f"[SIMULATED] Buyback-burn of {amount} VIRTUAL for entity {entity.id}"
-            )
+            logger.info(f"[SIMULATED] Buyback-burn of {amount} VIRTUAL for entity {entity.id}")
             return TransactionRecord(
                 tx_hash=f"0xsim_buyback_{uuid4().hex[:16]}",
                 chain=self.config.primary_chain.value,

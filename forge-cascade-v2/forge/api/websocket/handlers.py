@@ -215,7 +215,9 @@ class WebSocketConnection:
         self.subscriptions = subscriptions or set()
         self.connected_at = datetime.now(UTC)
         self.last_ping = datetime.now(UTC)
-        self.last_message_received = datetime.now(UTC)  # SECURITY HARDENING: track last inbound message
+        self.last_message_received = datetime.now(
+            UTC
+        )  # SECURITY HARDENING: track last inbound message
         self.message_count = 0
         # SECURITY FIX (Audit 5): Use deque with maxlen to bound memory growth
         # maxlen is 2x the rate limit to allow room for cleanup
@@ -1109,7 +1111,7 @@ async def _receive_json_with_timeout(
     try:
         data = await asyncio.wait_for(websocket.receive_json(), timeout=timeout)
         return data  # type: ignore[return-value]
-    except asyncio.TimeoutError:
+    except TimeoutError:
         return None
     except (json.JSONDecodeError, ValueError, KeyError):
         # Try text fallback with same timeout -- use a short timeout since
@@ -1117,7 +1119,7 @@ async def _receive_json_with_timeout(
         try:
             text = await asyncio.wait_for(websocket.receive_text(), timeout=2.0)
             return json.loads(text)  # type: ignore[return-value]
-        except (asyncio.TimeoutError, json.JSONDecodeError, ValueError, KeyError):
+        except (TimeoutError, json.JSONDecodeError, ValueError, KeyError):
             return None
 
 
