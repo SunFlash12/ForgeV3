@@ -135,7 +135,7 @@ class TrustBasedPricingEngine:
         "very_high": 0.1,
     }
 
-    def __init__(self, graph_repo=None, marketplace_service=None):
+    def __init__(self, graph_repo: Any = None, marketplace_service: Any = None) -> None:
         self.graph_repo = graph_repo
         self.marketplace = marketplace_service
 
@@ -275,7 +275,7 @@ class TrustBasedPricingEngine:
             tier_reason=tier_reason,
             base_price=base_price,
             multipliers=multipliers,
-            adjustments={k: float(v) for k, v in adjustments.items()},
+            adjustments={k: Decimal(str(v)) for k, v in adjustments.items()},
             market_comparison=market_comparison,
             recommendations=recommendations,
         )
@@ -630,7 +630,7 @@ class TrustBasedPricingEngine:
         Uses depth-weighted distribution where earlier contributors
         receive larger shares.
         """
-        distributions = []
+        distributions: list[dict[str, Any]] = []
 
         if not self.graph_repo:
             return distributions

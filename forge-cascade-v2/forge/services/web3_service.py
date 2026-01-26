@@ -6,15 +6,15 @@ for the Forge Marketplace.
 """
 
 import ipaddress
-import logging
 import socket
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlparse
 
 import httpx
+import structlog
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # SECURITY: Allowed RPC URL patterns for SSRF protection
 # Only allow known blockchain RPC endpoints
@@ -71,8 +71,7 @@ def _validate_rpc_url(rpc_url: str) -> None:
                 ip = ipaddress.ip_address(ip_str)
                 if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
                     raise ValueError(f"RPC URL resolves to private IP: {ip_str}")
-                # Block cloud metadata endpoints
-                if ip_str.startswith("169.254."):
+                if isinstance(ip_str, str) and ip_str.startswith("169.254."):
                     raise ValueError("RPC URL resolves to cloud metadata endpoint")
         except socket.gaierror as e:
             raise ValueError(f"Cannot resolve RPC hostname: {e}")

@@ -98,7 +98,7 @@ def validate_webhook_url(url: str) -> str:
                 raise SSRFError(f"Link-local address blocked: {ip_str}")
             if ip.is_reserved:
                 raise SSRFError(f"Reserved address blocked: {ip_str}")
-            if ip_str.startswith("169.254."):
+            if isinstance(ip_str, str) and ip_str.startswith("169.254."):
                 raise SSRFError(f"Cloud metadata address blocked: {ip_str}")
 
     except socket.gaierror as e:
@@ -118,7 +118,7 @@ class NotificationService:
     MAX_RETRIES = 3
     RETRY_DELAYS = [60, 300, 900]  # 1min, 5min, 15min
 
-    def __init__(self, redis_client=None, neo4j_client=None):
+    def __init__(self, redis_client: Any = None, neo4j_client: Any = None) -> None:
         self.redis = redis_client
         self.neo4j = neo4j_client  # AUDIT 3 FIX (A1-D03): Add Neo4j client
         self._http_client: httpx.AsyncClient | None = None
@@ -131,12 +131,12 @@ class NotificationService:
         self._preferences: dict[str, NotificationPreferences] = {}
 
         # Queues for async processing
-        self._webhook_queue: asyncio.Queue = asyncio.Queue()
-        self._retry_queue: asyncio.Queue = asyncio.Queue()
+        self._webhook_queue: asyncio.Queue[tuple[WebhookSubscription, Notification]] = asyncio.Queue()
+        self._retry_queue: asyncio.Queue[tuple[WebhookDelivery, WebhookSubscription]] = asyncio.Queue()
 
         # Background tasks
-        self._webhook_worker_task: asyncio.Task | None = None
-        self._retry_worker_task: asyncio.Task | None = None
+        self._webhook_worker_task: asyncio.Task[None] | None = None
+        self._retry_worker_task: asyncio.Task[None] | None = None
 
     async def start(self) -> None:
         """Start the notification service."""
@@ -276,7 +276,7 @@ class NotificationService:
         message: str,
         data: dict[str, Any] | None = None,
         priority: NotificationPriority = NotificationPriority.NORMAL,
-        user_filter: Callable | None = None,
+        user_filter: Callable[..., Any] | None = None,
         caller_id: str | None = None,
         caller_role: str | None = None,
     ) -> int:
@@ -297,9 +297,9 @@ class NotificationService:
         # SECURITY FIX (Audit 4 - M19): Require admin permissions for broadcast
         if not caller_id or caller_role != "admin":
             self._logger.warning(
-                "broadcast_unauthorized",
-                caller_id=caller_id,
-                caller_role=caller_role,
+                "broadcast_unauthorized: caller_id=%s, caller_role=%s",
+                caller_id,
+                caller_role,
             )
             raise PermissionError(
                 "Broadcast notifications require admin-level permissions"
@@ -307,10 +307,10 @@ class NotificationService:
 
         # Log the broadcast for audit
         self._logger.info(
-            "broadcast_initiated",
-            caller_id=caller_id,
-            event_type=event_type.value,
-            title=title,
+            "broadcast_initiated: caller_id=%s, event_type=%s, title=%s",
+            caller_id,
+            event_type.value,
+            title,
         )
 
         # In production, get users from database
@@ -331,7 +331,7 @@ class NotificationService:
             )
             sent += 1
 
-        self._logger.info("broadcast_completed", sent_count=sent, caller_id=caller_id)
+        self._logger.info("broadcast_completed: sent_count=%d, caller_id=%s", sent, caller_id)
         return sent
 
     # =========================================================================

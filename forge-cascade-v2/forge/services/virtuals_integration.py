@@ -233,6 +233,8 @@ class VirtualsIntegrationService:
         """
         self._ensure_acp_enabled()
 
+        if self._acp_service is None:
+            raise RuntimeError("ACP service not initialized")
         return await self._acp_service.register_offering(
             agent_id=agent_id,
             agent_wallet=agent_wallet,
@@ -262,13 +264,16 @@ class VirtualsIntegrationService:
         """
         self._ensure_acp_enabled()
 
-        return await self._acp_service.search_offerings(
+        if self._acp_service is None:
+            return []
+        offerings: list[JobOffering] = await self._acp_service.search_offerings(
             service_type=service_type,
             query=query,
             max_fee=max_fee,
             min_provider_reputation=min_provider_reputation,
             limit=limit,
         )
+        return offerings
 
     async def get_offering(self, offering_id: str) -> JobOffering | None:
         """Get a specific offering by ID."""
@@ -276,7 +281,8 @@ class VirtualsIntegrationService:
 
     async def get_agent_offerings(self, agent_id: str) -> list[JobOffering]:
         """Get all offerings for a specific agent."""
-        return await self._offering_repo.get_by_agent(agent_id)
+        offerings: list[JobOffering] = await self._offering_repo.get_by_agent(agent_id)
+        return offerings
 
     # ==================== Job Lifecycle ====================
 
@@ -299,6 +305,8 @@ class VirtualsIntegrationService:
         """
         self._ensure_acp_enabled()
 
+        if self._acp_service is None:
+            raise RuntimeError("ACP service not initialized")
         return await self._acp_service.create_job(
             create_request=create_request,
             buyer_wallet=buyer_wallet,
@@ -325,6 +333,8 @@ class VirtualsIntegrationService:
         """
         self._ensure_acp_enabled()
 
+        if self._acp_service is None:
+            raise RuntimeError("ACP service not initialized")
         return await self._acp_service.respond_to_request(
             job_id=job_id,
             terms=terms,
@@ -351,6 +361,8 @@ class VirtualsIntegrationService:
         """
         self._ensure_acp_enabled()
 
+        if self._acp_service is None:
+            raise RuntimeError("ACP service not initialized")
         return await self._acp_service.accept_terms(
             job_id=job_id,
             buyer_wallet=buyer_wallet,
@@ -377,6 +389,8 @@ class VirtualsIntegrationService:
         """
         self._ensure_acp_enabled()
 
+        if self._acp_service is None:
+            raise RuntimeError("ACP service not initialized")
         return await self._acp_service.submit_deliverable(
             job_id=job_id,
             deliverable=deliverable,
@@ -404,6 +418,8 @@ class VirtualsIntegrationService:
         """
         self._ensure_acp_enabled()
 
+        if self._acp_service is None:
+            raise RuntimeError("ACP service not initialized")
         return await self._acp_service.evaluate_deliverable(
             job_id=job_id,
             evaluation=evaluation,
@@ -429,6 +445,8 @@ class VirtualsIntegrationService:
         """
         self._ensure_acp_enabled()
 
+        if self._acp_service is None:
+            raise RuntimeError("ACP service not initialized")
         return await self._acp_service.file_dispute(
             job_id=job_id,
             dispute=dispute,
@@ -451,11 +469,12 @@ class VirtualsIntegrationService:
         from forge.virtuals.models.acp import ACPJobStatus
 
         status_enum = ACPJobStatus(status) if status else None
-        return await self._job_repo.list_by_buyer(
+        jobs: list[ACPJob] = await self._job_repo.list_by_buyer(
             buyer_agent_id=buyer_agent_id,
             status=status_enum,
             limit=limit,
         )
+        return jobs
 
     async def get_provider_jobs(
         self,
@@ -467,15 +486,17 @@ class VirtualsIntegrationService:
         from forge.virtuals.models.acp import ACPJobStatus
 
         status_enum = ACPJobStatus(status) if status else None
-        return await self._job_repo.list_by_provider(
+        jobs: list[ACPJob] = await self._job_repo.list_by_provider(
             provider_agent_id=provider_agent_id,
             status=status_enum,
             limit=limit,
         )
+        return jobs
 
     async def get_pending_jobs(self, agent_id: str) -> list[ACPJob]:
         """Get jobs pending action by an agent."""
-        return await self._job_repo.get_pending_jobs(agent_id)
+        jobs: list[ACPJob] = await self._job_repo.get_pending_jobs(agent_id)
+        return jobs
 
     # ==================== Agent Gateway Bridge ====================
 
@@ -528,7 +549,7 @@ class VirtualsIntegrationService:
             offering=offering,
         )
 
-    def _capabilities_to_input_schema(self, capabilities: list) -> dict[str, Any]:
+    def _capabilities_to_input_schema(self, capabilities: list[Any]) -> dict[str, Any]:
         """Convert Agent Gateway capabilities to JSON schema."""
         properties = {}
 
@@ -651,7 +672,8 @@ class VirtualsIntegrationService:
             primary_chain=self._config.primary_chain,
         )
 
-        # Create agent via GAME SDK
+        if self._game_client is None:
+            raise RuntimeError("GAME SDK client not initialized")
         agent = await self._game_client.create_agent(create_request, workers)
 
         # Store agent and workers for later use
@@ -689,15 +711,18 @@ class VirtualsIntegrationService:
                 "workers": list(self._agent_workers.get(agent_id, {}).keys()),
             }
 
-        # Try to fetch from GAME API
-        agent = await self._game_client.get_agent(agent_id)
-        return agent
+        if self._game_client is None:
+            return None
+        result: dict[str, Any] | None = await self._game_client.get_agent(agent_id)
+        return result
 
     async def delete_game_agent(self, agent_id: str) -> bool:
         """Delete a GAME agent."""
         self._ensure_game_enabled()
 
-        success = await self._game_client.delete_agent(agent_id)
+        if self._game_client is None:
+            return False
+        success: bool = await self._game_client.delete_agent(agent_id)
         if success:
             self._agents.pop(agent_id, None)
             self._agent_workers.pop(agent_id, None)
@@ -761,7 +786,9 @@ class VirtualsIntegrationService:
             max_iterations=max_iter,
         )
 
-        results = await self._game_client.run_agent_loop(
+        if self._game_client is None:
+            return []
+        results: list[dict[str, Any]] = await self._game_client.run_agent_loop(
             agent=agent,
             workers=workers,
             context=context,
@@ -802,18 +829,20 @@ class VirtualsIntegrationService:
 
         agent = self._agents[agent_id]
 
-        # Build current state from workers if not provided
         if current_state is None:
             current_state = {}
             workers = self._agent_workers.get(agent_id, {})
             for worker_id, worker in workers.items():
                 current_state[worker_id] = worker.get_state()
 
-        return await self._game_client.get_next_action(
+        if self._game_client is None:
+            return {}
+        action: dict[str, Any] = await self._game_client.get_next_action(
             agent.game_agent_id,
             current_state,
             context,
         )
+        return action
 
     # ==================== GAME SDK: Memory Operations ====================
 
@@ -845,12 +874,15 @@ class VirtualsIntegrationService:
 
         agent = self._agents[agent_id]
 
-        return await self._game_client.store_memory(
+        if self._game_client is None:
+            return ""
+        memory_id: str = await self._game_client.store_memory(
             agent.game_agent_id,
             memory_type,
             content,
             ttl_days,
         )
+        return memory_id
 
     async def search_agent_memories(
         self,
@@ -880,12 +912,15 @@ class VirtualsIntegrationService:
 
         agent = self._agents[agent_id]
 
-        return await self._game_client.retrieve_memories(
+        if self._game_client is None:
+            return []
+        memories: list[dict[str, Any]] = await self._game_client.retrieve_memories(
             agent.game_agent_id,
             query,
             memory_type,
             limit,
         )
+        return memories
 
     # ==================== GAME SDK: Function Discovery ====================
 

@@ -55,7 +55,7 @@ class HistoryExtractor:
     def __init__(
         self,
         config: ExtractorConfig | None = None,
-        hpo_service=None,
+        hpo_service: Any = None,
     ):
         """
         Initialize the history extractor.
@@ -443,7 +443,7 @@ class HistoryExtractor:
 
 def create_history_extractor(
     config: ExtractorConfig | None = None,
-    hpo_service=None,
+    hpo_service: Any = None,
 ) -> HistoryExtractor:
     """Create a history extractor instance."""
     return HistoryExtractor(

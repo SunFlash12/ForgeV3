@@ -194,7 +194,7 @@ class InputValidator:
     Validator class for clinical inputs with caching and statistics.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._validation_stats = {
             "hpo_valid": 0,
             "hpo_invalid": 0,

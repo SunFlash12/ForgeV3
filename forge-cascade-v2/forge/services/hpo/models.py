@@ -64,10 +64,10 @@ class HPOTerm:
             return 0
         return -1  # Unknown without traversal
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         return hash(self.hpo_id)
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
         if isinstance(other, HPOTerm):
             return self.hpo_id == other.hpo_id
         return False
@@ -124,7 +124,7 @@ class PhenotypeMatch:
     laterality: str | None = None  # "left", "right", "bilateral"
     temporal: str | None = None    # "onset", "progression", etc.
 
-    def __lt__(self, other):
+    def __lt__(self, other: "PhenotypeMatch") -> bool:
         """Enable sorting by confidence."""
         return self.confidence > other.confidence
 

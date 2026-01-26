@@ -47,10 +47,10 @@ class PhenotypeAgent(DiagnosticAgent):
     def __init__(
         self,
         config: PhenotypeAgentConfig | None = None,
-        hpo_service=None,
-        primekg_overlay=None,
-        neo4j_client=None,
-    ):
+        hpo_service: Any = None,
+        primekg_overlay: Any = None,
+        neo4j_client: Any = None,
+    ) -> None:
         """
         Initialize the phenotype agent.
 
@@ -71,7 +71,7 @@ class PhenotypeAgent(DiagnosticAgent):
         self._neo4j = neo4j_client
 
         # Analysis cache
-        self._phenotype_cache: dict[str, dict] = {}
+        self._phenotype_cache: dict[str, dict[str, Any]] = {}
 
     async def analyze(
         self,
@@ -596,9 +596,9 @@ class PhenotypeAgent(DiagnosticAgent):
 
 def create_phenotype_agent(
     config: PhenotypeAgentConfig | None = None,
-    hpo_service=None,
-    primekg_overlay=None,
-    neo4j_client=None,
+    hpo_service: Any = None,
+    primekg_overlay: Any = None,
+    neo4j_client: Any = None,
 ) -> PhenotypeAgent:
     """Create a phenotype agent instance."""
     return PhenotypeAgent(

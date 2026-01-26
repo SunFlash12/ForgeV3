@@ -15,7 +15,8 @@ import csv
 from collections import defaultdict
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+from typing import Any
 from pathlib import Path
 
 import structlog
@@ -208,14 +209,18 @@ class PrimeKGParser:
             progress_callback(progress)
         self._notify_progress(progress)
 
+        if progress.started_at is not None:
+            duration = progress.completed_at - progress.started_at
+        else:
+            duration = timedelta()
         logger.info(
             "primekg_nodes_parsed",
             valid=progress.valid_records,
             invalid=progress.invalid_records,
-            duration_seconds=(progress.completed_at - progress.started_at).total_seconds()
+            duration_seconds=duration.total_seconds()
         )
 
-    def _parse_node_row(self, row: dict) -> PrimeKGNode:
+    def _parse_node_row(self, row: dict[str, Any]) -> PrimeKGNode:
         """Parse a single node row into a PrimeKGNode."""
         # Normalize column names (handle variations)
         node_index = int(row.get("node_index", row.get("index", 0)))
@@ -329,14 +334,18 @@ class PrimeKGParser:
             progress_callback(progress)
         self._notify_progress(progress)
 
+        if progress.started_at is not None:
+            duration = progress.completed_at - progress.started_at
+        else:
+            duration = timedelta()
         logger.info(
             "primekg_edges_parsed",
             valid=progress.valid_records,
             invalid=progress.invalid_records,
-            duration_seconds=(progress.completed_at - progress.started_at).total_seconds()
+            duration_seconds=duration.total_seconds()
         )
 
-    def _parse_edge_row(self, row: dict) -> PrimeKGEdge:
+    def _parse_edge_row(self, row: dict[str, Any]) -> PrimeKGEdge:
         """Parse a single edge row into a PrimeKGEdge."""
         return PrimeKGEdge(
             relation=row.get("relation", row.get("display_relation", "")),
@@ -466,7 +475,7 @@ class PrimeKGParser:
         )
 
         # Count nodes by type
-        node_type_counts = defaultdict(int)
+        node_type_counts: defaultdict[str, int] = defaultdict(int)
         for node in self.parse_nodes(nodes_file):
             stats.total_nodes += 1
             node_type_counts[node.node_type.value] += 1
@@ -483,7 +492,7 @@ class PrimeKGParser:
         stats.exposure_count = node_type_counts.get("exposure", 0)
 
         # Count edges by type
-        edge_type_counts = defaultdict(int)
+        edge_type_counts: defaultdict[str, int] = defaultdict(int)
         for edge in self.parse_edges(edges_file):
             stats.total_edges += 1
             edge_type_counts[edge.relation] += 1
@@ -504,7 +513,7 @@ class PrimeKGParser:
         self,
         nodes_file: Path | str,
         edges_file: Path | str,
-    ) -> dict[str, any]:
+    ) -> dict[str, Any]:
         """
         Validate that all edge references point to valid nodes.
 

@@ -8,6 +8,7 @@ Uses phenotype-disease frequencies, genetic evidence, and clinical context.
 import math
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Any
 
 import structlog
 
@@ -65,8 +66,8 @@ class BayesianScorer:
     def __init__(
         self,
         config: ScoringConfig | None = None,
-        primekg_overlay=None,
-    ):
+        primekg_overlay: Any = None,
+    ) -> None:
         """
         Initialize the Bayesian scorer.
 
@@ -485,7 +486,7 @@ class BayesianScorer:
 
 def create_bayesian_scorer(
     config: ScoringConfig | None = None,
-    primekg_overlay=None,
+    primekg_overlay: Any = None,
 ) -> BayesianScorer:
     """Create a Bayesian scorer instance."""
     return BayesianScorer(

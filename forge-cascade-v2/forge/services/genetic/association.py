@@ -30,9 +30,9 @@ class GeneAssociationService:
 
     def __init__(
         self,
-        neo4j_client=None,
-        primekg_overlay=None,
-    ):
+        neo4j_client: Any = None,
+        primekg_overlay: Any = None,
+    ) -> None:
         """
         Initialize the gene association service.
 
@@ -256,7 +256,7 @@ class GeneAssociationService:
         if not genes:
             return []
 
-        disease_evidence: dict[str, dict] = {}
+        disease_evidence: dict[str, dict[str, Any]] = {}
 
         # Get associations for each gene
         for gene in genes:
@@ -395,8 +395,8 @@ class GeneAssociationService:
 # =============================================================================
 
 def create_gene_association_service(
-    neo4j_client=None,
-    primekg_overlay=None,
+    neo4j_client: Any = None,
+    primekg_overlay: Any = None,
 ) -> GeneAssociationService:
     """Create a gene association service instance."""
     return GeneAssociationService(

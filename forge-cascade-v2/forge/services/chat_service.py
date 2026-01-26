@@ -226,9 +226,9 @@ class ChatService:
         if role != RoomRole.OWNER:
             raise ChatPermissionError("delete_room", "owner")
 
-        result = await self._chat_repo.delete_room(room_id)
+        deleted: bool = await self._chat_repo.delete_room(room_id)
 
-        if result and self._audit_repo:
+        if deleted and self._audit_repo:
             await self._audit_repo.log_user_action(
                 actor_id=user_id,
                 target_user_id=user_id,
@@ -236,7 +236,7 @@ class ChatService:
                 details={"room_id": room_id},
             )
 
-        return result
+        return deleted
 
     async def get_room(self, room_id: str) -> ChatRoom | None:
         """Get a room by ID."""
@@ -259,9 +259,10 @@ class ChatService:
         Returns:
             List of (room, user_role) tuples
         """
-        return await self._chat_repo.get_user_rooms(
+        rooms: list[tuple[ChatRoom, RoomRole | None]] = await self._chat_repo.get_user_rooms(
             user_id, include_public, limit
         )
+        return rooms
 
     # =========================================================================
     # Access Control
@@ -430,9 +431,9 @@ class ChatService:
                 "Owner cannot leave. Transfer ownership or delete the room."
             )
 
-        result = await self._chat_repo.remove_member(room_id, user_id)
+        removed: bool = await self._chat_repo.remove_member(room_id, user_id)
 
-        if result and self._audit_repo:
+        if removed and self._audit_repo:
             await self._audit_repo.log_user_action(
                 actor_id=user_id,
                 target_user_id=user_id,
@@ -440,7 +441,7 @@ class ChatService:
                 details={"room_id": room_id},
             )
 
-        return result
+        return removed
 
     async def add_member(
         self,
@@ -535,9 +536,9 @@ class ChatService:
         if target_role == RoomRole.ADMIN and admin_role != RoomRole.OWNER:
             raise ChatPermissionError("remove_admin", "owner")
 
-        result = await self._chat_repo.remove_member(room_id, user_id)
+        removed: bool = await self._chat_repo.remove_member(room_id, user_id)
 
-        if result and self._audit_repo:
+        if removed and self._audit_repo:
             await self._audit_repo.log_user_action(
                 actor_id=admin_id,
                 target_user_id=user_id,
@@ -545,7 +546,7 @@ class ChatService:
                 details={"room_id": room_id},
             )
 
-        return result
+        return removed
 
     async def update_member_role(
         self,
@@ -579,9 +580,9 @@ class ChatService:
         if new_role == RoomRole.OWNER:
             raise ChatPermissionError("transfer_ownership", "Use transfer_ownership()")
 
-        result = await self._chat_repo.update_member_role(room_id, user_id, new_role)
+        updated: bool = await self._chat_repo.update_member_role(room_id, user_id, new_role)
 
-        if result and self._audit_repo:
+        if updated and self._audit_repo:
             await self._audit_repo.log_user_action(
                 actor_id=owner_id,
                 target_user_id=user_id,
@@ -592,7 +593,7 @@ class ChatService:
                 },
             )
 
-        return result
+        return updated
 
     async def get_room_members(
         self,
@@ -600,7 +601,8 @@ class ChatService:
         limit: int = 100,
     ) -> list[RoomMember]:
         """Get all members of a room."""
-        return await self._chat_repo.get_room_members(room_id, limit)
+        members: list[RoomMember] = await self._chat_repo.get_room_members(room_id, limit)
+        return members
 
     # =========================================================================
     # Message Operations
@@ -652,11 +654,11 @@ class ChatService:
         Raises:
             ChatAccessDeniedError: If user cannot access room
         """
-        # Verify access
         await self.verify_access(room_id, user_id)
 
         limit = min(limit, settings.chat_history_default_limit)
-        return await self._chat_repo.get_room_messages(room_id, limit, before)
+        messages: tuple[list[ChatMessage], bool] = await self._chat_repo.get_room_messages(room_id, limit, before)
+        return messages
 
     async def delete_message(
         self,
@@ -693,9 +695,9 @@ class ChatService:
                     "delete_message", "message author, admin, or owner"
                 )
 
-        result = await self._chat_repo.delete_message(message_id, user_id)
+        deleted: bool = await self._chat_repo.delete_message(message_id, user_id)
 
-        if result and self._audit_repo:
+        if deleted and self._audit_repo:
             await self._audit_repo.log_user_action(
                 actor_id=user_id,
                 target_user_id=message.sender_id,
@@ -706,7 +708,7 @@ class ChatService:
                 },
             )
 
-        return result
+        return deleted
 
     # =========================================================================
     # Invite Code Operations
@@ -738,9 +740,9 @@ class ChatService:
             raise ChatPermissionError("generate_invite", "admin or owner")
 
         expires = expires_hours or settings.chat_invite_expiry_hours
-        code = await self._chat_repo.regenerate_invite_code(room_id, expires)
+        invite_code: str | None = await self._chat_repo.regenerate_invite_code(room_id, expires)
 
-        if code and self._audit_repo:
+        if invite_code and self._audit_repo:
             await self._audit_repo.log_user_action(
                 actor_id=user_id,
                 target_user_id=user_id,
@@ -751,7 +753,7 @@ class ChatService:
                 },
             )
 
-        return code
+        return invite_code
 
 
 # Global service instance

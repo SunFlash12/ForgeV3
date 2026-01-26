@@ -49,7 +49,7 @@ class HPOOntologyService:
     def __init__(
         self,
         data_dir: Path | str = "./data/hpo",
-        neo4j_client=None,
+        neo4j_client: Any = None,
     ):
         """
         Initialize the HPO ontology service.
@@ -169,7 +169,7 @@ class HPOOntologyService:
             logger.error("hpo_json_parse_error", error=str(e))
             return False
 
-    def _parse_json_node(self, node: dict) -> HPOTerm | None:
+    def _parse_json_node(self, node: dict[str, Any]) -> HPOTerm | None:
         """Parse a JSON node into an HPOTerm."""
         node_id = node.get("id", "")
         if not node_id.startswith("http://purl.obolibrary.org/obo/HP_"):
@@ -199,7 +199,7 @@ class HPOOntologyService:
             xrefs=meta.get("xrefs", []) if isinstance(meta.get("xrefs"), list) else [],
         )
 
-    def _process_json_edge(self, edge: dict, terms: dict[str, HPOTerm]) -> None:
+    def _process_json_edge(self, edge: dict[str, Any], terms: dict[str, HPOTerm]) -> None:
         """Process a JSON edge to build hierarchy."""
         subj = edge.get("sub", "")
         obj = edge.get("obj", "")
@@ -309,7 +309,7 @@ class HPOOntologyService:
             logger.error("hpo_obo_parse_error", error=str(e))
             return False
 
-    def _obo_dict_to_term(self, data: dict) -> HPOTerm | None:
+    def _obo_dict_to_term(self, data: dict[str, Any]) -> HPOTerm | None:
         """Convert parsed OBO dict to HPOTerm."""
         hpo_id = data.get("id", "")
         if not hpo_id.startswith("HP:"):
@@ -498,7 +498,7 @@ class HPOOntologyService:
 
 def create_hpo_ontology_service(
     data_dir: str = "./data/hpo",
-    neo4j_client=None,
+    neo4j_client: Any = None,
 ) -> HPOOntologyService:
     """Create an HPO ontology service instance."""
     return HPOOntologyService(

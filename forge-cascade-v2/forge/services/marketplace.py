@@ -592,7 +592,7 @@ class MarketplaceService:
 
         top_sellers = sorted(
             [{"seller_id": k, "revenue": float(v)} for k, v in seller_revenue.items()],
-            key=lambda x: x["revenue"],
+            key=lambda x: float(x["revenue"]),
             reverse=True
         )[:10]
 
@@ -603,7 +603,7 @@ class MarketplaceService:
 
         top_capsules = sorted(
             [{"capsule_id": k, "sales": v} for k, v in capsule_sales.items()],
-            key=lambda x: x["sales"],
+            key=lambda x: int(x["sales"]),
             reverse=True
         )[:10]
 

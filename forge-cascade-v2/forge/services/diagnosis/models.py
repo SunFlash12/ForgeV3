@@ -122,7 +122,7 @@ class DiagnosisHypothesis:
 
     # Genetic details
     associated_genes: list[str] = field(default_factory=list)
-    found_variants: list[dict] = field(default_factory=list)
+    found_variants: list[dict[str, Any]] = field(default_factory=list)
 
     # Metadata
     rank: int = 0

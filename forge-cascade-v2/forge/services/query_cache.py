@@ -219,7 +219,7 @@ class QueryCache:
             self._logger.error("cache_invalidate_all_error", error=str(e))
             return 0
 
-    async def cleanup_expired(self) -> dict[str, int]:
+    async def cleanup_expired(self) -> dict[str, int | str]:
         """
         Clean up expired entries.
 

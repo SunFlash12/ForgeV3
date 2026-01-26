@@ -163,7 +163,7 @@ class WearableConverter:
         data: list[HeartRateData],
     ) -> list[dict[str, Any]]:
         """Convert heart rate data to phenotypes."""
-        phenotypes = []
+        phenotypes: list[dict[str, Any]] = []
 
         if len(data) < self.config.min_hr_readings:
             return phenotypes
@@ -247,7 +247,7 @@ class WearableConverter:
         data: list[SleepData],
     ) -> list[dict[str, Any]]:
         """Convert sleep data to phenotypes."""
-        phenotypes = []
+        phenotypes: list[dict[str, Any]] = []
 
         if len(data) < self.config.min_sleep_sessions or len(data) == 0:
             return phenotypes
@@ -322,7 +322,7 @@ class WearableConverter:
         data: list[OxygenData],
     ) -> list[dict[str, Any]]:
         """Convert oxygen data to phenotypes."""
-        phenotypes = []
+        phenotypes: list[dict[str, Any]] = []
 
         if len(data) < self.config.min_oxygen_readings:
             return phenotypes
@@ -366,7 +366,7 @@ class WearableConverter:
         data: list[ECGData],
     ) -> list[dict[str, Any]]:
         """Convert ECG data to phenotypes."""
-        phenotypes = []
+        phenotypes: list[dict[str, Any]] = []
 
         if not data:
             return phenotypes
@@ -406,7 +406,7 @@ class WearableConverter:
         data: list[ActivityData],
     ) -> list[dict[str, Any]]:
         """Convert activity data to phenotypes."""
-        phenotypes = []
+        phenotypes: list[dict[str, Any]] = []
 
         if not data:
             return phenotypes

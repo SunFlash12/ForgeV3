@@ -19,6 +19,7 @@ Usage:
 """
 
 from datetime import datetime
+from typing import Any
 
 import structlog
 
@@ -299,7 +300,7 @@ class TippingService:
                 ],
             )
 
-    def _record_to_tip(self, record: dict) -> Tip:
+    def _record_to_tip(self, record: dict[str, Any]) -> Tip:
         """Convert a Neo4j record to a Tip model."""
         return Tip(
             id=record["id"],

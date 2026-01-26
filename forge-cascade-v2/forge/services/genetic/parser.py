@@ -30,12 +30,12 @@ class VCFHeader:
     file_format: str = "VCFv4.2"
     reference: str | None = None
     contigs: list[str] | None = None
-    info_fields: dict[str, dict] | None = None
-    format_fields: dict[str, dict] | None = None
+    info_fields: dict[str, dict[str, str]] | None = None
+    format_fields: dict[str, dict[str, str]] | None = None
     sample_names: list[str] | None = None
     filters: dict[str, str] | None = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         self.contigs = self.contigs or []
         self.info_fields = self.info_fields or {}
         self.format_fields = self.format_fields or {}
@@ -129,7 +129,7 @@ class VCFParser:
                 "vcf_parsed",
                 file=str(file_path),
                 total_variants=len(variants),
-                samples=len(header.sample_names),
+                samples=len(header.sample_names) if header.sample_names else 0,
             )
 
         # Create result
@@ -172,12 +172,12 @@ class VCFParser:
             elif line.startswith("##contig="):
                 # Extract contig ID
                 match = re.search(r'ID=([^,>]+)', line)
-                if match:
+                if match and header.contigs is not None:
                     header.contigs.append(match.group(1))
 
             elif line.startswith("##INFO="):
                 match = self.INFO_META_PATTERN.match(line)
-                if match:
+                if match and header.info_fields is not None:
                     header.info_fields[match.group("id")] = {
                         "number": match.group("number"),
                         "type": match.group("type"),
@@ -186,7 +186,7 @@ class VCFParser:
 
             elif line.startswith("##FORMAT="):
                 match = self.FORMAT_META_PATTERN.match(line)
-                if match:
+                if match and header.format_fields is not None:
                     header.format_fields[match.group("id")] = {
                         "number": match.group("number"),
                         "type": match.group("type"),
@@ -195,7 +195,7 @@ class VCFParser:
 
             elif line.startswith("##FILTER="):
                 match = re.search(r'ID=([^,>]+).*Description="([^"]*)"', line)
-                if match:
+                if match and header.filters is not None:
                     header.filters[match.group(1)] = match.group(2)
 
             elif line.startswith("#CHROM"):
@@ -303,7 +303,7 @@ class VCFParser:
 
     def _parse_info(self, info: str) -> dict[str, str]:
         """Parse INFO field into dictionary."""
-        result = {}
+        result: dict[str, str] = {}
         if info == "." or not info:
             return result
 
@@ -319,8 +319,8 @@ class VCFParser:
                         result["ANN_Consequence"] = ann_parts[1]
                         result["ANN_Impact"] = ann_parts[2]
                         result["ANN_Gene"] = ann_parts[3]
-                        result["ANN_HGVS_c"] = ann_parts[9] if len(ann_parts) > 9 else None
-                        result["ANN_HGVS_p"] = ann_parts[10] if len(ann_parts) > 10 else None
+                        result["ANN_HGVS_c"] = ann_parts[9] if len(ann_parts) > 9 else ""
+                        result["ANN_HGVS_p"] = ann_parts[10] if len(ann_parts) > 10 else ""
             else:
                 # Flag field (no value)
                 result[item] = "true"
@@ -364,7 +364,7 @@ class VCFParser:
         else:
             return Zygosity.HETEROZYGOUS
 
-    def _parse_pathogenicity(self, info: dict) -> VariantPathogenicity:
+    def _parse_pathogenicity(self, info: dict[str, str]) -> VariantPathogenicity:
         """Parse ClinVar clinical significance."""
         clnsig = info.get("CLNSIG", "").lower()
         info.get("CLNREVSTAT", "")

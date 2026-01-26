@@ -43,8 +43,8 @@ class HistoryAnalyzer:
     def __init__(
         self,
         config: AnalyzerConfig | None = None,
-        primekg_overlay=None,
-        neo4j_client=None,
+        primekg_overlay: Any = None,
+        neo4j_client: Any = None,
     ):
         """
         Initialize the history analyzer.
@@ -102,7 +102,7 @@ class HistoryAnalyzer:
         timeline: HistoryTimeline,
     ) -> dict[str, Any]:
         """Analyze family history patterns."""
-        patterns = {
+        patterns: dict[str, Any] = {
             "conditions_with_family_history": [],
             "inheritance_suggestions": [],
             "affected_relatives_by_condition": {},
@@ -116,8 +116,8 @@ class HistoryAnalyzer:
             member = fh.family_member.value if fh.family_member else "unknown"
 
             # Check which conditions are mentioned
-            for condition in timeline.conditions:
-                cond_desc = condition.description.lower()
+            for cond in timeline.conditions:
+                cond_desc = cond.description.lower()
                 # Simple matching - would use more sophisticated NLP
                 keywords = cond_desc.split()[:3]  # First few words
                 if any(kw in description_lower for kw in keywords if len(kw) > 3):
@@ -128,10 +128,10 @@ class HistoryAnalyzer:
         patterns["affected_relatives_by_condition"] = condition_relatives
 
         # Identify conditions with strong family history
-        for condition, relatives in condition_relatives.items():
+        for condition_name, relatives in condition_relatives.items():
             if len(relatives) >= self.config.strong_family_history_threshold:
                 patterns["conditions_with_family_history"].append({
-                    "condition": condition,
+                    "condition": condition_name,
                     "affected_relatives": relatives,
                     "count": len(relatives),
                 })
@@ -270,7 +270,7 @@ class HistoryAnalyzer:
         timeline: HistoryTimeline,
     ) -> dict[str, Any]:
         """Analyze temporal patterns in the history."""
-        patterns = {
+        patterns: dict[str, Any] = {
             "earliest_onset_age": None,
             "condition_progression": [],
             "age_periods": {},
@@ -282,7 +282,7 @@ class HistoryAnalyzer:
             patterns["earliest_onset_age"] = min(onset_ages)
 
         # Group by age periods
-        periods = {
+        periods: dict[str, tuple[int, int]] = {
             "childhood": (0, 12),
             "adolescence": (13, 18),
             "young_adult": (19, 40),
@@ -422,8 +422,8 @@ class HistoryAnalyzer:
 
 def create_history_analyzer(
     config: AnalyzerConfig | None = None,
-    primekg_overlay=None,
-    neo4j_client=None,
+    primekg_overlay: Any = None,
+    neo4j_client: Any = None,
 ) -> HistoryAnalyzer:
     """Create a history analyzer instance."""
     return HistoryAnalyzer(

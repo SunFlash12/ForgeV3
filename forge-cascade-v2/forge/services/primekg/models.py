@@ -95,7 +95,7 @@ class PrimeKGEdgeType(str, Enum):
     ACTIVATES = "activates"
 
 
-class PrimeKGNode(ForgeModel):
+class PrimeKGNode(ForgeModel):  # type: ignore[misc]
     """
     Base model for all PrimeKG nodes.
 
@@ -116,7 +116,7 @@ class PrimeKGNode(ForgeModel):
     embedding: list[float] | None = Field(default=None, description="Vector embedding")
 
 
-class PrimeKGEdge(ForgeModel):
+class PrimeKGEdge(ForgeModel):  # type: ignore[misc]
     """
     Model for PrimeKG edges/relationships.
 
@@ -262,7 +262,7 @@ class PrimeKGPathway(PrimeKGNode):
 # Import/Export Statistics
 # =============================================================================
 
-class PrimeKGStats(ForgeModel):
+class PrimeKGStats(ForgeModel):  # type: ignore[misc]
     """Statistics about loaded PrimeKG data."""
     total_nodes: int = 0
     total_edges: int = 0
