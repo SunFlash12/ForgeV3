@@ -15,9 +15,13 @@ RUN npm ci
 # Copy source code
 COPY . .
 
-# Build argument for API URL
+# Build arguments for environment variables
 ARG VITE_API_URL=http://localhost:8001/api/v1
+ARG VITE_GOOGLE_CLIENT_ID=
+ARG VITE_SENTRY_DSN=
 ENV VITE_API_URL=$VITE_API_URL
+ENV VITE_GOOGLE_CLIENT_ID=$VITE_GOOGLE_CLIENT_ID
+ENV VITE_SENTRY_DSN=$VITE_SENTRY_DSN
 
 # Build for production
 RUN npm run build

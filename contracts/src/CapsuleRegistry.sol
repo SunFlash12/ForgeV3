@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/utils/Pausable.sol";
 
 /**
  * @title CapsuleRegistry
@@ -15,7 +16,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
  *   - Batch anchor updates capsuleCount once instead of per-iteration
  *   - calldata arrays avoid memory copies
  */
-contract CapsuleRegistry is Ownable {
+contract CapsuleRegistry is Ownable, Pausable {
     // ═══════════════════════════════════════════════════════════════════════
     // Types
     // ═══════════════════════════════════════════════════════════════════════
@@ -89,7 +90,7 @@ contract CapsuleRegistry is Ownable {
         bytes32 contentHash,
         bytes32 merkleRoot,
         uint8 capsuleType
-    ) external onlyOwner {
+    ) external onlyOwner whenNotPaused {
         if (contentHash == bytes32(0)) revert InvalidContentHash();
         if (capsules[capsuleId].anchoredAt != 0) {
             revert CapsuleAlreadyAnchored(capsuleId);
@@ -129,7 +130,7 @@ contract CapsuleRegistry is Ownable {
         bytes32[] calldata contentHashes,
         bytes32[] calldata merkleRoots,
         uint8[] calldata capsuleTypes
-    ) external onlyOwner {
+    ) external onlyOwner whenNotPaused {
         uint256 len = capsuleIds.length;
         if (len == 0) revert EmptyBatch();
         if (
@@ -174,6 +175,13 @@ contract CapsuleRegistry is Ownable {
 
         emit BatchAnchored(len, msg.sender, ts);
     }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Pause Functions
+    // ═══════════════════════════════════════════════════════════════════════
+
+    function pause() external onlyOwner { _pause(); }
+    function unpause() external onlyOwner { _unpause(); }
 
     // ═══════════════════════════════════════════════════════════════════════
     // View Functions

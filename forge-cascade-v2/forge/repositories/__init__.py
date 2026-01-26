@@ -6,7 +6,7 @@ for all domain entities.
 """
 
 from forge.repositories.audit_repository import AuditRepository
-from forge.repositories.base import BaseRepository
+from forge.repositories.base import BaseRepository, QueryTimeoutConfig
 from forge.repositories.capsule_repository import CapsuleRepository
 from forge.repositories.cascade_repository import CascadeRepository, get_cascade_repository
 from forge.repositories.governance_repository import GovernanceRepository
@@ -24,6 +24,7 @@ from forge.repositories.user_repository import UserRepository
 
 __all__ = [
     "BaseRepository",
+    "QueryTimeoutConfig",
     "CapsuleRepository",
     "CascadeRepository",
     "get_cascade_repository",

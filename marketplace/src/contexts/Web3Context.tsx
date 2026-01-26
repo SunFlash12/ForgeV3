@@ -26,7 +26,7 @@ const IS_TESTNET = import.meta.env.VITE_USE_TESTNET === 'true';
 // $VIRTUAL token addresses
 export const VIRTUAL_TOKEN = {
   mainnet: '0x0b3e328455c4059EEb9e3f84b5543F74E24e7E1b',
-  testnet: '0x0b3e328455c4059EEb9e3f84b5543F74E24e7E1b', // Same address on testnet
+  testnet: '0x832F65733f8DB2B4f6FA3370acD5Fa7EA585A0A4', // tVIRTUAL on Base Sepolia
 };
 
 // Marketplace contract addresses (to be deployed)

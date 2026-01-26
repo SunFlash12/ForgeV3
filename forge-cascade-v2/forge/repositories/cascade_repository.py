@@ -14,6 +14,7 @@ import structlog
 
 from forge.database.client import Neo4jClient
 from forge.models.events import CascadeChain, CascadeEvent
+from forge.repositories.base import QueryTimeoutConfig, DEFAULT_QUERY_TIMEOUT
 
 logger = structlog.get_logger(__name__)
 
@@ -28,9 +29,14 @@ class CascadeRepository:
     - [:HAS_EVENT {order: N}] relationships linking chains to events
     """
 
-    def __init__(self, client: Neo4jClient):
+    def __init__(
+        self,
+        client: Neo4jClient,
+        timeout_config: QueryTimeoutConfig | None = None,
+    ):
         """Initialize repository with database client."""
         self.client = client
+        self.timeout_config = timeout_config or DEFAULT_QUERY_TIMEOUT
         self.logger = logger.bind(repository="cascade")
 
     def _generate_id(self) -> str:
@@ -169,7 +175,9 @@ class CascadeRepository:
             "errors_encountered": chain.errors_encountered,
         }
 
-        await self.client.execute_single(query, params)
+        await self.client.execute_single(
+            query, params, timeout=self.timeout_config.write_timeout
+        )
 
         # Create events if any
         for i, event in enumerate(chain.events):
@@ -203,7 +211,10 @@ class CascadeRepository:
             MATCH (c:CascadeChain {cascade_id: $cascade_id})-[:HAS_EVENT]->(e:CascadeEvent)
             RETURN count(e) AS count
             """
-            result = await self.client.execute_single(count_query, {"cascade_id": cascade_id})
+            result = await self.client.execute_single(
+                count_query, {"cascade_id": cascade_id},
+                timeout=self.timeout_config.read_timeout,
+            )
             order = result["count"] if result else 0
 
         event_data = self._serialize_event(event)
@@ -224,6 +235,7 @@ class CascadeRepository:
                 "event_data": event_data,
                 "order": order,
             },
+            timeout=self.timeout_config.write_timeout,
         )
 
         self.logger.debug(
@@ -265,6 +277,7 @@ class CascadeRepository:
                 "actions_triggered": chain.actions_triggered,
                 "errors_encountered": chain.errors_encountered,
             },
+            timeout=self.timeout_config.write_timeout,
         )
 
         return chain
@@ -292,6 +305,7 @@ class CascadeRepository:
                 "cascade_id": cascade_id,
                 "completed_at": self._now().isoformat(),
             },
+            timeout=self.timeout_config.write_timeout,
         )
 
         if not result:
@@ -327,7 +341,10 @@ class CascadeRepository:
         RETURN c {.*} AS chain, events
         """
 
-        result = await self.client.execute_single(query, {"cascade_id": cascade_id})
+        result = await self.client.execute_single(
+            query, {"cascade_id": cascade_id},
+            timeout=self.timeout_config.read_timeout,
+        )
 
         if not result or not result.get("chain"):
             return None
@@ -352,7 +369,9 @@ class CascadeRepository:
         ORDER BY c.initiated_at DESC
         """
 
-        results = await self.client.execute(query, {})
+        results = await self.client.execute(
+            query, {}, timeout=self.timeout_config.read_timeout
+        )
 
         chains: list[CascadeChain] = []
         for result in results:
@@ -392,7 +411,10 @@ class CascadeRepository:
         LIMIT $limit
         """
 
-        results = await self.client.execute(query, {"limit": limit, "skip": skip})
+        results = await self.client.execute(
+            query, {"limit": limit, "skip": skip},
+            timeout=self.timeout_config.read_timeout,
+        )
 
         chains: list[CascadeChain] = []
         for result in results:
@@ -421,7 +443,10 @@ class CascadeRepository:
         RETURN count(c) AS deleted
         """
 
-        result = await self.client.execute_single(query, {"cascade_id": cascade_id})
+        result = await self.client.execute_single(
+            query, {"cascade_id": cascade_id},
+            timeout=self.timeout_config.write_timeout,
+        )
 
         deleted = result.get("deleted", 0) > 0 if result else False
 
@@ -456,7 +481,10 @@ class CascadeRepository:
         RETURN count(c) AS deleted
         """
 
-        result = await self.client.execute_single(query, {"days_old": days_old})
+        result = await self.client.execute_single(
+            query, {"days_old": days_old},
+            timeout=self.timeout_config.write_timeout,
+        )
 
         deleted = result.get("deleted", 0) if result else 0
 
@@ -490,7 +518,9 @@ class CascadeRepository:
             sum(c.errors_encountered) AS total_errors
         """
 
-        result = await self.client.execute_single(query, {})
+        result = await self.client.execute_single(
+            query, {}, timeout=self.timeout_config.read_timeout
+        )
 
         if not result:
             return {

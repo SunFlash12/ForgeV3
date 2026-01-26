@@ -74,19 +74,16 @@ export default function GovernancePage() {
     queryFn: () => api.getActiveProposals(),
   });
 
-  // Delegation queries
-  const { data: delegations, isLoading: delegationsLoading } = useQuery({
+  // Delegation queries - backend returns both sent and received delegations
+  const { data: allDelegations, isLoading: delegationsLoading } = useQuery({
     queryKey: ['my-delegations'],
     queryFn: () => api.getDelegations(),
     enabled: !!user,
   });
 
-  // TODO: Implement received delegations when backend endpoint is available
-  // const { data: receivedDelegations } = useQuery({
-  //   queryKey: ['received-delegations'],
-  //   queryFn: () => api.getReceivedDelegations(),
-  //   enabled: !!user,
-  // });
+  // Split into sent (where user is delegator) and received (where user is delegate)
+  const delegations = allDelegations?.filter(d => d.delegator_id === user?.id) || [];
+  const receivedDelegations = allDelegations?.filter(d => d.delegate_id === user?.id) || [];
 
   // Revoke delegation mutation
   const revokeDelegationMutation = useMutation({
@@ -97,8 +94,9 @@ export default function GovernancePage() {
   });
 
   // Calculate delegation stats
-  const activeDelegations = delegations?.filter((d: { is_active: boolean }) => d.is_active) || [];
-  const totalDelegatedWeight = activeDelegations.reduce((sum: number, d: { weight: number }) => sum + (d.weight || 0), 0);
+  const activeDelegations = delegations.filter((d) => d.is_active);
+  const activeReceivedDelegations = receivedDelegations.filter((d) => d.is_active);
+  const totalDelegatedWeight = activeDelegations.reduce((sum: number, d: { weight?: number }) => sum + (d.weight || 0), 0);
 
   return (
     <div className="space-y-6">
@@ -185,7 +183,7 @@ export default function GovernancePage() {
             <div className="text-left">
               <h3 className="font-semibold text-slate-800">Vote Delegation</h3>
               <p className="text-sm text-slate-500">
-                {activeDelegations.length} active delegation{activeDelegations.length !== 1 ? 's' : ''}
+                {activeDelegations.length} sent{activeReceivedDelegations.length > 0 && `, ${activeReceivedDelegations.length} received`}
                 {totalDelegatedWeight > 0 && ` • ${totalDelegatedWeight.toFixed(2)} weight delegated`}
               </p>
             </div>
@@ -277,6 +275,49 @@ export default function GovernancePage() {
                 <p className="text-xs text-slate-400 mt-1">
                   Delegate your voting power to participate even when you're away
                 </p>
+              </div>
+            )}
+
+            {/* Received Delegations */}
+            {activeReceivedDelegations.length > 0 && (
+              <div className="mt-6 pt-4 border-t border-slate-100">
+                <h4 className="text-sm font-medium text-slate-600 mb-3 flex items-center gap-2">
+                  <UserCheck className="w-4 h-4" />
+                  Received Delegations ({activeReceivedDelegations.length})
+                </h4>
+                <div className="space-y-2">
+                  {activeReceivedDelegations.map((delegation) => (
+                    <div
+                      key={delegation.id}
+                      className="flex items-center justify-between p-3 bg-emerald-50 rounded-lg"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center text-white font-semibold">
+                          {(delegation.delegator_id)[0].toUpperCase()}
+                        </div>
+                        <div>
+                          <p className="font-medium text-slate-800">
+                            {delegation.delegator_id}
+                          </p>
+                          <div className="flex items-center gap-2 text-xs text-slate-500">
+                            <span>Delegated to you</span>
+                            {delegation.proposal_types && delegation.proposal_types.length > 0 && (
+                              <>
+                                <span>•</span>
+                                <span>{delegation.proposal_types.join(', ')}</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      {delegation.expires_at && (
+                        <span className="text-xs text-slate-500">
+                          Expires {formatDistanceToNow(new Date(delegation.expires_at), { addSuffix: true })}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>

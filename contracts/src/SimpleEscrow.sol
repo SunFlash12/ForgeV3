@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/utils/Pausable.sol";
 
 /**
  * @title SimpleEscrow
@@ -21,7 +22,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
  *   - Local variable caching for storage reads
  *   - maxEscrowAmount configurable by owner (not hardcoded constant)
  */
-contract SimpleEscrow is ReentrancyGuard, Ownable {
+contract SimpleEscrow is ReentrancyGuard, Ownable, Pausable {
     // ═══════════════════════════════════════════════════════════════════════
     // Types
     // ═══════════════════════════════════════════════════════════════════════
@@ -127,6 +128,9 @@ contract SimpleEscrow is ReentrancyGuard, Ownable {
         emit MaxEscrowAmountUpdated(oldMax, _newMax);
     }
 
+    function pause() external onlyOwner { _pause(); }
+    function unpause() external onlyOwner { _unpause(); }
+
     // ═══════════════════════════════════════════════════════════════════════
     // External Functions
     // ═══════════════════════════════════════════════════════════════════════
@@ -142,7 +146,7 @@ contract SimpleEscrow is ReentrancyGuard, Ownable {
         address provider,
         uint256 deadline,
         bytes32 jobHash
-    ) external payable nonReentrant returns (uint256 escrowId) {
+    ) external payable nonReentrant whenNotPaused returns (uint256 escrowId) {
         if (provider == address(0)) revert InvalidAddress();
         if (provider == msg.sender) revert InvalidAddress();
         if (deadline <= block.timestamp) revert InvalidDeadline();

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Trash2, Wallet, ShoppingBag, ArrowLeft, Loader2, ShieldCheck, ExternalLink } from 'lucide-react';
+import { Trash2, Wallet, ShoppingBag, ArrowLeft, Loader2, ShieldCheck, ExternalLink, CheckCircle } from 'lucide-react';
 import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
 import {
@@ -8,11 +8,41 @@ import {
   useAccount,
   useBalance,
   useChainId,
+  useWriteContract,
+  useWaitForTransactionReceipt,
   ConnectButton,
 } from '../contexts/Web3Context';
 import { api } from '../services/api';
+import { parseEther } from 'viem';
 
 const PLATFORM_FEE_RATE = 0.10;
+
+// Platform wallet that receives capsule purchase payments
+const PLATFORM_WALLET = {
+  mainnet: '0x3CA3443c28B18332933Ea131aF85D6C9D8B88b94', // platformTreasury from base.json
+  testnet: '0x7572C2170bDf132085aa6Fea5A0E4d4f2774A9f2', // deployer on Base Sepolia
+};
+
+// Standard ERC20 ABI (only the functions we need)
+const ERC20_ABI = [
+  {
+    name: 'transfer',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'to', type: 'address' },
+      { name: 'amount', type: 'uint256' },
+    ],
+    outputs: [{ name: '', type: 'bool' }],
+  },
+  {
+    name: 'balanceOf',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'account', type: 'address' }],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+] as const;
 
 export default function Cart() {
   const { items, total, removeItem, clearCart } = useCart();
@@ -29,6 +59,19 @@ export default function Cart() {
     token: virtualTokenAddress as `0x${string}`,
   });
 
+  // Contract write hook for ERC20 transfer
+  const { writeContractAsync } = useWriteContract();
+
+  // Transaction tracking
+  const [txHash, setTxHash] = useState<`0x${string}` | undefined>();
+  const [purchaseStep, setPurchaseStep] = useState<
+    'idle' | 'signing' | 'confirming' | 'submitting' | 'success'
+  >('idle');
+
+  const { isSuccess: isConfirmed } = useWaitForTransactionReceipt({
+    hash: txHash,
+  });
+
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [purchaseError, setPurchaseError] = useState<string | null>(null);
   const [virtualPrice, setVirtualPrice] = useState<number>(0);
@@ -39,10 +82,43 @@ export default function Cart() {
 
   const navigate = useNavigate();
   const isCorrectChain = currentChainId === expectedChainId;
+  const explorerUrl = isTestnet ? 'https://sepolia.basescan.org' : 'https://basescan.org';
 
   useEffect(() => {
     fetchVirtualPrice();
   }, []);
+
+  // Watch for transaction confirmation and submit to backend
+  useEffect(() => {
+    if (isConfirmed && txHash && purchaseStep === 'confirming') {
+      setPurchaseStep('submitting');
+
+      const purchaseItems = items.map(item => ({
+        listing_id: item.capsule.id,
+        capsule_id: item.capsule.id,
+        title: item.capsule.title,
+        price_virtual: parseEther(
+          ((item.capsule.price || 0) / virtualPrice).toFixed(8)
+        ).toString(),
+        price_usd: item.capsule.price || 0,
+      }));
+
+      api.submitPurchase(purchaseItems, walletAddress!, txHash)
+        .then(() => {
+          setPurchaseStep('success');
+          clearCart();
+        })
+        .catch((err) => {
+          console.error('Backend purchase submission failed:', err);
+          // Transaction succeeded on-chain even if backend submission fails
+          setPurchaseStep('success');
+          clearCart();
+        })
+        .finally(() => {
+          setIsPurchasing(false);
+        });
+    }
+  }, [isConfirmed, txHash, purchaseStep]);
 
   const fetchVirtualPrice = async () => {
     try {
@@ -71,7 +147,7 @@ export default function Cart() {
     }
 
     // Check balance
-    const requiredAmount = BigInt(Math.floor(totalVirtual * 1e18));
+    const requiredAmount = parseEther(totalVirtual.toFixed(8));
     const currentBalance = virtualBalance?.value || BigInt(0);
     if (currentBalance < requiredAmount) {
       setPurchaseError(
@@ -82,32 +158,68 @@ export default function Cart() {
 
     setIsPurchasing(true);
     setPurchaseError(null);
+    setPurchaseStep('signing');
 
     try {
-      // For now, show coming soon - full implementation requires smart contract deployment
-      setPurchaseError(
-        'Web3 purchase integration coming soon! The marketplace smart contract is being deployed to Base. ' +
-        'Connect your wallet to be ready when it launches.'
-      );
+      // Step 1: Send ERC20 transfer of $VIRTUAL to platform wallet
+      const hash = await writeContractAsync({
+        address: virtualTokenAddress as `0x${string}`,
+        abi: ERC20_ABI,
+        functionName: 'transfer',
+        args: [(isTestnet ? PLATFORM_WALLET.testnet : PLATFORM_WALLET.mainnet) as `0x${string}`, requiredAmount],
+      });
 
-      // TODO: Full purchase flow when contract is deployed:
-      // 1. Call $VIRTUAL token approve() for marketplace contract
-      // 2. Call marketplace.purchaseCapsules(capsuleIds, totalWei)
-      // 3. Wait for transaction confirmation
-      // 4. Submit purchase to backend with tx hash
-      // 5. Navigate to success page with tx hash
+      // Step 2: Wait for on-chain confirmation (handled by useEffect above)
+      setTxHash(hash);
+      setPurchaseStep('confirming');
 
     } catch (error) {
       console.error('Purchase failed:', error);
+      setPurchaseStep('idle');
       setPurchaseError(
         error instanceof Error
           ? error.message
           : 'Failed to complete purchase. Please try again.'
       );
-    } finally {
       setIsPurchasing(false);
     }
   };
+
+  // Success view after purchase
+  if (purchaseStep === 'success' && txHash) {
+    return (
+      <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+        <div className="text-center">
+          <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" aria-hidden="true" />
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Purchase Successful!</h1>
+          <p className="text-slate-500 dark:text-slate-400 mb-6">
+            Your capsules have been purchased and are now available in your library.
+          </p>
+          <div className="bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-4 mb-8">
+            <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">Transaction Hash</p>
+            <a
+              href={`${explorerUrl}/tx/${txHash}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm font-mono text-indigo-600 dark:text-indigo-400 hover:underline break-all flex items-center justify-center gap-1"
+            >
+              {txHash.slice(0, 10)}...{txHash.slice(-8)}
+              <ExternalLink className="w-3 h-3 flex-shrink-0" aria-hidden="true" />
+            </a>
+          </div>
+          <div className="flex gap-4 justify-center">
+            <Link
+              to="/browse"
+              className="inline-flex items-center gap-2 bg-indigo-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-indigo-700 transition"
+            >
+              <ShoppingBag className="w-5 h-5" aria-hidden="true" />
+              Continue Shopping
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (items.length === 0) {
     return (
@@ -281,7 +393,7 @@ export default function Cart() {
                           )}
                           {walletAddress && (
                             <a
-                              href={`https://basescan.org/address/${walletAddress}`}
+                              href={`${explorerUrl}/address/${walletAddress}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-xs text-slate-400 hover:text-indigo-600 flex items-center gap-1 mt-1"
@@ -303,6 +415,30 @@ export default function Cart() {
               </div>
             )}
 
+            {/* Transaction progress */}
+            {purchaseStep !== 'idle' && purchaseStep !== 'success' && (
+              <div className="mb-4 p-3 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg">
+                <div className="flex items-center gap-3 text-sm">
+                  <Loader2 className="w-4 h-4 animate-spin text-indigo-600 dark:text-indigo-400 flex-shrink-0" aria-hidden="true" />
+                  <div className="text-indigo-700 dark:text-indigo-300">
+                    {purchaseStep === 'signing' && 'Please confirm the transaction in your wallet...'}
+                    {purchaseStep === 'confirming' && 'Waiting for on-chain confirmation...'}
+                    {purchaseStep === 'submitting' && 'Registering purchase...'}
+                  </div>
+                </div>
+                {txHash && (
+                  <a
+                    href={`${explorerUrl}/tx/${txHash}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-indigo-500 hover:text-indigo-700 flex items-center gap-1 mt-2"
+                  >
+                    View transaction <ExternalLink className="w-3 h-3" aria-hidden="true" />
+                  </a>
+                )}
+              </div>
+            )}
+
             {isConnected && (
               <button
                 onClick={handlePurchase}
@@ -310,15 +446,25 @@ export default function Cart() {
                 className="w-full bg-purple-600 text-white py-3 rounded-lg font-semibold hover:bg-purple-700 transition flex items-center justify-center gap-2 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 aria-label={`Purchase ${items.length} items for ${totalVirtual.toFixed(2)} $VIRTUAL`}
               >
-                {isPurchasing ? (
+                {purchaseStep === 'signing' ? (
                   <>
                     <Loader2 className="w-5 h-5 animate-spin" aria-hidden="true" />
-                    Processing...
+                    Sign in Wallet...
+                  </>
+                ) : purchaseStep === 'confirming' ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" aria-hidden="true" />
+                    Confirming...
+                  </>
+                ) : purchaseStep === 'submitting' ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" aria-hidden="true" />
+                    Finalizing...
                   </>
                 ) : !isCorrectChain ? (
                   <>
                     <Wallet className="w-5 h-5" aria-hidden="true" />
-                    Switch to Base
+                    Switch to {isTestnet ? 'Base Sepolia' : 'Base'}
                   </>
                 ) : (
                   <>

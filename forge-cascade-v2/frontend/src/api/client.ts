@@ -28,7 +28,7 @@ import type {
 // API Client Setup
 // ============================================================================
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8001/api/v1';
 
 // New login response type (tokens are in httpOnly cookies)
 interface LoginResponse {
@@ -842,26 +842,40 @@ class ForgeApiClient {
   // ============================================================================
 
   async createDelegation(data: {
-    delegate_to: string;
-    proposal_type?: string;
-    expires_at?: string;
+    delegate_id: string;
+    proposal_types?: string[];
+    expires_in_days?: number;
   }): Promise<{
     id: string;
     delegator_id: string;
     delegate_id: string;
-    proposal_type: string | null;
+    proposal_types: string[] | null;
+    is_active: boolean;
     created_at: string;
     expires_at: string | null;
   }> {
-    const response = await this.client.post('/governance/delegations', data);
+    // Convert expires_in_days to ISO string for backend
+    const payload: Record<string, unknown> = {
+      delegate_id: data.delegate_id,
+      proposal_types: data.proposal_types || null,
+    };
+    if (data.expires_in_days) {
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + data.expires_in_days);
+      payload.expires_at = expiresAt.toISOString();
+    }
+    const response = await this.client.post('/governance/delegations', payload);
     return response.data;
   }
 
-  async getMyDelegations(): Promise<Array<{
+  async getDelegations(): Promise<Array<{
     id: string;
+    delegator_id: string;
     delegate_id: string;
-    delegate_username: string;
-    proposal_type: string | null;
+    delegate_username?: string;
+    proposal_types: string[] | null;
+    is_active: boolean;
+    weight?: number;
     created_at: string;
     expires_at: string | null;
   }>> {
@@ -877,7 +891,12 @@ class ForgeApiClient {
   // User Directory Endpoints
   // ============================================================================
 
-  async searchUsers(query: string, params?: { limit?: number }): Promise<{
+  async searchUsers(params: {
+    query?: string;
+    limit?: number;
+    trust_level?: string;
+    sort_by?: string;
+  }): Promise<{
     users: Array<{
       id: string;
       username: string;
@@ -886,7 +905,14 @@ class ForgeApiClient {
       created_at: string;
     }>;
   }> {
-    const response = await this.client.get('/users/search', { params: { q: query, ...params } });
+    const response = await this.client.get('/users/search', {
+      params: {
+        q: params.query,
+        limit: params.limit,
+        trust_level: params.trust_level,
+        sort_by: params.sort_by,
+      },
+    });
     return response.data;
   }
 

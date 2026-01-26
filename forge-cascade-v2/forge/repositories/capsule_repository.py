@@ -126,7 +126,8 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
                    parent.content AS content
             """
             parent_result = await self.client.execute_single(
-                parent_query, {"parent_id": data.parent_id}
+                parent_query, {"parent_id": data.parent_id},
+                timeout=self.timeout_config.read_timeout,
             )
             if parent_result:
                 # Get parent's content hash (compute if not stored)
@@ -229,7 +230,7 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
             "now": now.isoformat(),
         }
 
-        result = await self.client.execute_single(query, params)
+        result = await self.client.execute_single(query, params, timeout=self.timeout_config.write_timeout)
 
         if result and result.get("capsule"):
             self.logger.info(
@@ -318,7 +319,7 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
         RETURN c {{.*}} AS capsule
         """
 
-        result = await self.client.execute_single(query, params)
+        result = await self.client.execute_single(query, params, timeout=self.timeout_config.write_timeout)
 
         if result and result.get("capsule"):
             return self._to_model(result["capsule"])
@@ -330,7 +331,7 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
             MATCH (c:Capsule {id: $id})
             RETURN c.owner_id AS owner_id
             """
-            check_result = await self.client.execute_single(check_query, {"id": entity_id})
+            check_result = await self.client.execute_single(check_query, {"id": entity_id}, timeout=self.timeout_config.read_timeout)
             if check_result and check_result.get("owner_id") != caller_id:
                 logger.warning(
                     "capsule_update_unauthorized",
@@ -383,7 +384,7 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
                size([x IN lineage WHERE x.id IS NOT NULL]) AS lineage_depth
         """
 
-        result = await self.client.execute_single(query, {"id": capsule_id})
+        result = await self.client.execute_single(query, {"id": capsule_id}, timeout=self.timeout_config.complex_read_timeout)
 
         if not result or not result.get("capsule"):
             return None
@@ -482,7 +483,7 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
         """
 
         try:
-            results = await self.client.execute(query, params)
+            results = await self.client.execute(query, params, timeout=self.timeout_config.read_timeout)
 
             search_results: list[CapsuleSearchResult] = []
             for r in results:
@@ -542,6 +543,7 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
         results = await self.client.execute(
             query,
             {"owner_id": owner_id, "skip": skip, "limit": limit},
+            timeout=self.timeout_config.read_timeout,
         )
 
         return self._to_models([r["capsule"] for r in results if r.get("capsule")])
@@ -556,7 +558,7 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
         MATCH (c:Capsule {id: $id})
         SET c.view_count = c.view_count + 1
         """
-        await self.client.execute(query, {"id": capsule_id})
+        await self.client.execute(query, {"id": capsule_id}, timeout=self.timeout_config.write_timeout)
 
     async def get_children(self, capsule_id: str) -> list[Capsule]:
         """Get direct children (forks) of a capsule."""
@@ -566,7 +568,7 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
         ORDER BY child.created_at DESC
         """
 
-        results = await self.client.execute(query, {"id": capsule_id})
+        results = await self.client.execute(query, {"id": capsule_id}, timeout=self.timeout_config.read_timeout)
         return self._to_models([r["capsule"] for r in results if r.get("capsule")])
 
     # SECURITY FIX (Audit 4 - H26): Maximum depth for graph traversals
@@ -611,6 +613,7 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
         results = await self.client.execute(
             query,
             {"id": capsule_id},
+            timeout=self.timeout_config.complex_read_timeout,
         )
 
         return [LineageNode(**r["node"]) for r in results if r.get("node") and r["node"].get("id")]
@@ -660,7 +663,7 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
         WHERE {where_clause}
         RETURN count(c) AS total
         """
-        count_result = await self.client.execute_single(count_query, params)
+        count_result = await self.client.execute_single(count_query, params, timeout=self.timeout_config.read_timeout)
         total = count_result["total"] if count_result else 0
 
         # Get capsules
@@ -673,7 +676,7 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
         LIMIT $limit
         """
 
-        results = await self.client.execute(query, params)
+        results = await self.client.execute(query, params, timeout=self.timeout_config.read_timeout)
         capsules = self._to_models([r["capsule"] for r in results if r.get("capsule")])
 
         return capsules, total
@@ -713,7 +716,7 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
         RETURN ancestor {{.*}} AS capsule
         """
 
-        results = await self.client.execute(query, {"id": capsule_id})
+        results = await self.client.execute(query, {"id": capsule_id}, timeout=self.timeout_config.complex_read_timeout)
         return self._to_models([r["capsule"] for r in results if r.get("capsule")])
 
     async def add_parent(
@@ -747,6 +750,7 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
                 "parent_id": parent_id,
                 "now": self._now().isoformat(),
             },
+            timeout=self.timeout_config.write_timeout,
         )
 
         if result and result.get("capsule"):
@@ -774,7 +778,7 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
         LIMIT $limit
         """
 
-        results = await self.client.execute(query, {"limit": limit})
+        results = await self.client.execute(query, {"limit": limit}, timeout=self.timeout_config.read_timeout)
         return self._to_models([r["capsule"] for r in results if r.get("capsule")])
 
     async def get_changes_since(
@@ -823,7 +827,7 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
         LIMIT $limit
         """
 
-        results = await self.client.execute(query, params)
+        results = await self.client.execute(query, params, timeout=self.timeout_config.read_timeout)
         capsules = self._to_models([r["capsule"] for r in results if r.get("capsule")])
 
         # Get deleted capsules since timestamp
@@ -839,6 +843,7 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
             archive_results = await self.client.execute(
                 archive_query,
                 {"since": since.isoformat(), "limit": limit},
+                timeout=self.timeout_config.read_timeout,
             )
             deleted_ids = [r["id"] for r in archive_results if r.get("id")]
 
@@ -886,7 +891,7 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
         LIMIT $limit
         """
 
-        results = await self.client.execute(query, params)
+        results = await self.client.execute(query, params, timeout=self.timeout_config.read_timeout)
         return [r["edge"] for r in results if r.get("edge")]
 
     async def find_similar_by_embedding(
@@ -932,6 +937,7 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
                     "min_similarity": min_similarity,
                     "exclude_ids": exclude_ids,
                 },
+                timeout=self.timeout_config.read_timeout,
             )
 
             similar: list[tuple[Capsule, float]] = []
@@ -970,7 +976,7 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
         } AS edge
         """
 
-        result = await self.client.execute_single(query, {"id": edge_id})
+        result = await self.client.execute_single(query, {"id": edge_id}, timeout=self.timeout_config.read_timeout)
 
         if result and result.get("edge"):
             return self._to_semantic_edge(result["edge"])
@@ -1060,7 +1066,7 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
             "now": now.isoformat(),
         }
 
-        result = await self.client.execute_single(query, params)
+        result = await self.client.execute_single(query, params, timeout=self.timeout_config.write_timeout)
 
         if result and result.get("edge"):
             self.logger.info(
@@ -1145,6 +1151,7 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
                 "limit": limit,
                 "type_values": type_values,  # SECURITY FIX (M4): Parameterized
             },
+            timeout=self.timeout_config.read_timeout,
         )
 
         return [
@@ -1218,7 +1225,7 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
         LIMIT $limit
         """
 
-        results = await self.client.execute(query, params)
+        results = await self.client.execute(query, params, timeout=self.timeout_config.read_timeout)
 
         contradictions: list[tuple[Capsule, Capsule, SemanticEdge]] = []
         for r in results:
@@ -1275,6 +1282,7 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
         results = await self.client.execute(
             query,
             {"min_size": min_size, "limit": limit},
+            timeout=self.timeout_config.read_timeout,
         )
 
         clusters = []
@@ -1344,7 +1352,7 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
         LIMIT $limit
         """
 
-        results = await self.client.execute(query, params)
+        results = await self.client.execute(query, params, timeout=self.timeout_config.read_timeout)
 
         return [self._to_semantic_edge(r["edge"]) for r in results if r.get("edge")]
 
@@ -1364,7 +1372,7 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
         RETURN count(r) AS deleted
         """
 
-        result = await self.client.execute_single(query, {"id": edge_id})
+        result = await self.client.execute_single(query, {"id": edge_id}, timeout=self.timeout_config.write_timeout)
         deleted = result.get("deleted", 0) if result else 0
 
         if deleted > 0:
@@ -1413,7 +1421,7 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
         }} AS edge
         """
 
-        result = await self.client.execute_single(query, params)
+        result = await self.client.execute_single(query, params, timeout=self.timeout_config.write_timeout)
 
         if result and result.get("edge"):
             return self._to_semantic_edge(result["edge"])
@@ -1442,6 +1450,7 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
                 "target_id": target_id,
                 "rel_type": rel_type.value,
             },
+            timeout=self.timeout_config.read_timeout,
         )
 
         if result and result.get("edge"):
@@ -1520,7 +1529,7 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
                c.integrity_status AS integrity_status
         """
 
-        result = await self.client.execute_single(query, {"id": capsule_id})
+        result = await self.client.execute_single(query, {"id": capsule_id}, timeout=self.timeout_config.read_timeout)
 
         if not result or result.get("content") is None:
             return {
@@ -1571,6 +1580,7 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
                     "status": new_status.value,
                     "verified_at": self._now().isoformat(),
                 },
+                timeout=self.timeout_config.write_timeout,
             )
             verification_result["status_updated"] = True
             verification_result["new_status"] = new_status.value
@@ -1609,7 +1619,7 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
         MATCH (c:Capsule {id: $id})
         RETURN c {.*} AS capsule
         """
-        target_result = await self.client.execute_single(target_query, {"id": capsule_id})
+        target_result = await self.client.execute_single(target_query, {"id": capsule_id}, timeout=self.timeout_config.read_timeout)
 
         if not target_result or not target_result.get("capsule"):
             return {

@@ -175,6 +175,7 @@ class Neo4jClient:
         self,
         query: str,
         parameters: dict[str, Any] | None = None,
+        timeout: float | None = None,
     ) -> list[dict[str, Any]]:
         """
         Execute a Cypher query and return results.
@@ -182,12 +183,17 @@ class Neo4jClient:
         Args:
             query: Cypher query string
             parameters: Query parameters
+            timeout: Optional query timeout in seconds. When set, the server
+                     will terminate the query if it runs longer than this.
+                     None means no timeout (use server default).
 
         Returns:
             List of result records as dictionaries
         """
         async with self.session() as session:
-            result = await session.run(query, parameters or {})
+            result = await session.run(
+                query, parameters or {}, timeout=timeout
+            )
             records = [dict(record) async for record in result]
             return records
 
@@ -200,6 +206,7 @@ class Neo4jClient:
         self,
         query: str,
         parameters: dict[str, Any] | None = None,
+        timeout: float | None = None,
     ) -> dict[str, Any] | None:
         """
         Execute a query and return a single result.
@@ -207,12 +214,17 @@ class Neo4jClient:
         Args:
             query: Cypher query string
             parameters: Query parameters
+            timeout: Optional query timeout in seconds. When set, the server
+                     will terminate the query if it runs longer than this.
+                     None means no timeout (use server default).
 
         Returns:
             Single result record or None
         """
         async with self.session() as session:
-            result = await session.run(query, parameters or {})
+            result = await session.run(
+                query, parameters or {}, timeout=timeout
+            )
             record = await result.single()
             return dict(record) if record else None
 
@@ -225,6 +237,7 @@ class Neo4jClient:
         self,
         query: str,
         parameters: dict[str, Any] | None = None,
+        timeout: float | None = None,
     ) -> dict[str, Any]:
         """
         Execute a write query within a transaction.
@@ -232,12 +245,17 @@ class Neo4jClient:
         Args:
             query: Cypher query string
             parameters: Query parameters
+            timeout: Optional query timeout in seconds. When set, the server
+                     will terminate the query if it runs longer than this.
+                     None means no timeout (use server default).
 
         Returns:
             Query result summary
         """
         async with self.session() as session:
-            result = await session.run(query, parameters or {})
+            result = await session.run(
+                query, parameters or {}, timeout=timeout
+            )
             summary = await result.consume()
             return {
                 "nodes_created": summary.counters.nodes_created,
@@ -251,6 +269,7 @@ class Neo4jClient:
         self,
         query: str,
         parameters: dict[str, Any] | None = None,
+        timeout: float | None = None,
     ) -> list[dict[str, Any]]:
         """
         Alias for execute() - provided for compatibility with agent code.
@@ -258,11 +277,12 @@ class Neo4jClient:
         Args:
             query: Cypher query string
             parameters: Query parameters
+            timeout: Optional query timeout in seconds.
 
         Returns:
             List of result records as dictionaries
         """
-        return await self.execute(query, parameters)
+        return await self.execute(query, parameters, timeout=timeout)
 
     async def health_check(self) -> dict[str, Any]:
         """

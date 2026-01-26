@@ -129,6 +129,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
                 "created_at": now.isoformat(),
                 "updated_at": now.isoformat(),
             },
+            timeout=self.timeout_config.write_timeout,
         )
 
         self.logger.info(
@@ -188,7 +189,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
         RETURN p {{.*}} AS entity
         """
 
-        result = await self.client.execute_single(query, params)
+        result = await self.client.execute_single(query, params, timeout=self.timeout_config.write_timeout)
 
         if result and result.get("entity"):
             return self._to_model(result["entity"])
@@ -232,6 +233,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
                 "ends_at": ends_at.isoformat(),
                 "now": now.isoformat(),
             },
+            timeout=self.timeout_config.write_timeout,
         )
 
         if result and result.get("entity"):
@@ -326,6 +328,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
                 if execution_allowed_after
                 else None,
             },
+            timeout=self.timeout_config.write_timeout,
         )
 
         if result and result.get("entity"):
@@ -361,6 +364,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
         result = await self.client.execute_single(
             query,
             {"min_trust": min_trust_level},
+            timeout=self.timeout_config.read_timeout,
         )
 
         return result.get("eligible_count", 0) if result else 0
@@ -403,6 +407,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
         result = await self.client.execute_single(
             query,
             {"id": proposal_id, "now": now_iso},
+            timeout=self.timeout_config.write_timeout,
         )
 
         if result and result.get("entity"):
@@ -413,7 +418,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
         MATCH (p:Proposal {id: $id})
         RETURN p.status AS status, p.execution_allowed_after AS timelock
         """
-        check_result = await self.client.execute_single(check_query, {"id": proposal_id})
+        check_result = await self.client.execute_single(check_query, {"id": proposal_id}, timeout=self.timeout_config.read_timeout)
 
         if check_result:
             status = check_result.get("status")
@@ -460,6 +465,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
                 "reason": reason,
                 "now": self._now().isoformat(),
             },
+            timeout=self.timeout_config.write_timeout,
         )
 
         if result and result.get("entity"):
@@ -511,7 +517,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
         MATCH (u:User {id: $voter_id})
         RETURN u.trust_flame AS trust_flame
         """
-        verify_result = await self.client.execute_single(verify_query, {"voter_id": voter_id})
+        verify_result = await self.client.execute_single(verify_query, {"voter_id": voter_id}, timeout=self.timeout_config.read_timeout)
 
         if not verify_result:
             self.logger.warning(
@@ -581,6 +587,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
                 "reason": vote_data.reason,
                 "now": now,
             },
+            timeout=self.timeout_config.write_timeout,
         )
 
         if result and result.get("vote"):
@@ -604,6 +611,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
         result = await self.client.execute_single(
             query,
             {"proposal_id": proposal_id, "voter_id": voter_id},
+            timeout=self.timeout_config.read_timeout,
         )
 
         if result and result.get("vote"):
@@ -632,6 +640,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
         results = await self.client.execute(
             query,
             {"proposal_id": proposal_id, "skip": skip, "limit": limit},
+            timeout=self.timeout_config.read_timeout,
         )
 
         return [Vote.model_validate(r["vote"]) for r in results if r.get("vote")]
@@ -655,6 +664,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
         results = await self.client.execute(
             query,
             {"voter_id": voter_id, "limit": limit},
+            timeout=self.timeout_config.read_timeout,
         )
 
         return [Vote.model_validate(r["vote"]) for r in results if r.get("vote")]
@@ -704,6 +714,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
                 ),
                 "created_at": delegation.created_at.isoformat(),
             },
+            timeout=self.timeout_config.write_timeout,
         )
 
         return result is not None
@@ -726,6 +737,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
         result = await self.client.execute_single(
             query,
             {"delegator_id": delegator_id, "delegate_id": delegate_id},
+            timeout=self.timeout_config.read_timeout,
         )
 
         deleted: int = result.get("deleted", 0) if result else 0
@@ -742,6 +754,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
         results = await self.client.execute(
             query,
             {"delegator_id": delegator_id, "now": self._now().isoformat()},
+            timeout=self.timeout_config.read_timeout,
         )
 
         delegations = []
@@ -799,6 +812,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
                 "review_json": analysis.model_dump_json(),
                 "now": self._now().isoformat(),
             },
+            timeout=self.timeout_config.write_timeout,
         )
 
         if result:
@@ -841,6 +855,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
                 "opinion_json": opinion.model_dump_json(),
                 "now": self._now().isoformat(),
             },
+            timeout=self.timeout_config.write_timeout,
         )
 
         if result:
@@ -878,7 +893,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
         ORDER BY p.voting_ends_at ASC
         """
 
-        results = await self.client.execute(query, {"now": now})
+        results = await self.client.execute(query, {"now": now}, timeout=self.timeout_config.read_timeout)
         return self._to_models([r["entity"] for r in results if r.get("entity")])
 
     async def get_by_proposer(
@@ -903,6 +918,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
         results = await self.client.execute(
             query,
             {"proposer_id": proposer_id, "skip": skip, "limit": limit},
+            timeout=self.timeout_config.read_timeout,
         )
 
         return self._to_models([r["entity"] for r in results if r.get("entity")])
@@ -936,6 +952,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
         results = await self.client.execute(
             query,
             {"now": now.isoformat(), "deadline": deadline},
+            timeout=self.timeout_config.read_timeout,
         )
 
         return self._to_models([r["entity"] for r in results if r.get("entity")])
@@ -987,7 +1004,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
         WHERE {where_clause}
         RETURN count(p) AS total
         """
-        count_result = await self.client.execute_single(count_query, params)
+        count_result = await self.client.execute_single(count_query, params, timeout=self.timeout_config.read_timeout)
         total = count_result.get("total", 0) if count_result else 0
 
         # Get paginated results
@@ -1000,7 +1017,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
         LIMIT $limit
         """
 
-        results = await self.client.execute(query, params)
+        results = await self.client.execute(query, params, timeout=self.timeout_config.read_timeout)
         proposals = self._to_models([r["entity"] for r in results if r.get("entity")])
 
         return proposals, total
@@ -1037,6 +1054,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
                 "status": status.value,
                 "now": self._now().isoformat(),
             },
+            timeout=self.timeout_config.write_timeout,
         )
 
         if result and result.get("entity"):
@@ -1104,6 +1122,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
                 "reason": vote.reason,
                 "now": now,
             },
+            timeout=self.timeout_config.write_timeout,
         )
 
         # If is_new is False, vote already existed (concurrent request)
@@ -1209,6 +1228,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
                 "expires_at": data.get("expires_at"),
                 "created_at": self._now().isoformat(),
             },
+            timeout=self.timeout_config.write_timeout,
         )
 
         if result and result.get("delegation"):
@@ -1239,7 +1259,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
         } AS stats
         """
 
-        result = await self.client.execute_single(query)
+        result = await self.client.execute_single(query, timeout=self.timeout_config.read_timeout)
 
         if result and result.get("stats"):
             return GovernanceStats.model_validate(result["stats"])
@@ -1259,6 +1279,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
         result = await self.client.execute_single(
             query,
             {"delegation_id": delegation_id},
+            timeout=self.timeout_config.write_timeout,
         )
 
         if result and result.get("delegation"):
@@ -1277,6 +1298,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
         results = await self.client.execute(
             query,
             {"user_id": user_id},
+            timeout=self.timeout_config.read_timeout,
         )
 
         delegations = []
@@ -1300,6 +1322,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
         result = await self.client.execute_single(
             query,
             {"delegation_id": delegation_id},
+            timeout=self.timeout_config.write_timeout,
         )
 
         updated: int = result.get("updated", 0) if result else 0

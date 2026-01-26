@@ -7,6 +7,7 @@ and Neo4j query patterns.
 
 import re
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Generic, TypeVar
 from uuid import uuid4
@@ -53,6 +54,30 @@ def validate_identifier(name: str, param_name: str = "identifier") -> str:
     return name
 
 
+@dataclass(frozen=True)
+class QueryTimeoutConfig:
+    """
+    Configurable query timeout settings for Neo4j repository operations.
+
+    All timeout values are in seconds. The Neo4j driver will terminate
+    queries that exceed their timeout on the server side.
+
+    Attributes:
+        read_timeout: Timeout for read queries (MATCH, RETURN).
+        write_timeout: Timeout for write queries (CREATE, SET, DELETE, MERGE).
+        complex_read_timeout: Timeout for complex read queries involving
+            traversals, aggregations, or graph algorithms.
+    """
+
+    read_timeout: float = 30.0
+    write_timeout: float = 60.0
+    complex_read_timeout: float = 120.0
+
+
+# Module-level default config; repositories can override per-instance.
+DEFAULT_QUERY_TIMEOUT = QueryTimeoutConfig()
+
+
 # Type variables for generic repository
 T = TypeVar("T", bound=BaseModel)  # Model type
 CreateT = TypeVar("CreateT", bound=BaseModel)  # Create schema type
@@ -67,14 +92,21 @@ class BaseRepository(ABC, Generic[T, CreateT, UpdateT]):
     Neo4j Cypher query patterns.
     """
 
-    def __init__(self, client: Neo4jClient):
+    def __init__(
+        self,
+        client: Neo4jClient,
+        timeout_config: QueryTimeoutConfig | None = None,
+    ):
         """
         Initialize repository with database client.
 
         Args:
             client: Neo4j client instance
+            timeout_config: Optional query timeout configuration.
+                            Uses DEFAULT_QUERY_TIMEOUT when not provided.
         """
         self.client = client
+        self.timeout_config = timeout_config or DEFAULT_QUERY_TIMEOUT
         self.logger = structlog.get_logger(self.__class__.__name__)
         # SECURITY FIX (Audit 4 - Session 4): Validate node_label at construction time
         # to ensure subclasses don't introduce injection-unsafe labels.
@@ -151,7 +183,9 @@ class BaseRepository(ABC, Generic[T, CreateT, UpdateT]):
         RETURN n {{.*}} AS entity
         """
 
-        result = await self.client.execute_single(query, {"id": entity_id})
+        result = await self.client.execute_single(
+            query, {"id": entity_id}, timeout=self.timeout_config.read_timeout
+        )
 
         if result and result.get("entity"):
             return self._to_model(result["entity"])
@@ -200,6 +234,7 @@ class BaseRepository(ABC, Generic[T, CreateT, UpdateT]):
         results = await self.client.execute(
             query,
             {"skip": skip, "limit": limit},
+            timeout=self.timeout_config.read_timeout,
         )
 
         return self._to_models([r["entity"] for r in results if r.get("entity")])
@@ -213,7 +248,9 @@ class BaseRepository(ABC, Generic[T, CreateT, UpdateT]):
         """
         # Safe: self.node_label validated at __init__ time
         query = f"MATCH (n:{self.node_label}) RETURN count(n) AS count"
-        result = await self.client.execute_single(query)
+        result = await self.client.execute_single(
+            query, timeout=self.timeout_config.read_timeout
+        )
         return result.get("count", 0) if result else 0
 
     async def exists(self, entity_id: str) -> bool:
@@ -232,7 +269,9 @@ class BaseRepository(ABC, Generic[T, CreateT, UpdateT]):
         RETURN count(n) > 0 AS exists
         """
 
-        result = await self.client.execute_single(query, {"id": entity_id})
+        result = await self.client.execute_single(
+            query, {"id": entity_id}, timeout=self.timeout_config.read_timeout
+        )
         return result.get("exists", False) if result else False
 
     async def delete(self, entity_id: str) -> bool:
@@ -252,7 +291,9 @@ class BaseRepository(ABC, Generic[T, CreateT, UpdateT]):
         RETURN count(n) AS deleted
         """
 
-        result = await self.client.execute_single(query, {"id": entity_id})
+        result = await self.client.execute_single(
+            query, {"id": entity_id}, timeout=self.timeout_config.write_timeout
+        )
         deleted = result.get("deleted", 0) if result else 0
 
         if deleted > 0:
@@ -298,6 +339,7 @@ class BaseRepository(ABC, Generic[T, CreateT, UpdateT]):
                 "value": value,
                 "now": self._now().isoformat(),
             },
+            timeout=self.timeout_config.write_timeout,
         )
 
         if result and result.get("entity"):
@@ -337,6 +379,7 @@ class BaseRepository(ABC, Generic[T, CreateT, UpdateT]):
         results = await self.client.execute(
             query,
             {"value": value, "limit": limit},
+            timeout=self.timeout_config.read_timeout,
         )
 
         return self._to_models([r["entity"] for r in results if r.get("entity")])

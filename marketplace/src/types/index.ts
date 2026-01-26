@@ -67,6 +67,8 @@ export interface CartItem {
 export interface AuthTokens {
   access_token: string;
   token_type: string;
+  csrf_token?: string;
+  expires_in?: number;
 }
 
 export interface LoginCredentials {

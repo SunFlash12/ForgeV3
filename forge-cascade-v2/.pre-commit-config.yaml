@@ -73,7 +73,6 @@ repos:
           - structlog>=24.1.0
           - types-redis
           - types-passlib
-          - types-python-jose
         files: ^forge/
         exclude: ^(tests/|\.venv/|forge/virtuals/)
 

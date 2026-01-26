@@ -12,6 +12,13 @@ Security Features:
 - Subscription limits per connection (DoS protection)
 - Message rate limiting (spam protection)
 - Message size limits (DoS protection)
+- SECURITY HARDENING: Periodic JWT re-validation during long-lived connections
+  (on every inbound message + at least every 5 minutes via receive timeout)
+- SECURITY HARDENING: Idle timeout -- clients with no inbound messages for
+  15 minutes are disconnected with a structured error frame
+- SECURITY HARDENING: Connection capacity warning logging at 80% threshold
+- SECURITY HARDENING: Consistent error-frame-then-close pattern for
+  expired/invalid tokens during active sessions
 """
 
 import asyncio
@@ -53,8 +60,16 @@ RATE_LIMIT_WINDOW_SECONDS = 60  # Rate limiting window
 MAX_WEBSOCKET_MESSAGE_SIZE = 64 * 1024  # 64KB max message size
 # SECURITY FIX (Audit 9): Global connection cap to prevent resource exhaustion
 MAX_TOTAL_CONNECTIONS = 10000
-# SECURITY FIX (Audit 9): Heartbeat idle timeout (seconds)
+# SECURITY FIX (Audit 9): Heartbeat idle timeout (seconds) -- legacy, kept for compat
 HEARTBEAT_TIMEOUT_SECONDS = 300  # 5 minutes
+# SECURITY HARDENING: Idle timeout -- disconnect clients with no inbound messages
+IDLE_TIMEOUT_SECONDS = 900  # 15 minutes
+# SECURITY HARDENING: Token re-validation ceiling for long-lived connections
+TOKEN_REVALIDATION_INTERVAL_SECONDS = 300  # Re-validate JWT at least every 5 minutes
+# SECURITY HARDENING: Receive loop timeout -- unblocks receive to allow periodic checks
+RECEIVE_LOOP_TIMEOUT_SECONDS = 30  # Wake up every 30s to run housekeeping
+# SECURITY HARDENING: Connection count warning threshold (percentage of MAX_TOTAL_CONNECTIONS)
+CONNECTION_WARNING_THRESHOLD = 0.8  # Warn at 80% capacity
 
 
 def get_token_expiry_check_interval() -> int:
@@ -200,6 +215,7 @@ class WebSocketConnection:
         self.subscriptions = subscriptions or set()
         self.connected_at = datetime.now(UTC)
         self.last_ping = datetime.now(UTC)
+        self.last_message_received = datetime.now(UTC)  # SECURITY HARDENING: track last inbound message
         self.message_count = 0
         # SECURITY FIX (Audit 5): Use deque with maxlen to bound memory growth
         # maxlen is 2x the rate limit to allow room for cleanup
@@ -328,13 +344,19 @@ class WebSocketConnection:
 
     def is_idle(self) -> bool:
         """
-        SECURITY FIX (Audit 9): Check if this connection has exceeded the heartbeat timeout.
+        SECURITY HARDENING: Check if this connection has exceeded the idle timeout.
 
-        Returns True if the connection is idle (no ping received within
-        HEARTBEAT_TIMEOUT_SECONDS), False otherwise.
+        Returns True if the connection has not received any inbound message
+        (including pings) within IDLE_TIMEOUT_SECONDS (15 minutes).
         """
         now = datetime.now(UTC)
-        return (now - self.last_ping).total_seconds() > HEARTBEAT_TIMEOUT_SECONDS
+        return (now - self.last_message_received).total_seconds() > IDLE_TIMEOUT_SECONDS
+
+    def record_inbound_activity(self) -> None:
+        """SECURITY HARDENING: Record that a message was received from this client."""
+        now = datetime.now(UTC)
+        self.last_message_received = now
+        self.last_ping = now
 
 
 class ConnectionManager:
@@ -378,6 +400,24 @@ class ConnectionManager:
             True if at or above MAX_TOTAL_CONNECTIONS, False otherwise
         """
         return self.active_connections_count >= MAX_TOTAL_CONNECTIONS
+
+    def _check_connection_threshold_warning(self) -> None:
+        """
+        SECURITY HARDENING: Log a warning if active connections exceed the warning threshold.
+
+        This provides early visibility into approaching capacity so operators
+        can scale or investigate before hard limits are hit.
+        """
+        current = self.active_connections_count
+        threshold = int(MAX_TOTAL_CONNECTIONS * CONNECTION_WARNING_THRESHOLD)
+        if current >= threshold:
+            logger.warning(
+                "websocket_connection_threshold_exceeded",
+                active_connections=current,
+                warning_threshold=threshold,
+                max_total=MAX_TOTAL_CONNECTIONS,
+                utilization_pct=round(current / MAX_TOTAL_CONNECTIONS * 100, 1),
+            )
 
     def can_user_connect(self, user_id: str | None) -> bool:
         """
@@ -434,6 +474,9 @@ class ConnectionManager:
             )
             await websocket.close(code=4029, reason="Server connection limit reached")
             return None
+
+        # SECURITY HARDENING: Warn if approaching capacity
+        self._check_connection_threshold_warning()
 
         await websocket.accept()
 
@@ -552,6 +595,9 @@ class ConnectionManager:
             await websocket.close(code=4029, reason="Server connection limit reached")
             return None
 
+        # SECURITY HARDENING: Warn if approaching capacity
+        self._check_connection_threshold_warning()
+
         await websocket.accept()
 
         connection_id = str(uuid4())
@@ -637,6 +683,9 @@ class ConnectionManager:
             )
             await websocket.close(code=4029, reason="Server connection limit reached")
             return None
+
+        # SECURITY HARDENING: Warn if approaching capacity
+        self._check_connection_threshold_warning()
 
         await websocket.accept()
 
@@ -1009,6 +1058,123 @@ async def authenticate_websocket(
 
 
 # ============================================================================
+# SECURITY HARDENING: Common helpers for hardened message loops
+# ============================================================================
+
+
+async def _send_error_and_close(
+    connection: WebSocketConnection,
+    websocket: WebSocket,
+    code: str,
+    message: str,
+    close_code: int = 4001,
+    close_reason: str = "Session terminated",
+) -> None:
+    """
+    SECURITY HARDENING: Send an error frame to the client, then close the WebSocket.
+
+    This ensures clients always receive a structured error notification before
+    the connection is torn down, giving them the opportunity to display a
+    message or automatically reconnect with a fresh token.
+    """
+    try:
+        await connection.send_json(
+            {
+                "type": "error",
+                "code": code,
+                "message": message,
+            }
+        )
+    except (WebSocketDisconnect, ConnectionError, OSError, RuntimeError):
+        pass  # Client may already be gone
+
+    try:
+        await websocket.close(code=close_code, reason=close_reason)
+    except (WebSocketDisconnect, ConnectionError, OSError, RuntimeError):
+        pass  # Already closed
+
+
+async def _receive_json_with_timeout(
+    websocket: WebSocket,
+    timeout: float = RECEIVE_LOOP_TIMEOUT_SECONDS,
+) -> dict[str, Any] | None:
+    """
+    SECURITY HARDENING: Receive a JSON message with a timeout.
+
+    Returns the parsed dict on success, or None if the timeout elapsed
+    (allowing the caller to run periodic housekeeping checks).
+
+    Raises WebSocketDisconnect if the client disconnected.
+    """
+    try:
+        data = await asyncio.wait_for(websocket.receive_json(), timeout=timeout)
+        return data  # type: ignore[return-value]
+    except asyncio.TimeoutError:
+        return None
+    except (json.JSONDecodeError, ValueError, KeyError):
+        # Try text fallback with same timeout -- use a short timeout since
+        # the underlying data may already be buffered
+        try:
+            text = await asyncio.wait_for(websocket.receive_text(), timeout=2.0)
+            return json.loads(text)  # type: ignore[return-value]
+        except (asyncio.TimeoutError, json.JSONDecodeError, ValueError, KeyError):
+            return None
+
+
+async def _run_periodic_checks(
+    connection: WebSocketConnection,
+    websocket: WebSocket,
+) -> bool:
+    """
+    SECURITY HARDENING: Run periodic housekeeping checks on a connection.
+
+    Called on every loop iteration (either after receiving a message or after
+    the receive timeout elapses). Checks:
+    1. JWT token validity (re-validates at least every TOKEN_REVALIDATION_INTERVAL_SECONDS)
+    2. Idle timeout (disconnects if no inbound message for IDLE_TIMEOUT_SECONDS)
+
+    Returns:
+        True if the connection should continue, False if it must be closed.
+    """
+    # --- Check 1: Token re-validation ---
+    if not await connection.check_token_expiry():
+        logger.info(
+            "websocket_session_expired",
+            connection_id=connection.connection_id,
+            user_id=connection.user_id,
+        )
+        await _send_error_and_close(
+            connection,
+            websocket,
+            code="TOKEN_EXPIRED",
+            message="Your session has expired. Please reconnect with a new token.",
+            close_code=4001,
+            close_reason="Token expired",
+        )
+        return False
+
+    # --- Check 2: Idle timeout ---
+    if connection.is_idle():
+        logger.info(
+            "websocket_idle_timeout",
+            connection_id=connection.connection_id,
+            user_id=connection.user_id,
+            idle_seconds=IDLE_TIMEOUT_SECONDS,
+        )
+        await _send_error_and_close(
+            connection,
+            websocket,
+            code="IDLE_TIMEOUT",
+            message=f"Connection closed due to inactivity ({IDLE_TIMEOUT_SECONDS // 60} minutes).",
+            close_code=4002,
+            close_reason="Idle timeout",
+        )
+        return False
+
+    return True
+
+
+# ============================================================================
 # WebSocket Endpoints
 # ============================================================================
 
@@ -1076,28 +1242,20 @@ async def websocket_events(
 
     try:
         while True:
-            # SECURITY FIX (Audit 6): Check token expiry periodically
-            if not await connection.check_token_expiry():
-                await connection.send_json(
-                    {
-                        "type": "error",
-                        "code": "TOKEN_EXPIRED",
-                        "message": "Your session has expired. Please reconnect with a new token.",
-                    }
-                )
-                await websocket.close(code=4001, reason="Token expired")
+            # SECURITY HARDENING: Run periodic checks (token re-validation + idle timeout)
+            if not await _run_periodic_checks(connection, websocket):
                 break
 
-            # Receive message
-            try:
-                data = await websocket.receive_json()
-            except (json.JSONDecodeError, ValueError, KeyError):
-                # Try text fallback
-                text = await websocket.receive_text()
-                try:
-                    data = json.loads(text)
-                except json.JSONDecodeError:
-                    continue
+            # SECURITY HARDENING: Receive with timeout so periodic checks can run
+            # even when no messages are arriving from the client
+            data = await _receive_json_with_timeout(websocket)
+
+            if data is None:
+                # Timeout elapsed -- no message received, loop back to run checks
+                continue
+
+            # SECURITY HARDENING: Record inbound activity to reset idle timer
+            connection.record_inbound_activity()
 
             # SECURITY FIX (Audit 9): Validate message structure
             if not isinstance(data, dict) or "type" not in data:
@@ -1109,6 +1267,18 @@ async def websocket_events(
                     }
                 )
                 continue
+
+            # SECURITY HARDENING: Re-validate token before processing every message
+            if not await connection.check_token_expiry():
+                await _send_error_and_close(
+                    connection,
+                    websocket,
+                    code="TOKEN_EXPIRED",
+                    message="Your session has expired. Please reconnect with a new token.",
+                    close_code=4001,
+                    close_reason="Token expired",
+                )
+                break
 
             # Rate limiting check
             if not connection.check_rate_limit():
@@ -1144,7 +1314,7 @@ async def websocket_events(
                     connection_manager._topic_subscribers[topic].add(connection.connection_id)
                     added_topics.append(topic)
 
-                response = {
+                response: dict[str, Any] = {
                     "type": "subscribed",
                     "topics": added_topics,
                     "all_subscriptions": list(connection.subscriptions),
@@ -1225,26 +1395,19 @@ async def websocket_dashboard(
 
     try:
         while True:
-            # SECURITY FIX (Audit 6): Check token expiry periodically
-            if not await connection.check_token_expiry():
-                await connection.send_json(
-                    {
-                        "type": "error",
-                        "code": "TOKEN_EXPIRED",
-                        "message": "Your session has expired. Please reconnect with a new token.",
-                    }
-                )
-                await websocket.close(code=4001, reason="Token expired")
+            # SECURITY HARDENING: Run periodic checks (token re-validation + idle timeout)
+            if not await _run_periodic_checks(connection, websocket):
                 break
 
-            try:
-                data = await websocket.receive_json()
-            except (json.JSONDecodeError, ValueError, KeyError):
-                text = await websocket.receive_text()
-                try:
-                    data = json.loads(text)
-                except json.JSONDecodeError:
-                    continue
+            # SECURITY HARDENING: Receive with timeout so periodic checks can run
+            data = await _receive_json_with_timeout(websocket)
+
+            if data is None:
+                # Timeout elapsed -- no message received, loop back to run checks
+                continue
+
+            # SECURITY HARDENING: Record inbound activity to reset idle timer
+            connection.record_inbound_activity()
 
             # SECURITY FIX (Audit 9): Validate message structure
             if not isinstance(data, dict) or "type" not in data:
@@ -1256,6 +1419,18 @@ async def websocket_dashboard(
                     }
                 )
                 continue
+
+            # SECURITY HARDENING: Re-validate token before processing every message
+            if not await connection.check_token_expiry():
+                await _send_error_and_close(
+                    connection,
+                    websocket,
+                    code="TOKEN_EXPIRED",
+                    message="Your session has expired. Please reconnect with a new token.",
+                    close_code=4001,
+                    close_reason="Token expired",
+                )
+                break
 
             msg_type = data.get("type")
 
@@ -1448,26 +1623,19 @@ async def websocket_chat(
 
     try:
         while True:
-            # SECURITY FIX (Audit 6): Check token expiry periodically
-            if not await connection.check_token_expiry():
-                await connection.send_json(
-                    {
-                        "type": "error",
-                        "code": "TOKEN_EXPIRED",
-                        "message": "Your session has expired. Please reconnect with a new token.",
-                    }
-                )
-                await websocket.close(code=4001, reason="Token expired")
+            # SECURITY HARDENING: Run periodic checks (token re-validation + idle timeout)
+            if not await _run_periodic_checks(connection, websocket):
                 break
 
-            try:
-                data = await websocket.receive_json()
-            except (json.JSONDecodeError, ValueError, KeyError):
-                text = await websocket.receive_text()
-                try:
-                    data = json.loads(text)
-                except json.JSONDecodeError:
-                    continue
+            # SECURITY HARDENING: Receive with timeout so periodic checks can run
+            data = await _receive_json_with_timeout(websocket)
+
+            if data is None:
+                # Timeout elapsed -- no message received, loop back to run checks
+                continue
+
+            # SECURITY HARDENING: Record inbound activity to reset idle timer
+            connection.record_inbound_activity()
 
             # SECURITY FIX (Audit 9): Validate message structure
             if not isinstance(data, dict) or "type" not in data:
@@ -1479,6 +1647,18 @@ async def websocket_chat(
                     }
                 )
                 continue
+
+            # SECURITY HARDENING: Re-validate token before processing every message
+            if not await connection.check_token_expiry():
+                await _send_error_and_close(
+                    connection,
+                    websocket,
+                    code="TOKEN_EXPIRED",
+                    message="Your session has expired. Please reconnect with a new token.",
+                    close_code=4001,
+                    close_reason="Token expired",
+                )
+                break
 
             # Rate limiting check
             if not connection.check_rate_limit():

@@ -27,6 +27,7 @@ contract CapsuleMarketplace is Ownable, ReentrancyGuard, Pausable {
     uint256 public constant PLATFORM_SHARE = 1000;    // 10%
     uint256 public constant DAO_SHARE = 500;          // 5%
     uint256 public constant BASIS_POINTS = 10000;     // 100%
+    uint256 public constant MAX_LINEAGE_ADDRESSES = 20; // Cap to prevent DoS via unbounded loops
 
     // ============ State Variables ============
     IERC20 public immutable virtualToken;
@@ -97,6 +98,7 @@ contract CapsuleMarketplace is Ownable, ReentrancyGuard, Pausable {
     error InvalidPrice();
     error Unauthorized();
     error TransferFailed();
+    error TooManyLineageAddresses();
 
     // ============ Constructor ============
     /**
@@ -134,10 +136,12 @@ contract CapsuleMarketplace is Ownable, ReentrancyGuard, Pausable {
     ) external whenNotPaused {
         if (listings[capsuleId].seller != address(0)) revert ListingAlreadyExists();
         if (priceInVirtual == 0) revert InvalidPrice();
+        if (lineageAddresses.length > MAX_LINEAGE_ADDRESSES) revert TooManyLineageAddresses();
 
         // Validate lineage addresses
-        for (uint256 i = 0; i < lineageAddresses.length; i++) {
+        for (uint256 i = 0; i < lineageAddresses.length;) {
             if (lineageAddresses[i] == address(0)) revert InvalidAddress();
+            unchecked { ++i; }
         }
 
         listings[capsuleId] = Listing({
@@ -189,8 +193,9 @@ contract CapsuleMarketplace is Ownable, ReentrancyGuard, Pausable {
         // Distribute to lineage (15% split among ancestors)
         if (listing.lineageAddresses.length > 0) {
             uint256 perLineage = lineageAmount / listing.lineageAddresses.length;
-            for (uint256 i = 0; i < listing.lineageAddresses.length; i++) {
+            for (uint256 i = 0; i < listing.lineageAddresses.length;) {
                 virtualToken.safeTransfer(listing.lineageAddresses[i], perLineage);
+                unchecked { ++i; }
             }
             // Handle remainder (dust) - send to first ancestor
             uint256 remainder = lineageAmount - (perLineage * listing.lineageAddresses.length);
@@ -240,8 +245,9 @@ contract CapsuleMarketplace is Ownable, ReentrancyGuard, Pausable {
      * @param capsuleIds Array of capsule IDs to purchase
      */
     function batchPurchase(bytes32[] calldata capsuleIds) external nonReentrant whenNotPaused {
-        for (uint256 i = 0; i < capsuleIds.length; i++) {
+        for (uint256 i = 0; i < capsuleIds.length;) {
             _executePurchase(capsuleIds[i]);
+            unchecked { ++i; }
         }
     }
 
@@ -282,9 +288,11 @@ contract CapsuleMarketplace is Ownable, ReentrancyGuard, Pausable {
     ) external {
         Listing storage listing = listings[capsuleId];
         if (listing.seller != msg.sender && msg.sender != owner()) revert Unauthorized();
+        if (newLineageAddresses.length > MAX_LINEAGE_ADDRESSES) revert TooManyLineageAddresses();
 
-        for (uint256 i = 0; i < newLineageAddresses.length; i++) {
+        for (uint256 i = 0; i < newLineageAddresses.length;) {
             if (newLineageAddresses[i] == address(0)) revert InvalidAddress();
+            unchecked { ++i; }
         }
 
         listing.lineageAddresses = newLineageAddresses;
@@ -371,10 +379,11 @@ contract CapsuleMarketplace is Ownable, ReentrancyGuard, Pausable {
         bytes32 txId
     ) external view returns (bool) {
         Purchase[] memory purchases = capsulePurchases[capsuleId];
-        for (uint256 i = 0; i < purchases.length; i++) {
+        for (uint256 i = 0; i < purchases.length;) {
             if (purchases[i].buyer == buyer && purchases[i].txId == txId) {
                 return true;
             }
+            unchecked { ++i; }
         }
         return false;
     }
@@ -411,8 +420,9 @@ contract CapsuleMarketplace is Ownable, ReentrancyGuard, Pausable {
 
         if (listing.lineageAddresses.length > 0) {
             uint256 perLineage = lineageAmount / listing.lineageAddresses.length;
-            for (uint256 i = 0; i < listing.lineageAddresses.length; i++) {
+            for (uint256 i = 0; i < listing.lineageAddresses.length;) {
                 virtualToken.safeTransfer(listing.lineageAddresses[i], perLineage);
+                unchecked { ++i; }
             }
             uint256 remainder = lineageAmount - (perLineage * listing.lineageAddresses.length);
             if (remainder > 0) {

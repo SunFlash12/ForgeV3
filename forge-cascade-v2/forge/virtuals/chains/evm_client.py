@@ -13,6 +13,7 @@ The EVM client supports:
 
 import asyncio
 import logging
+import re
 from datetime import UTC, datetime
 from typing import Any
 
@@ -128,6 +129,7 @@ class EVMChainClient(BaseChainClient):
         self._operator_account: LocalAccount | None = None
         self._contract_cache: dict[str, Any] = {}
         self._token_decimals_cache: dict[str, int] = {}
+        self._tx_lock: asyncio.Lock = asyncio.Lock()
 
     def _get_w3(self) -> AsyncWeb3:
         """Return the Web3 instance, raising if not initialized."""
@@ -323,43 +325,47 @@ class EVMChainClient(BaseChainClient):
         if not self._operator_account:
             raise ChainClientError("No operator account configured")
 
+        # --- Input validation ---
+        to_address = self._validate_address(to_address)
         if value < 0:
             raise ValueError("Transaction value cannot be negative")
 
         operator_account: LocalAccount = self._operator_account
-
-        to_address = w3.to_checksum_address(to_address)
         value_wei: Any = w3.to_wei(value, "ether")
 
-        # Build the transaction with EIP-1559 fee parameters
-        tx: dict[str, Any] = {
-            "from": operator_account.address,
-            "to": to_address,
-            "value": value_wei,
-            "nonce": await w3.eth.get_transaction_count(operator_account.address),
-            "chainId": await w3.eth.chain_id,  # type: ignore[misc]
-        }
+        # Acquire the transaction lock so that nonce fetch, signing, and
+        # broadcasting are performed atomically.  Without this, concurrent
+        # coroutines could read the same nonce and produce collisions.
+        async with self._tx_lock:
+            # Build the transaction with EIP-1559 fee parameters
+            tx: dict[str, Any] = {
+                "from": operator_account.address,
+                "to": to_address,
+                "value": value_wei,
+                "nonce": await w3.eth.get_transaction_count(operator_account.address),
+                "chainId": await w3.eth.chain_id,  # type: ignore[misc]
+            }
 
-        # Add calldata if provided
-        if data:
-            tx["data"] = data
+            # Add calldata if provided
+            if data:
+                tx["data"] = data
 
-        # Estimate gas if not provided
-        if gas_limit:
-            tx["gas"] = gas_limit
-        else:
-            tx["gas"] = await w3.eth.estimate_gas(tx)  # type: ignore[arg-type]
+            # Estimate gas if not provided
+            if gas_limit:
+                tx["gas"] = gas_limit
+            else:
+                tx["gas"] = await w3.eth.estimate_gas(tx)  # type: ignore[arg-type]
 
-        # Get EIP-1559 fee parameters
-        latest_block: Any = await w3.eth.get_block("latest")
-        base_fee: int = latest_block["baseFeePerGas"]
-        max_priority_fee: int = await w3.eth.max_priority_fee  # type: ignore[attr-defined]
-        tx["maxFeePerGas"] = base_fee * 2 + max_priority_fee
-        tx["maxPriorityFeePerGas"] = max_priority_fee
+            # Get EIP-1559 fee parameters
+            latest_block: Any = await w3.eth.get_block("latest")
+            base_fee: int = latest_block["baseFeePerGas"]
+            max_priority_fee: int = await w3.eth.max_priority_fee  # type: ignore[attr-defined]
+            tx["maxFeePerGas"] = base_fee * 2 + max_priority_fee
+            tx["maxPriorityFeePerGas"] = max_priority_fee
 
-        # Sign and send the transaction
-        signed_tx: Any = operator_account.sign_transaction(tx)
-        tx_hash: Any = await w3.eth.send_raw_transaction(signed_tx.raw_transaction)
+            # Sign and send the transaction
+            signed_tx: Any = operator_account.sign_transaction(tx)
+            tx_hash: Any = await w3.eth.send_raw_transaction(signed_tx.raw_transaction)
 
         return TransactionRecord(
             tx_hash=tx_hash.hex(),
@@ -507,8 +513,10 @@ class EVMChainClient(BaseChainClient):
         self._ensure_initialized()
         w3 = self._get_w3()
 
-        token_address = w3.to_checksum_address(token_address)
-        to_address = w3.to_checksum_address(to_address)
+        # --- Input validation ---
+        token_address = self._validate_address(token_address)
+        to_address = self._validate_address(to_address)
+        self._validate_amount(amount)
 
         # Get decimals and convert amount using Decimal for precision
         from decimal import Decimal
@@ -557,8 +565,11 @@ class EVMChainClient(BaseChainClient):
         self._ensure_initialized()
         w3 = self._get_w3()
 
-        token_address = w3.to_checksum_address(token_address)
-        spender_address = w3.to_checksum_address(spender_address)
+        # --- Input validation ---
+        token_address = self._validate_address(token_address)
+        spender_address = self._validate_address(spender_address)
+        if amount != float("inf"):
+            self._validate_amount(amount)
 
         # SECURITY FIX (Audit 4 - M12): Handle unlimited approval with explicit opt-in
         amount_raw: int
@@ -676,9 +687,12 @@ class EVMChainClient(BaseChainClient):
         if not self._operator_account:
             raise ChainClientError("No operator account configured")
 
-        operator_account: LocalAccount = self._operator_account
+        # --- Input validation ---
+        contract_address = self._validate_address(contract_address)
+        if value < 0:
+            raise ValueError("Transaction value cannot be negative")
 
-        contract_address = w3.to_checksum_address(contract_address)
+        operator_account: LocalAccount = self._operator_account
         contract: Any = w3.eth.contract(  # type: ignore[attr-defined]
             address=contract_address, abi=abi
         )
@@ -709,6 +723,87 @@ class EVMChainClient(BaseChainClient):
         w3 = self._get_w3()
         block: Any = await w3.eth.get_block(block_number)
         return datetime.fromtimestamp(block["timestamp"], tz=UTC)
+
+    # ==================== Validation Methods ====================
+
+    def _validate_address(self, address: str) -> str:
+        """
+        Validate and normalize an Ethereum address.
+
+        Checks that the address is a valid hex address (0x + 40 hex chars) and
+        returns the EIP-55 checksummed version.
+
+        Args:
+            address: The address string to validate
+
+        Returns:
+            The EIP-55 checksummed address
+
+        Raises:
+            ValueError: If the address is not a valid Ethereum address
+        """
+        if not isinstance(address, str):
+            raise ValueError(f"Address must be a string, got {type(address).__name__}")
+        if not re.fullmatch(r"0x[0-9a-fA-F]{40}", address):
+            raise ValueError(
+                f"Invalid Ethereum address: {address!r}. "
+                "Must be '0x' followed by exactly 40 hex characters."
+            )
+        w3 = self._get_w3()
+        return str(w3.to_checksum_address(address))
+
+    @staticmethod
+    def _validate_bytes32(value: str | bytes) -> bytes:
+        """
+        Validate that a value is exactly 32 bytes.
+
+        Accepts either raw bytes or a hex string (with or without '0x' prefix).
+
+        Args:
+            value: The value to validate (str or bytes)
+
+        Returns:
+            The value as a 32-byte ``bytes`` object
+
+        Raises:
+            ValueError: If the value is not exactly 32 bytes
+        """
+        if isinstance(value, str):
+            hex_str = value.removeprefix("0x")
+            try:
+                value = bytes.fromhex(hex_str)
+            except ValueError:
+                raise ValueError(f"Invalid hex string for bytes32: {value!r}")
+        if not isinstance(value, bytes):
+            raise ValueError(f"Expected str or bytes, got {type(value).__name__}")
+        if len(value) != 32:
+            raise ValueError(
+                f"bytes32 value must be exactly 32 bytes, got {len(value)}"
+            )
+        return value
+
+    @staticmethod
+    def _validate_amount(
+        amount: int | float, max_amount: float | None = None
+    ) -> None:
+        """
+        Validate that a transaction amount is positive and within bounds.
+
+        Args:
+            amount: The amount to validate
+            max_amount: Optional upper bound (inclusive)
+
+        Raises:
+            ValueError: If amount is not positive or exceeds max_amount
+        """
+        if not isinstance(amount, (int, float)):
+            raise ValueError(f"Amount must be numeric, got {type(amount).__name__}")
+        if amount <= 0:
+            raise ValueError(f"Amount must be greater than zero, got {amount}")
+        if max_amount is not None and amount > max_amount:
+            raise ValueError(
+                f"Amount {amount} exceeds maximum allowed {max_amount}"
+            )
 
     # ==================== Helper Methods ====================
 

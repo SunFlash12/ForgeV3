@@ -46,7 +46,7 @@ dependencies = [
     "email-validator>=2.1.0,<3.0.0",
 
     # Security
-    "python-jose[cryptography]>=3.3.0,<4.0.0",
+    "PyJWT[crypto]>=2.8.0,<3.0.0",
     "passlib[bcrypt]>=1.7.4,<2.0.0",
 
     # ML/AI
@@ -160,7 +160,6 @@ module = [
     "sentence_transformers.*",
     "sklearn.*",
     "passlib.*",
-    "jose.*",
     "boto3.*",
     "botocore.*",
     "psutil.*",

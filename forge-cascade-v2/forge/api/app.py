@@ -894,6 +894,7 @@ def create_app(
         sessions,
         system,
         tipping,
+        users,
     )
 
     app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
@@ -919,6 +920,7 @@ def create_app(
     app.include_router(game.router, prefix="/api/v1", tags=["GAME SDK"])
     app.include_router(tipping.router, prefix="/api/v1", tags=["Tipping"])
     app.include_router(copilot.router, prefix="/api/v1", tags=["Copilot"])
+    app.include_router(users.router, prefix="/api/v1", tags=["Users"])
 
     # WebSocket endpoints
     from forge.api.websocket import websocket_router

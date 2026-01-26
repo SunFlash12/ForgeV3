@@ -1,5 +1,5 @@
 // Forge Shop - API Client
-import axios, { AxiosInstance, AxiosError } from 'axios';
+import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
 import type {
   User,
   Capsule,
@@ -14,7 +14,14 @@ import type {
   TransactionStatus,
 } from '../types';
 
-const CASCADE_API_URL = import.meta.env.VITE_CASCADE_API_URL || 'http://localhost:8000/api/v1';
+// Extend AxiosRequestConfig to support retry flag
+declare module 'axios' {
+  interface InternalAxiosRequestConfig {
+    _retry?: boolean;
+  }
+}
+
+const CASCADE_API_URL = import.meta.env.VITE_CASCADE_API_URL || 'http://localhost:8001/api/v1';
 
 class ApiClient {
   private client: AxiosInstance;
@@ -44,14 +51,31 @@ class ApiClient {
       (error) => Promise.reject(error)
     );
 
-    // Response interceptor for error handling
+    // Response interceptor - handle 401 with token refresh before logout
     this.client.interceptors.response.use(
       (response) => response,
-      (error: AxiosError<ApiError>) => {
-        if (error.response?.status === 401) {
-          // Token expired or invalid - clear auth state
-          window.dispatchEvent(new CustomEvent('auth:logout'));
+      async (error: AxiosError<ApiError>) => {
+        const originalRequest = error.config;
+
+        if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
+          originalRequest._retry = true;
+
+          try {
+            // Attempt to refresh the token
+            const tokens = await this.refreshToken();
+            if (tokens.csrf_token) {
+              this.csrfToken = tokens.csrf_token;
+            }
+            // Retry the original request (cookies are automatically included)
+            return this.client(originalRequest);
+          } catch {
+            // Refresh failed - force logout
+            this.csrfToken = null;
+            window.dispatchEvent(new CustomEvent('auth:logout'));
+            return Promise.reject(error);
+          }
         }
+
         return Promise.reject(error);
       }
     );

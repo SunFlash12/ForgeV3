@@ -73,6 +73,7 @@ def validate_relationship_pattern(rel_types: list[str]) -> str:
 
 
 from forge.database.client import Neo4jClient
+from forge.repositories.base import QueryTimeoutConfig, DEFAULT_QUERY_TIMEOUT
 from forge.models.graph_analysis import (
     AlgorithmType,
     CentralityRequest,
@@ -115,9 +116,11 @@ class GraphAlgorithmProvider:
         self,
         client: Neo4jClient,
         config: GraphAlgorithmConfig | None = None,
+        timeout_config: QueryTimeoutConfig | None = None,
     ):
         self.client = client
         self.config = config or GraphAlgorithmConfig()
+        self.timeout_config = timeout_config or DEFAULT_QUERY_TIMEOUT
         self._gds_available: bool | None = None
         self._cache: dict[str, tuple[Any, datetime]] = {}
         self.logger = structlog.get_logger(self.__class__.__name__)
@@ -134,7 +137,10 @@ class GraphAlgorithmProvider:
     async def _check_gds_available(self) -> bool:
         """Check if Neo4j GDS plugin is available."""
         try:
-            result = await self.client.execute_single("RETURN gds.version() AS version")
+            result = await self.client.execute_single(
+                "RETURN gds.version() AS version",
+                timeout=self.timeout_config.read_timeout,
+            )
             if result and result.get("version"):
                 self.logger.info(
                     "GDS plugin detected",
@@ -222,7 +228,8 @@ class GraphAlgorithmProvider:
                     '{node_label}',
                     '{relationship_type}'
                 )
-                """
+                """,
+                timeout=self.timeout_config.write_timeout,
             )
 
             # Run PageRank
@@ -247,6 +254,7 @@ class GraphAlgorithmProvider:
                     "tolerance": request.tolerance,
                     "limit": safe_limit,
                 },
+                timeout=self.timeout_config.complex_read_timeout,
             )
 
             rankings = [
@@ -264,7 +272,8 @@ class GraphAlgorithmProvider:
             # Get total node count
             # Safe: node_label validated above
             count_result = await self.client.execute_single(
-                f"MATCH (n:{node_label}) RETURN count(n) AS count"
+                f"MATCH (n:{node_label}) RETURN count(n) AS count",
+                timeout=self.timeout_config.read_timeout,
             )
             total_nodes = count_result.get("count", 0) if count_result else 0
 
@@ -284,7 +293,10 @@ class GraphAlgorithmProvider:
             # Clean up projected graph
             # Safe: graph_name built from validated identifiers
             try:
-                await self.client.execute(f"CALL gds.graph.drop('{graph_name}', false)")
+                await self.client.execute(
+                    f"CALL gds.graph.drop('{graph_name}', false)",
+                    timeout=self.timeout_config.read_timeout,
+                )
             except (RuntimeError, OSError, ValueError):
                 pass  # Best-effort GDS graph cleanup
 
@@ -329,6 +341,7 @@ class GraphAlgorithmProvider:
                 "damping": request.damping_factor,
                 "limit": safe_limit,
             },
+            timeout=self.timeout_config.complex_read_timeout,
         )
 
         rankings = [
@@ -345,7 +358,8 @@ class GraphAlgorithmProvider:
 
         # Safe: node_label validated above
         count_result = await self.client.execute_single(
-            f"MATCH (n:{node_label}) RETURN count(n) AS count"
+            f"MATCH (n:{node_label}) RETURN count(n) AS count",
+            timeout=self.timeout_config.read_timeout,
         )
         total_nodes = count_result.get("count", 0) if count_result else 0
 
@@ -425,6 +439,7 @@ class GraphAlgorithmProvider:
                    degree AS score
             """,
             {"limit": safe_limit},
+            timeout=self.timeout_config.complex_read_timeout,
         )
 
         # Normalize if requested
@@ -444,7 +459,8 @@ class GraphAlgorithmProvider:
 
         # Safe: node_label validated above
         count_result = await self.client.execute_single(
-            f"MATCH (n:{node_label}) RETURN count(n) AS count"
+            f"MATCH (n:{node_label}) RETURN count(n) AS count",
+            timeout=self.timeout_config.read_timeout,
         )
 
         return NodeRankingResult(
@@ -491,7 +507,8 @@ class GraphAlgorithmProvider:
                     '{node_label}',
                     '{rel_type}'
                 )
-                """
+                """,
+                timeout=self.timeout_config.write_timeout,
             )
 
             # Safe: algo from hardcoded allowlist; graph_name from validated identifiers;
@@ -507,6 +524,7 @@ class GraphAlgorithmProvider:
                 RETURN n.id AS node_id, n.title AS title, n.trust_level AS trust_level, score
                 """,
                 {"limit": safe_limit},
+                timeout=self.timeout_config.complex_read_timeout,
             )
 
             rankings = [
@@ -523,7 +541,8 @@ class GraphAlgorithmProvider:
 
             # Safe: node_label validated above
             count_result = await self.client.execute_single(
-                f"MATCH (n:{node_label}) RETURN count(n) AS count"
+                f"MATCH (n:{node_label}) RETURN count(n) AS count",
+                timeout=self.timeout_config.read_timeout,
             )
 
             return NodeRankingResult(
@@ -538,7 +557,10 @@ class GraphAlgorithmProvider:
         finally:
             # Safe: graph_name built from validated identifier
             try:
-                await self.client.execute(f"CALL gds.graph.drop('{graph_name}', false)")
+                await self.client.execute(
+                    f"CALL gds.graph.drop('{graph_name}', false)",
+                    timeout=self.timeout_config.read_timeout,
+                )
             except (RuntimeError, OSError, ValueError):
                 pass  # Best-effort GDS graph cleanup
 
@@ -611,7 +633,8 @@ class GraphAlgorithmProvider:
                         }}
                     }}
                 )
-                """
+                """,
+                timeout=self.timeout_config.write_timeout,
             )
 
             # Run Louvain
@@ -624,7 +647,8 @@ class GraphAlgorithmProvider:
                 RETURN n.id AS node_id, n.type AS node_type, n.trust_level AS trust_level,
                        communityId AS community_id
                 ORDER BY community_id
-                """
+                """,
+                timeout=self.timeout_config.complex_read_timeout,
             )
 
             # Group by community
@@ -677,7 +701,10 @@ class GraphAlgorithmProvider:
         finally:
             # Safe: graph_name is constant "community_detection"
             try:
-                await self.client.execute(f"CALL gds.graph.drop('{graph_name}', false)")
+                await self.client.execute(
+                    f"CALL gds.graph.drop('{graph_name}', false)",
+                    timeout=self.timeout_config.read_timeout,
+                )
             except (RuntimeError, OSError, ValueError):
                 pass  # Best-effort GDS graph cleanup
 
@@ -716,6 +743,7 @@ class GraphAlgorithmProvider:
                 "min_size": request.min_community_size,
                 "max_communities": request.max_communities,
             },
+            timeout=self.timeout_config.complex_read_timeout,
         )
 
         communities = []
@@ -798,6 +826,7 @@ class GraphAlgorithmProvider:
                 "target_id": request.target_id,
                 "decay": request.decay_rate,
             },
+            timeout=self.timeout_config.complex_read_timeout,
         )
 
         paths = []
@@ -839,7 +868,8 @@ class GraphAlgorithmProvider:
             MATCH (n)
             WITH labels(n)[0] AS label, count(n) AS count
             RETURN label, count
-            """
+            """,
+            timeout=self.timeout_config.read_timeout,
         )
         nodes_by_type = {r["label"]: r["count"] for r in node_results}
         total_nodes = sum(nodes_by_type.values())
@@ -850,7 +880,8 @@ class GraphAlgorithmProvider:
             MATCH ()-[r]->()
             WITH type(r) AS rel_type, count(r) AS count
             RETURN rel_type, count
-            """
+            """,
+            timeout=self.timeout_config.read_timeout,
         )
         edges_by_type = {r["rel_type"]: r["count"] for r in edge_results}
         total_edges = sum(edges_by_type.values())
@@ -864,7 +895,8 @@ class GraphAlgorithmProvider:
             RETURN avg(degree) AS avg_degree,
                    max(degree) AS max_degree,
                    count(n) AS node_count
-            """
+            """,
+            timeout=self.timeout_config.complex_read_timeout,
         )
 
         avg_degree = stats_result.get("avg_degree", 0) if stats_result else 0
@@ -888,13 +920,15 @@ class GraphAlgorithmProvider:
                     ELSE 'CORE'
                 END AS bucket,
                 count(*) AS count
-            """
+            """,
+            timeout=self.timeout_config.read_timeout,
         )
         trust_distribution = {r["bucket"]: r["count"] for r in trust_result}
 
         # Average trust
         avg_trust_result = await self.client.execute_single(
-            "MATCH (c:Capsule) RETURN avg(c.trust_level) AS avg_trust"
+            "MATCH (c:Capsule) RETURN avg(c.trust_level) AS avg_trust",
+            timeout=self.timeout_config.read_timeout,
         )
         avg_trust = avg_trust_result.get("avg_trust", 60) if avg_trust_result else 60
 
@@ -952,6 +986,7 @@ class GraphAlgorithmProvider:
                    trust
             """,
             {"limit": safe_limit},
+            timeout=self.timeout_config.complex_read_timeout,
         )
 
         return [
@@ -1018,7 +1053,8 @@ class GraphAlgorithmProvider:
                     '{node_label}',
                     '{relationship_type}'
                 )
-                """
+                """,
+                timeout=self.timeout_config.write_timeout,
             )
 
             # Run node similarity
@@ -1046,6 +1082,7 @@ class GraphAlgorithmProvider:
                         "top_k": safe_top_k,
                         "cutoff": request.similarity_cutoff,
                     },
+                    timeout=self.timeout_config.complex_read_timeout,
                 )
             else:
                 results = await self.client.execute(
@@ -1065,6 +1102,7 @@ class GraphAlgorithmProvider:
                         "top_k": safe_top_k,
                         "cutoff": request.similarity_cutoff,
                     },
+                    timeout=self.timeout_config.complex_read_timeout,
                 )
 
             similar_nodes = [
@@ -1089,7 +1127,10 @@ class GraphAlgorithmProvider:
         finally:
             # Safe: graph_name built from validated identifier
             try:
-                await self.client.execute(f"CALL gds.graph.drop('{graph_name}', false)")
+                await self.client.execute(
+                    f"CALL gds.graph.drop('{graph_name}', false)",
+                    timeout=self.timeout_config.read_timeout,
+                )
             except (RuntimeError, OSError, ValueError):
                 pass  # Best-effort GDS graph cleanup
 
@@ -1139,6 +1180,7 @@ class GraphAlgorithmProvider:
                     "cutoff": request.similarity_cutoff,
                     "top_k": safe_top_k,
                 },
+                timeout=self.timeout_config.complex_read_timeout,
             )
         else:
             # Safe: node_label and relationship_type validated above
@@ -1165,6 +1207,7 @@ class GraphAlgorithmProvider:
                     "cutoff": request.similarity_cutoff,
                     "top_k": safe_top_k,
                 },
+                timeout=self.timeout_config.complex_read_timeout,
             )
 
         similar_nodes = [
@@ -1240,7 +1283,8 @@ class GraphAlgorithmProvider:
                         relationshipProperties: 'trust_weight'
                     }}
                 )
-                """
+                """,
+                timeout=self.timeout_config.write_timeout,
             )
 
             # Safe: graph_name is constant "shortest_path_graph"
@@ -1264,6 +1308,7 @@ class GraphAlgorithmProvider:
                     "source_id": request.source_id,
                     "target_id": request.target_id,
                 },
+                timeout=self.timeout_config.complex_read_timeout,
             )
 
             if result:
@@ -1303,7 +1348,10 @@ class GraphAlgorithmProvider:
         finally:
             # Safe: graph_name is constant "shortest_path_graph"
             try:
-                await self.client.execute(f"CALL gds.graph.drop('{graph_name}', false)")
+                await self.client.execute(
+                    f"CALL gds.graph.drop('{graph_name}', false)",
+                    timeout=self.timeout_config.read_timeout,
+                )
             except (RuntimeError, OSError, ValueError):
                 pass  # Best-effort GDS graph cleanup
 
@@ -1338,6 +1386,7 @@ class GraphAlgorithmProvider:
                 "source_id": request.source_id,
                 "target_id": request.target_id,
             },
+            timeout=self.timeout_config.complex_read_timeout,
         )
 
         if result:
@@ -1394,9 +1443,16 @@ class GraphRepository:
     Wraps GraphAlgorithmProvider with repository patterns.
     """
 
-    def __init__(self, client: Neo4jClient):
+    def __init__(
+        self,
+        client: Neo4jClient,
+        timeout_config: QueryTimeoutConfig | None = None,
+    ):
         self.client = client
-        self.provider = GraphAlgorithmProvider(client)
+        self.timeout_config = timeout_config or DEFAULT_QUERY_TIMEOUT
+        self.provider = GraphAlgorithmProvider(
+            client, timeout_config=self.timeout_config
+        )
         self.logger = structlog.get_logger(self.__class__.__name__)
 
     async def compute_pagerank(
