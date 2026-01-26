@@ -202,7 +202,7 @@ class CacheInvalidator:
                         await callback(event)
                     else:
                         callback(event)
-                except Exception as e:
+                except (RuntimeError, ValueError, TypeError, OSError) as e:
                     logger.warning(
                         "invalidation_callback_error",
                         error=str(e)
@@ -210,7 +210,7 @@ class CacheInvalidator:
 
             self._stats.events_processed += 1
 
-        except Exception as e:
+        except (RuntimeError, ValueError, TypeError, OSError, ConnectionError) as e:
             logger.error(
                 "invalidation_error",
                 capsule_id=event.capsule_id,

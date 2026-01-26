@@ -272,7 +272,7 @@ class PhenotypeNormalizer:
 
             return candidates
 
-        except Exception as e:
+        except (ConnectionError, TimeoutError, ValueError, RuntimeError) as e:
             logger.warning("embedding_match_failed", error=str(e))
             return []
 

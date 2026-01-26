@@ -189,7 +189,7 @@ class ForgeTracer:
                 service=self._config.service_name
             )
 
-        except Exception as e:
+        except (RuntimeError, OSError, ConnectionError, ValueError, TypeError) as e:
             logger.error("tracing_init_error", error=str(e))
             self._tracer = NoOpTracer()
             self._initialized = True
@@ -227,7 +227,7 @@ class ForgeTracer:
         ) as active_span:
             try:
                 yield active_span
-            except Exception as e:
+            except Exception as e:  # Intentional broad catch: tracing must record all exception types before re-raising
                 if OTEL_AVAILABLE and hasattr(active_span, 'record_exception'):
                     active_span.record_exception(e)
                     active_span.set_status(Status(StatusCode.ERROR, str(e)))

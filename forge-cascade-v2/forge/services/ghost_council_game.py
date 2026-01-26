@@ -84,7 +84,7 @@ def create_analyze_proposal_function(council_service: GhostCouncilService) -> Fu
                 "timestamp": datetime.now(UTC).isoformat(),
             }
             return ("DONE", result, {"last_analysis": result})
-        except Exception as e:
+        except (RuntimeError, ValueError, ConnectionError, TimeoutError, OSError) as e:
             return ("FAILED", {"error": str(e)}, {})
 
     return FunctionDefinition(
@@ -534,7 +534,7 @@ then cast your vote.
                 vote = await task
                 member_votes.append(vote)
                 self._stats["agent_interactions"] += 1
-            except Exception as e:
+            except (RuntimeError, ValueError, ConnectionError, TimeoutError, OSError) as e:
                 logger.error(f"Agent {member.name} deliberation failed: {e}")
                 # Create abstain vote on failure
                 member_votes.append(

@@ -329,7 +329,7 @@ class DifferentialAgent(DiagnosticAgent):
                             """, {"name": disease_name})
                             if results:
                                 disease_id = results[0].get("disease_id")
-                        except Exception as e:
+                        except (RuntimeError, OSError, ConnectionError, ValueError) as e:
                             logger.warning("disease_lookup_failed", name=disease_name, error=str(e))
 
                     if disease_id and disease_id not in seen_ids:
@@ -387,7 +387,7 @@ class DifferentialAgent(DiagnosticAgent):
                             })
                             seen_ids.add(disease_id)
 
-                except Exception as e:
+                except (RuntimeError, OSError, ConnectionError, ValueError) as e:
                     logger.error("candidate_query_failed", error=str(e))
 
         return candidates
@@ -493,7 +493,7 @@ class DifferentialAgent(DiagnosticAgent):
                     recall = matched / len(patient_hpo) if patient_hpo else 0
                     precision = matched / len(expected) if expected else 0
                     return (recall + precision) / 2
-        except Exception:
+        except (RuntimeError, OSError, ConnectionError, ValueError) as _:
             pass
 
         return 0.5
@@ -523,7 +523,7 @@ class DifferentialAgent(DiagnosticAgent):
                 """, {"disease_id": disease_id})
                 if results:
                     disease_genes = results[0].get("genes", [])
-            except Exception as e:
+            except (RuntimeError, OSError, ConnectionError, ValueError) as e:
                 logger.debug("disease_genes_query_failed", disease_id=disease_id, error=str(e))
 
         if not disease_genes:

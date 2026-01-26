@@ -60,7 +60,7 @@ def validate_webhook_url(url: str) -> str:
     """
     try:
         parsed = urlparse(url)
-    except Exception as e:
+    except (ValueError, TypeError) as e:
         raise SSRFError(f"Invalid URL format: {e}")
 
     if parsed.scheme not in ("http", "https"):
@@ -489,7 +489,7 @@ class NotificationService:
                     webhook.verified = True
                     return True
 
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError, httpx.HTTPError, RuntimeError) as e:
             logger.warning(f"Webhook verification failed: {e}")
 
         return False
@@ -531,7 +531,7 @@ class NotificationService:
                 await self._deliver_webhook(webhook, notification)
             except asyncio.CancelledError:
                 break
-            except Exception as e:
+            except Exception as e:  # Intentional broad catch: background worker loop must not crash
                 logger.error(f"Webhook worker error: {e}")
 
     async def _deliver_webhook(
@@ -611,7 +611,7 @@ class NotificationService:
                 # Schedule retry
                 await self._schedule_retry(delivery, webhook)
 
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError, httpx.HTTPError, RuntimeError, SSRFError) as e:
             delivery.error = str(e)
             delivery.completed_at = datetime.now(UTC)
             webhook.total_failure += 1
@@ -662,7 +662,7 @@ class NotificationService:
 
             except asyncio.CancelledError:
                 break
-            except Exception as e:
+            except Exception as e:  # Intentional broad catch: background worker loop must not crash
                 logger.error(f"Retry worker error: {e}")
 
     async def _retry_delivery(self, delivery: WebhookDelivery, webhook: WebhookSubscription) -> None:
@@ -704,7 +704,7 @@ class NotificationService:
             delivery.success = False
             logger.warning(f"Webhook {webhook.id} blocked by SSRF protection: {e}")
             # Don't retry - this is a permanent failure
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError, httpx.HTTPError, RuntimeError) as e:
             delivery.error = str(e)
             await self._schedule_retry(delivery, webhook)
 
@@ -784,7 +784,7 @@ class NotificationService:
                 }
             )
             return True
-        except Exception as e:
+        except (RuntimeError, OSError, ConnectionError, ValueError) as e:
             logger.error(f"Failed to persist notification {notification.id}: {e}")
             return False
 
@@ -806,7 +806,7 @@ class NotificationService:
         import bcrypt
         try:
             return bcrypt.checkpw(secret.encode('utf-8'), hashed_secret.encode('utf-8'))
-        except Exception:
+        except (ValueError, TypeError, RuntimeError) as _:
             return False
 
     async def _persist_webhook(self, webhook: WebhookSubscription) -> bool:
@@ -846,7 +846,7 @@ class NotificationService:
                 }
             )
             return True
-        except Exception as e:
+        except (RuntimeError, OSError, ConnectionError, ValueError) as e:
             logger.error(f"Failed to persist webhook {webhook.id}: {e}")
             return False
 
@@ -891,7 +891,7 @@ class NotificationService:
 
             logger.info(f"Loaded {loaded} webhooks from database")
             return loaded
-        except Exception as e:
+        except (RuntimeError, OSError, ConnectionError, ValueError, KeyError) as e:
             logger.error(f"Failed to load notification data: {e}")
             return 0
 
@@ -907,7 +907,7 @@ class NotificationService:
             """
             await self.neo4j.execute_write(query, parameters={"id": webhook_id})
             return True
-        except Exception as e:
+        except (RuntimeError, OSError, ConnectionError, ValueError) as e:
             logger.error(f"Failed to delete webhook {webhook_id}: {e}")
             return False
 

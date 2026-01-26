@@ -129,7 +129,7 @@ async def get_agent():
                 detail="GitHub Copilot SDK not installed. "
                        "Install with: pip install github-copilot-sdk"
             )
-        except Exception as e:
+        except (RuntimeError, ConnectionError, OSError, ValueError) as e:
             logger.error(f"Failed to initialize Copilot agent: {e}")
             raise HTTPException(
                 status_code=503,
@@ -186,7 +186,7 @@ async def chat(
             latency_ms=response.latency_ms,
         )
 
-    except Exception as e:
+    except (ConnectionError, TimeoutError, ValueError, RuntimeError) as e:
         logger.error(f"Chat request failed: {e}")
         raise HTTPException(
             status_code=500,
@@ -216,7 +216,7 @@ async def stream_chat(
                 metadata=request.metadata,
             ):
                 yield chunk
-        except Exception as e:
+        except (ConnectionError, TimeoutError, ValueError, RuntimeError) as e:
             logger.error(f"Stream chat failed: {e}")
             yield f"\n[Error: {e}]"
 
@@ -364,7 +364,7 @@ async def websocket_chat(websocket: WebSocket) -> None:
 
         user_id = payload.sub
 
-    except Exception as e:
+    except (ValueError, KeyError, OSError, RuntimeError) as e:
         logger.warning(f"WebSocket authentication failed: {e}")
         await websocket.close(code=4001, reason="Authentication failed")
         return
@@ -385,7 +385,7 @@ async def websocket_chat(websocket: WebSocket) -> None:
                         "name": event.data.name,
                         "arguments": event.data.arguments,
                     }))
-                except Exception:
+                except (WebSocketDisconnect, ConnectionError, OSError, RuntimeError):
                     pass
 
         agent.on_event(on_tool_call)
@@ -432,12 +432,12 @@ async def websocket_chat(websocket: WebSocket) -> None:
 
     except WebSocketDisconnect:
         logger.info("WebSocket disconnected")
-    except Exception as e:
+    except (ConnectionError, asyncio.CancelledError, OSError, RuntimeError) as e:
         logger.error(f"WebSocket error: {e}")
         try:
             await websocket.send_json({
                 "type": "error",
                 "message": str(e),
             })
-        except Exception:
+        except (WebSocketDisconnect, ConnectionError, OSError, RuntimeError):
             pass

@@ -138,8 +138,12 @@ class PrimeKGOverlay(BaseOverlay):
 
             return await super().initialize()
 
-        except Exception as e:
-            self._logger.error("primekg_init_error", error=str(e))
+        except (PrimeKGError, OverlayError, RuntimeError, ValueError, ConnectionError, OSError) as e:
+            self._logger.error(
+                "primekg_init_error",
+                error=str(e),
+                error_type=type(e).__name__,
+            )
             return False
 
     async def cleanup(self) -> None:
@@ -223,11 +227,12 @@ class PrimeKGOverlay(BaseOverlay):
                 }
             )
 
-        except Exception as e:
+        except (PrimeKGError, OverlayError, RuntimeError, ValueError, TypeError, KeyError, ConnectionError, OSError) as e:
             self._logger.error(
                 "primekg_execution_error",
                 operation=operation,
-                error=str(e)
+                error=str(e),
+                error_type=type(e).__name__,
             )
             return OverlayResult.fail(f"PrimeKG error: {str(e)}")
 

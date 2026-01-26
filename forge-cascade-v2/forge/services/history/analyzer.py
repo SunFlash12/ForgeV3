@@ -372,7 +372,7 @@ class HistoryAnalyzer:
                         "relevance": "high",
                     })
 
-            except Exception as e:
+            except (RuntimeError, ValueError, OSError, ConnectionError) as e:
                 logger.debug("disease_query_failed", error=str(e))
 
         return hints

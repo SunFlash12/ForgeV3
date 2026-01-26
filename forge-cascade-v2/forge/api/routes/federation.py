@@ -1192,11 +1192,11 @@ async def receive_capsules(
 
                     accepted += 1
                     logger.info(f"Created federated capsule {new_capsule.id} from peer {peer.name}")
-                except Exception as e:
+                except (ValueError, TypeError, KeyError, RuntimeError, OSError) as e:
                     logger.error(f"Failed to create capsule from {remote_id}: {e}")
                     rejected += 1
 
-        except Exception as e:
+        except (ValueError, TypeError, KeyError, RuntimeError, OSError) as e:
             logger.error(f"Error processing incoming capsule: {e}")
             rejected += 1
 

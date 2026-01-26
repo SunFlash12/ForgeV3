@@ -21,6 +21,7 @@ Usage:
     governance_worker = create_governance_worker(governance_service)
 """
 
+import json
 import logging
 from datetime import UTC, datetime
 from typing import cast
@@ -105,7 +106,7 @@ def create_search_capsules_function(
                 "results_count": len(formatted_results),
             }
 
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError, ValueError, RuntimeError, KeyError, TypeError) as e:
             logger.error(f"Capsule search failed: {e}")
             return STATUS_FAILED, str(e), {}
 
@@ -182,7 +183,7 @@ def create_get_capsule_function(
 
             return STATUS_DONE, result, {"last_retrieved_capsule": capsule_id}
 
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError, ValueError, RuntimeError, KeyError, TypeError) as e:
             logger.error(f"Failed to get capsule {capsule_id}: {e}")
             return STATUS_FAILED, str(e), {}
 
@@ -244,7 +245,7 @@ def create_create_capsule_function(
                 "created_capsule_id": capsule.id,
             }
 
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError, ValueError, RuntimeError, KeyError, TypeError) as e:
             logger.error(f"Failed to create capsule: {e}")
             return STATUS_FAILED, str(e), {}
 
@@ -319,7 +320,6 @@ def create_run_overlay_function(
             # Parse parameters if provided (JSON string)
             params_dict = {}
             if parameters:
-                import json
                 params_dict = json.loads(parameters)
 
             # Run the overlay
@@ -340,7 +340,7 @@ def create_run_overlay_function(
                 "last_overlay_result": result.status,
             }
 
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError, ValueError, RuntimeError, KeyError, TypeError, json.JSONDecodeError) as e:
             logger.error(f"Overlay execution failed: {e}")
             return STATUS_FAILED, str(e), {}
 
@@ -402,7 +402,7 @@ def create_list_overlays_function(
 
             return STATUS_DONE, formatted, {}
 
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError, ValueError, RuntimeError, KeyError, TypeError) as e:
             logger.error(f"Failed to list overlays: {e}")
             return STATUS_FAILED, str(e), {}
 
@@ -459,7 +459,7 @@ def create_get_proposals_function(
                 "active_proposals_count": len([p for p in formatted if p["status"] == "active"]),
             }
 
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError, ValueError, RuntimeError, KeyError, TypeError) as e:
             logger.error(f"Failed to get proposals: {e}")
             return STATUS_FAILED, str(e), {}
 
@@ -529,7 +529,7 @@ def create_cast_vote_function(
                 "last_vote_direction": vote,
             }
 
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError, ValueError, RuntimeError, KeyError, TypeError) as e:
             logger.error(f"Failed to cast vote: {e}")
             return STATUS_FAILED, str(e), {}
 

@@ -14,6 +14,7 @@ Security Features:
 - Message size limits (DoS protection)
 """
 
+import asyncio
 import json
 from collections import defaultdict, deque
 from datetime import UTC, datetime
@@ -100,7 +101,7 @@ def validate_websocket_origin(websocket: WebSocket) -> bool:
     try:
         parsed_origin = urlparse(origin)
         origin_host = parsed_origin.netloc.lower()
-    except Exception:
+    except (ValueError, AttributeError):
         logger.warning(
             "websocket_invalid_origin",
             origin=origin,
@@ -132,7 +133,7 @@ def validate_websocket_origin(websocket: WebSocket) -> bool:
                 # Same host, different port - may be allowed in development
                 if settings.app_env != "production":
                     return True
-        except Exception:
+        except (ValueError, AttributeError):
             continue
 
     # Origin not in allowed list
@@ -290,7 +291,7 @@ class WebSocketConnection:
             self._token_valid = False
             return False
 
-        except Exception as e:
+        except (ValueError, KeyError, OSError) as e:
             logger.error(
                 "websocket_token_check_error",
                 connection_id=self.connection_id,
@@ -306,7 +307,7 @@ class WebSocketConnection:
             await self.websocket.send_json(data)
             self.message_count += 1
             return True
-        except Exception as e:
+        except (WebSocketDisconnect, ConnectionError, OSError, RuntimeError) as e:
             logger.warning("websocket_send_failed",
                          connection_id=self.connection_id,
                          error=str(e))
@@ -318,7 +319,7 @@ class WebSocketConnection:
             await self.websocket.send_text(text)
             self.message_count += 1
             return True
-        except Exception:
+        except (WebSocketDisconnect, ConnectionError, OSError, RuntimeError):
             return False
 
 
@@ -790,7 +791,7 @@ class ConnectionManager:
                             "action_required": "reauthenticate",
                             "timestamp": datetime.now(UTC).isoformat()
                         })
-                    except Exception:
+                    except (WebSocketDisconnect, ConnectionError, OSError, RuntimeError):
                         pass  # Client may already be disconnected
 
                     # Close the WebSocket connection
@@ -799,7 +800,7 @@ class ConnectionManager:
                             code=close_code,
                             reason=f"Session terminated: {reason}"
                         )
-                    except Exception:
+                    except (WebSocketDisconnect, ConnectionError, OSError, RuntimeError):
                         pass  # Already closed
 
                     closed_count += 1
@@ -816,7 +817,7 @@ class ConnectionManager:
                             await self.disconnect_chat(room_id, conn_id)
                             break
 
-            except Exception as e:
+            except (WebSocketDisconnect, ConnectionError, OSError, RuntimeError) as e:
                 logger.warning(
                     "force_disconnect_error",
                     user_id=user_id,
@@ -945,7 +946,7 @@ async def authenticate_websocket(
 
         # SECURITY FIX (Audit 6): Return token for periodic validation
         return user_id, token
-    except Exception as e:
+    except (TokenExpiredError, TokenInvalidError, ValueError, KeyError, OSError) as e:
         logger.warning(
             "websocket_auth_failed",
             auth_method=token_source,
@@ -1032,7 +1033,7 @@ async def websocket_events(
             # Receive message
             try:
                 data = await websocket.receive_json()
-            except Exception:
+            except (json.JSONDecodeError, ValueError, KeyError):
                 # Try text fallback
                 text = await websocket.receive_text()
                 try:
@@ -1095,7 +1096,7 @@ async def websocket_events(
 
     except WebSocketDisconnect:
         pass
-    except Exception as e:
+    except (ConnectionError, asyncio.CancelledError, OSError, RuntimeError) as e:
         logger.error("websocket_events_error",
                     connection_id=connection.connection_id,
                     error=str(e))
@@ -1161,7 +1162,7 @@ async def websocket_dashboard(
 
             try:
                 data = await websocket.receive_json()
-            except Exception:
+            except (json.JSONDecodeError, ValueError, KeyError):
                 text = await websocket.receive_text()
                 try:
                     data = json.loads(text)
@@ -1185,7 +1186,7 @@ async def websocket_dashboard(
 
     except WebSocketDisconnect:
         pass
-    except Exception as e:
+    except (ConnectionError, asyncio.CancelledError, OSError, RuntimeError) as e:
         logger.error("websocket_dashboard_error",
                     connection_id=connection.connection_id,
                     error=str(e))
@@ -1298,7 +1299,7 @@ async def websocket_chat(
         )
         await websocket.close(code=4003, reason=f"Access denied: {e.reason}")
         return
-    except Exception as e:
+    except (RuntimeError, ValueError, KeyError, OSError) as e:
         logger.error(
             "chat_access_check_error",
             room_id=room_id,
@@ -1367,7 +1368,7 @@ async def websocket_chat(
 
             try:
                 data = await websocket.receive_json()
-            except Exception:
+            except (json.JSONDecodeError, ValueError, KeyError):
                 text = await websocket.receive_text()
                 try:
                     data = json.loads(text)
@@ -1422,7 +1423,7 @@ async def websocket_chat(
                                 "created_at": saved_message.created_at.isoformat(),
                             }
                         )
-                    except Exception as e:
+                    except (RuntimeError, ValueError, OSError) as e:
                         logger.error(
                             "chat_message_save_failed",
                             room_id=room_id,
@@ -1463,7 +1464,7 @@ async def websocket_chat(
                             "code": "PERMISSION_DENIED",
                             "message": f"Cannot delete message: {e.action} requires {e.required_role} role."
                         })
-                    except Exception as e:
+                    except (RuntimeError, ValueError, OSError) as e:
                         logger.error(
                             "chat_message_delete_failed",
                             room_id=room_id,
@@ -1491,7 +1492,7 @@ async def websocket_chat(
 
     except WebSocketDisconnect:
         pass
-    except Exception as e:
+    except (ConnectionError, asyncio.CancelledError, OSError, RuntimeError) as e:
         logger.error("websocket_chat_error",
                     connection_id=connection.connection_id,
                     room_id=room_id,

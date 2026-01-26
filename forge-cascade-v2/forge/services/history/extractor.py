@@ -193,7 +193,7 @@ class HistoryExtractor:
             try:
                 # Use HPO service to extract phenotypes
                 pass  # Would integrate with HPO extractor
-            except Exception:
+            except (RuntimeError, ValueError, OSError):
                 pass
 
         return conditions
@@ -238,7 +238,7 @@ class HistoryExtractor:
                 matches = self._hpo.search_terms(keyword, limit=1)
                 if matches:
                     condition.hpo_code = matches[0].hpo_id
-            except Exception:
+            except (RuntimeError, ValueError, KeyError):
                 pass
 
         return condition
@@ -279,7 +279,7 @@ class HistoryExtractor:
                                 hpo_matches = self._hpo.search_terms(keyword, limit=1)
                                 if hpo_matches:
                                     item.hpo_code = hpo_matches[0].hpo_id
-                            except Exception:
+                            except (RuntimeError, ValueError, KeyError):
                                 pass
 
                         items.append(item)

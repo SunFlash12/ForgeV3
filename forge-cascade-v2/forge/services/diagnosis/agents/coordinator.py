@@ -227,7 +227,7 @@ class DiagnosticCoordinator:
                 "error": "Diagnosis timeout",
                 "partial_results": self._build_result(session),
             }
-        except Exception as e:
+        except (RuntimeError, ValueError, OSError, ConnectionError) as e:
             logger.error("diagnosis_failed", session_id=session.id, error=str(e))
             return {
                 "error": str(e),
@@ -264,7 +264,7 @@ class DiagnosticCoordinator:
             for task in tasks:
                 try:
                     await task
-                except Exception as e:
+                except (RuntimeError, ValueError, OSError, ConnectionError) as e:
                     logger.warning("agent_analysis_failed", error=str(e))
 
     async def _run_agent_analysis(
@@ -319,7 +319,7 @@ class DiagnosticCoordinator:
 
         except TimeoutError:
             logger.warning("agent_timeout", agent=role.value)
-        except Exception as e:
+        except (RuntimeError, ValueError, OSError, ConnectionError) as e:
             logger.error("agent_error", agent=role.value, error=str(e))
 
     async def _broadcast_analysis(
@@ -399,7 +399,7 @@ class DiagnosticCoordinator:
 
         except TimeoutError:
             logger.warning("differential_timeout")
-        except Exception as e:
+        except (RuntimeError, ValueError, OSError, ConnectionError) as e:
             logger.error("differential_error", error=str(e))
 
     async def _build_consensus(
@@ -444,7 +444,7 @@ class DiagnosticCoordinator:
                         "agent": role.value,
                         "evaluation": response.content,
                     })
-            except Exception:
+            except (RuntimeError, ValueError, OSError, ConnectionError, TimeoutError):
                 pass
 
         # Check for consensus
@@ -664,7 +664,7 @@ class DiagnosticCoordinator:
         for callback in self._event_callbacks:
             try:
                 await callback(event_type, data)
-            except Exception as e:
+            except Exception as e:  # Intentional broad catch: event callback must not crash coordinator
                 logger.error("event_callback_failed", error=str(e))
 
 

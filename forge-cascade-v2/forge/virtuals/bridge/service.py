@@ -192,7 +192,7 @@ class BridgeService:
                 try:
                     self._get_chain_manager().get_client(chain)
                     logger.info(f"Bridge service: {chain.value} initialized")
-                except Exception as e:
+                except (ValueError, ConnectionError, TimeoutError, OSError) as e:
                     logger.warning(f"Bridge service: Failed to init {chain.value}: {e}")
 
         self._initialized = True
@@ -353,7 +353,7 @@ class BridgeService:
                 f"(tx: {request.source_tx_hash[:16]}...)"
             )
 
-        except Exception as e:
+        except (ValueError, ConnectionError, TimeoutError, OSError) as e:
             request.status = BridgeStatus.FAILED
             request.metadata["error"] = str(e)
             logger.error(f"Bridge initiation failed: {e}")
@@ -519,7 +519,7 @@ class BridgeService:
                 request.completed_at = datetime.now(UTC)
                 logger.info(f"Bridge {bridge_id} completed on Solana (simulated)")
 
-        except Exception as e:
+        except (ValueError, ConnectionError, TimeoutError, OSError) as e:
             request.status = BridgeStatus.FAILED
             request.metadata["completion_error"] = str(e)
             logger.error(f"Bridge completion failed: {e}")

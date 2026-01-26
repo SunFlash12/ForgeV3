@@ -516,7 +516,7 @@ class TrustBasedPricingEngine:
                     if r.node_id == capsule_id:
                         factors.pagerank_score = r.score
                         break
-            except Exception as e:
+            except (RuntimeError, ValueError, OSError, ConnectionError) as e:
                 logger.warning(f"Failed to fetch PageRank: {e}")
 
         return factors
@@ -672,7 +672,7 @@ class TrustBasedPricingEngine:
                 for d in distributions:
                     d["amount"] = (Decimal(str(d["weight"])) / total_weight * total_lineage_share).quantize(Decimal("0.01"))
 
-        except Exception as e:
+        except (RuntimeError, ValueError, TypeError, OSError) as e:
             logger.warning(f"Failed to calculate lineage distribution: {e}")
 
         return distributions

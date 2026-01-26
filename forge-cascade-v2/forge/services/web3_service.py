@@ -44,7 +44,7 @@ def _validate_rpc_url(rpc_url: str) -> None:
     """
     try:
         parsed = urlparse(rpc_url)
-    except Exception as e:
+    except (ValueError, ConnectionError, TimeoutError, OSError) as e:
         raise ValueError(f"Invalid RPC URL format: {e}")
 
     # Must be HTTPS in production
@@ -235,7 +235,7 @@ async def verify_purchase_transaction(
             is_valid=False,
             error="RPC request timed out",
         )
-    except Exception as e:
+    except (ValueError, ConnectionError, TimeoutError, OSError) as e:
         logger.error("verification_failed", tx=transaction_hash, error=str(e))
         return TransactionVerification(
             is_valid=False,
@@ -344,7 +344,7 @@ async def get_transaction_info(
                 value=tx.get("value"),
             )
 
-    except Exception as e:
+    except (ValueError, ConnectionError, TimeoutError, OSError) as e:
         logger.error("get_transaction_info_failed", tx=transaction_hash, error=str(e))
         raise
 
@@ -393,7 +393,7 @@ async def get_token_balance(
             result = response.json().get("result", "0x0")
             return str(int(result, 16))
 
-    except Exception as e:
+    except (ValueError, ConnectionError, TimeoutError, OSError) as e:
         logger.error(
             "get_token_balance_failed",
             wallet=wallet_address,

@@ -290,7 +290,7 @@ When creating capsules, ensure they are well-structured with appropriate tags an
             self._state = AgentState.RUNNING
             logger.info("Copilot Forge agent started successfully")
 
-        except Exception as e:
+        except (RuntimeError, ConnectionError, TimeoutError, ValueError, OSError) as e:
             self._state = AgentState.ERROR
             logger.error(f"Failed to start agent: {e}")
             raise
@@ -315,7 +315,7 @@ When creating capsules, ensure they are well-structured with appropriate tags an
             self._state = AgentState.STOPPED
             logger.info("Copilot Forge agent stopped")
 
-        except Exception as e:
+        except (RuntimeError, ConnectionError, TimeoutError, ValueError, OSError) as e:
             self._state = AgentState.ERROR
             logger.error(f"Error stopping agent: {e}")
             raise
@@ -506,7 +506,7 @@ When creating capsules, ensure they are well-structured with appropriate tags an
         try:
             messages: list[dict[str, Any]] = await self._session.get_messages()
             return messages
-        except Exception as e:
+        except (RuntimeError, ConnectionError, TimeoutError, ValueError, OSError) as e:
             logger.error(f"Failed to get session messages: {e}")
             return []
 
@@ -522,7 +522,7 @@ When creating capsules, ensure they are well-structured with appropriate tags an
         for handler in self._event_handlers:
             try:
                 handler(event)
-            except Exception as e:
+            except (RuntimeError, ConnectionError, TimeoutError, ValueError, OSError) as e:
                 logger.error(f"Event handler error: {e}")
 
 

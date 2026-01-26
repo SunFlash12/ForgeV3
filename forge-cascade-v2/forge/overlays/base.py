@@ -308,7 +308,7 @@ class BaseOverlay(ABC):
             )
             return OverlayResult.fail(str(e))
 
-        except Exception as e:
+        except (OverlayError, RuntimeError, ValueError, TypeError, KeyError, OSError) as e:
             self.execution_count += 1
             self.error_count += 1
             self.last_error = str(e)
@@ -316,7 +316,8 @@ class BaseOverlay(ABC):
                 "overlay_error",
                 execution_id=context.execution_id,
                 error=str(e),
-                exc_info=True
+                error_type=type(e).__name__,
+                exc_info=True,
             )
             return OverlayResult.fail(f"Overlay error: {str(e)}")
 

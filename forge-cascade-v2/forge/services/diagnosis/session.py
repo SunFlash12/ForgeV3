@@ -654,14 +654,14 @@ class SessionController:
         for callback in callbacks:
             try:
                 await callback(event)
-            except Exception as e:
+            except (RuntimeError, ValueError, TypeError, OSError) as e:
                 logger.error("event_callback_failed", error=str(e))
 
         # Global callbacks
         for callback in self._global_callbacks:
             try:
                 await callback(event)
-            except Exception as e:
+            except (RuntimeError, ValueError, TypeError, OSError) as e:
                 logger.error("global_callback_failed", error=str(e))
 
     async def _cleanup_loop(self) -> None:
@@ -673,7 +673,7 @@ class SessionController:
 
             except asyncio.CancelledError:
                 break
-            except Exception as e:
+            except Exception as e:  # Intentional broad catch: prevents background task death
                 logger.error("cleanup_loop_error", error=str(e))
 
     async def _cleanup_expired_sessions(self) -> int:

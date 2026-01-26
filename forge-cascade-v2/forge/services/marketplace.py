@@ -567,7 +567,7 @@ class MarketplaceService:
                 stats.revenue_this_month = sum((p.price for p in sales_month), Decimal("0"))
 
                 return stats
-            except Exception as e:
+            except (RuntimeError, OSError, ConnectionError, ValueError) as e:
                 logger.warning(f"Repository stats failed, using in-memory: {e}")
 
         # Fallback to in-memory calculation
@@ -658,7 +658,7 @@ class MarketplaceService:
                     await self._repository.listings.create(listing)
                 logger.debug(f"Persisted listing {listing.id} via repository")
                 return True
-            except Exception as e:
+            except (RuntimeError, OSError, ConnectionError, ValueError) as e:
                 logger.error(f"Repository failed for listing {listing.id}: {e}")
                 return False
 
@@ -703,7 +703,7 @@ class MarketplaceService:
             )
             logger.debug(f"Persisted listing {listing.id} to database")
             return True
-        except Exception as e:
+        except (RuntimeError, OSError, ConnectionError, ValueError) as e:
             logger.error(f"Failed to persist listing {listing.id}: {e}")
             return False
 
@@ -715,7 +715,7 @@ class MarketplaceService:
                 await self._repository.purchases.create(purchase)
                 logger.debug(f"Persisted purchase {purchase.id} via repository")
                 return True
-            except Exception as e:
+            except (RuntimeError, OSError, ConnectionError, ValueError) as e:
                 logger.error(f"Repository failed for purchase {purchase.id}: {e}")
                 return False
 
@@ -753,7 +753,7 @@ class MarketplaceService:
                 }
             )
             return True
-        except Exception as e:
+        except (RuntimeError, OSError, ConnectionError, ValueError) as e:
             logger.error(f"Failed to persist purchase {purchase.id}: {e}")
             return False
 
@@ -794,7 +794,7 @@ class MarketplaceService:
                 }
             )
             return True
-        except Exception as e:
+        except (RuntimeError, OSError, ConnectionError, ValueError) as e:
             logger.error(f"Failed to persist cart for user {cart.user_id}: {e}")
             return False
 
@@ -828,7 +828,7 @@ class MarketplaceService:
                 ))
 
             return cart
-        except Exception as e:
+        except (RuntimeError, OSError, ConnectionError, ValueError, KeyError) as e:
             logger.error(f"Failed to load cart for user {user_id}: {e}")
             return None
 
@@ -840,7 +840,7 @@ class MarketplaceService:
                 await self._repository.licenses.create(license)
                 logger.debug(f"Persisted license {license.id} via repository")
                 return True
-            except Exception as e:
+            except (RuntimeError, OSError, ConnectionError, ValueError) as e:
                 logger.error(f"Repository failed for license {license.id}: {e}")
                 return False
 
@@ -880,7 +880,7 @@ class MarketplaceService:
                 }
             )
             return True
-        except Exception as e:
+        except (RuntimeError, OSError, ConnectionError, ValueError) as e:
             logger.error(f"Failed to persist license {license.id}: {e}")
             return False
 
@@ -994,7 +994,7 @@ class MarketplaceService:
                 f"and {len(self._licenses)} licenses from database"
             )
             return loaded
-        except Exception as e:
+        except (RuntimeError, OSError, ConnectionError, ValueError, KeyError) as e:
             logger.error(f"Failed to load marketplace data: {e}")
             return 0
 
@@ -1010,7 +1010,7 @@ class MarketplaceService:
             """
             await self.neo4j.execute_write(query, parameters={"id": listing_id})
             return True
-        except Exception as e:
+        except (RuntimeError, OSError, ConnectionError, ValueError) as e:
             logger.error(f"Failed to delete listing {listing_id}: {e}")
             return False
 
@@ -1053,7 +1053,7 @@ async def get_marketplace_service(
                 _marketplace_repository = MarketplaceRepository(neo4j_client)
                 await _marketplace_repository.initialize()
                 logger.info("MarketplaceRepository initialized")
-            except Exception as e:
+            except (RuntimeError, OSError, ConnectionError, ImportError) as e:
                 logger.warning(f"Failed to initialize MarketplaceRepository: {e}")
                 _marketplace_repository = None
 
@@ -1069,7 +1069,7 @@ async def get_marketplace_service(
             loaded = await _marketplace_service.load_from_database()
             _marketplace_initialized = True
             logger.info(f"Marketplace service initialized with {loaded} listings from database")
-        except Exception as e:
+        except (RuntimeError, OSError, ConnectionError, ValueError, KeyError) as e:
             logger.warning(f"Failed to load marketplace data on startup: {e}")
 
     return _marketplace_service

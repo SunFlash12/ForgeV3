@@ -82,7 +82,7 @@ async def create_tip(
             status="confirmed" if tx_signature else "pending",
             message=f"Tip of {request.amount_frowg} $FROWG recorded successfully!",
         )
-    except Exception as e:
+    except (ValueError, ConnectionError, TimeoutError, OSError) as e:
         logger.error(f"Tip creation failed: {e}")
         raise HTTPException(status_code=400, detail="Failed to process tip")
 

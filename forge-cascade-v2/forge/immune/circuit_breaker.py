@@ -236,7 +236,7 @@ class CircuitBreaker(Generic[T]):
         for listener in self._listeners:
             try:
                 await listener(old_state, new_state)
-            except Exception as e:
+            except (RuntimeError, ValueError, OSError, TypeError) as e:
                 logger.warning(
                     "circuit_breaker_listener_error",
                     name=self.name,
@@ -455,7 +455,7 @@ class CircuitBreaker(Generic[T]):
                 await self._record_failure(TimeoutError("Call timed out"))
             raise
 
-        except Exception as e:
+        except Exception as e:  # Intentional broad catch: circuit breaker must track all failure types
             # Check if exception should be excluded
             if isinstance(e, self.config.excluded_exceptions):
                 async with self._lock:

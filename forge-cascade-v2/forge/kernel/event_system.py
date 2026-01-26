@@ -330,8 +330,13 @@ class EventBus:
             if self._cascade_repo:
                 try:
                     await self._cascade_repo.create_chain(self._cascade_chains[cascade_id])
-                except Exception as e:
-                    logger.warning("cascade_chain_persist_failed", cascade_id=cascade_id, error=str(e))
+                except (OSError, RuntimeError, ValueError, ConnectionError) as e:
+                    logger.warning(
+                        "cascade_chain_persist_failed",
+                        cascade_id=cascade_id,
+                        error=str(e),
+                        error_type=type(e).__name__,
+                    )
 
         chain = self._cascade_chains[cascade_id]
 
@@ -364,8 +369,13 @@ class EventBus:
         if self._cascade_repo and not is_new_chain:
             try:
                 await self._cascade_repo.add_event(cascade_id, cascade_event, hop_count)
-            except Exception as e:
-                logger.warning("cascade_event_persist_failed", cascade_id=cascade_id, error=str(e))
+            except (OSError, RuntimeError, ValueError, ConnectionError) as e:
+                logger.warning(
+                    "cascade_event_persist_failed",
+                    cascade_id=cascade_id,
+                    error=str(e),
+                    error_type=type(e).__name__,
+                )
 
         # Check if cascade can continue propagating
         if cascade_event.can_propagate:
@@ -410,8 +420,13 @@ class EventBus:
         if self._cascade_repo:
             try:
                 await self._cascade_repo.complete_chain(cascade_id)
-            except Exception as e:
-                logger.warning("cascade_complete_persist_failed", cascade_id=cascade_id, error=str(e))
+            except (OSError, RuntimeError, ValueError, ConnectionError) as e:
+                logger.warning(
+                    "cascade_complete_persist_failed",
+                    cascade_id=cascade_id,
+                    error=str(e),
+                    error_type=type(e).__name__,
+                )
 
         logger.info(
             "cascade_completed",
@@ -521,8 +536,13 @@ class EventBus:
             try:
                 await self._cascade_repo.add_event(cascade_id, cascade_event, hop_count)
                 await self._cascade_repo.update_chain(chain)
-            except Exception as e:
-                logger.warning("cascade_propagate_persist_failed", cascade_id=cascade_id, error=str(e))
+            except (OSError, RuntimeError, ValueError, ConnectionError) as e:
+                logger.warning(
+                    "cascade_propagate_persist_failed",
+                    cascade_id=cascade_id,
+                    error=str(e),
+                    error_type=type(e).__name__,
+                )
 
         # Publish propagation event if can continue
         if cascade_event.can_propagate:
@@ -618,14 +638,15 @@ class EventBus:
                     event_id=event.id
                 )
                 raise
-            except Exception as e:
+            except Exception as e:  # Intentional broad catch: event handlers are user-provided and may raise any exception
                 if current_attempt < self._max_retries:
                     logger.warning(
                         "event_delivery_retry",
                         subscription_id=subscription.id,
                         event_id=event.id,
                         attempt=current_attempt,
-                        error=str(e)
+                        error=str(e),
+                        error_type=type(e).__name__,
                     )
                     await asyncio.sleep(self._retry_delay * current_attempt)
                     # Continue to next iteration (retry)
@@ -664,8 +685,12 @@ class EventBus:
                 await self._process_event(event)
                 self._event_queue.task_done()
 
-            except Exception as e:
-                logger.error("event_worker_error", error=str(e))
+            except Exception as e:  # Intentional broad catch: prevents background task death
+                logger.error(
+                    "event_worker_error",
+                    error=str(e),
+                    error_type=type(e).__name__,
+                )
 
         logger.info("event_worker_stopped")
 
@@ -685,8 +710,12 @@ class EventBus:
                 for chain in active_chains:
                     self._cascade_chains[chain.cascade_id] = chain
                 logger.info("cascade_chains_loaded", count=len(active_chains))
-            except Exception as e:
-                logger.warning("cascade_chains_load_failed", error=str(e))
+            except (OSError, RuntimeError, ValueError, ConnectionError) as e:
+                logger.warning(
+                    "cascade_chains_load_failed",
+                    error=str(e),
+                    error_type=type(e).__name__,
+                )
 
         self._running = True
         self._worker_task = asyncio.create_task(self._worker())

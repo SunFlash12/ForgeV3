@@ -137,7 +137,7 @@ class FrowgTippingService:
             client = self._get_chain_manager().get_client(ChainNetwork.SOLANA)
             token_info = await client.get_token_info(self.FROWG_TOKEN_ADDRESS)
             logger.info(f"FROWG tipping service initialized. Token: {token_info.symbol}")
-        except Exception as e:
+        except (ValueError, ConnectionError, TimeoutError, OSError) as e:
             logger.warning(f"Could not verify FROWG token: {e}")
 
         self._initialized = True
@@ -228,7 +228,7 @@ class FrowgTippingService:
                 tip.status = TipStatus.FAILED
                 logger.error(f"Tip failed: {tip.tx_hash}")
 
-        except Exception as e:
+        except (ValueError, ConnectionError, TimeoutError, OSError) as e:
             tip.status = TipStatus.FAILED
             tip.metadata["error"] = str(e)
             logger.error(f"Failed to send tip: {e}")

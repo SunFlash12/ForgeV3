@@ -161,8 +161,12 @@ class PerformanceOptimizerOverlay(BaseOverlay):
 
             return OverlayResult.ok(result)
 
-        except Exception as e:
-            self._logger.error("Performance optimizer error", error=str(e))
+        except (ValueError, TypeError, KeyError, RuntimeError) as e:
+            self._logger.error(
+                "Performance optimizer error",
+                error=str(e),
+                error_type=type(e).__name__,
+            )
             return OverlayResult.fail(str(e))
 
     async def _cache_get(self, data: dict[str, Any]) -> dict[str, Any]:
@@ -397,7 +401,7 @@ class PerformanceOptimizerOverlay(BaseOverlay):
                 healthy=healthy,
                 message="Cache operational" if healthy else "Cache check failed",
             )
-        except Exception as e:
+        except (ValueError, TypeError, KeyError, RuntimeError) as e:
             return OverlayHealthCheck(
                 overlay_id=self.id,
                 level="L1",
@@ -427,5 +431,9 @@ class PerformanceOptimizerOverlay(BaseOverlay):
 
             except asyncio.CancelledError:
                 break
-            except Exception as e:
-                self._logger.error("Cache cleanup error", error=str(e))
+            except Exception as e:  # Intentional broad catch: prevents background task death
+                self._logger.error(
+                    "Cache cleanup error",
+                    error=str(e),
+                    error_type=type(e).__name__,
+                )

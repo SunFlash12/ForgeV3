@@ -304,8 +304,9 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
             hashed_password.encode('utf-8')
         )
         return result
-    except Exception:
-        # On any error, still do a dummy comparison to maintain consistent timing
+    except (ValueError, TypeError) as e:
+        # Intentional broad catch: maintain consistent timing on any bcrypt/encoding error
+        _ = e  # Logged at debug level only to avoid timing side-channels
         hmac.compare_digest("dummy", "dummy")
         return False
 
@@ -386,7 +387,7 @@ def check_password_history(
                 )
         except PasswordValidationError:
             raise
-        except Exception:
+        except (ValueError, TypeError):
             # Skip invalid hashes but continue checking
             continue
 

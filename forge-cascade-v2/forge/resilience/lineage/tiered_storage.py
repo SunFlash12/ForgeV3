@@ -197,7 +197,7 @@ class TieredLineageStorage:
 
             return True
 
-        except Exception as e:
+        except (RuntimeError, OSError, ConnectionError, ValueError, TypeError) as e:
             logger.error(
                 "lineage_store_error",
                 entry_id=entry.entry_id,
@@ -331,7 +331,7 @@ class TieredLineageStorage:
 
             return True
 
-        except Exception as e:
+        except (RuntimeError, OSError, ConnectionError, ValueError, TypeError) as e:
             logger.error(
                 "lineage_migration_error",
                 entry_id=entry_id,
@@ -437,7 +437,7 @@ class TieredLineageStorage:
 
             except asyncio.CancelledError:
                 break
-            except Exception as e:
+            except Exception as e:  # Intentional broad catch: background migration loop must not crash
                 logger.error("background_migration_error", error=str(e))
 
     async def _perform_tier_migration(self) -> None:

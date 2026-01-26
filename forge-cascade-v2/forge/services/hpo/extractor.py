@@ -350,7 +350,7 @@ class PhenotypeExtractor:
 
             return extractions
 
-        except Exception as e:
+        except (ConnectionError, TimeoutError, ValueError, RuntimeError) as e:
             logger.error("llm_extraction_failed", error=str(e))
             return []
 

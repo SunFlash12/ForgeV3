@@ -493,7 +493,7 @@ class StarterPackManager:
                     metadata={"from_pack_template": template.template_id}
                 )
                 return result
-            except Exception as e:
+            except (RuntimeError, OSError, ConnectionError, ValueError, TypeError) as e:
                 logger.warning(
                     "pack_capsule_creation_failed",
                     template_id=template.template_id,
@@ -585,7 +585,7 @@ class StarterPackManager:
                     user_id=user_id
                 )
                 return overlay_result
-            except Exception as e:
+            except (RuntimeError, OSError, ConnectionError, ValueError, TypeError) as e:
                 logger.warning(
                     "pack_overlay_activation_failed",
                     overlay_id=overlay_config.overlay_id,

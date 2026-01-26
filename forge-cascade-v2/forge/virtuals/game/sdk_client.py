@@ -431,7 +431,7 @@ class GAMESDKClient:
 
         except GAMEClientError:
             raise
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError, ValueError, RuntimeError) as e:
             raise GAMEClientError(f"Failed to create agent: {e}")
 
     async def get_agent(self, agent_id: str) -> ForgeAgent | None:
@@ -637,7 +637,7 @@ class GAMESDKClient:
                 if stop_condition and stop_condition(action_result):
                     break
 
-            except Exception as e:
+            except (GAMEClientError, ConnectionError, TimeoutError, OSError, ValueError, RuntimeError, KeyError, TypeError) as e:
                 logger.error(f"Action execution failed: {e}")
                 results.append({
                     "iteration": iteration,

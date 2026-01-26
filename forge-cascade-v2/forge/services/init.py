@@ -276,7 +276,7 @@ def _setup_ghost_council_event_handlers(ghost_council: Any, event_bus: Any) -> N
                 async def _safe_respond(gc: Any, iss: Any) -> None:
                     try:
                         await gc.respond_to_issue(iss)
-                    except Exception as e:
+                    except (RuntimeError, ValueError, ConnectionError, OSError) as e:
                         logger.error(
                             "ghost_council_response_error",
                             issue_id=iss.id,
@@ -287,7 +287,7 @@ def _setup_ghost_council_event_handlers(ghost_council: Any, event_bus: Any) -> N
                 task = asyncio.create_task(_safe_respond(ghost_council, issue))
                 task.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
 
-        except Exception as e:
+        except (RuntimeError, ValueError, ConnectionError, OSError) as e:
             logger.error(
                 "ghost_council_event_handler_error",
                 error=str(e),

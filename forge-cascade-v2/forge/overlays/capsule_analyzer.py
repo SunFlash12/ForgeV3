@@ -150,8 +150,12 @@ class CapsuleAnalyzerOverlay(BaseOverlay):
 
             return OverlayResult.ok(result)
 
-        except Exception as e:
-            self._logger.error("Capsule analyzer error", error=str(e))
+        except (ValueError, TypeError, KeyError, RuntimeError, AttributeError) as e:
+            self._logger.error(
+                "Capsule analyzer error",
+                error=str(e),
+                error_type=type(e).__name__,
+            )
             return OverlayResult.fail(str(e))
 
     async def _analyze_content(self, data: dict[str, Any]) -> dict[str, Any]:
@@ -639,7 +643,7 @@ class CapsuleAnalyzerOverlay(BaseOverlay):
             # Test analysis functionality
             result = await self._analyze_content({"content": "Test content for health check."})
             healthy = "word_count" in result
-        except Exception:
+        except (ValueError, TypeError, KeyError, RuntimeError):
             healthy = False
         return OverlayHealthCheck(
             overlay_id=self.id,

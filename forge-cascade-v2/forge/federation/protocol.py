@@ -33,7 +33,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 import httpx
-from cryptography.exceptions import InvalidSignature
+from cryptography.exceptions import InvalidSignature, UnsupportedAlgorithm
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ed25519
 
@@ -248,7 +248,7 @@ class CertificatePinStore:
                         if pin_data.get("next_valid_from") else None,
                 )
             logger.info(f"Loaded {len(self._pins)} certificate pins from {pin_file}")
-        except Exception as e:
+        except (OSError, IOError, json.JSONDecodeError, ValueError, KeyError, TypeError) as e:
             logger.error(f"Failed to load certificate pins: {e}")
 
     def _save_pins(self) -> None:
@@ -274,7 +274,7 @@ class CertificatePinStore:
             with open(pin_file, 'w') as f:
                 json.dump(data, f, indent=2)
             logger.debug(f"Saved {len(data)} certificate pins to {pin_file}")
-        except Exception as e:
+        except (OSError, IOError, TypeError, ValueError) as e:
             logger.error(f"Failed to save certificate pins: {e}")
 
     def pin_certificate(
@@ -627,7 +627,7 @@ def validate_url_for_ssrf(
 
     try:
         parsed = urlparse(url)
-    except Exception as e:
+    except (ValueError, TypeError) as e:
         raise SSRFError(f"Invalid URL format: {e}") from e
 
     # SECURITY: Require HTTPS in production
@@ -846,7 +846,7 @@ class FederationProtocol:
 
             logger.debug("Could not extract certificate from response")
             return None
-        except Exception as e:
+        except (AttributeError, TypeError, ValueError, OSError) as e:
             logger.warning(f"Failed to extract certificate fingerprint: {e}")
             return None
 
@@ -883,7 +883,7 @@ class FederationProtocol:
                 self._public_key_b64 = base64.b64encode(public_bytes).decode('utf-8')
                 logger.info("Federation keys loaded successfully")
                 return
-            except Exception as e:
+            except (OSError, ValueError, TypeError, RuntimeError, UnsupportedAlgorithm) as e:
                 logger.warning(f"Failed to load existing keys: {e}, generating new ones")
 
         # Generate new keys
@@ -961,7 +961,7 @@ class FederationProtocol:
                 f.write(public_pem)
 
             logger.info(f"Federation keys saved to {private_key_path.parent}")
-        except Exception as e:
+        except (OSError, IOError, ValueError, TypeError, RuntimeError) as e:
             logger.error(f"Failed to save federation keys: {e}")
             # Don't raise - keys work in memory, just won't persist
 
@@ -1021,7 +1021,7 @@ class FederationProtocol:
                 )
             except subprocess.TimeoutExpired:
                 logger.warning("Timeout setting Windows ACL on private key")
-            except Exception as e:
+            except (OSError, ValueError, RuntimeError) as e:
                 logger.warning(f"Error setting Windows ACL on private key: {e}")
         else:
             # Unix/Linux/macOS: Use standard chmod
@@ -1061,7 +1061,7 @@ class FederationProtocol:
             signature = base64.b64decode(signature_b64)
             public_key.verify(signature, message)
             return True
-        except (InvalidSignature, ValueError, Exception) as e:
+        except (InvalidSignature, ValueError, TypeError) as e:
             logger.warning(f"Signature verification failed: {e}")
             return False
 
@@ -1244,7 +1244,7 @@ class FederationProtocol:
         except httpx.RequestError as e:
             logger.error(f"Handshake request failed: {e}")
             return None
-        except Exception as e:
+        except (ValueError, TypeError, KeyError, RuntimeError) as e:
             logger.error(f"Handshake error: {e}")
             return None
 
@@ -1371,7 +1371,7 @@ class FederationProtocol:
 
             return payload
 
-        except Exception as e:
+        except (httpx.RequestError, ValueError, TypeError, KeyError, RuntimeError) as e:
             logger.error(f"Sync request error: {e}")
             return None
 
@@ -1438,7 +1438,7 @@ class FederationProtocol:
         except httpx.RequestError as e:
             logger.error(f"Push request error: {e}")
             return False
-        except Exception as e:
+        except (ValueError, TypeError, KeyError, RuntimeError) as e:
             logger.exception(f"Push error: {e}")
             return False
 

@@ -229,7 +229,7 @@ async def create_session(
             answered_questions_count=len(session.answered_questions),
         )
 
-    except Exception as e:
+    except (RuntimeError, ValueError, TypeError, OSError) as e:
         raise _handle_internal_error(e, "session creation")
 
 
@@ -304,7 +304,7 @@ async def start_diagnosis(
     except ValueError as e:
         logger.warning(f"Resource not found: {e}")
         raise HTTPException(status_code=404, detail="Resource not found")
-    except Exception as e:
+    except (RuntimeError, TypeError, OSError) as e:
         raise _handle_internal_error(e, "starting diagnosis")
 
 
@@ -371,7 +371,7 @@ async def answer_questions(
     except ValueError as e:
         logger.warning(f"Resource not found: {e}")
         raise HTTPException(status_code=404, detail="Resource not found")
-    except Exception as e:
+    except (RuntimeError, TypeError, OSError) as e:
         raise _handle_internal_error(e, "answering questions")
 
 
@@ -405,7 +405,7 @@ async def skip_questions(
     except ValueError as e:
         logger.warning(f"Resource not found: {e}")
         raise HTTPException(status_code=404, detail="Resource not found")
-    except Exception as e:
+    except (RuntimeError, TypeError, OSError) as e:
         raise _handle_internal_error(e, "skipping questions")
 
 
@@ -496,7 +496,7 @@ async def get_result(
     except ValueError as e:
         logger.warning(f"Resource not found: {e}")
         raise HTTPException(status_code=404, detail="Resource not found")
-    except Exception as e:
+    except (RuntimeError, TypeError, OSError) as e:
         raise _handle_internal_error(e, "getting result")
 
 
@@ -618,7 +618,7 @@ async def multi_agent_diagnose(
         result = await coordinator.diagnose(patient_data)
         return result
 
-    except Exception as e:
+    except (RuntimeError, ValueError, TypeError, OSError) as e:
         raise _handle_internal_error(e, "multi-agent diagnosis")
 
 
@@ -636,7 +636,7 @@ async def get_discriminating_phenotypes(
     try:
         suggestions = await coordinator.suggest_discriminating_phenotypes(session_id)
         return {"suggestions": suggestions}
-    except Exception as e:
+    except (RuntimeError, ValueError, TypeError, OSError) as e:
         raise _handle_internal_error(e, "getting discriminating phenotypes")
 
 

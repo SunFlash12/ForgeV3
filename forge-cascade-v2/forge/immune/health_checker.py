@@ -173,7 +173,7 @@ class HealthCheck(ABC):
                 break
             except TimeoutError:
                 last_error = TimeoutError(f"Health check timed out after {self.config.timeout_seconds}s")
-            except Exception as e:
+            except (ConnectionError, TimeoutError, OSError, RuntimeError, ValueError) as e:
                 last_error = e
 
             if attempt < self.config.retry_count:
@@ -324,7 +324,7 @@ class FunctionHealthCheck(HealthCheck):
                 status=HealthStatus.HEALTHY if healthy else HealthStatus.UNHEALTHY,
                 message=message,
             )
-        except Exception as e:
+        except (RuntimeError, OSError, ConnectionError, TimeoutError, ValueError, TypeError) as e:
             return HealthCheckResult(
                 name=self.name,
                 status=HealthStatus.UNHEALTHY,
@@ -366,7 +366,7 @@ class Neo4jHealthCheck(HealthCheck):
                     status=HealthStatus.UNHEALTHY,
                     message="Unexpected response from Neo4j",
                 )
-        except Exception as e:
+        except (RuntimeError, OSError, ConnectionError, TimeoutError, ValueError) as e:
             return HealthCheckResult(
                 name=self.name,
                 status=HealthStatus.UNHEALTHY,
@@ -411,7 +411,7 @@ class OverlayHealthCheck(HealthCheck):
                 message=message,
                 details=details_out,
             )
-        except Exception as e:
+        except (RuntimeError, OSError, ConnectionError, TimeoutError, ValueError) as e:
             return HealthCheckResult(
                 name=self.name,
                 status=HealthStatus.UNHEALTHY,
@@ -461,7 +461,7 @@ class EventSystemHealthCheck(HealthCheck):
                 message=message,
                 details=details_out,
             )
-        except Exception as e:
+        except (RuntimeError, OSError, ConnectionError, TimeoutError, ValueError, TypeError) as e:
             return HealthCheckResult(
                 name=self.name,
                 status=HealthStatus.UNHEALTHY,
@@ -511,7 +511,7 @@ class CircuitBreakerHealthCheck(HealthCheck):
                 message=message,
                 details=details_out,
             )
-        except Exception as e:
+        except (RuntimeError, ValueError, OSError, TypeError) as e:
             return HealthCheckResult(
                 name=self.name,
                 status=HealthStatus.UNHEALTHY,
@@ -566,7 +566,7 @@ class MemoryHealthCheck(HealthCheck):
                 status=HealthStatus.UNKNOWN,
                 message="psutil not installed",
             )
-        except Exception as e:
+        except (OSError, RuntimeError, ValueError) as e:
             return HealthCheckResult(
                 name=self.name,
                 status=HealthStatus.UNHEALTHY,
@@ -624,7 +624,7 @@ class DiskHealthCheck(HealthCheck):
                 status=HealthStatus.UNKNOWN,
                 message="psutil not installed",
             )
-        except Exception as e:
+        except (OSError, RuntimeError, ValueError) as e:
             return HealthCheckResult(
                 name=self.name,
                 status=HealthStatus.UNHEALTHY,
@@ -720,7 +720,7 @@ class ForgeHealthChecker:
                     if callback:
                         await callback(result)
 
-                except Exception as e:
+                except Exception as e:  # Intentional broad catch: background monitor loop must not crash
                     logger.error("health_monitor_error", error=str(e))
 
                 await asyncio.sleep(interval_seconds)

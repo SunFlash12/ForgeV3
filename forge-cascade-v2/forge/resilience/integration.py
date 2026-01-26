@@ -78,7 +78,7 @@ class ObservabilityMiddleware(BaseHTTPMiddleware):
 
                 return response
 
-            except Exception:
+            except Exception:  # Intentional broad catch: middleware must record metrics for all exception types before re-raising
                 # Record error
                 latency = time.perf_counter() - start_time
                 metrics.request_latency(

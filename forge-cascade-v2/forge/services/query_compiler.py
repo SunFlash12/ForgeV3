@@ -368,7 +368,7 @@ class QueryCompiler:
             intent_data = self._parse_json_response(response.content)
             return self._to_query_intent(intent_data)
 
-        except Exception as e:
+        except (ConnectionError, TimeoutError, ValueError, RuntimeError) as e:
             self.logger.error("Intent extraction failed", error=str(e))
             # Return a basic fallback intent
             return self._create_fallback_intent(question)
@@ -787,7 +787,7 @@ class KnowledgeQueryService:
                 compiled.cypher,
                 compiled.parameters,
             )
-        except Exception as e:
+        except (ConnectionError, TimeoutError, ValueError, RuntimeError, OSError) as e:
             self.logger.error("Query execution failed", error=str(e))
             return QueryResult(
                 id="",
@@ -848,6 +848,6 @@ class KnowledgeQueryService:
                 LLMMessage(role="user", content=prompt)
             ])
             return response.content
-        except Exception as e:
+        except (ConnectionError, TimeoutError, ValueError, RuntimeError, OSError) as e:
             self.logger.error("Answer synthesis failed", error=str(e))
             return f"Found {len(rows)} results. (Answer synthesis failed)"

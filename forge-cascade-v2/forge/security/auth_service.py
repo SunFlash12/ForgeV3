@@ -177,7 +177,7 @@ class IPRateLimiter:
             self._redis_initialized = True
             logger.info("ip_rate_limiter_redis_connected")
             return self._redis_client
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError) as e:
             logger.warning("ip_rate_limiter_redis_failed", error=str(e))
             self._redis_client = None
             self._redis_initialized = True
@@ -245,7 +245,7 @@ class IPRateLimiter:
                     return (False, self.LOCKOUT_SECONDS)
 
                 return (True, 0)
-            except Exception as e:
+            except (ConnectionError, TimeoutError, OSError) as e:
                 logger.warning("ip_rate_limiter_redis_error", error=str(e), operation="check")
                 # Fall through to in-memory
 
@@ -311,7 +311,7 @@ class IPRateLimiter:
                     # Set expiry on the attempts set
                     await redis.expire(attempts_key, self.WINDOW_SECONDS + 60)
                 return
-            except Exception as e:
+            except (ConnectionError, TimeoutError, OSError) as e:
                 logger.warning("ip_rate_limiter_redis_error", error=str(e), operation="record")
                 # Fall through to in-memory
 
@@ -441,8 +441,9 @@ class AuthService:
         # The pre-checks above are for user-friendly errors; DB constraints are authoritative
         try:
             user = await self.user_repo.create(user_create, password_hash)
-        except Exception as e:
-            # Handle database constraint violations from race conditions
+        except (ValueError, RuntimeError, OSError) as e:
+            # Intentional broad catch: DB constraint violations surface as various exception
+            # types depending on the Neo4j driver version; we inspect the message to classify
             error_msg = str(e).lower()
             if "username" in error_msg and ("unique" in error_msg or "duplicate" in error_msg or "exists" in error_msg):
                 raise RegistrationError(f"Username '{username}' is already taken")
@@ -673,8 +674,8 @@ class AuthService:
                     user_agent=user_agent,
                     expires_at=datetime.fromtimestamp(exp_ts, tz=UTC),
                 )
-            except Exception as e:
-                # Don't fail login if session creation fails
+            except (ValueError, TypeError, KeyError, RuntimeError, OSError) as e:
+                # Intentional broad catch: don't fail login if session creation fails
                 logger.warning(
                     "session_creation_failed",
                     user_id=user.id,
@@ -805,7 +806,8 @@ class AuthService:
                     user_agent=user_agent,
                     expires_at=datetime.fromtimestamp(exp_ts2, tz=UTC),
                 )
-            except Exception as e:
+            except (ValueError, TypeError, KeyError, RuntimeError, OSError) as e:
+                # Intentional broad catch: don't fail MFA login if session creation fails
                 logger.warning(
                     "session_creation_failed",
                     user_id=user.id,
@@ -973,7 +975,7 @@ class AuthService:
                 exp = claims.get("exp")
                 if jti:
                     await TokenBlacklist.add_async(jti, exp)
-            except Exception:
+            except (TokenInvalidError, ValueError, KeyError):
                 pass  # Token may already be invalid
 
         # Clear refresh token
@@ -1452,7 +1454,7 @@ class AuthService:
         except ImportError:
             # WebSocket handlers not available (e.g., in tests)
             pass
-        except Exception as e:
+        except (RuntimeError, OSError, ConnectionError) as e:
             # Don't fail privilege change if WebSocket disconnect fails
             logger.warning(
                 "websocket_disconnect_failed",

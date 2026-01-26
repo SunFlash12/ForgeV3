@@ -299,7 +299,7 @@ class CrossPartitionQueryExecutor:
                 if task.done():
                     try:
                         results.append(task.result())
-                    except Exception:
+                    except (RuntimeError, OSError, ConnectionError, ValueError, TypeError):
                         pass
 
         # Process results
@@ -350,7 +350,7 @@ class CrossPartitionQueryExecutor:
                 success=True,
             )
 
-        except Exception as e:
+        except (RuntimeError, OSError, ConnectionError, TimeoutError, ValueError) as e:
             execution_time = (datetime.now(UTC) - start_time).total_seconds() * 1000
 
             return PartitionQueryResult(

@@ -236,7 +236,9 @@ class VaultSecretsManager(BaseSecretsManager):
             )
             result: str = secret["data"]["data"]["value"]
             return result
-        except Exception as e:
+        except SecretNotFoundError:
+            raise
+        except (KeyError, TypeError, ValueError, ConnectionError, OSError) as e:
             if "404" in str(e) or "secret not found" in str(e).lower():
                 raise SecretNotFoundError(f"Secret '{key}' not found in Vault")
             raise SecretsBackendError(f"Vault error: {e}")
@@ -257,7 +259,9 @@ class VaultSecretsManager(BaseSecretsManager):
                 "created_time": secret["data"]["metadata"]["created_time"],
                 "retrieved_at": datetime.now(UTC).isoformat(),
             }
-        except Exception as e:
+        except SecretNotFoundError:
+            raise
+        except (KeyError, TypeError, ValueError, ConnectionError, OSError) as e:
             if "404" in str(e) or "secret not found" in str(e).lower():
                 raise SecretNotFoundError(f"Secret '{key}' not found in Vault")
             raise SecretsBackendError(f"Vault error: {e}")
@@ -267,7 +271,7 @@ class VaultSecretsManager(BaseSecretsManager):
         try:
             client = self._get_client()
             return await asyncio.to_thread(lambda: client.is_authenticated)
-        except Exception as e:
+        except (ConnectionError, OSError, ValueError, RuntimeError) as e:
             logger.error(f"Vault health check failed: {e}")
             return False
 
@@ -309,7 +313,9 @@ class AWSSecretsManager(BaseSecretsManager):
             )
             result: str = response["SecretString"]
             return result
-        except Exception as e:
+        except SecretNotFoundError:
+            raise
+        except (KeyError, TypeError, ValueError, ConnectionError, OSError) as e:
             if "ResourceNotFoundException" in str(type(e).__name__):
                 raise SecretNotFoundError(f"Secret '{key}' not found in AWS Secrets Manager")
             raise SecretsBackendError(f"AWS Secrets Manager error: {e}")
@@ -330,7 +336,9 @@ class AWSSecretsManager(BaseSecretsManager):
                 "arn": response["ARN"],
                 "retrieved_at": datetime.now(UTC).isoformat(),
             }
-        except Exception as e:
+        except SecretNotFoundError:
+            raise
+        except (KeyError, TypeError, ValueError, ConnectionError, OSError) as e:
             if "ResourceNotFoundException" in str(type(e).__name__):
                 raise SecretNotFoundError(f"Secret '{key}' not found in AWS Secrets Manager")
             raise SecretsBackendError(f"AWS Secrets Manager error: {e}")
@@ -342,7 +350,7 @@ class AWSSecretsManager(BaseSecretsManager):
             # List secrets to verify connectivity (limited to 1)
             await asyncio.to_thread(client.list_secrets, MaxResults=1)
             return True
-        except Exception as e:
+        except (ConnectionError, OSError, ValueError, RuntimeError) as e:
             logger.error(f"AWS Secrets Manager health check failed: {e}")
             return False
 

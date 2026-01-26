@@ -409,7 +409,7 @@ class EmbeddingMigrationService:
                     failed=job.progress.failed_capsules
                 )
 
-        except Exception as e:
+        except (RuntimeError, OSError, ValueError, ConnectionError) as e:
             job.status = MigrationStatus.FAILED
             job.error_message = str(e)
             job.completed_at = datetime.now(UTC)
@@ -541,7 +541,7 @@ class EmbeddingMigrationService:
 
             return capsules
 
-        except Exception as e:
+        except (RuntimeError, OSError, ConnectionError, ValueError) as e:
             logger.error(
                 "failed_to_fetch_capsules_for_migration",
                 job_id=job.job_id,
@@ -572,7 +572,7 @@ class EmbeddingMigrationService:
                 else:
                     job.progress.failed_capsules += 1
 
-            except Exception as e:
+            except (RuntimeError, OSError, ConnectionError, ValueError, TypeError) as e:
                 job.progress.failed_capsules += 1
                 logger.warning(
                     "capsule_migration_error",
@@ -598,7 +598,7 @@ class EmbeddingMigrationService:
         if self._embed_callback:
             try:
                 embedding = await self._embed_callback(content, to_version)
-            except Exception as e:
+            except (RuntimeError, OSError, ConnectionError, ValueError, TypeError) as e:
                 logger.error(
                     "embedding_generation_failed",
                     capsule_id=capsule_id,
@@ -615,7 +615,7 @@ class EmbeddingMigrationService:
                 stored = await self._store_callback(capsule_id, embedding, to_version)
                 if not stored:
                     return False
-            except Exception as e:
+            except (RuntimeError, OSError, ConnectionError, ValueError, TypeError) as e:
                 logger.error(
                     "embedding_store_failed",
                     capsule_id=capsule_id,
@@ -627,7 +627,7 @@ class EmbeddingMigrationService:
         try:
             if capsule_id is not None:
                 await self._update_capsule_embedding_version(capsule_id, to_version)
-        except Exception as e:
+        except (RuntimeError, OSError, ConnectionError, ValueError) as e:
             logger.warning(
                 "embedding_version_update_failed",
                 capsule_id=capsule_id,
@@ -639,7 +639,7 @@ class EmbeddingMigrationService:
             try:
                 await self._cleanup_callback(capsule_id, from_version)
                 self._stats["embeddings_cleaned"] += 1
-            except Exception as e:
+            except (RuntimeError, OSError, ConnectionError, ValueError) as e:
                 logger.warning(
                     "old_embedding_cleanup_failed",
                     capsule_id=capsule_id,
@@ -676,7 +676,7 @@ class EmbeddingMigrationService:
                 "now": datetime.now(UTC).isoformat(),
             })
 
-        except Exception as e:
+        except (RuntimeError, OSError, ConnectionError, ValueError) as e:
             logger.warning(
                 "failed_to_update_embedding_version",
                 capsule_id=capsule_id,

@@ -88,7 +88,7 @@ class Neo4jClient:
             await self._driver.verify_connectivity()
             self._connected = True
             logger.info("Neo4j connection established")
-        except Exception as e:
+        except (ServiceUnavailable, SessionExpired, OSError, RuntimeError) as e:
             logger.error("Failed to connect to Neo4j", error=str(e))
             raise
 
@@ -142,7 +142,7 @@ class Neo4jClient:
                 yield tx
                 # Commit on successful exit
                 await tx.commit()
-            except Exception:
+            except Exception:  # Intentional broad catch: transaction rollback guard must catch all exceptions before re-raising
                 # Rollback on error - check if transaction is still open
                 # FIX: Use 'not tx.closed()' instead of 'tx.closed() is False'
                 # to handle any falsy value correctly
@@ -265,7 +265,7 @@ class Neo4jClient:
                 "database": self._database,
                 "details": result or {},
             }
-        except Exception as e:
+        except (ServiceUnavailable, SessionExpired, TransientError, OSError, RuntimeError) as e:
             logger.error("Neo4j health check failed", error=str(e))
             return {
                 "status": "unhealthy",
@@ -283,7 +283,7 @@ class Neo4jClient:
         try:
             health = await self.health_check()
             return health.get("status") == "healthy"
-        except Exception:
+        except (ServiceUnavailable, SessionExpired, TransientError, OSError, RuntimeError):
             return False
 
 

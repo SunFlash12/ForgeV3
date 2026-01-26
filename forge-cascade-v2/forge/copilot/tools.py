@@ -273,7 +273,7 @@ class ForgeToolRegistry:
                 resultType="success",
                 sessionLog=f"Found {len(results)} results for: {params.query}",
             )
-        except Exception as e:
+        except (RuntimeError, ConnectionError, TimeoutError, ValueError, OSError) as e:
             logger.error(f"Knowledge query failed: {e}")
             return self._error_result(f"Query failed: {e}")
 
@@ -298,7 +298,7 @@ class ForgeToolRegistry:
                 resultType="success",
                 sessionLog=f"Semantic search found {len(results)} matches",
             )
-        except Exception as e:
+        except (RuntimeError, ConnectionError, TimeoutError, ValueError, OSError) as e:
             logger.error(f"Semantic search failed: {e}")
             return self._error_result(f"Search failed: {e}")
 
@@ -324,7 +324,7 @@ class ForgeToolRegistry:
                 resultType="success",
                 sessionLog=f"Capsule created: {capsule.id}",
             )
-        except Exception as e:
+        except (RuntimeError, ConnectionError, TimeoutError, ValueError, OSError) as e:
             logger.error(f"Capsule creation failed: {e}")
             return self._error_result(f"Creation failed: {e}")
 
@@ -351,7 +351,7 @@ class ForgeToolRegistry:
                 resultType="success",
                 sessionLog=f"Retrieved capsule: {params.capsule_id}",
             )
-        except Exception as e:
+        except (RuntimeError, ConnectionError, TimeoutError, ValueError, OSError) as e:
             logger.error(f"Capsule retrieval failed: {e}")
             return self._error_result(f"Retrieval failed: {e}")
 
@@ -374,7 +374,7 @@ class ForgeToolRegistry:
                 resultType="success",
                 sessionLog=f"Found {len(overlays)} overlays",
             )
-        except Exception as e:
+        except (RuntimeError, ConnectionError, TimeoutError, ValueError, OSError) as e:
             logger.error(f"Overlay listing failed: {e}")
             return self._error_result(f"Listing failed: {e}")
 
@@ -398,7 +398,7 @@ class ForgeToolRegistry:
                 resultType="success",
                 sessionLog=f"Executed overlay: {params.overlay_id}",
             )
-        except Exception as e:
+        except (RuntimeError, ConnectionError, TimeoutError, ValueError, OSError) as e:
             logger.error(f"Overlay execution failed: {e}")
             return self._error_result(f"Execution failed: {e}")
 

@@ -527,11 +527,12 @@ class SecurityValidatorOverlay(BaseOverlay):
                     else:
                         warnings.append(f"[LOW] {rule.name}: {error}")
 
-            except Exception as e:
+            except (SecurityValidationError, OverlayError, ValueError, TypeError, KeyError, RuntimeError, RegexTimeoutError, RegexValidationError) as e:
                 self._logger.error(
                     "rule_validation_error",
                     rule=rule.name,
-                    error=str(e)
+                    error=str(e),
+                    error_type=type(e).__name__,
                 )
                 # Fail closed - if validation fails, deny
                 rule_results[rule.name] = (False, f"Validation error: {str(e)}")

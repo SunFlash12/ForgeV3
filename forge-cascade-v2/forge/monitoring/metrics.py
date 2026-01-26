@@ -675,7 +675,7 @@ def add_metrics_middleware(app: Any) -> None:
                 )
 
                 return response  # type: ignore[no-any-return]
-            except Exception:
+            except Exception:  # Intentional broad catch: metrics middleware must record all exception types as 500s before re-raising
                 http_requests_total.inc(method=method, endpoint=path, status="500")
                 raise
             finally:

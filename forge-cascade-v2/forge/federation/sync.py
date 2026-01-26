@@ -178,7 +178,7 @@ class SyncService:
                 # Update trust based on successful sync
                 await self.trust_manager.record_successful_sync(peer)
 
-            except Exception as e:
+            except (ConnectionError, TimeoutError, OSError, ValueError, RuntimeError) as e:
                 logger.error(f"Sync failed with {peer.name}: {e}")
                 state.status = SyncOperationStatus.FAILED
                 state.error_message = str(e)
@@ -545,7 +545,7 @@ class SyncService:
                 if record:
                     capsule_data: dict[str, Any] | None = record["capsule"]
                     return capsule_data
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError, RuntimeError) as e:
             logger.error(f"Failed to get local capsule {capsule_id}: {e}")
 
         return None
@@ -595,7 +595,7 @@ class SyncService:
                 await result.single()
                 logger.debug(f"Created local capsule {local_id} from peer {peer.name}")
 
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError, RuntimeError, KeyError) as e:
             logger.error(f"Failed to create local capsule: {e}")
             return
 
@@ -648,7 +648,7 @@ class SyncService:
                         # NOTE: Don't update trust_level - must be calculated locally
                     })
                     logger.debug(f"Updated local capsule {fed_capsule.local_capsule_id}")
-            except Exception as e:
+            except (ConnectionError, TimeoutError, OSError, RuntimeError) as e:
                 logger.error(f"Failed to update local capsule: {e}")
 
         # Update tracking record
@@ -737,7 +737,7 @@ class SyncService:
                     f"Created federated edge {relationship_type} "
                     f"from {source_local} to {target_local}"
                 )
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError, RuntimeError) as e:
             logger.error(f"Failed to create edge in Neo4j: {e}")
 
     async def _get_edge_changes(
@@ -784,7 +784,7 @@ class SyncService:
                 logger.debug(f"Found {len(edges)} edge changes since {since}")
                 return edges
 
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError, RuntimeError) as e:
             logger.error(f"Failed to get edge changes: {e}")
             return []
 
@@ -843,7 +843,7 @@ class SyncService:
                 logger.debug(f"Found {len(capsules)} local changes since {since}")
                 return capsules
 
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError, RuntimeError) as e:
             logger.error(f"Failed to get local changes: {e}")
             return []
 
@@ -880,7 +880,7 @@ class SyncService:
                 try:
                     state = await self.sync_with_peer(peer.id)
                     sync_ids.append(state.id)
-                except Exception as e:
+                except (ConnectionError, TimeoutError, OSError, ValueError, RuntimeError) as e:
                     logger.error(f"Failed to schedule sync with {peer.name}: {e}")
         return sync_ids
 
@@ -938,7 +938,7 @@ class SyncService:
                 record = await result.single()
                 logger.info(f"Persisted peer {peer.name} to database")
                 return record is not None
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError, RuntimeError) as e:
             logger.error(f"Failed to persist peer {peer.id}: {e}")
             return False
 
@@ -990,12 +990,12 @@ class SyncService:
                         # Register in memory
                         self._peers[peer.id] = peer
                         loaded_peers.append(peer)
-                    except Exception as e:
+                    except (ValueError, KeyError, TypeError) as e:
                         logger.error(f"Failed to parse peer {peer_data.get('id')}: {e}")
 
                 logger.info(f"Loaded {len(loaded_peers)} peers from database")
                 return loaded_peers
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError, RuntimeError) as e:
             logger.error(f"Failed to load peers from database: {e}")
             return []
 
@@ -1022,7 +1022,7 @@ class SyncService:
                 if deleted > 0:
                     logger.info(f"Deleted peer {peer_id} from database")
                 return deleted > 0
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError, RuntimeError) as e:
             logger.error(f"Failed to delete peer {peer_id}: {e}")
             return False
 
@@ -1089,7 +1089,7 @@ class SyncService:
                 })
                 record = await result.single()
                 return record is not None
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError, RuntimeError) as e:
             logger.error(f"Failed to persist trust score for {peer_id}: {e}")
             return False
 
@@ -1134,7 +1134,7 @@ class SyncService:
                 })
                 await result.single()
                 return True
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError, RuntimeError) as e:
             logger.error(f"Failed to persist federated capsule mapping: {e}")
             return False
 
@@ -1168,11 +1168,11 @@ class SyncService:
                         )
                         key = f"{fed_capsule.peer_id}:{fed_capsule.remote_capsule_id}"
                         self._federated_capsules[key] = fed_capsule
-                    except Exception as e:
+                    except (ValueError, KeyError, TypeError) as e:
                         logger.error(f"Failed to parse federated capsule: {e}")
 
                 logger.info(f"Loaded {len(self._federated_capsules)} federated capsule mappings")
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError, RuntimeError) as e:
             logger.error(f"Failed to load federated capsules: {e}")
 
     # =========================================================================
@@ -1210,7 +1210,7 @@ class SyncService:
                 })
                 await result.single()
                 return True
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError, RuntimeError) as e:
             logger.error(f"Failed to persist federated edge mapping: {e}")
             return False
 
@@ -1241,9 +1241,9 @@ class SyncService:
                             last_synced_at=datetime.fromisoformat(fe_data["last_synced_at"]) if fe_data.get("last_synced_at") else None,
                         )
                         self._federated_edges[fed_edge.id] = fed_edge
-                    except Exception as e:
+                    except (ValueError, KeyError, TypeError) as e:
                         logger.error(f"Failed to parse federated edge: {e}")
 
                 logger.info(f"Loaded {len(self._federated_edges)} federated edge mappings")
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError, RuntimeError) as e:
             logger.error(f"Failed to load federated edges: {e}")

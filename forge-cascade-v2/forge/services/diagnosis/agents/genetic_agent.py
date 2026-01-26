@@ -240,7 +240,7 @@ class GeneticAgent(DiagnosticAgent):
                 }
                 hypotheses.append(hypothesis)
 
-        except Exception as e:
+        except (RuntimeError, OSError, ConnectionError, ValueError) as e:
             logger.error("genetic_hypothesis_query_failed", error=str(e))
 
         # Merge with existing
@@ -417,7 +417,7 @@ class GeneticAgent(DiagnosticAgent):
             ]
             self._gene_cache[cache_key] = {"associations": associations}
             return associations
-        except Exception:
+        except (RuntimeError, OSError, ConnectionError, ValueError):
             return []
 
     async def _get_disease_genes(
@@ -444,7 +444,7 @@ class GeneticAgent(DiagnosticAgent):
             genes = [r["gene_symbol"] for r in (results or []) if r.get("gene_symbol")]
             self._gene_cache[cache_key] = {"genes": genes}
             return genes
-        except Exception:
+        except (RuntimeError, OSError, ConnectionError, ValueError):
             return []
 
     def _check_compound_heterozygosity(

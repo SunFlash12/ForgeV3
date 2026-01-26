@@ -99,10 +99,10 @@ class RevenueService:
                 )
                 self._pending_distributions = list(all_records)
                 logger.info(f"Loaded {len(self._pending_distributions)} pending distributions")
-            except Exception as e:
+            except (ConnectionError, TimeoutError, OSError, ValueError, RuntimeError) as e:
                 logger.warning(f"Could not load pending distributions: {e}")
                 self._pending_distributions = []
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError, ValueError, RuntimeError) as e:
             logger.warning(f"Failed to load pending distributions: {e}")
             self._pending_distributions = []
 
@@ -370,7 +370,7 @@ class RevenueService:
                     record.distribution_complete = True
                     await self._revenue_repo.update(record)
 
-            except Exception as e:
+            except (ConnectionError, TimeoutError, OSError, ValueError, RuntimeError) as e:
                 logger.error(f"Batch distribution failed: {e}")
                 # Return records to pending queue for retry
                 self._pending_distributions.extend(batch)

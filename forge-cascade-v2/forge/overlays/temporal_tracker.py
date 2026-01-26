@@ -246,11 +246,12 @@ class TemporalTrackerOverlay(BaseOverlay):
                 }
             )
 
-        except Exception as e:
+        except (TemporalError, VersionNotFoundError, OverlayError, ValueError, TypeError, KeyError, RuntimeError) as e:
             self._logger.error(
                 "temporal_tracking_error",
                 error=str(e),
-                event_type=event.type.value if event else "direct"
+                error_type=type(e).__name__,
+                event_type=event.type.value if event else "direct",
             )
             return OverlayResult.fail(f"Temporal tracking error: {str(e)}")
 

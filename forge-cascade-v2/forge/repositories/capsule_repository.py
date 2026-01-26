@@ -497,7 +497,7 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
                             highlights=[],  # Would need text search for highlights
                         ))
             return search_results
-        except Exception as e:
+        except (RuntimeError, OSError, ValueError, KeyError) as e:
             self.logger.error(
                 "Semantic search failed",
                 error=str(e),
@@ -922,7 +922,7 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
                     if capsule is not None:
                         similar.append((capsule, r["score"]))
             return similar
-        except Exception as e:
+        except (RuntimeError, OSError, ValueError, KeyError) as e:
             self.logger.warning(
                 "find_similar_by_embedding failed",
                 error=str(e),

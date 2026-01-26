@@ -110,7 +110,7 @@ class HPOOntologyService:
                 return await self._load_from_json(json_file)
             elif obo_file.exists():
                 return await self._load_from_obo(obo_file)
-        except Exception as e:
+        except (ConnectionError, TimeoutError, ValueError, OSError, RuntimeError) as e:
             logger.error("hpo_download_failed", error=str(e))
 
         return False
@@ -126,7 +126,7 @@ class HPOOntologyService:
                     json_file.write_bytes(response.content)
                     logger.info("hpo_json_downloaded", size=len(response.content))
                     return
-            except Exception as e:
+            except (ConnectionError, TimeoutError, ValueError, OSError, RuntimeError) as e:
                 logger.warning("hpo_json_download_failed", error=str(e))
 
             # Fall back to OBO
@@ -165,7 +165,7 @@ class HPOOntologyService:
             logger.info("hpo_loaded_from_json", term_count=len(terms))
             return True
 
-        except Exception as e:
+        except (ConnectionError, TimeoutError, ValueError, OSError, RuntimeError) as e:
             logger.error("hpo_json_parse_error", error=str(e))
             return False
 
@@ -305,7 +305,7 @@ class HPOOntologyService:
             logger.info("hpo_loaded_from_obo", term_count=len(terms))
             return True
 
-        except Exception as e:
+        except (ConnectionError, TimeoutError, ValueError, OSError, RuntimeError) as e:
             logger.error("hpo_obo_parse_error", error=str(e))
             return False
 

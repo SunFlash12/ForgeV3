@@ -315,7 +315,7 @@ class EscrowService:
                 escrow.funded_at = datetime.now(UTC)
                 logger.info(f"Simulated escrow created for job {job_id}")
 
-        except Exception as e:
+        except (ValueError, ConnectionError, TimeoutError, OSError) as e:
             escrow.status = EscrowStatus.PENDING
             escrow.metadata["error"] = str(e)
             logger.error(f"Failed to create escrow: {e}")
@@ -426,7 +426,7 @@ class EscrowService:
                 escrow.resolved_at = datetime.now(UTC)
                 logger.info(f"Escrow {escrow_id} released to provider")
 
-            except Exception as e:
+            except (ValueError, ConnectionError, TimeoutError, OSError) as e:
                 escrow.metadata["release_error"] = str(e)
                 logger.error(f"Failed to release escrow: {e}")
                 raise EscrowError(f"Escrow release failed: {e}") from e
@@ -478,7 +478,7 @@ class EscrowService:
                 escrow.metadata["refund_reason"] = reason
                 logger.info(f"Escrow {escrow_id} refunded to buyer: {reason}")
 
-            except Exception as e:
+            except (ValueError, ConnectionError, TimeoutError, OSError) as e:
                 escrow.metadata["refund_error"] = str(e)
                 logger.error(f"Failed to refund escrow: {e}")
                 raise EscrowError(f"Escrow refund failed: {e}") from e
@@ -576,7 +576,7 @@ class EscrowService:
                     f"buyer={buyer_share_pct}%, provider={100-buyer_share_pct}%"
                 )
 
-            except Exception as e:
+            except (ValueError, ConnectionError, TimeoutError, OSError) as e:
                 escrow.metadata["resolution_error"] = str(e)
                 logger.error(f"Failed to resolve dispute: {e}")
                 raise EscrowError(f"Dispute resolution failed: {e}") from e

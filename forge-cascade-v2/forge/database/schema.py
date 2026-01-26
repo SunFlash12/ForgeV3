@@ -246,7 +246,7 @@ class SchemaManager:
                 # Connection lost - re-raise as this is fatal
                 logger.critical(f"Database unavailable while creating constraint: {name}", error=str(e))
                 raise
-            except Exception as e:
+            except Exception as e:  # Intentional broad catch: last-resort safety net after specific Neo4j exception handlers
                 # Unexpected error - log with full type info
                 results[name] = False
                 logger.error(
@@ -518,7 +518,7 @@ class SchemaManager:
                 # Connection lost - re-raise as this is fatal
                 logger.critical(f"Database unavailable while creating index: {name}", error=str(e))
                 raise
-            except Exception as e:
+            except Exception as e:  # Intentional broad catch: last-resort safety net after specific Neo4j exception handlers
                 # Unexpected error - log with full type info
                 results[name] = False
                 logger.error(
@@ -579,7 +579,7 @@ class SchemaManager:
                 # Connection lost - re-raise as this is fatal
                 logger.critical(f"Database unavailable while creating vector index: {name}", error=str(e))
                 raise
-            except Exception as e:
+            except Exception as e:  # Intentional broad catch: last-resort safety net after specific Neo4j exception handlers
                 # Unexpected error - log with full type info
                 results[name] = False
                 logger.warning(
@@ -654,7 +654,7 @@ class SchemaManager:
                 except ServiceUnavailable as e:
                     logger.critical(f"Database unavailable while dropping constraint: {name}", error=str(e))
                     raise
-                except Exception as e:
+                except Exception as e:  # Intentional broad catch: last-resort safety net after specific Neo4j exception handlers
                     results[f"drop_constraint_{name}"] = False
                     logger.error(
                         f"Unexpected error dropping constraint: {name}",
@@ -687,7 +687,7 @@ class SchemaManager:
                 except ServiceUnavailable as e:
                     logger.critical(f"Database unavailable while dropping index: {name}", error=str(e))
                     raise
-                except Exception as e:
+                except Exception as e:  # Intentional broad catch: last-resort safety net after specific Neo4j exception handlers
                     results[f"drop_index_{name}"] = False
                     logger.error(
                         f"Unexpected error dropping index: {name}",

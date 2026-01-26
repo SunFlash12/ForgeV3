@@ -272,8 +272,12 @@ class MLIntelligenceOverlay(BaseOverlay):
                 }
             )
 
-        except Exception as e:
-            self._logger.error("ml_analysis_error", error=str(e))
+        except (MLProcessingError, EmbeddingError, ValueError, TypeError, KeyError, RuntimeError) as e:
+            self._logger.error(
+                "ml_analysis_error",
+                error=str(e),
+                error_type=type(e).__name__,
+            )
             return OverlayResult.fail(error=f"ML analysis failed: {str(e)}")
 
     def _extract_content(self, data: dict[str, Any]) -> str:
@@ -361,8 +365,12 @@ class MLIntelligenceOverlay(BaseOverlay):
             try:
                 embedding = await self._embedding_provider(content)
                 model_name = "external"
-            except Exception as e:
-                self._logger.warning("external_embedding_provider_failed", error=str(e))
+            except (EmbeddingError, ConnectionError, TimeoutError, ValueError, RuntimeError, OSError) as e:
+                self._logger.warning(
+                    "external_embedding_provider_failed",
+                    error=str(e),
+                    error_type=type(e).__name__,
+                )
 
         # Use Forge embedding service as default
         if embedding is None:
@@ -388,8 +396,12 @@ class MLIntelligenceOverlay(BaseOverlay):
                 embedding = self._pseudo_embedding(content)
                 model_name = "pseudo-hash-fallback"
 
-            except Exception as e:
-                self._logger.error("embedding_service_error", error=str(e))
+            except (EmbeddingError, RuntimeError, ValueError, ConnectionError, OSError) as e:
+                self._logger.error(
+                    "embedding_service_error",
+                    error=str(e),
+                    error_type=type(e).__name__,
+                )
                 # Fall back to pseudo-embedding on error
                 embedding = self._pseudo_embedding(content)
                 model_name = "pseudo-hash-fallback"

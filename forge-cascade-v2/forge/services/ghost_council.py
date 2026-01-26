@@ -1031,7 +1031,7 @@ Constitutional AI Review:
                 primary_concerns=synthesis.get("primary_concerns", [])[:3],
             )
 
-        except Exception as e:
+        except (RuntimeError, ValueError, ConnectionError, TimeoutError, OSError) as e:
             logger.warning(
                 "ghost_council_member_vote_failed",
                 member=member.name,
@@ -1270,7 +1270,7 @@ Constitutional AI Review:
         for handler in self._issue_handlers:
             try:
                 handler(issue)
-            except Exception as e:
+            except (RuntimeError, ValueError, ConnectionError, TimeoutError, OSError) as e:
                 logger.error("issue_handler_failed", error=str(e))
 
         logger.info(
@@ -1426,7 +1426,7 @@ Provide your Ghost Council tri-perspective assessment as JSON:"""
                 primary_concerns=synthesis.get("primary_concerns", [])[:3],
             )
 
-        except Exception as e:
+        except (RuntimeError, ValueError, ConnectionError, TimeoutError, OSError) as e:
             logger.warning(
                 "ghost_council_issue_response_failed",
                 member=member.name,

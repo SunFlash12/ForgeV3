@@ -700,7 +700,7 @@ async def query_knowledge(
             cypher=result_data.get("cypher") if request.debug else None,
             results=result_data.get("results") if request.include_results else None,
         )
-    except Exception as e:
+    except (ValueError, TypeError, KeyError, RuntimeError, OSError) as e:
         execution_time = (time.time() - start) * 1000
         return KnowledgeQueryResponse(
             question=request.question,

@@ -195,7 +195,7 @@ async def create_offering(
     except RuntimeError as e:
         logger.error(f"Service unavailable: {e}")
         raise HTTPException(status_code=503, detail="Service temporarily unavailable")
-    except Exception as e:
+    except (ValueError, TypeError, KeyError) as e:
         logger.error(f"Failed to create offering: {e}")
         raise HTTPException(status_code=400, detail="Failed to create offering")
 
@@ -246,7 +246,7 @@ async def search_offerings(
     except RuntimeError as e:
         logger.error(f"Service unavailable: {e}")
         raise HTTPException(status_code=503, detail="Service temporarily unavailable")
-    except Exception as e:
+    except (ValueError, TypeError, KeyError) as e:
         logger.error(f"Failed to search offerings: {e}")
         raise HTTPException(status_code=500, detail="Failed to search offerings")
 
@@ -284,7 +284,7 @@ async def get_offering(offering_id: str) -> OfferingResponse:
     except RuntimeError as e:
         logger.error(f"Service unavailable: {e}")
         raise HTTPException(status_code=503, detail="Service temporarily unavailable")
-    except Exception as e:
+    except (ValueError, TypeError, KeyError) as e:
         logger.error(f"Failed to get offering: {e}")
         raise HTTPException(status_code=500, detail="Failed to get offering")
 
@@ -333,7 +333,7 @@ async def create_job(
     except ValueError as e:
         logger.warning(f"Invalid request: {e}")
         raise HTTPException(status_code=400, detail="Invalid request parameters")
-    except Exception as e:
+    except (TypeError, KeyError, ConnectionError) as e:
         logger.error(f"Failed to create job: {e}")
         raise HTTPException(status_code=500, detail="Failed to create job")
 
@@ -358,7 +358,7 @@ async def get_job(
     except RuntimeError as e:
         logger.error(f"Service unavailable: {e}")
         raise HTTPException(status_code=503, detail="Service temporarily unavailable")
-    except Exception as e:
+    except (TypeError, KeyError, ConnectionError) as e:
         logger.error(f"Failed to get job: {e}")
         raise HTTPException(status_code=500, detail="Failed to get job")
 
@@ -406,7 +406,7 @@ async def respond_to_job(
     except ValueError as e:
         logger.warning(f"Invalid request: {e}")
         raise HTTPException(status_code=400, detail="Invalid request parameters")
-    except Exception as e:
+    except (TypeError, KeyError, ConnectionError) as e:
         logger.error(f"Failed to respond to job: {e}")
         raise HTTPException(status_code=500, detail="Failed to respond to job")
 
@@ -440,7 +440,7 @@ async def accept_job_terms(
     except ValueError as e:
         logger.warning(f"Invalid request: {e}")
         raise HTTPException(status_code=400, detail="Invalid request parameters")
-    except Exception as e:
+    except (TypeError, KeyError, ConnectionError) as e:
         logger.error(f"Failed to accept terms: {e}")
         raise HTTPException(status_code=500, detail="Failed to accept terms")
 
@@ -484,7 +484,7 @@ async def submit_deliverable(
     except ValueError as e:
         logger.warning(f"Invalid request: {e}")
         raise HTTPException(status_code=400, detail="Invalid request parameters")
-    except Exception as e:
+    except (TypeError, KeyError, ConnectionError) as e:
         logger.error(f"Failed to submit deliverable: {e}")
         raise HTTPException(status_code=500, detail="Failed to submit deliverable")
 
@@ -533,7 +533,7 @@ async def evaluate_deliverable(
     except ValueError as e:
         logger.warning(f"Invalid request: {e}")
         raise HTTPException(status_code=400, detail="Invalid request parameters")
-    except Exception as e:
+    except (TypeError, KeyError, ConnectionError) as e:
         logger.error(f"Failed to evaluate: {e}")
         raise HTTPException(status_code=500, detail="Failed to evaluate deliverable")
 
@@ -574,7 +574,7 @@ async def file_dispute(
     except ValueError as e:
         logger.warning(f"Invalid request: {e}")
         raise HTTPException(status_code=400, detail="Invalid request parameters")
-    except Exception as e:
+    except (TypeError, KeyError, ConnectionError) as e:
         logger.error(f"Failed to file dispute: {e}")
         raise HTTPException(status_code=500, detail="Failed to file dispute")
 
@@ -604,7 +604,7 @@ async def get_buyer_jobs(
     except RuntimeError as e:
         logger.error(f"Service unavailable: {e}")
         raise HTTPException(status_code=503, detail="Service temporarily unavailable")
-    except Exception as e:
+    except (ValueError, TypeError, KeyError, ConnectionError) as e:
         logger.error(f"Failed to get buyer jobs: {e}")
         raise HTTPException(status_code=500, detail="Failed to get jobs")
 
@@ -634,7 +634,7 @@ async def get_provider_jobs(
     except RuntimeError as e:
         logger.error(f"Service unavailable: {e}")
         raise HTTPException(status_code=503, detail="Service temporarily unavailable")
-    except Exception as e:
+    except (ValueError, TypeError, KeyError, ConnectionError) as e:
         logger.error(f"Failed to get provider jobs: {e}")
         raise HTTPException(status_code=500, detail="Failed to get jobs")
 

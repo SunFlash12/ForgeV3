@@ -902,7 +902,7 @@ class ForgeAnomalySystem:
         for callback in self._callbacks:
             try:
                 await callback(anomaly)
-            except Exception as e:
+            except (RuntimeError, ValueError, TypeError, OSError) as e:
                 logger.error("anomaly_callback_failed", error=str(e))
 
     def get_recent_anomalies(

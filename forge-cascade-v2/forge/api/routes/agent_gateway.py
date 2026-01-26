@@ -4,6 +4,7 @@ Agent Knowledge Gateway API Routes
 REST and WebSocket endpoints for AI agent access to the knowledge graph.
 """
 
+import asyncio
 import logging
 from datetime import datetime
 from typing import Any
@@ -573,7 +574,7 @@ async def websocket_stream(
                     response_format=ResponseFormat.STREAMING,
                     max_results=data.get("max_results", 10),
                 )
-            except Exception as e:
+            except (ValueError, TypeError, KeyError) as e:
                 await websocket.send_json({
                     "error": f"Invalid query: {str(e)}",
                     "error_code": "INVALID_QUERY",
@@ -594,7 +595,7 @@ async def websocket_stream(
 
     except WebSocketDisconnect:
         logger.info("agent_websocket_disconnected session_id=%s", session.id)
-    except Exception as e:
+    except (ConnectionError, asyncio.CancelledError, OSError, RuntimeError) as e:
         logger.exception("agent_websocket_error session_id=%s", session.id)
         await websocket.close(code=4000, reason=str(e))
 

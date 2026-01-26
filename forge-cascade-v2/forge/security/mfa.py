@@ -182,7 +182,7 @@ class MFAService:
             return decrypted
         except ImportError:
             return encrypted
-        except Exception as e:
+        except (ValueError, TypeError) as e:
             logger.error("mfa_decrypt_error", error=str(e))
             raise ValueError("Failed to decrypt MFA secret")
 
@@ -402,7 +402,7 @@ class MFAService:
         # Decode secret
         try:
             key = base64.b32decode(secret, casefold=True)
-        except Exception:
+        except (ValueError, TypeError):
             return ""
 
         # Generate HMAC-SHA1 of counter
@@ -491,7 +491,7 @@ class MFAService:
                     self._last_used[user_id] = datetime.fromisoformat(mfa_data["last_used"])
                 logger.info("mfa_data_loaded_from_db", user_id=user_id)
                 return True
-            except Exception as e:
+            except (ValueError, TypeError, KeyError) as e:
                 logger.error("mfa_data_load_error", user_id=user_id, error=str(e))
                 return False
 
@@ -669,7 +669,7 @@ class MFAService:
                     {"user_id": user_id}
                 )
             logger.info("mfa_data_deleted_from_db", user_id=user_id)
-        except Exception as e:
+        except (RuntimeError, OSError, ConnectionError) as e:
             logger.error("mfa_data_delete_error", user_id=user_id, error=str(e))
 
     async def regenerate_backup_codes(self, user_id: str) -> list[str]:
@@ -732,7 +732,7 @@ class MFAService:
                     }
                 )
             logger.info("mfa_backup_codes_updated_in_db", user_id=user_id)
-        except Exception as e:
+        except (RuntimeError, OSError, ConnectionError) as e:
             logger.error("mfa_backup_codes_update_error", user_id=user_id, error=str(e))
 
 

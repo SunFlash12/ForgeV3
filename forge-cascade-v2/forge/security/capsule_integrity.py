@@ -21,6 +21,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 import structlog
+from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import (
     Ed25519PrivateKey,
     Ed25519PublicKey,
@@ -242,7 +243,7 @@ class CapsuleIntegrityService:
             public_key = Ed25519PublicKey.from_public_bytes(public_key_bytes)
             public_key.verify(signature, content_hash.encode("utf-8"))
             return True
-        except Exception as e:
+        except (InvalidSignature, ValueError, TypeError) as e:
             logger.debug(
                 "signature_verification_failed",
                 error=str(e),
@@ -272,7 +273,7 @@ class CapsuleIntegrityService:
             public_key = Ed25519PublicKey.from_public_bytes(public_key_bytes)
             public_key.verify(signature, content_hash.encode("utf-8"))
             return True
-        except Exception:
+        except (InvalidSignature, ValueError, TypeError):
             return False
 
     # ═══════════════════════════════════════════════════════════════════════════

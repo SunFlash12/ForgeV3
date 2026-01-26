@@ -94,7 +94,7 @@ class SolanaChainClient(BaseChainClient):
                     secret_key: bytes = base58.b58decode(self.config.solana_private_key)
                     self._keypair = Keypair.from_bytes(secret_key)
                     logger.info(f"Operator keypair loaded: {self._keypair.pubkey()}")
-                except Exception as e:
+                except (ValueError, TypeError, RuntimeError) as e:
                     logger.warning(f"Failed to load Solana operator keypair: {e}")
 
             self._initialized = True
@@ -408,7 +408,7 @@ class SolanaChainClient(BaseChainClient):
                 status=status_str,
                 transaction_type="unknown",
             )
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError, ValueError, RuntimeError) as e:
             logger.error(f"Failed to get Solana transaction {tx_hash}: {e}")
             return None
 
@@ -656,7 +656,7 @@ class SolanaChainClient(BaseChainClient):
         # For simple queries, contract_address is the account to read
         try:
             account_pubkey: Any = Pubkey.from_string(contract_address)
-        except Exception as e:
+        except (ValueError, TypeError) as e:
             raise ChainClientError(f"Invalid account address: {contract_address} - {e}")
 
         # Handle different query types based on function_name

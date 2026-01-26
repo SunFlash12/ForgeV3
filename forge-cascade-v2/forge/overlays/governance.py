@@ -199,11 +199,12 @@ class PolicyRule:
             if self.condition.evaluate(context):
                 return True, None
             return False, f"Policy rule '{self.name}' failed"
-        except Exception as e:
+        except (ValueError, TypeError, KeyError, AttributeError) as e:
             logger.warning(
                 "policy_rule_evaluation_error",
                 rule=self.name,
-                error=str(e)
+                error=str(e),
+                error_type=type(e).__name__,
             )
             return False, f"Policy rule '{self.name}' error: {str(e)}"
 

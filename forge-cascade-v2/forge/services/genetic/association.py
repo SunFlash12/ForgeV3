@@ -108,7 +108,7 @@ class GeneAssociationService:
             self._gene_cache[gene_symbol] = gene_info
             return gene_info
 
-        except Exception as e:
+        except (RuntimeError, ValueError, ConnectionError, OSError) as e:
             logger.error("gene_info_query_failed", gene=gene_symbol, error=str(e))
             return None
 
@@ -173,7 +173,7 @@ class GeneAssociationService:
             self._association_cache[cache_key] = associations
             return associations
 
-        except Exception as e:
+        except (RuntimeError, ValueError, ConnectionError, OSError) as e:
             logger.error("disease_association_query_failed", gene=gene_symbol, error=str(e))
             return []
 
@@ -227,7 +227,7 @@ class GeneAssociationService:
                 for r in results
             ]
 
-        except Exception as e:
+        except (RuntimeError, ValueError, ConnectionError, OSError) as e:
             logger.error("genes_for_disease_query_failed", disease=disease_id, error=str(e))
             return []
 
@@ -345,7 +345,7 @@ class GeneAssociationService:
                         return InheritancePattern.X_LINKED_RECESSIVE
                     return InheritancePattern.AUTOSOMAL_RECESSIVE
 
-        except Exception as e:
+        except (RuntimeError, ValueError, ConnectionError, OSError) as e:
             logger.warning("inheritance_query_failed", gene=gene_symbol, error=str(e))
 
         return InheritancePattern.UNKNOWN

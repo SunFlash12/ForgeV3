@@ -457,7 +457,7 @@ async def login(
             message="MFA verification required",
         )
 
-    except Exception:
+    except (ValueError, KeyError, OSError, RuntimeError):
         # Resilience: Record failed login
         record_login_attempt(success=False, reason="invalid_credentials")
         raise HTTPException(
@@ -604,7 +604,7 @@ async def refresh_token(
         try:
             body = await http_request.json()
             token_to_use = body.get("refresh_token")
-        except Exception:
+        except (ValueError, KeyError, RuntimeError):
             pass
 
     if not token_to_use:
@@ -680,7 +680,7 @@ async def logout(
                 # Blacklist with expiry matching token expiry (async for Redis support)
                 expires_at = claims.get("exp")
                 await TokenBlacklist.add_async(claims["jti"], expires_at)
-        except Exception:
+        except (ValueError, KeyError, OSError, RuntimeError):
             pass  # Token parsing failed, but still clear cookies
 
     # Resilience: Record logout metric

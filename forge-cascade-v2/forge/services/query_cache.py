@@ -121,7 +121,7 @@ class QueryCache:
                 hit_count=result["hit_count"],
             )
 
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError, ValueError) as e:
             self._logger.error("cache_get_error", error=str(e))
             self._stats["misses"] += 1
             return None
@@ -177,7 +177,7 @@ class QueryCache:
             )
             return True
 
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError, ValueError) as e:
             self._logger.error("cache_set_error", error=str(e))
             return False
 
@@ -190,7 +190,7 @@ class QueryCache:
             await self._redis.delete(key)
             self._stats["deletes"] += 1
             return True
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError, ValueError) as e:
             self._logger.error("cache_invalidate_error", error=str(e))
             return False
 
@@ -215,7 +215,7 @@ class QueryCache:
             self._logger.info("cache_invalidate_all", keys_removed=len(keys))
             return len(keys)
 
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError, ValueError) as e:
             self._logger.error("cache_invalidate_all_error", error=str(e))
             return 0
 
@@ -241,7 +241,7 @@ class QueryCache:
             self._logger.debug("cache_cleanup_check", total_keys=total_keys)
             return {"checked": total_keys, "removed": 0}  # Redis auto-expires
 
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError, ValueError) as e:
             self._logger.error("cache_cleanup_error", error=str(e))
             return {"checked": 0, "removed": 0, "error": str(e)}
 
@@ -273,7 +273,7 @@ class QueryCache:
                 "hit_rate": round(hit_rate, 4),
             }
 
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError, ValueError) as e:
             self._logger.error("cache_stats_error", error=str(e))
             return {"error": str(e)}
 
@@ -442,7 +442,7 @@ async def init_query_cache() -> QueryCache | InMemoryQueryCache:
             _query_cache = QueryCache(client)
             logger.info("query_cache_initialized", backend="redis")
 
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError, ValueError) as e:
             logger.warning(
                 "redis_unavailable_using_memory",
                 error=str(e),
@@ -470,7 +470,7 @@ async def close_query_cache() -> None:
     if isinstance(_query_cache, QueryCache) and _query_cache._redis:
         try:
             await _query_cache._redis.close()
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError, ValueError) as e:
             # SECURITY FIX (Audit 5): Log Redis close errors instead of silently ignoring
             logger.warning("query_cache_redis_close_error", error=str(e))
 

@@ -1276,8 +1276,8 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
             if r.get("delegation"):
                 try:
                     delegations.append(VoteDelegation.model_validate(r["delegation"]))
-                except Exception:
-                    pass
+                except (ValueError, TypeError, KeyError):
+                    pass  # Skip malformed delegation records
 
         return delegations
 

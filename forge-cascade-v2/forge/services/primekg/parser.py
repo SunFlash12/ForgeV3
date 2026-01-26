@@ -135,7 +135,7 @@ class PrimeKGParser:
         for callback in self._progress_callbacks:
             try:
                 callback(progress)
-            except Exception as e:
+            except Exception as e:  # Intentional broad catch: callback error must not crash parser
                 logger.warning("parser_callback_error", error=str(e))
 
     def count_lines(self, file_path: Path) -> int:
@@ -189,7 +189,7 @@ class PrimeKGParser:
                     progress.valid_records += 1
                     yield node
 
-                except Exception as e:
+                except (ValueError, KeyError, TypeError) as e:
                     progress.invalid_records += 1
                     error_msg = f"Line {progress.processed_lines}: {str(e)}"
                     progress.errors.append(error_msg)
@@ -314,7 +314,7 @@ class PrimeKGParser:
                     progress.valid_records += 1
                     yield edge
 
-                except Exception as e:
+                except (ValueError, KeyError, TypeError) as e:
                     progress.invalid_records += 1
                     error_msg = f"Line {progress.processed_lines}: {str(e)}"
                     progress.errors.append(error_msg)
@@ -437,7 +437,7 @@ class PrimeKGParser:
                     else:
                         raise ValueError(f"Invalid row format: {row}")
 
-                except Exception as e:
+                except (ValueError, KeyError, TypeError, IndexError) as e:
                     progress.invalid_records += 1
                     progress.errors.append(str(e))
 

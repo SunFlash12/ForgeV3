@@ -142,7 +142,7 @@ class GraphAlgorithmProvider:
                     version=result["version"],
                 )
                 return True
-        except Exception:
+        except (RuntimeError, OSError, ValueError):
             self.logger.debug("GDS plugin not available, using Cypher fallback")
         return False
 
@@ -279,8 +279,8 @@ class GraphAlgorithmProvider:
                 await self.client.execute(
                     f"CALL gds.graph.drop('{graph_name}', false)"
                 )
-            except Exception:
-                pass
+            except (RuntimeError, OSError, ValueError):
+                pass  # Best-effort GDS graph cleanup
 
     async def _cypher_pagerank(self, request: PageRankRequest) -> NodeRankingResult:
         """
@@ -509,8 +509,8 @@ class GraphAlgorithmProvider:
                 await self.client.execute(
                     f"CALL gds.graph.drop('{graph_name}', false)"
                 )
-            except Exception:
-                pass
+            except (RuntimeError, OSError, ValueError):
+                pass  # Best-effort GDS graph cleanup
 
     async def _cypher_centrality(
         self,
@@ -646,8 +646,8 @@ class GraphAlgorithmProvider:
                 await self.client.execute(
                     f"CALL gds.graph.drop('{graph_name}', false)"
                 )
-            except Exception:
-                pass
+            except (RuntimeError, OSError, ValueError):
+                pass  # Best-effort GDS graph cleanup
 
     async def _cypher_communities(
         self,
@@ -1046,8 +1046,8 @@ class GraphAlgorithmProvider:
                 await self.client.execute(
                     f"CALL gds.graph.drop('{graph_name}', false)"
                 )
-            except Exception:
-                pass
+            except (RuntimeError, OSError, ValueError):
+                pass  # Best-effort GDS graph cleanup
 
     async def _cypher_node_similarity(
         self,
@@ -1250,8 +1250,8 @@ class GraphAlgorithmProvider:
                 await self.client.execute(
                     f"CALL gds.graph.drop('{graph_name}', false)"
                 )
-            except Exception:
-                pass
+            except (RuntimeError, OSError, ValueError):
+                pass  # Best-effort GDS graph cleanup
 
     async def _cypher_shortest_path(
         self,

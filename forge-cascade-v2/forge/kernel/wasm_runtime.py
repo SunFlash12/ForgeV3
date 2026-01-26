@@ -654,7 +654,7 @@ class WasmOverlayRuntime:
             instance.state = ExecutionState.FAILED
             raise RuntimeError(f"Execution timeout after {instance.fuel_budget.timeout_seconds}s")
 
-        except Exception:
+        except (SecurityError, PermissionError, ValueError, RuntimeError, AttributeError, OSError) as e:
             execution_time_ms = (time.monotonic() - start_time) * 1000
             instance.metrics.record_invocation(
                 function=function,
@@ -663,7 +663,7 @@ class WasmOverlayRuntime:
                 success=False,
             )
             instance.state = ExecutionState.FAILED
-            raise
+            raise e
 
     async def terminate(self, instance_id: str) -> bool:
         """
@@ -769,12 +769,13 @@ def shutdown_wasm_runtime() -> None:
         async def _safe_terminate(instance_id: str) -> None:
             try:
                 await runtime.terminate(instance_id)
-            except Exception as e:
+            except (RuntimeError, ValueError, KeyError, OSError) as e:
                 import structlog
                 structlog.get_logger().error(
                     "wasm_terminate_error",
                     instance_id=instance_id,
-                    error=str(e)
+                    error=str(e),
+                    error_type=type(e).__name__,
                 )
 
         # Terminate all instances with exception handling

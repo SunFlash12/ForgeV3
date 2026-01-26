@@ -272,12 +272,13 @@ class KnowledgeQueryOverlay(BaseOverlay):
                 }
             )
 
-        except Exception as e:
+        except (QueryCompilationError, QueryExecutionError, OverlayError, ValueError, TypeError, KeyError, RuntimeError) as e:
             self._stats["queries_failed"] += 1
             self._logger.error(
                 "query_execution_failed",
                 question=question,
-                error=str(e)
+                error=str(e),
+                error_type=type(e).__name__,
             )
             return OverlayResult.fail(f"Query failed: {str(e)}")
 

@@ -257,7 +257,7 @@ class KeyManagementService:
 
             return result
 
-        except Exception as e:
+        except (ValueError, TypeError, KeyError) as e:
             logger.warning("key_decryption_failed", error=str(e))
             raise KeyDecryptionError("Failed to decrypt private key") from e
 
@@ -317,7 +317,7 @@ class KeyManagementService:
                 raise InvalidKeyError("Public key must be 32 bytes")
             # Verify it's a valid Ed25519 public key
             Ed25519PublicKey.from_public_bytes(public_key_bytes)
-        except Exception as e:
+        except (ValueError, TypeError) as e:
             raise InvalidKeyError(f"Invalid Ed25519 public key: {e}") from e
 
         return {
@@ -508,7 +508,7 @@ class KeyManagementService:
                 if len(private_key) != 32:
                     raise InvalidKeyError("Private key must be 32 bytes")
                 return private_key
-            except Exception as e:
+            except (ValueError, TypeError) as e:
                 raise InvalidKeyError(f"Invalid private key: {e}") from e
 
         if strategy == KeyStorageStrategy.PASSWORD_DERIVED:

@@ -95,7 +95,7 @@ class SessionCache:
                 if cached:
                     session_dict = json.loads(cached)
                     return Session.model_validate(session_dict)
-            except Exception as e:
+            except (ConnectionError, TimeoutError, OSError) as e:
                 logger.warning("session_cache_redis_error", error=str(e), operation="get")
 
         # Try in-memory cache
@@ -133,7 +133,7 @@ class SessionCache:
                 key = f"{cls._redis_prefix}{jti}"
                 await redis_client.setex(key, ttl_seconds, json.dumps(session_dict))
                 return
-            except Exception as e:
+            except (ConnectionError, TimeoutError, OSError) as e:
                 logger.warning("session_cache_redis_error", error=str(e), operation="set")
 
         # Fall back to in-memory cache
@@ -162,7 +162,7 @@ class SessionCache:
             try:
                 key = f"{cls._redis_prefix}{jti}"
                 await redis_client.delete(key)
-            except Exception as e:
+            except (ConnectionError, TimeoutError, OSError) as e:
                 logger.warning("session_cache_redis_error", error=str(e), operation="invalidate")
 
         # Invalidate in-memory cache
@@ -186,8 +186,8 @@ class SessionCache:
                         await redis_client.delete(*keys)
                     if cursor == 0:
                         break
-            except Exception:
-                pass
+            except (ConnectionError, TimeoutError, OSError):
+                pass  # Best-effort cache clear
 
         async with cls._get_async_lock():
             cls._cache.clear()
@@ -732,6 +732,6 @@ class SessionRepository:
         for index_query in indexes:
             try:
                 await self.client.execute(index_query)
-            except Exception as e:
+            except (RuntimeError, OSError, ValueError) as e:
                 # Index may already exist
                 self.logger.debug("index_creation_skipped", query=index_query[:50], error=str(e))

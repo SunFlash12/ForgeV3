@@ -194,7 +194,7 @@ Only return the JSON object, no other text."""
                             result.edges.append(edge)
                             result.edges_created += 1
 
-                except Exception as e:
+                except (RuntimeError, ValueError, ConnectionError, TimeoutError, OSError) as e:
                     logger.warning(
                         "classification_failed",
                         capsule_id=capsule.id,
@@ -203,7 +203,7 @@ Only return the JSON object, no other text."""
                     )
                     result.errors.append(f"Failed to classify {candidate.id}: {str(e)}")
 
-        except Exception as e:
+        except (RuntimeError, ValueError, ConnectionError, TimeoutError, OSError) as e:
             logger.error("detection_failed", capsule_id=capsule.id, error=str(e))
             result.errors.append(str(e))
 
@@ -363,7 +363,7 @@ Only return the JSON object, no other text."""
             )
             return edge
 
-        except Exception as e:
+        except (RuntimeError, ValueError, ConnectionError, OSError) as e:
             logger.error(
                 "edge_creation_failed",
                 source_id=source.id,

@@ -340,7 +340,7 @@ class CanaryManager(Generic[T]):
         if self.on_state_change:
             try:
                 await self.on_state_change(deployment, old_state, new_state)
-            except Exception as e:
+            except (RuntimeError, ValueError, TypeError, OSError) as e:
                 logger.error(
                     "canary_state_change_callback_error",
                     error=str(e),
@@ -594,7 +594,7 @@ class CanaryManager(Generic[T]):
                     if elapsed >= deployment.config.step_duration_seconds and has_min_samples:
                         await self._advance_step(deployment)
 
-            except Exception as e:
+            except Exception as e:  # Intentional broad catch: background monitor loop must not crash
                 logger.error(
                     "canary_monitor_error",
                     deployment_id=deployment.id,

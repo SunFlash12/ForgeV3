@@ -855,7 +855,7 @@ async def primekg_health_check(
             "checked_at": datetime.now(UTC).isoformat(),
         }
 
-    except Exception as e:
+    except (OSError, ConnectionError, TimeoutError, RuntimeError) as e:
         return {
             "healthy": False,
             "error": str(e),

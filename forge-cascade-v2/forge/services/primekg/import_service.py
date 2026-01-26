@@ -152,7 +152,7 @@ class PrimeKGImportService:
         for callback in self._progress_callbacks:
             try:
                 callback(progress)
-            except Exception as e:
+            except Exception as e:  # Intentional broad catch: callback error must not crash import
                 logger.warning("import_callback_error", error=str(e))
 
     def cancel(self) -> None:
@@ -204,7 +204,7 @@ class PrimeKGImportService:
             logger.info("primekg_schema_created")
             return True
 
-        except Exception as e:
+        except (RuntimeError, OSError, ConnectionError) as e:
             logger.error("primekg_schema_error", error=str(e))
             return False
 
@@ -231,7 +231,7 @@ class PrimeKGImportService:
             await self.neo4j.run(query)
             logger.info("primekg_vector_index_created", dimensions=dimensions)
             return True
-        except Exception as e:
+        except (RuntimeError, OSError, ConnectionError) as e:
             logger.error("primekg_vector_index_error", error=str(e))
             return False
 
@@ -407,7 +407,7 @@ class PrimeKGImportService:
                 # Try with APOC first, fallback to simple query
                 try:
                     await self.neo4j.run(query, {"nodes": node_dicts})
-                except Exception:
+                except (RuntimeError, OSError, ConnectionError, ValueError) as _apoc_err:
                     await self.neo4j.run(simple_query, {"nodes": node_dicts})
 
                 # Add specialized labels in separate query
@@ -415,7 +415,7 @@ class PrimeKGImportService:
 
                 return True
 
-            except Exception as e:
+            except (RuntimeError, OSError, ConnectionError, ValueError) as e:
                 logger.warning(
                     "primekg_node_batch_retry",
                     attempt=attempt + 1,
@@ -577,11 +577,11 @@ class PrimeKGImportService:
             try:
                 try:
                     await self.neo4j.run(query, {"edges": edge_dicts})
-                except Exception:
+                except (RuntimeError, OSError, ConnectionError, ValueError) as _apoc_err:
                     await self.neo4j.run(simple_query, {"edges": edge_dicts})
                 return True
 
-            except Exception as e:
+            except (RuntimeError, OSError, ConnectionError, ValueError) as e:
                 logger.warning(
                     "primekg_edge_batch_retry",
                     attempt=attempt + 1,
@@ -643,7 +643,7 @@ class PrimeKGImportService:
             # Compute final statistics
             result.stats = await self._compute_import_stats()
 
-        except Exception as e:
+        except (RuntimeError, OSError, ConnectionError, ValueError) as e:
             result.success = False
             result.errors.append(str(e))
             logger.error("primekg_import_error", error=str(e))
@@ -719,7 +719,7 @@ class PrimeKGImportService:
             with open(self.progress_file, "w") as f:
                 json.dump(data, f)
 
-        except Exception as e:
+        except (OSError, IOError, ValueError, TypeError) as e:
             logger.warning("primekg_progress_save_error", error=str(e))
 
     def _load_progress(self) -> dict[str, Any] | None:
@@ -729,7 +729,7 @@ class PrimeKGImportService:
                 with open(self.progress_file) as f:
                     result: dict[str, Any] = json.load(f)
                     return result
-        except Exception as e:
+        except (OSError, IOError, ValueError, KeyError) as e:
             logger.warning("primekg_progress_load_error", error=str(e))
         return None
 
@@ -738,5 +738,5 @@ class PrimeKGImportService:
         try:
             if self.progress_file.exists():
                 self.progress_file.unlink()
-        except Exception as e:
+        except (OSError, IOError) as e:
             logger.warning("primekg_progress_clear_error", error=str(e))

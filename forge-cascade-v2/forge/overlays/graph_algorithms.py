@@ -213,11 +213,12 @@ class GraphAlgorithmsOverlay(BaseOverlay):
                 }
             )
 
-        except Exception as e:
+        except (OverlayError, RuntimeError, ValueError, TypeError, KeyError, OSError) as e:
             self._logger.error(
                 "graph_algorithm_error",
                 operation=operation,
-                error=str(e)
+                error=str(e),
+                error_type=type(e).__name__,
             )
             return OverlayResult.fail(f"Algorithm error: {str(e)}")
 

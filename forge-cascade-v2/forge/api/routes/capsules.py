@@ -138,7 +138,7 @@ async def run_semantic_edge_detection(capsule_id: str, user_id: str) -> None:
         finally:
             await db_client.close()
 
-    except Exception as e:
+    except (RuntimeError, ValueError, TypeError, OSError) as e:
         logger.error(
             "semantic_detection_failed",
             capsule_id=capsule_id,
@@ -1379,7 +1379,7 @@ async def sign_capsule(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Required key not found",
         ) from e
-    except Exception as e:
+    except (ValueError, TypeError, OSError, RuntimeError) as e:
         logger.warning("capsule_sign_failed", error=str(e), capsule_id=capsule_id)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

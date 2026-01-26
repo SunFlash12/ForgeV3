@@ -391,7 +391,7 @@ class AgentGatewayService:
 
             return result
 
-        except Exception as e:
+        except (RuntimeError, ValueError, TypeError, OSError, ConnectionError) as e:
             logger.exception("agent_query_failed query_id=%s", query.id)
             self._stats.error_count += 1
 

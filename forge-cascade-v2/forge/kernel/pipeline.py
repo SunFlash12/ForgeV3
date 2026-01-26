@@ -420,11 +420,12 @@ class Pipeline:
                 for hook in self._pre_phase_hooks:
                     try:
                         await self._run_hook(hook, context, phase)
-                    except Exception as e:
+                    except (TypeError, ValueError, AttributeError, RuntimeError) as e:
                         self._logger.warning(
                             "pre_phase_hook_error",
                             phase=phase.value,
-                            error=str(e)
+                            error=str(e),
+                            error_type=type(e).__name__,
                         )
 
                 # Execute phase
@@ -439,11 +440,12 @@ class Pipeline:
                 for hook in self._post_phase_hooks:
                     try:
                         await self._run_hook(hook, context, phase_result)
-                    except Exception as e:
+                    except (TypeError, ValueError, AttributeError, RuntimeError) as e:
                         self._logger.warning(
                             "post_phase_hook_error",
                             phase=phase.value,
-                            error=str(e)
+                            error=str(e),
+                            error_type=type(e).__name__,
                         )
 
                 # Handle phase failure
@@ -469,13 +471,14 @@ class Pipeline:
             errors.append("Pipeline cancelled")
             self._logger.warning("pipeline_cancelled", pipeline_id=pipeline_id)
 
-        except Exception as e:
+        except (PipelineError, PhaseError, OverlayError, RuntimeError, ValueError, KeyError) as e:
             errors.append(f"Pipeline error: {str(e)}")
             self._logger.error(
                 "pipeline_error",
                 pipeline_id=pipeline_id,
                 error=str(e),
-                exc_info=True
+                error_type=type(e).__name__,
+                exc_info=True,
             )
 
         finally:
@@ -509,10 +512,11 @@ class Pipeline:
         for hook in self._pipeline_complete_hooks:
             try:
                 await self._run_hook(hook, result)
-            except Exception as e:
+            except (TypeError, ValueError, AttributeError, RuntimeError) as e:
                 self._logger.warning(
                     "completion_hook_error",
-                    error=str(e)
+                    error=str(e),
+                    error_type=type(e).__name__,
                 )
 
         # Record history (deque automatically drops oldest items when maxlen exceeded)
@@ -662,7 +666,7 @@ class Pipeline:
                                 merged_data.update(overlay_result.data)
                             elif not overlay_result.success:
                                 errors.append(f"{name}: {overlay_result.error}")
-                        except Exception as e:
+                        except (OverlayError, RuntimeError, ValueError, TypeError, KeyError) as e:
                             errors.append(f"{name}: {str(e)}")
             else:
                 # Execute sequentially
@@ -705,12 +709,12 @@ class Pipeline:
                         if config.required:
                             break
 
-                    except Exception as e:
+                    except (OverlayError, RuntimeError, ValueError, TypeError, KeyError) as e:
                         errors.append(f"{overlay.NAME}: {str(e)}")
                         if config.required:
                             break
 
-        except Exception as e:
+        except (OverlayError, PipelineError, RuntimeError, ValueError, TypeError, KeyError, asyncio.CancelledError) as e:
             errors.append(f"Phase execution error: {str(e)}")
 
         # Determine status

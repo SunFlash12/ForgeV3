@@ -451,7 +451,7 @@ class MultiChainManager:
                 if chain in self._clients:
                     balance = await self._clients[chain].get_virtual_balance(address)
                     total += balance
-            except Exception as e:
+            except (ConnectionError, TimeoutError, OSError, ValueError, RuntimeError) as e:
                 logger.warning(f"Failed to get balance on {chain_name}: {e}")
         return total
 

@@ -377,7 +377,7 @@ def log_duration(
             duration_ms=round(duration_ms, 2),
             **extra_context,
         )
-    except Exception as e:
+    except Exception as e:  # Intentional broad catch: logging utility must capture all exception types to log duration before re-raising
         duration_ms = (time.monotonic() - start_time) * 1000
         logger.error(
             f"{operation}_failed",

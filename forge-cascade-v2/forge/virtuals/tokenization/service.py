@@ -239,7 +239,7 @@ class TokenizationService:
 
         except BlockchainConfigurationError:
             raise
-        except Exception as e:
+        except (ValueError, ConnectionError, TimeoutError, OSError, RuntimeError) as e:
             logger.error(f"Token deployment failed: {e}")
             entity.status = TokenizationStatus.FAILED
             entity.metadata["failure_reason"] = str(e)
@@ -322,7 +322,7 @@ class TokenizationService:
                     amount_virtual=amount_virtual,
                 )
                 contribution.tx_hash = tx.tx_hash
-            except Exception as e:
+            except (ValueError, ConnectionError, TimeoutError, OSError, RuntimeError) as e:
                 logger.error(f"On-chain contribution failed: {e}")
                 raise TokenizationServiceError(f"Contribution failed: {e}")
 
@@ -378,7 +378,7 @@ class TokenizationService:
                 # Extract liquidity pool address from transaction
                 # entity.liquidity_pool_address = extract_pool_address(tx)
 
-            except Exception as e:
+            except (ValueError, ConnectionError, TimeoutError, OSError, RuntimeError) as e:
                 logger.error(f"Graduation failed: {e}")
                 raise TokenizationServiceError(f"Graduation failed: {e}")
 
@@ -457,7 +457,7 @@ class TokenizationService:
                 if buyback_amount > 0:
                     await self._execute_buyback_burn(entity, buyback_amount)
 
-            except Exception as e:
+            except (ValueError, ConnectionError, TimeoutError, OSError, RuntimeError) as e:
                 logger.error(f"Revenue distribution failed: {e}")
                 raise TokenizationServiceError(f"Distribution failed: {e}")
 
@@ -666,7 +666,7 @@ class TokenizationService:
                 # source_tx = await self._initiate_bridge(bridge_request)
                 # bridge_request.source_tx_hash = source_tx.tx_hash
                 pass
-            except Exception as e:
+            except (ValueError, ConnectionError, TimeoutError, OSError, RuntimeError) as e:
                 logger.error(f"Bridge initiation failed: {e}")
                 raise TokenizationServiceError(f"Bridge failed: {e}")
 
@@ -785,7 +785,7 @@ class TokenizationService:
                         event = contract.events.AgentCreated().process_log(log)
                         token_address = event.args.tokenAddress
                         break
-                    except Exception:
+                    except (ConnectionError, TimeoutError, OSError, RuntimeError):
                         continue
 
                 if token_address:
@@ -807,7 +807,7 @@ class TokenizationService:
                     related_entity_id=entity.id,
                 )
 
-            except Exception as e:
+            except (ValueError, ConnectionError, TimeoutError, OSError, RuntimeError) as e:
                 logger.error(f"Blockchain deployment failed: {e}")
                 raise BlockchainConfigurationError(f"Token deployment failed: {e}")
 
@@ -963,7 +963,7 @@ class TokenizationService:
                     related_entity_id=entity.id,
                 )
 
-            except Exception as e:
+            except (ValueError, ConnectionError, TimeoutError, OSError, RuntimeError) as e:
                 logger.error(f"Blockchain contribution failed: {e}")
                 raise BlockchainConfigurationError(f"Bonding curve contribution failed: {e}")
 
@@ -1089,7 +1089,7 @@ class TokenizationService:
             result: TransactionRecord = tx_record
             return result
 
-        except Exception as e:
+        except (ValueError, ConnectionError, TimeoutError, OSError, RuntimeError) as e:
             logger.error(f"Graduation transaction failed: {e}")
             raise BlockchainConfigurationError(
                 f"Token graduation failed for {token_address}: {e}. "
@@ -1154,7 +1154,7 @@ class TokenizationService:
                                 f"[BLOCKCHAIN] Transferred {amount} VIRTUAL to {recipient} "
                                 f"(tx: {tx_record.tx_hash})"
                             )
-                        except Exception as e:
+                        except (ValueError, ConnectionError, TimeoutError, OSError, RuntimeError) as e:
                             logger.error(f"Transfer to {recipient} failed: {e}")
                             # Continue with other transfers, but record failure
                             tx_records.append(TransactionRecord(
@@ -1190,7 +1190,7 @@ class TokenizationService:
                                     timeout_seconds=60,
                                 )
                                 tx_records.append(tx_record)
-                            except Exception as e:
+                            except (ValueError, ConnectionError, TimeoutError, OSError, RuntimeError) as e:
                                 logger.error(f"Transfer to {recipient} failed: {e}")
                     else:
                         # Use MultiSend contract for batch efficiency
@@ -1249,7 +1249,7 @@ class TokenizationService:
 
             except BlockchainConfigurationError:
                 raise
-            except Exception as e:
+            except (ValueError, ConnectionError, TimeoutError, OSError, RuntimeError) as e:
                 logger.error(f"Distribution preparation failed: {e}")
                 raise BlockchainConfigurationError(f"Distribution failed: {e}")
 
@@ -1336,7 +1336,7 @@ class TokenizationService:
                 token_address=entity.token_info.token_address,
             )
             return Decimal(str(balance))
-        except Exception as e:
+        except (ValueError, ConnectionError, TimeoutError, OSError, RuntimeError) as e:
             logger.error(f"Failed to query token balance: {e}")
             raise BlockchainConfigurationError(
                 f"Token balance query failed for {wallet} on token "

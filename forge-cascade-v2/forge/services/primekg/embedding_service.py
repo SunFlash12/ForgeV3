@@ -308,7 +308,7 @@ class PrimeKGEmbeddingService:
                     self._add_to_cache(self._cache_key(text), embedding)
                     progress.processed_items += 1
 
-            except Exception as e:
+            except (RuntimeError, OSError, ConnectionError, ValueError, TimeoutError) as e:
                 logger.error("primekg_embedding_batch_error", error=str(e))
                 progress.failed_items += len(batch)
 
@@ -428,7 +428,7 @@ class PrimeKGEmbeddingService:
                 embedded_count += len(embeddings)
                 progress.processed_items += len(embeddings)
 
-            except Exception as e:
+            except (RuntimeError, OSError, ConnectionError, ValueError, TimeoutError) as e:
                 logger.error("primekg_node_embedding_error", error=str(e))
                 progress.failed_items += len(texts)
 

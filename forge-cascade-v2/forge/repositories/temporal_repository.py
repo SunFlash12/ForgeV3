@@ -365,7 +365,7 @@ class TemporalRepository:
                 try:
                     diff = VersionDiff.model_validate_json(diff_json)
                     content = self._apply_diff(content, diff)
-                except Exception as e:
+                except (ValueError, TypeError, KeyError) as e:
                     self.logger.error("Failed to apply diff", error=str(e))
 
         return content
@@ -438,8 +438,8 @@ class TemporalRepository:
         if diff_json:
             try:
                 diff = VersionDiff.model_validate_json(diff_json)
-            except Exception:
-                pass
+            except (ValueError, TypeError, KeyError):
+                pass  # Skip malformed diff data
 
         return CapsuleVersion(
             id=record["id"],

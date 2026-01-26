@@ -129,7 +129,7 @@ class TokenBlacklist:
             cls._redis_initialized = True
             logger.info("token_blacklist_redis_connected", redis_url=url[:20] + "...")
             return True
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError) as e:
             logger.warning("token_blacklist_redis_failed", error=str(e))
             cls._redis_client = None
             cls._redis_initialized = True
@@ -166,7 +166,7 @@ class TokenBlacklist:
                 # SECURITY FIX (Audit 4 - L2): Log more JTI chars for debugging
                 logger.debug("token_blacklisted_redis", jti=jti[:16] + "...")
                 return
-            except Exception as e:
+            except (ConnectionError, TimeoutError, OSError) as e:
                 logger.warning("token_blacklist_redis_error", error=str(e), operation="add")
                 # Fall through to in-memory
 
@@ -210,7 +210,7 @@ class TokenBlacklist:
                 key = f"{cls._redis_prefix}{jti}"
                 result = await cls._redis_client.exists(key)
                 return bool(result)
-            except Exception as e:
+            except (ConnectionError, TimeoutError, OSError) as e:
                 logger.warning("token_blacklist_redis_error", error=str(e), operation="check")
                 # Fall through to in-memory
 
@@ -277,7 +277,7 @@ class TokenBlacklist:
             try:
                 key = f"{cls._redis_prefix}{jti}"
                 await cls._redis_client.delete(key)
-            except Exception as e:
+            except (ConnectionError, TimeoutError, OSError) as e:
                 logger.warning("token_blacklist_redis_error", error=str(e), operation="remove")
 
         # Also remove from in-memory (SECURITY FIX: use async lock)
@@ -340,7 +340,7 @@ class TokenBlacklist:
                         await cls._redis_client.delete(*keys)
                     if cursor == 0:
                         break
-            except Exception as e:
+            except (ConnectionError, TimeoutError, OSError) as e:
                 logger.warning("token_blacklist_redis_error", error=str(e), operation="clear")
 
         # Clear in-memory (SECURITY FIX: use async lock)
@@ -354,8 +354,8 @@ class TokenBlacklist:
         if cls._redis_client:
             try:
                 await cls._redis_client.close()
-            except Exception:
-                pass
+            except (ConnectionError, TimeoutError, OSError):
+                pass  # Intentional broad catch: closing connection may fail if already disconnected
             cls._redis_client = None
         cls._redis_initialized = False
 
@@ -445,7 +445,7 @@ class TokenVersionCache:
                 cached = await TokenBlacklist._redis_client.get(key)
                 if cached is not None:
                     return int(cached)
-            except Exception as e:
+            except (ConnectionError, TimeoutError, OSError) as e:
                 logger.warning("token_version_cache_redis_error", error=str(e))
 
         # Try in-memory cache
@@ -463,7 +463,7 @@ class TokenVersionCache:
                 db_version: int = await db_fallback(user_id)
                 await cls.set_version(user_id, db_version)
                 return db_version
-            except Exception as e:
+            except (ValueError, TypeError, KeyError, RuntimeError) as e:
                 logger.warning(
                     "token_version_db_fetch_error",
                     user_id=user_id,
@@ -492,7 +492,7 @@ class TokenVersionCache:
                 key = f"{cls._redis_prefix}{user_id}"
                 await TokenBlacklist._redis_client.setex(key, ttl_seconds, str(version))
                 return
-            except Exception as e:
+            except (ConnectionError, TimeoutError, OSError) as e:
                 logger.warning("token_version_cache_redis_error", error=str(e))
 
         # Fall back to in-memory cache
@@ -514,7 +514,7 @@ class TokenVersionCache:
             try:
                 key = f"{cls._redis_prefix}{user_id}"
                 await TokenBlacklist._redis_client.delete(key)
-            except Exception as e:
+            except (ConnectionError, TimeoutError, OSError) as e:
                 logger.warning("token_version_cache_redis_error", error=str(e))
 
         # Invalidate in-memory cache
@@ -538,8 +538,8 @@ class TokenVersionCache:
                         await TokenBlacklist._redis_client.delete(*keys)
                     if cursor == 0:
                         break
-            except Exception:
-                pass
+            except (ConnectionError, TimeoutError, OSError):
+                pass  # Intentional: best-effort cleanup during clear
 
         # Clear in-memory
         async with cls._get_async_lock():
@@ -795,7 +795,7 @@ class KeyRotationManager:
                     return result
                 except (InvalidTokenError, DecodeError):
                     pass  # Fall through to try all keys
-        except Exception:
+        except (InvalidTokenError, DecodeError, ValueError, KeyError):
             pass  # No valid header, try all keys
 
         # Try all keys
@@ -1040,7 +1040,7 @@ def verify_mfa_pending_token(
                         user_id=payload.sub,
                         note="IP changed during MFA verification (logged for audit)",
                     )
-        except Exception:
+        except (InvalidTokenError, DecodeError, ValueError, KeyError):
             pass  # Don't fail on IP logging errors
 
     return payload

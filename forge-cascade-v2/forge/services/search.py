@@ -193,7 +193,7 @@ class SearchService:
             results = self._filter_by_score(results, request.min_score)
             results = results[request.offset:request.offset + request.limit]
 
-        except Exception as e:
+        except (RuntimeError, ValueError, TypeError, OSError, ConnectionError) as e:
             # SECURITY FIX (Audit 3): Truncate search query in error logs to prevent sensitive data leakage
             logger.error("search_failed", error=str(e), query=request.query[:50] + ("..." if len(request.query) > 50 else ""))
             results = []
@@ -335,7 +335,7 @@ class SearchService:
                 for r in results
                 if r.get("capsule")
             ]
-        except Exception as e:
+        except (RuntimeError, ValueError, TypeError, OSError, ConnectionError) as e:
             logger.warning(
                 "semantic_search_direct_failed",
                 error=str(e),
@@ -408,7 +408,7 @@ class SearchService:
                 for r in results
                 if r.get("capsule")
             ]
-        except Exception as e:
+        except (RuntimeError, ValueError, TypeError, OSError, ConnectionError) as e:
             logger.warning("keyword_search_failed", error=str(e))
             return []
 
@@ -475,7 +475,7 @@ class SearchService:
                 for r in results
                 if r.get("capsule")
             ]
-        except Exception as e:
+        except (RuntimeError, ValueError, TypeError, OSError, ConnectionError) as e:
             logger.warning("exact_search_failed", error=str(e))
             return []
 

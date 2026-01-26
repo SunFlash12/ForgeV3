@@ -211,7 +211,7 @@ class BackgroundScheduler:
                     name=task.name,
                     circuit=str(e),
                 )
-            except Exception as e:
+            except Exception as e:  # Intentional broad catch: prevents background task death
                 task.error_count += 1
                 task.consecutive_failures += 1
                 task.last_error = str(e)
@@ -286,7 +286,7 @@ class BackgroundScheduler:
             self._stats.total_runs += 1
             task.consecutive_failures = 0  # Reset on success
             return True
-        except Exception as e:
+        except Exception as e:  # Intentional broad catch: prevents background task death
             task.error_count += 1
             task.consecutive_failures += 1
             task.last_error = str(e)

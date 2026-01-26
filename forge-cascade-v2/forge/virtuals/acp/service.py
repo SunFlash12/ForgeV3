@@ -166,7 +166,7 @@ class ACPService:
                 # offering.registry_id = extract_from_tx(tx)
                 # offering.registration_tx_hash = tx.tx_hash
                 pass
-            except Exception as e:
+            except (ConnectionError, TimeoutError, OSError, ValueError, RuntimeError) as e:
                 logger.warning(f"On-chain registration failed: {e}")
 
         logger.info(f"Registered offering {offering.id} for agent {agent_id}")
@@ -411,7 +411,7 @@ class ACPService:
                     amount_virtual=agreed_fee,
                 )
                 job.escrow_tx_hash = escrow_tx.tx_hash
-            except Exception as e:
+            except (ConnectionError, TimeoutError, OSError, ValueError, RuntimeError) as e:
                 raise EscrowError(f"Failed to lock escrow: {e}")
 
         job.agreement_memo = agreement_memo
@@ -555,7 +555,7 @@ class ACPService:
                         amount_virtual=job.escrow_amount_virtual,
                     )
                     job.settlement_tx_hash = settlement_tx.tx_hash
-                except Exception as e:
+                except (ConnectionError, TimeoutError, OSError, ValueError, RuntimeError) as e:
                     logger.error(f"Escrow release failed: {e}")
                     raise EscrowError(f"Failed to release escrow: {e}")
 
@@ -743,7 +743,7 @@ class ACPService:
             # Return signature as hex
             return str(signed.signature.hex())  # type: ignore[attr-defined]
 
-        except Exception as e:
+        except (ValueError, TypeError, RuntimeError, ImportError) as e:
             logger.error("evm_signing_error: %s", str(e))
             raise ValueError(f"Failed to sign with EVM key: {e}")
 
@@ -764,7 +764,7 @@ class ACPService:
             result: str = base58.b58encode(bytes(signature)).decode('ascii')
             return result
 
-        except Exception as e:
+        except (ValueError, TypeError, RuntimeError, ImportError) as e:
             logger.error("solana_signing_error: %s", str(e))
             raise ValueError(f"Failed to sign with Solana key: {e}")
 
@@ -818,7 +818,7 @@ class ACPService:
 
             return recovered_address.lower() == expected_address.lower()
 
-        except Exception as e:
+        except (ValueError, TypeError, RuntimeError, ImportError) as e:
             logger.error("evm_verify_error: %s", str(e))
             return False
 
@@ -842,7 +842,7 @@ class ACPService:
             result: bool = signature.verify(pubkey, message_bytes)
             return result
 
-        except Exception as e:
+        except (ValueError, TypeError, RuntimeError, ImportError) as e:
             logger.error("solana_verify_error: %s", str(e))
             return False
 

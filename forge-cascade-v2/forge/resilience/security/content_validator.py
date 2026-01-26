@@ -311,7 +311,7 @@ class ContentValidator:
 
                 if issue:
                     result.add_issue(issue)
-            except Exception as e:
+            except (RuntimeError, ValueError, TypeError, OSError) as e:
                 logger.warning("custom_validator_error", error=str(e))
 
         # Determine final validity
@@ -353,7 +353,7 @@ class ContentValidator:
         import unicodedata
         try:
             sanitized = unicodedata.normalize('NFC', sanitized)
-        except Exception:
+        except (ValueError, TypeError):
             pass
 
         # Remove control characters (except newlines and tabs)
@@ -604,7 +604,7 @@ Respond with JSON classification only:"""
             # Fall back to heuristic classification when LLM not configured
             await self._heuristic_classify(content, content_type, result)
 
-        except Exception as e:
+        except (RuntimeError, OSError, ConnectionError, TimeoutError, ValueError, TypeError) as e:
             logger.error(
                 "ml_classification_error",
                 error=str(e)

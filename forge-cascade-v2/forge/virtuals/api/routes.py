@@ -131,7 +131,7 @@ async def get_current_user_wallet(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except (ValueError, TypeError, KeyError, RuntimeError, ImportError) as e:
         import structlog
         structlog.get_logger().error("virtuals_auth_error", error=str(e))
         raise HTTPException(status_code=401, detail="Authentication failed")
@@ -179,7 +179,7 @@ async def create_agent(
 
         return APIResponse(data=agent.model_dump())
 
-    except Exception as e:
+    except (ConnectionError, TimeoutError, OSError, ValueError, RuntimeError, ImportError) as e:
         raise _sanitized_error("agent creation", e)
 
 
@@ -230,7 +230,7 @@ async def get_agent(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except (ConnectionError, TimeoutError, OSError, ValueError, RuntimeError, ImportError) as e:
         raise _sanitized_error("agent retrieval", e)
 
 
@@ -269,7 +269,7 @@ async def run_agent(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except (ConnectionError, TimeoutError, OSError, ValueError, RuntimeError, ImportError) as e:
         raise _sanitized_error("agent execution", e)
 
 
@@ -303,7 +303,7 @@ async def request_tokenization(
 
         return APIResponse(data=entity.model_dump())
 
-    except Exception as e:
+    except (ConnectionError, TimeoutError, OSError, ValueError, RuntimeError, ImportError) as e:
         raise _sanitized_error("tokenization request", e)
 
 
@@ -350,7 +350,7 @@ async def contribute_to_bonding_curve(
             "contribution": contribution.model_dump(),
         })
 
-    except Exception as e:
+    except (ConnectionError, TimeoutError, OSError, ValueError, RuntimeError, ImportError) as e:
         raise _sanitized_error("bonding curve contribution", e)
 
 
@@ -385,7 +385,7 @@ async def create_governance_proposal(
 
         return APIResponse(data=proposal.model_dump())
 
-    except Exception as e:
+    except (ConnectionError, TimeoutError, OSError, ValueError, RuntimeError, ImportError) as e:
         raise _sanitized_error("governance proposal creation", e)
 
 
@@ -413,7 +413,7 @@ async def vote_on_proposal(
 
         return APIResponse(data=vote_record.model_dump())
 
-    except Exception as e:
+    except (ConnectionError, TimeoutError, OSError, ValueError, RuntimeError, ImportError) as e:
         raise _sanitized_error("governance vote", e)
 
 
@@ -447,7 +447,7 @@ async def register_offering(
 
         return APIResponse(data=registered.model_dump())
 
-    except Exception as e:
+    except (ConnectionError, TimeoutError, OSError, ValueError, RuntimeError, ImportError) as e:
         raise _sanitized_error("offering registration", e)
 
 
@@ -484,7 +484,7 @@ async def search_offerings(
             per_page=per_page,
         )
 
-    except Exception as e:
+    except (ConnectionError, TimeoutError, OSError, ValueError, RuntimeError, ImportError) as e:
         raise _sanitized_error("offering search", e)
 
 
@@ -510,7 +510,7 @@ async def create_job(
 
         return APIResponse(data=job.model_dump())
 
-    except Exception as e:
+    except (ConnectionError, TimeoutError, OSError, ValueError, RuntimeError, ImportError) as e:
         raise _sanitized_error("job creation", e)
 
 
@@ -553,7 +553,7 @@ async def respond_to_job(
 
         return APIResponse(data=job.model_dump())
 
-    except Exception as e:
+    except (ConnectionError, TimeoutError, OSError, ValueError, RuntimeError, ImportError) as e:
         raise _sanitized_error("job response", e)
 
 
@@ -579,7 +579,7 @@ async def accept_job_terms(
 
         return APIResponse(data=job.model_dump())
 
-    except Exception as e:
+    except (ValueError, TypeError, KeyError, ConnectionError, TimeoutError, OSError) as e:
         raise _sanitized_error("terms acceptance", e)
 
 
@@ -607,7 +607,7 @@ async def submit_deliverable(
 
         return APIResponse(data=job.model_dump())
 
-    except Exception as e:
+    except (ValueError, TypeError, KeyError, ConnectionError, TimeoutError, OSError) as e:
         raise _sanitized_error("deliverable submission", e)
 
 
@@ -635,7 +635,7 @@ async def evaluate_deliverable(
 
         return APIResponse(data=job.model_dump())
 
-    except Exception as e:
+    except (ValueError, TypeError, KeyError, ConnectionError, TimeoutError, OSError) as e:
         raise _sanitized_error("deliverable evaluation", e)
 
 
@@ -671,7 +671,7 @@ async def get_revenue_summary(
 
         return APIResponse(data=summary)
 
-    except Exception as e:
+    except (ValueError, TypeError, KeyError, ConnectionError, TimeoutError, OSError) as e:
         raise _sanitized_error("revenue summary retrieval", e)
 
 
@@ -698,7 +698,7 @@ async def get_entity_revenue(
 
         return APIResponse(data=revenue)
 
-    except Exception as e:
+    except (ValueError, TypeError, KeyError, ConnectionError, TimeoutError, OSError) as e:
         raise _sanitized_error("entity revenue retrieval", e)
 
 
@@ -729,7 +729,7 @@ async def get_entity_valuation(
 
         return APIResponse(data=valuation)
 
-    except Exception as e:
+    except (ValueError, TypeError, KeyError, ConnectionError, TimeoutError, OSError) as e:
         raise _sanitized_error("entity valuation", e)
 
 

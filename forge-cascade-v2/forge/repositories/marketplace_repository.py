@@ -169,7 +169,7 @@ class ListingRepository(BaseRepository[CapsuleListing, CapsuleListing, CapsuleLi
             if "price" in record and isinstance(record["price"], str):
                 record["price"] = Decimal(record["price"])
             return CapsuleListing.model_validate(record)
-        except Exception as e:
+        except (ValueError, TypeError, KeyError) as e:
             self.logger.error("Failed to convert listing record", error=str(e))
             return None
 
@@ -303,7 +303,7 @@ class PurchaseRepository(BaseRepository[Purchase, Purchase, Purchase]):
                 if field in record and isinstance(record[field], str):
                     record[field] = Decimal(record[field])
             return Purchase.model_validate(record)
-        except Exception as e:
+        except (ValueError, TypeError, KeyError) as e:
             self.logger.error("Failed to convert purchase record", error=str(e))
             return None
 
@@ -568,7 +568,7 @@ class LicenseRepository(BaseRepository[License, License, License]):
             if "license_type" in record and isinstance(record["license_type"], str):
                 record["license_type"] = LicenseType(record["license_type"])
             return License.model_validate(record)
-        except Exception as e:
+        except (ValueError, TypeError, KeyError) as e:
             self.logger.error("Failed to convert license record", error=str(e))
             return None
 
@@ -612,7 +612,7 @@ class MarketplaceRepository:
         for index_query in indexes:
             try:
                 await self.client.execute(index_query)
-            except Exception as e:
+            except (RuntimeError, OSError, ValueError) as e:
                 self.logger.warning("Index creation warning", query=index_query, error=str(e))
 
         self.logger.info("marketplace_repository_initialized")

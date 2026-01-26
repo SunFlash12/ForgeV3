@@ -80,7 +80,7 @@ class RevenueRepository:
             await self.client.execute_write(query, parameters=params)
             self.logger.debug(f"Created revenue record {record.id}")
             return record
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError, RuntimeError) as e:
             self.logger.error(f"Failed to create revenue record: {e}")
             raise
 
@@ -112,7 +112,7 @@ class RevenueRepository:
             await self.client.execute_write(query, parameters=params)
             self.logger.debug(f"Updated revenue record {record.id}")
             return record
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError, RuntimeError) as e:
             self.logger.error(f"Failed to update revenue record: {e}")
             raise
 
@@ -136,7 +136,7 @@ class RevenueRepository:
             if not results:
                 return None
             return self._deserialize_record(results[0]["record"])
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError, RuntimeError, KeyError) as e:
             self.logger.error(f"Failed to get revenue record: {e}")
             return None
 
@@ -221,7 +221,7 @@ class RevenueRepository:
                 if record:
                     records.append(record)
             return records
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError, RuntimeError, KeyError) as e:
             self.logger.error(f"Failed to query revenue records: {e}")
             return []
 
@@ -255,7 +255,7 @@ class RevenueRepository:
             if results and results[0]["total"]:
                 return float(results[0]["total"])
             return 0.0
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError, RuntimeError, KeyError) as e:
             self.logger.error(f"Failed to get entity revenue total: {e}")
             return 0.0
 
@@ -281,7 +281,7 @@ class RevenueRepository:
                 parameters={"id": record_id}
             )
             return True
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError, RuntimeError) as e:
             self.logger.error(f"Failed to delete revenue record: {e}")
             return False
 
@@ -331,7 +331,7 @@ class RevenueRepository:
                 distribution_complete=data.get("distribution_complete", False),
                 tx_hash=data.get("tx_hash"),
             )
-        except Exception as e:
+        except (ValueError, KeyError, TypeError) as e:
             self.logger.error(f"Failed to deserialize revenue record: {e}")
             return None
 

@@ -190,7 +190,7 @@ class DiagnosticAgent(ABC):
             else:
                 return await self._handle_other(message)
 
-        except Exception as e:
+        except (RuntimeError, ValueError, TypeError, ConnectionError, OSError) as e:
             logger.error(
                 "message_handling_failed",
                 agent_id=self.agent_id,

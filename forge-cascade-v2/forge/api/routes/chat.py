@@ -107,7 +107,7 @@ async def create_room(
 
         return RoomResponse.from_room(room, user_role=RoomRole.OWNER)
 
-    except Exception as e:
+    except (ValueError, TypeError, KeyError, RuntimeError, OSError) as e:
         logger.error(
             "chat_room_create_failed",
             user_id=current_user.id,
@@ -151,7 +151,7 @@ async def list_rooms(
 
         return RoomListResponse(rooms=room_responses, total=total)
 
-    except Exception as e:
+    except (ValueError, TypeError, KeyError, RuntimeError, OSError) as e:
         logger.error(
             "chat_rooms_list_failed",
             user_id=current_user.id,
@@ -195,7 +195,7 @@ async def get_room(
         )
     except HTTPException:
         raise
-    except Exception as e:
+    except (ValueError, TypeError, KeyError, RuntimeError, OSError) as e:
         logger.error(
             "chat_room_get_failed",
             room_id=room_id,
@@ -258,7 +258,7 @@ async def update_room(
         )
     except HTTPException:
         raise
-    except Exception as e:
+    except (ValueError, TypeError, KeyError, RuntimeError, OSError) as e:
         logger.error(
             "chat_room_update_failed",
             room_id=room_id,
@@ -324,7 +324,7 @@ async def delete_room(
         )
     except HTTPException:
         raise
-    except Exception as e:
+    except (ValueError, TypeError, KeyError, RuntimeError, OSError) as e:
         logger.error(
             "chat_room_delete_failed",
             room_id=room_id,
@@ -373,7 +373,7 @@ async def list_members(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"Access denied: {e.reason}",
         )
-    except Exception as e:
+    except (ValueError, TypeError, KeyError, RuntimeError, OSError) as e:
         logger.error(
             "chat_members_list_failed",
             room_id=room_id,
@@ -445,7 +445,7 @@ async def add_member(
         )
     except HTTPException:
         raise
-    except Exception as e:
+    except (ValueError, TypeError, KeyError, RuntimeError, OSError) as e:
         logger.error(
             "chat_member_add_failed",
             room_id=room_id,
@@ -514,7 +514,7 @@ async def remove_member(
         )
     except HTTPException:
         raise
-    except Exception as e:
+    except (ValueError, TypeError, KeyError, RuntimeError, OSError) as e:
         logger.error(
             "chat_member_remove_failed",
             room_id=room_id,
@@ -587,7 +587,7 @@ async def update_member_role(
         )
     except HTTPException:
         raise
-    except Exception as e:
+    except (ValueError, TypeError, KeyError, RuntimeError, OSError) as e:
         logger.error(
             "chat_member_role_update_failed",
             room_id=room_id,
@@ -658,7 +658,7 @@ async def generate_invite_code(
         )
     except HTTPException:
         raise
-    except Exception as e:
+    except (ValueError, TypeError, KeyError, RuntimeError, OSError) as e:
         logger.error(
             "chat_invite_generate_failed",
             room_id=room_id,
@@ -712,7 +712,7 @@ async def join_via_invite(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except (ValueError, TypeError, KeyError, RuntimeError, OSError) as e:
         logger.error(
             "chat_join_via_invite_failed",
             invite_code=invite_code[:8] + "...",
@@ -769,7 +769,7 @@ async def join_public_room(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except (ValueError, TypeError, KeyError, RuntimeError, OSError) as e:
         logger.error(
             "chat_join_public_failed",
             room_id=room_id,
@@ -822,7 +822,7 @@ async def get_messages(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"Access denied: {e.reason}",
         )
-    except Exception as e:
+    except (ValueError, TypeError, KeyError, RuntimeError, OSError) as e:
         logger.error(
             "chat_messages_get_failed",
             room_id=room_id,

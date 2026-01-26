@@ -308,7 +308,7 @@ async def get_token_payload(
                 return None
 
         return payload
-    except Exception:
+    except (ValueError, KeyError, OSError, RuntimeError):
         return None
 
 
@@ -352,7 +352,7 @@ async def get_current_user_optional(
     except ValueError:
         # User not found - this is expected for deleted/invalid users
         return None
-    except Exception as e:
+    except (KeyError, TypeError, OSError, RuntimeError) as e:
         # Log unexpected errors but don't expose them to avoid info leakage
         # This prevents silent failures that could mask database issues
         logger.warning(

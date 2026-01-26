@@ -922,7 +922,7 @@ async def submit_web3_purchase(
             created_at=datetime.utcnow(),
         )
 
-    except Exception as e:
+    except (ValueError, ConnectionError, TimeoutError, OSError) as e:
         logger.error("web3_purchase_failed: error=%s, tx=%s", str(e), request.transaction_hash)
         raise HTTPException(
             status_code=400,
@@ -987,7 +987,7 @@ async def get_transaction_status(
             detail="Transaction verification service temporarily unavailable",
         )
 
-    except Exception as e:
+    except (ValueError, ConnectionError, TimeoutError, OSError) as e:
         logger.error("transaction_status_failed: error=%s, tx=%s", str(e), transaction_hash)
         raise HTTPException(
             status_code=500,
@@ -1034,7 +1034,7 @@ async def get_virtual_price() -> VirtualPriceResponse:
             updated_at=datetime.utcnow(),
         )
 
-    except Exception as e:
+    except (ValueError, ConnectionError, TimeoutError, OSError) as e:
         logger.error("virtual_price_fetch_failed: error=%s", str(e))
         return VirtualPriceResponse(
             price_usd=0.10,  # Fallback price

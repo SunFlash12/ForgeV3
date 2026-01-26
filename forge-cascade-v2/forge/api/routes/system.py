@@ -284,7 +284,7 @@ async def get_health(
             "type": "neo4j"
         }
         checks["database"] = db_healthy
-    except Exception as e:
+    except (OSError, ConnectionError, TimeoutError, RuntimeError) as e:
         # SECURITY FIX (Audit 3): Don't expose internal error details
         import structlog
         structlog.get_logger(__name__).error("database_health_check_failed", error=str(e))
@@ -398,7 +398,7 @@ async def readiness_probe(
         details["database"] = "ready" if db_ready else "not_ready"
         if not db_ready:
             ready = False
-    except Exception as e:
+    except (OSError, ConnectionError, TimeoutError, RuntimeError) as e:
         # SECURITY FIX (Audit 3): Don't expose internal error details
         import structlog
         structlog.get_logger(__name__).error("readiness_check_failed", error=str(e))
@@ -876,7 +876,7 @@ async def get_system_metrics(
     # Database check
     try:
         db_connected = await db_client.verify_connection()
-    except Exception:
+    except (OSError, ConnectionError, TimeoutError, RuntimeError):
         db_connected = False
 
     # Try to get memory usage
@@ -1136,7 +1136,7 @@ async def clear_caches(
                     cleared.append(f"token_blacklist ({count} entries)")
             else:
                 cleared.append("token_blacklist (no lock)")
-        except Exception as e:
+        except (RuntimeError, AttributeError, OSError) as e:
             errors.append(f"token_blacklist: {str(e)}")
 
     # Clear query cache (from resilience integration)
@@ -1150,7 +1150,7 @@ async def clear_caches(
         except ImportError:
             # Function not available
             pass
-        except Exception as e:
+        except (RuntimeError, AttributeError, OSError) as e:
             errors.append(f"query_cache: {str(e)}")
 
     # Clear health status cache
@@ -1164,7 +1164,7 @@ async def clear_caches(
                 cleared.append("health_cache")
         except ImportError:
             pass
-        except Exception as e:
+        except (RuntimeError, AttributeError, OSError) as e:
             errors.append(f"health_cache: {str(e)}")
 
     # Clear metrics cache
@@ -1177,7 +1177,7 @@ async def clear_caches(
                 cleared.append("metrics_cache")
         except ImportError:
             pass
-        except Exception as e:
+        except (RuntimeError, AttributeError, OSError) as e:
             errors.append(f"metrics_cache: {str(e)}")
 
     # Clear embedding service cache if available
@@ -1192,7 +1192,7 @@ async def clear_caches(
                 if clear_method:
                     await clear_method() if asyncio.iscoroutinefunction(clear_method) else clear_method()
                 cleared.append(f"embedding_cache ({count} entries)")
-        except Exception as e:
+        except (RuntimeError, AttributeError, ImportError, OSError) as e:
             errors.append(f"embedding_cache: {str(e)}")
 
     # Resilience: Record cache clear metric
@@ -1275,7 +1275,7 @@ async def get_system_status(
     try:
         db_ok = await db_client.verify_connection()
         services["database"] = "operational" if db_ok else "down"
-    except Exception:
+    except (OSError, ConnectionError, TimeoutError, RuntimeError):
         services["database"] = "down"
 
     # Event system status

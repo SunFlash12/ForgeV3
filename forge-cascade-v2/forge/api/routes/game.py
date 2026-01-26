@@ -221,7 +221,7 @@ async def create_agent(
 
     except ImportError as e:
         raise HTTPException(status_code=503, detail=f"GAME SDK not available: {e}")
-    except Exception as e:
+    except (ValueError, TypeError, KeyError, ConnectionError, OSError) as e:
         logger.error(f"Failed to create agent: {e}")
         raise HTTPException(status_code=500, detail="Failed to create agent")
 
@@ -255,7 +255,7 @@ async def get_agent(agent_id: str) -> AgentResponse:
 
     except HTTPException:
         raise
-    except Exception as e:
+    except (ValueError, TypeError, KeyError, ConnectionError, OSError) as e:
         logger.error(f"Failed to get agent: {e}")
         raise HTTPException(status_code=500, detail="Failed to get agent")
 
@@ -279,7 +279,7 @@ async def delete_agent(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except (ValueError, TypeError, KeyError, ConnectionError, OSError) as e:
         logger.error(f"Failed to delete agent: {e}")
         raise HTTPException(status_code=500, detail="Failed to delete agent")
 
@@ -353,7 +353,7 @@ async def run_agent(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except (ValueError, TypeError, KeyError, ConnectionError, OSError) as e:
         logger.error(f"Failed to run agent: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to run agent: {e}")
 
@@ -401,7 +401,7 @@ async def get_next_action(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except (ValueError, TypeError, KeyError, ConnectionError, OSError) as e:
         logger.error(f"Failed to get next action: {e}")
         raise HTTPException(status_code=500, detail="Failed to get next action")
 
@@ -441,7 +441,7 @@ async def store_memory(
             "status": "stored",
         }
 
-    except Exception as e:
+    except (ValueError, TypeError, KeyError, ConnectionError, OSError) as e:
         logger.error(f"Failed to store memory: {e}")
         raise HTTPException(status_code=500, detail="Failed to store memory")
 
@@ -476,7 +476,7 @@ async def search_memories(
             "count": len(memories),
         }
 
-    except Exception as e:
+    except (ValueError, TypeError, KeyError, ConnectionError, OSError) as e:
         logger.error(f"Failed to search memories: {e}")
         raise HTTPException(status_code=500, detail="Failed to search memories")
 

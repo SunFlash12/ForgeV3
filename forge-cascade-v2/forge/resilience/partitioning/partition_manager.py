@@ -381,7 +381,7 @@ class PartitionManager:
         async def _safe_rebalance(j: RebalanceJob) -> None:
             try:
                 await self._execute_rebalance(j)
-            except Exception as e:
+            except (RuntimeError, OSError, ValueError, KeyError) as e:
                 j.status = "failed"
                 logger.error(
                     "rebalance_execution_error",
@@ -443,7 +443,7 @@ class PartitionManager:
                 moved=job.moved_count
             )
 
-        except Exception as e:
+        except (RuntimeError, OSError, ValueError, KeyError) as e:
             job.status = "failed"
             logger.error(
                 "rebalance_failed",
@@ -466,7 +466,7 @@ class PartitionManager:
 
             except asyncio.CancelledError:
                 break
-            except Exception as e:
+            except Exception as e:  # Intentional broad catch: background rebalance loop must not crash
                 logger.error("background_rebalance_error", error=str(e))
 
     def get_partition_stats(self) -> dict[str, Any]:

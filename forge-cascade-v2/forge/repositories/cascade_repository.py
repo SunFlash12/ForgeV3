@@ -83,7 +83,7 @@ class CascadeRepository:
                 timestamp=parsed_timestamp,
                 correlation_id=data.get("correlation_id"),
             )
-        except Exception as e:
+        except (ValueError, TypeError, KeyError) as e:
             self.logger.error("Failed to deserialize event", error=str(e))
             return None
 
@@ -123,7 +123,7 @@ class CascadeRepository:
                 actions_triggered=data.get("actions_triggered", 0),
                 errors_encountered=data.get("errors_encountered", 0),
             )
-        except Exception as e:
+        except (ValueError, TypeError, KeyError) as e:
             self.logger.error("Failed to deserialize chain", error=str(e))
             return None
 

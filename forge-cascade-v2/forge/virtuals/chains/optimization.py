@@ -469,8 +469,7 @@ class ChainQueryOptimizer:
 
             return result
 
-        except Exception as e:
-            # Trigger backoff on rate limit errors
+        except Exception as e:  # Intentional broad catch: re-raises after rate-limit detection
             if "rate limit" in str(e).lower():
                 limiter.trigger_backoff()
             raise

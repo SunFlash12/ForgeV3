@@ -72,7 +72,7 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
 
         try:
             return User.model_validate(record)
-        except Exception as e:
+        except (ValueError, TypeError, KeyError) as e:
             self.logger.error(
                 "Failed to convert record to model",
                 error=str(e),

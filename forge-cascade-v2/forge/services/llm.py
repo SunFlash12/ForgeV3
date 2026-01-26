@@ -535,7 +535,7 @@ class LLMService:
 
                 return response
 
-            except Exception as e:
+            except (ConnectionError, TimeoutError, ValueError, OSError, RuntimeError) as e:
                 if attempt == self._config.max_retries - 1:
                     raise
                 logger.warning(
@@ -900,7 +900,7 @@ async def shutdown_llm_service() -> None:
     if _llm_service is not None:
         try:
             await _llm_service.close()
-        except Exception as e:
+        except (ConnectionError, OSError, RuntimeError) as e:
             logger.warning("llm_service_close_error", error=str(e))
         _llm_service = None
 

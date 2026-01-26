@@ -245,7 +245,7 @@ class DiagnosisEngine:
                         matches = self._hpo.search_terms(clean_phenotype, limit=1)
                         if matches:
                             hpo_code = matches[0].hpo_id
-                    except Exception as e:
+                    except (ValueError, KeyError, RuntimeError) as e:
                         logger.debug("hpo_mapping_failed", text=clean_phenotype, error=str(e))
 
                 evidence = EvidenceItem(
@@ -396,7 +396,7 @@ class DiagnosisEngine:
 
                 candidates.append(hypothesis)
 
-        except Exception as e:
+        except (RuntimeError, ValueError, TypeError, ConnectionError, OSError) as e:
             logger.error("phenotype_candidate_query_failed", error=str(e))
 
         return candidates
@@ -451,7 +451,7 @@ class DiagnosisEngine:
                 )
                 candidates.append(hypothesis)
 
-        except Exception as e:
+        except (RuntimeError, ValueError, TypeError, ConnectionError, OSError) as e:
             logger.error("gene_candidate_query_failed", error=str(e))
 
         return candidates
@@ -479,7 +479,7 @@ class DiagnosisEngine:
                 "limit": limit,
             })
             return [r["hpo_id"] for r in (results or []) if r.get("hpo_id")]
-        except Exception as e:
+        except (RuntimeError, ValueError, TypeError, ConnectionError, OSError) as e:
             logger.debug("phenotype_query_failed", disease_id=disease_id, error=str(e))
             return []
 
@@ -500,7 +500,7 @@ class DiagnosisEngine:
                         return 0.001  # Default for invalid denominator
                     return float(parts[0]) / denominator
                 return float(prevalence)
-        except Exception as e:
+        except (RuntimeError, ValueError, TypeError, ConnectionError, OSError) as e:
             logger.debug("prevalence_parse_failed", input=str(prevalence)[:50], error=str(e))
 
         return 0.001
@@ -648,7 +648,7 @@ class DiagnosisEngine:
                 term = self._hpo.get_term(hpo_id)
                 if term:
                     phenotype_name = term.name
-            except Exception as e:
+            except (RuntimeError, ValueError, TypeError, ConnectionError, OSError) as e:
                 logger.debug("hpo_term_lookup_failed", hpo_id=hpo_id, error=str(e))
 
         # Find which hypotheses this affects

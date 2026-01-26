@@ -208,7 +208,7 @@ class ForgeMetrics:
                 service=self._config.service_name
             )
 
-        except Exception as e:
+        except (RuntimeError, OSError, ConnectionError, ValueError, TypeError) as e:
             logger.error("metrics_init_error", error=str(e))
             self._meter = NoOpMeter()
             self._initialized = True

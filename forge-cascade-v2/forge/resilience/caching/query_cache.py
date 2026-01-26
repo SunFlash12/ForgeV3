@@ -114,7 +114,7 @@ class QueryCache:
                     "query_cache_redis_connected",
                     redis_url=self._config.redis_url[:20] + "..."
                 )
-            except Exception as e:
+            except (ConnectionError, TimeoutError, OSError, ValueError) as e:
                 logger.warning(
                     "query_cache_redis_failed",
                     error=str(e),
@@ -162,7 +162,7 @@ class QueryCache:
                 self._stats.misses += 1
                 return None
 
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError, ValueError, TypeError) as e:
             logger.warning("cache_get_error", key=key, error=str(e))
             self._stats.errors += 1
             return None
@@ -223,7 +223,7 @@ class QueryCache:
 
             return True
 
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError, ValueError, TypeError) as e:
             logger.warning("cache_set_error", key=key, error=str(e))
             self._stats.errors += 1
             return False
@@ -242,7 +242,7 @@ class QueryCache:
                     del self._memory_cache[key]
                     return True
                 return False
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError, ValueError) as e:
             logger.warning("cache_delete_error", key=key, error=str(e))
             return False
 
@@ -512,7 +512,7 @@ class QueryCache:
             else:
                 return 3600         # 1 hour for stable lineage
 
-        except Exception:
+        except (ValueError, TypeError, KeyError, AttributeError, OSError):
             return self._config.default_ttl_seconds
 
     def _extract_capsule_ids(self, result: Any) -> list[str]:
@@ -535,7 +535,7 @@ class QueryCache:
                     ids.append(result['id'])
                 if 'capsules' in result:
                     ids.extend(self._extract_capsule_ids(result['capsules']))
-        except Exception:
+        except (ValueError, TypeError, KeyError, AttributeError):
             pass
 
         return ids

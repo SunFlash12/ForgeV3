@@ -131,11 +131,12 @@ class OverlayManager:
             for overlay in self._registry.instances.values():
                 try:
                     await overlay.cleanup()
-                except Exception as e:
+                except (OverlayError, RuntimeError, OSError) as e:
                     self._logger.error(
                         "overlay_cleanup_error",
                         overlay_name=overlay.NAME,
-                        error=str(e)
+                        error=str(e),
+                        error_type=type(e).__name__,
                     )
 
         self._logger.info("overlay_manager_stopped")
@@ -312,11 +313,12 @@ class OverlayManager:
             # Cleanup
             try:
                 await overlay.cleanup()
-            except Exception as e:
+            except (OverlayError, RuntimeError, OSError) as e:
                 self._logger.error(
                     "overlay_cleanup_error",
                     overlay_id=overlay_id,
-                    error=str(e)
+                    error=str(e),
+                    error_type=type(e).__name__,
                 )
 
             # Remove from indices
@@ -516,13 +518,14 @@ class OverlayManager:
 
             return result
 
-        except Exception as e:
+        except (OverlayError, RuntimeError, ValueError, TypeError, KeyError, OSError) as e:
             self._record_failure(overlay_id)
             self._logger.error(
                 "overlay_execution_failed",
                 overlay_id=overlay_id,
                 error=str(e),
-                exc_info=True
+                error_type=type(e).__name__,
+                exc_info=True,
             )
             return OverlayResult.fail(f"Execution error: {str(e)}")
 
@@ -691,7 +694,7 @@ class OverlayManager:
         for overlay_id, overlay in self._registry.instances.items():
             try:
                 results[overlay_id] = await overlay.health_check()
-            except Exception as e:
+            except (OverlayError, RuntimeError, ValueError, OSError) as e:
                 results[overlay_id] = OverlayHealthCheck(
                     overlay_id=overlay_id,
                     level="L1",

@@ -347,7 +347,7 @@ class BayesianScorer:
                         count=len(frequencies),
                     )
 
-            except Exception as e:
+            except (RuntimeError, ValueError, KeyError, OSError) as e:
                 logger.warning(
                     "phenotype_freq_query_failed",
                     disease=disease_id,

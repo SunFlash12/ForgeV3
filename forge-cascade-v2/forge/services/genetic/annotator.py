@@ -197,7 +197,7 @@ class VariantAnnotator:
                             "pubmed_ids": record.get("supporting_submissions", {}).get("pmids", []),
                         }
 
-        except Exception as e:
+        except (ConnectionError, TimeoutError, ValueError, OSError, RuntimeError) as e:
             logger.warning("clinvar_query_failed", variant=variant.notation, error=str(e))
 
         return None
@@ -260,7 +260,7 @@ class VariantAnnotator:
                     "af_popmax": genome.get("af_popmax"),
                 }
 
-        except Exception as e:
+        except (ConnectionError, TimeoutError, ValueError, OSError, RuntimeError) as e:
             logger.debug("gnomad_query_failed", variant=variant.notation, error=str(e))
 
         return None
@@ -308,7 +308,7 @@ class VariantAnnotator:
                     "polyphen_prediction": tc.get("polyphen_prediction"),
                 }
 
-        except Exception as e:
+        except (ConnectionError, TimeoutError, ValueError, OSError, RuntimeError) as e:
             logger.debug("vep_query_failed", variant=variant.notation, error=str(e))
 
         return None

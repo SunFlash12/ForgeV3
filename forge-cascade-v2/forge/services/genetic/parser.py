@@ -227,7 +227,7 @@ class VCFParser:
                 variant = self._parse_variant_line(line, header, sample_idx)
                 if variant and self._passes_filters(variant, line):
                     yield variant
-            except Exception as e:
+            except (ValueError, KeyError, IndexError) as e:
                 logger.warning("vcf_variant_parse_error", error=str(e), line=line[:100])
 
     def _parse_variant_line(

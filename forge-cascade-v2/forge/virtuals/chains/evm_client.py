@@ -153,7 +153,7 @@ class EVMChainClient(BaseChainClient):
         try:
             chain_id: int = await self._w3.eth.chain_id  # type: ignore[misc]
             logger.info(f"Connected to {self.chain} (chain_id: {chain_id})")
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError, ValueError, RuntimeError) as e:
             raise ChainClientError(f"Failed to connect to {self.chain}: {e}")
 
         # Load operator account if private key is configured. The operator
@@ -166,7 +166,7 @@ class EVMChainClient(BaseChainClient):
                 logger.info(
                     f"Operator account loaded: {self._operator_account.address}"
                 )
-            except Exception as e:
+            except (ValueError, TypeError, RuntimeError) as e:
                 logger.warning(f"Failed to load operator account: {e}")
 
         self._initialized = True

@@ -77,7 +77,7 @@ class NonceStore:
                 if value is not None:
                     return int(value)
                 return 0
-            except Exception as e:
+            except (ConnectionError, TimeoutError, OSError) as e:
                 self._logger.warning(
                     "redis_get_nonce_error",
                     extra={"sender": sender_address, "error": str(e)},
@@ -115,7 +115,7 @@ class NonceStore:
                     extra={"sender": sender_address, "nonce": nonce},
                 )
                 return True
-            except Exception as e:
+            except (ConnectionError, TimeoutError, OSError) as e:
                 self._logger.warning(
                     "redis_set_nonce_error",
                     extra={"sender": sender_address, "error": str(e)},
@@ -244,7 +244,7 @@ class NonceStore:
                     "backend": "redis",
                     "memory_fallback_size": len(self._memory_nonces),
                 }
-            except Exception as e:
+            except (ConnectionError, TimeoutError, OSError) as e:
                 self._logger.error("redis_stats_error", extra={"error": str(e)})
 
         return {
@@ -294,7 +294,7 @@ async def init_nonce_store(
             await redis_client.ping()
             logger.info("nonce_store_initialized", extra={"backend": "redis"})
 
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError) as e:
             logger.warning(
                 "redis_unavailable_using_memory",
                 extra={"error": str(e)},
@@ -327,7 +327,7 @@ async def close_nonce_store() -> None:
     if _nonce_store._redis:
         try:
             await _nonce_store._redis.close()
-        except Exception:
+        except (ConnectionError, TimeoutError, OSError, RuntimeError):
             pass
 
     _nonce_store = None

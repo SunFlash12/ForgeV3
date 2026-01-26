@@ -27,6 +27,8 @@ if TYPE_CHECKING:
     from forge.services.query_cache import InMemoryQueryCache, QueryCache
     from forge.services.scheduler import BackgroundScheduler
 
+import asyncio
+
 import sentry_sdk
 import structlog
 from fastapi import FastAPI, Request
@@ -161,7 +163,7 @@ class ForgeApp:
             self.db_client = Neo4jClient()
             await self.db_client.connect()
             logger.info("database_connected")
-        except Exception as e:
+        except (ServiceUnavailable, SessionExpired, OSError) as e:
             logger.critical("database_connection_failed", error=str(e))
             raise RuntimeError(f"Cannot start: Database connection failed - {e}") from e
 
@@ -183,7 +185,7 @@ class ForgeApp:
                 event_bus=self.event_system,
             )
             logger.info("kernel_initialized")
-        except Exception as e:
+        except (RuntimeError, ValueError, TypeError, OSError) as e:
             logger.critical("kernel_initialization_failed", error=str(e))
             # Clean up database connection before failing
             if self.db_client:
@@ -202,7 +204,7 @@ class ForgeApp:
             self.anomaly_system = immune["anomaly_system"]
             self.canary_manager = immune["canary_manager"]
             logger.info("immune_system_initialized")
-        except Exception as e:
+        except (RuntimeError, ValueError, TypeError, KeyError) as e:
             logger.error("immune_system_init_failed", error=str(e))
             # Continue without immune system - degraded mode
             self.circuit_registry = None
@@ -222,7 +224,7 @@ class ForgeApp:
                 event_bus=self.event_system,
             )
             logger.info("services_initialized")
-        except Exception as e:
+        except (RuntimeError, ImportError, ValueError, OSError) as e:
             logger.error("services_init_failed", error=str(e))
             # Continue - some features may not work
 
@@ -241,7 +243,7 @@ class ForgeApp:
                     acp_enabled=virtuals_config.acp_enabled,
                     game_enabled=virtuals_config.game_enabled,
                 )
-        except Exception as e:
+        except (RuntimeError, ImportError, ConnectionError, ValueError, OSError) as e:
             logger.error("virtuals_integration_init_failed", error=str(e))
             # Continue - Virtuals features may not work
 
@@ -249,7 +251,7 @@ class ForgeApp:
         try:
             await self._register_core_overlays()
             logger.info("core_overlays_registered")
-        except Exception as e:
+        except (RuntimeError, ValueError, TypeError, KeyError) as e:
             logger.error("overlay_registration_failed", error=str(e))
 
         # Initialize resilience layer (caching, observability, validation)
@@ -258,7 +260,7 @@ class ForgeApp:
             resilience_state = await get_resilience_state()
             self.resilience_initialized = resilience_state.initialized
             logger.info("resilience_layer_initialized")
-        except Exception as e:
+        except (RuntimeError, ImportError, ConnectionError, OSError) as e:
             logger.warning("resilience_init_failed", error=str(e))
             self.resilience_initialized = False
 
@@ -267,7 +269,7 @@ class ForgeApp:
             from forge.security.tokens import TokenBlacklist
             redis_connected = await TokenBlacklist.initialize(self.settings.redis_url)
             logger.info("token_blacklist_initialized", redis_enabled=redis_connected)
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError, ImportError) as e:
             logger.warning("token_blacklist_init_failed", error=str(e))
 
         # Initialize query cache (Redis or in-memory fallback)
@@ -275,7 +277,7 @@ class ForgeApp:
             from forge.services.query_cache import init_query_cache
             self.query_cache = await init_query_cache()
             logger.info("query_cache_initialized")
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError, ImportError) as e:
             logger.warning("query_cache_init_failed", error=str(e))
             self.query_cache = None
 
@@ -288,7 +290,7 @@ class ForgeApp:
                 "scheduler_started",
                 tasks=self.scheduler.get_stats().get("tasks_registered", 0),
             )
-        except Exception as e:
+        except (RuntimeError, ImportError, ValueError, OSError) as e:
             logger.warning("scheduler_init_failed", error=str(e))
             self.scheduler = None
 
@@ -296,7 +298,7 @@ class ForgeApp:
         try:
             await self._initialize_diagnosis_services()
             logger.info("diagnosis_services_initialized")
-        except Exception as e:
+        except (RuntimeError, ImportError, ValueError, OSError) as e:
             logger.warning("diagnosis_services_init_failed", error=str(e))
             self.session_controller = None
             self.diagnostic_coordinator = None
@@ -425,14 +427,14 @@ class ForgeApp:
             try:
                 await self.session_controller.stop()
                 logger.info("session_controller_shutdown")
-            except Exception as e:
+            except (RuntimeError, OSError, asyncio.CancelledError) as e:
                 logger.warning("session_controller_shutdown_failed", error=str(e))
 
         if hasattr(self, 'diagnostic_coordinator') and self.diagnostic_coordinator:
             try:
                 await self.diagnostic_coordinator.stop()
                 logger.info("diagnostic_coordinator_shutdown")
-            except Exception as e:
+            except (RuntimeError, OSError, asyncio.CancelledError) as e:
                 logger.warning("diagnostic_coordinator_shutdown_failed", error=str(e))
 
         # Stop scheduler first (prevents new background tasks)
@@ -440,7 +442,7 @@ class ForgeApp:
             try:
                 await self.scheduler.stop()
                 logger.info("scheduler_shutdown")
-            except Exception as e:
+            except (RuntimeError, OSError, asyncio.CancelledError) as e:
                 logger.warning("scheduler_shutdown_failed", error=str(e))
 
         # Shutdown query cache
@@ -449,7 +451,7 @@ class ForgeApp:
                 from forge.services.query_cache import close_query_cache
                 await close_query_cache()
                 logger.info("query_cache_shutdown")
-            except Exception as e:
+            except (ConnectionError, TimeoutError, OSError) as e:
                 logger.warning("query_cache_shutdown_failed", error=str(e))
 
         # Shutdown resilience layer
@@ -459,7 +461,7 @@ class ForgeApp:
                 resilience_state = await get_resilience_state()
                 await resilience_state.close()
                 logger.info("resilience_layer_shutdown")
-            except Exception as e:
+            except (RuntimeError, ConnectionError, OSError) as e:
                 logger.warning("resilience_shutdown_failed", error=str(e))
 
         # Shutdown Virtuals integration
@@ -467,7 +469,7 @@ class ForgeApp:
             from forge.services.virtuals_integration import shutdown_virtuals_service
             await shutdown_virtuals_service()
             logger.info("virtuals_integration_shutdown")
-        except Exception as e:
+        except (RuntimeError, ConnectionError, OSError, ImportError) as e:
             logger.warning("virtuals_shutdown_failed", error=str(e))
 
         # Shutdown Copilot agent
@@ -475,7 +477,7 @@ class ForgeApp:
             from forge.api.routes.copilot import shutdown_agent
             await shutdown_agent()  # type: ignore[no-untyped-call]
             logger.info("copilot_agent_shutdown")
-        except Exception as e:
+        except (RuntimeError, ConnectionError, OSError, ImportError) as e:
             logger.warning("copilot_shutdown_failed", error=str(e))
 
         # Shutdown services
@@ -490,7 +492,7 @@ class ForgeApp:
             try:
                 await self.event_system.stop()
                 logger.info("event_system_shutdown")
-            except Exception as e:
+            except (RuntimeError, OSError, asyncio.CancelledError) as e:
                 logger.warning("event_system_shutdown_failed", error=str(e))
 
         if self.db_client:

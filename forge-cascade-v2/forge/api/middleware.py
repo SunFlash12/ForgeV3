@@ -160,7 +160,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         try:
             response = await call_next(request)
             status_code = response.status_code
-        except Exception as e:
+        except Exception as e:  # Intentional broad catch: API error boundary - returns sanitized 500
             # Log exception
             duration_ms = (time.perf_counter() - start_time) * 1000
             logger.exception(
@@ -272,7 +272,7 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
                     request.state.user_id = payload.sub
                     request.state.token_payload = payload
 
-            except Exception as e:
+            except (ValueError, KeyError, OSError, RuntimeError) as e:
                 # Log authentication failures for security monitoring
                 logger.warning(
                     "auth_token_validation_failed",
@@ -397,7 +397,7 @@ class SessionBindingMiddleware(BaseHTTPMiddleware):
                     },
                 )
 
-        except Exception as e:
+        except (ValueError, KeyError, OSError, RuntimeError) as e:
             # Don't block requests on session validation errors
             logger.warning(
                 "session_binding_error",
@@ -498,7 +498,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 self._redis = redis.from_url(redis_url, decode_responses=True)
                 self._use_redis = True
                 logger.info("rate_limit_redis_enabled", redis_url=redis_url[:20] + "...")
-            except Exception as e:
+            except (ConnectionError, TimeoutError, OSError) as e:
                 logger.warning("rate_limit_redis_failed", error=str(e))
 
     async def dispatch(
@@ -609,7 +609,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
             return False, 0, max(0, minute_limit - minute_count)
 
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError) as e:
             logger.warning("redis_rate_limit_error", error=str(e))
             # Fallback to memory
             return self._check_memory_rate_limit(key, minute_limit, hour_limit, burst)
@@ -1015,7 +1015,7 @@ class APILimitsMiddleware(BaseHTTPMiddleware):
                             )
                     except json.JSONDecodeError:
                         pass  # Let FastAPI handle JSON parse errors
-            except Exception:
+            except (ValueError, OSError, RuntimeError):
                 pass  # Don't block on body read errors
 
         response: Response = await call_next(request)

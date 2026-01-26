@@ -595,7 +595,7 @@ class EmbeddingService:
                     try:
                         batch_results = await self._provider.embed_batch(batch_texts)
                         break
-                    except Exception as e:
+                    except (ConnectionError, TimeoutError, ValueError, OSError) as e:
                         if attempt == self._config.max_retries - 1:
                             raise
                         logger.warning(

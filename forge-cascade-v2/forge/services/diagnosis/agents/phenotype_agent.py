@@ -212,7 +212,7 @@ class PhenotypeAgent(DiagnosticAgent):
                     }
                     hypotheses.append(hypothesis)
 
-            except Exception as e:
+            except (RuntimeError, OSError, ConnectionError, ValueError) as e:
                 logger.error("hypothesis_query_failed", error=str(e))
 
         # Merge with existing hypotheses
@@ -348,7 +348,7 @@ class PhenotypeAgent(DiagnosticAgent):
                         term = self._hpo.get_term(hpo_id)
                         if term:
                             name = term.name
-                    except Exception:
+                    except (ValueError, KeyError, AttributeError):
                         pass
 
                 suggestions.append({
@@ -396,7 +396,7 @@ class PhenotypeAgent(DiagnosticAgent):
                             if matches:
                                 hpo_id = matches[0].hpo_id
                                 name = matches[0].name
-                        except Exception:
+                        except (ValueError, KeyError, AttributeError):
                             pass
             else:
                 continue
@@ -429,7 +429,7 @@ class PhenotypeAgent(DiagnosticAgent):
                             max_depth=self.config.max_hierarchy_depth,
                         )
                         expanded.update(ancestors)
-                    except Exception:
+                    except (ValueError, KeyError, AttributeError):
                         pass
 
         return list(expanded)
@@ -477,7 +477,7 @@ class PhenotypeAgent(DiagnosticAgent):
                             by_system[sys_name].append(hpo_id)
                             assigned = True
                             break
-                except Exception:
+                except (ValueError, KeyError, AttributeError):
                     pass
 
             if not assigned:
@@ -518,7 +518,7 @@ class PhenotypeAgent(DiagnosticAgent):
                 }
                 for r in (results or [])
             ]
-        except Exception:
+        except (RuntimeError, OSError, ConnectionError, ValueError) as _:
             return []
 
     def _identify_patterns(
@@ -590,7 +590,7 @@ class PhenotypeAgent(DiagnosticAgent):
             phenotypes = [r["hpo_id"] for r in (results or []) if r.get("hpo_id")]
             self._phenotype_cache[cache_key] = {"phenotypes": phenotypes}
             return phenotypes
-        except Exception:
+        except (RuntimeError, OSError, ConnectionError, ValueError) as _:
             return []
 
 

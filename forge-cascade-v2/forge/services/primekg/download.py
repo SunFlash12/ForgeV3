@@ -163,7 +163,7 @@ class PrimeKGDownloader:
         for callback in self._progress_callbacks:
             try:
                 callback(progress)
-            except Exception as e:
+            except Exception as e:  # Intentional broad catch: callback error must not crash download
                 logger.warning("progress_callback_error", error=str(e))
 
     async def download_all(
@@ -362,7 +362,7 @@ class PrimeKGDownloader:
             logger.error("primekg_download_timeout", file=file_name, error=str(e))
             return None
 
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError, httpx.HTTPError, ValueError) as e:
             progress.status = DownloadStatus.FAILED
             progress.error = str(e)
             self._notify_progress(progress)
@@ -450,7 +450,7 @@ class PrimeKGDownloader:
                 results[name] = True
                 logger.info("primekg_file_verified", file=name, size=size)
 
-            except Exception as e:
+            except (OSError, IOError, ValueError, UnicodeDecodeError) as e:
                 logger.error("primekg_verification_error", file=name, error=str(e))
                 results[name] = False
 
