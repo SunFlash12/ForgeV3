@@ -34,6 +34,7 @@ logger = structlog.get_logger(__name__)
 @dataclass
 class CacheEntry:
     """Cache entry with TTL tracking."""
+
     value: Any
     created_at: float = field(default_factory=time.time)
     hits: int = 0
@@ -47,6 +48,7 @@ class CacheEntry:
 @dataclass
 class PerformanceMetrics:
     """Aggregated performance metrics."""
+
     avg_response_time_ms: float = 0.0
     p95_response_time_ms: float = 0.0
     p99_response_time_ms: float = 0.0
@@ -64,6 +66,7 @@ class PerformanceMetrics:
 @dataclass
 class OptimizationRecommendation:
     """Performance optimization recommendation."""
+
     category: str  # caching, scaling, configuration
     priority: str  # low, medium, high, critical
     title: str
@@ -252,7 +255,9 @@ class PerformanceOptimizerOverlay(BaseOverlay):
                     "p95_response_time_ms": metrics.p95_response_time_ms,
                     "p99_response_time_ms": metrics.p99_response_time_ms,
                     "total_requests": metrics.total_requests,
-                    "error_rate": metrics.error_count / metrics.total_requests if metrics.total_requests > 0 else 0,
+                    "error_rate": metrics.error_count / metrics.total_requests
+                    if metrics.total_requests > 0
+                    else 0,
                 }
             return {"endpoint": endpoint, "error": "No metrics for endpoint"}
 
@@ -262,13 +267,19 @@ class PerformanceOptimizerOverlay(BaseOverlay):
 
         return {
             "cache_size": len(self._cache),
-            "cache_hit_rate": cache_hits / (cache_hits + cache_misses) if (cache_hits + cache_misses) > 0 else 0,
+            "cache_hit_rate": cache_hits / (cache_hits + cache_misses)
+            if (cache_hits + cache_misses) > 0
+            else 0,
             "total_endpoints": len(self._endpoint_metrics),
-            "avg_response_time_ms": sum(self._response_times) / len(self._response_times) if self._response_times else 0,
+            "avg_response_time_ms": sum(self._response_times) / len(self._response_times)
+            if self._response_times
+            else 0,
             "operations_processed": self._stats.get("operations_processed", 0),
         }
 
-    async def _get_optimized_llm_params(self, data: dict[str, Any], context: OverlayContext) -> dict[str, Any]:
+    async def _get_optimized_llm_params(
+        self, data: dict[str, Any], context: OverlayContext
+    ) -> dict[str, Any]:
         """
         Get optimized LLM parameters based on context.
 
@@ -334,38 +345,44 @@ class PerformanceOptimizerOverlay(BaseOverlay):
         if total_cache_ops > 100:
             hit_rate = cache_hits / total_cache_ops
             if hit_rate < 0.3:
-                recommendations.append({
-                    "category": "caching",
-                    "priority": "high",
-                    "title": "Low cache hit rate",
-                    "description": f"Cache hit rate is {hit_rate:.1%}, consider increasing TTL or cache size",
-                    "expected_improvement": "20-40% latency reduction",
-                })
+                recommendations.append(
+                    {
+                        "category": "caching",
+                        "priority": "high",
+                        "title": "Low cache hit rate",
+                        "description": f"Cache hit rate is {hit_rate:.1%}, consider increasing TTL or cache size",
+                        "expected_improvement": "20-40% latency reduction",
+                    }
+                )
 
         # Check response times
         if self._response_times and len(self._response_times) > 50:
             avg_time = sum(self._response_times) / len(self._response_times)
             if avg_time > 1000:  # > 1 second
-                recommendations.append({
-                    "category": "performance",
-                    "priority": "critical",
-                    "title": "High average response time",
-                    "description": f"Average response time is {avg_time:.0f}ms",
-                    "expected_improvement": "Investigate slow endpoints",
-                })
+                recommendations.append(
+                    {
+                        "category": "performance",
+                        "priority": "critical",
+                        "title": "High average response time",
+                        "description": f"Average response time is {avg_time:.0f}ms",
+                        "expected_improvement": "Investigate slow endpoints",
+                    }
+                )
 
         # Check error rates
         for endpoint, metrics in self._endpoint_metrics.items():
             if metrics.total_requests > 50:
                 error_rate = metrics.error_count / metrics.total_requests
                 if error_rate > 0.05:  # > 5% errors
-                    recommendations.append({
-                        "category": "reliability",
-                        "priority": "high",
-                        "title": f"High error rate for {endpoint}",
-                        "description": f"Error rate is {error_rate:.1%}",
-                        "expected_improvement": "Improve reliability",
-                    })
+                    recommendations.append(
+                        {
+                            "category": "reliability",
+                            "priority": "high",
+                            "title": f"High error rate for {endpoint}",
+                            "description": f"Error rate is {error_rate:.1%}",
+                            "expected_improvement": "Improve reliability",
+                        }
+                    )
 
         return {
             "recommendations": recommendations,
@@ -415,10 +432,7 @@ class PerformanceOptimizerOverlay(BaseOverlay):
             try:
                 await asyncio.sleep(60)  # Check every minute
 
-                expired_keys = [
-                    key for key, entry in self._cache.items()
-                    if entry.is_expired
-                ]
+                expired_keys = [key for key, entry in self._cache.items() if entry.is_expired]
 
                 for key in expired_keys:
                     del self._cache[key]

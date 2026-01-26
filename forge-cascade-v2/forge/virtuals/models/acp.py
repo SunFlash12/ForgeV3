@@ -25,8 +25,9 @@ from .base import ACPJobStatus, ACPPhase, VirtualsBaseModel
 
 class PaymentToken(str, Enum):
     """Supported payment tokens for ACP transactions."""
+
     VIRTUAL = "VIRTUAL"  # Native Virtuals Protocol token on Base L2
-    FROWG = "FROWG"      # $FROWG token on Solana ("Rise of Frowg")
+    FROWG = "FROWG"  # $FROWG token on Solana ("Rise of Frowg")
 
     @property
     def chain(self) -> str:
@@ -43,7 +44,7 @@ class PaymentToken(str, Enum):
         if self == PaymentToken.VIRTUAL:
             return 18  # ERC-20 standard
         elif self == PaymentToken.FROWG:
-            return 9   # SPL token standard
+            return 9  # SPL token standard
         return 18
 
     @property
@@ -67,25 +68,15 @@ class PaymentToken(str, Enum):
 
 class TokenPayment(BaseModel):
     """Payment details for a multi-token transaction."""
-    token: PaymentToken = Field(
-        default=PaymentToken.VIRTUAL,
-        description="Payment token type"
-    )
-    amount: float = Field(
-        ge=0,
-        description="Amount in token units"
-    )
+
+    token: PaymentToken = Field(default=PaymentToken.VIRTUAL, description="Payment token type")
+    amount: float = Field(ge=0, description="Amount in token units")
     token_address: str | None = Field(
-        default=None,
-        description="Token contract/mint address (auto-filled based on token type)"
+        default=None, description="Token contract/mint address (auto-filled based on token type)"
     )
-    chain: str = Field(
-        default="base",
-        description="Blockchain for the payment"
-    )
+    chain: str = Field(default="base", description="Blockchain for the payment")
     exchange_rate_to_virtual: float = Field(
-        default=1.0,
-        description="Exchange rate: 1 token = X VIRTUAL (for pricing equivalence)"
+        default=1.0, description="Exchange rate: 1 token = X VIRTUAL (for pricing equivalence)"
     )
 
     def to_virtual_equivalent(self) -> float:
@@ -101,6 +92,7 @@ class JobOffering(BaseModel):
     the ACP registry, enabling agents to find providers for specific
     capabilities.
     """
+
     id: str = Field(default_factory=lambda: str(uuid4()))
     provider_agent_id: str = Field(description="ID of the agent offering this service")
     provider_wallet: str = Field(description="Wallet address of provider")
@@ -109,76 +101,52 @@ class JobOffering(BaseModel):
     service_type: str = Field(
         description="Type of service (knowledge_query, analysis, generation, etc.)"
     )
-    title: str = Field(
-        max_length=200,
-        description="Human-readable title of the offering"
-    )
+    title: str = Field(max_length=200, description="Human-readable title of the offering")
     description: str = Field(
-        max_length=2000,
-        description="Detailed description of what the service provides"
+        max_length=2000, description="Detailed description of what the service provides"
     )
 
     # Capabilities
     input_schema: dict[str, Any] = Field(
-        default_factory=dict,
-        description="JSON schema for expected input format"
+        default_factory=dict, description="JSON schema for expected input format"
     )
     output_schema: dict[str, Any] = Field(
-        default_factory=dict,
-        description="JSON schema for output format"
+        default_factory=dict, description="JSON schema for output format"
     )
     supported_formats: list[str] = Field(
-        default_factory=lambda: ["json", "text"],
-        description="Supported input/output formats"
+        default_factory=lambda: ["json", "text"], description="Supported input/output formats"
     )
 
     # Pricing
-    base_fee_virtual: float = Field(
-        ge=0,
-        description="Base fee in VIRTUAL tokens"
-    )
+    base_fee_virtual: float = Field(ge=0, description="Base fee in VIRTUAL tokens")
     fee_per_unit: float = Field(
-        default=0.0,
-        ge=0,
-        description="Additional fee per unit (e.g., per 1000 tokens)"
+        default=0.0, ge=0, description="Additional fee per unit (e.g., per 1000 tokens)"
     )
     unit_type: str | None = Field(
-        default=None,
-        description="Type of unit for per-unit pricing (tokens, queries, etc.)"
+        default=None, description="Type of unit for per-unit pricing (tokens, queries, etc.)"
     )
 
     # Multi-token payment support
     accepted_tokens: list[PaymentToken] = Field(
         default_factory=lambda: [PaymentToken.VIRTUAL],
-        description="Payment tokens accepted for this offering"
+        description="Payment tokens accepted for this offering",
     )
     frowg_fee_equivalent: float | None = Field(
-        default=None,
-        description="Base fee in $FROWG tokens (if accepted)"
+        default=None, description="Base fee in $FROWG tokens (if accepted)"
     )
 
     # Constraints
     max_execution_time_seconds: int = Field(
-        default=300,
-        description="Maximum time allowed for service execution"
+        default=300, description="Maximum time allowed for service execution"
     )
-    requires_escrow: bool = Field(
-        default=True,
-        description="Whether payment must be escrowed"
-    )
+    requires_escrow: bool = Field(default=True, description="Whether payment must be escrowed")
     min_buyer_trust_score: float = Field(
-        default=0.0,
-        ge=0.0,
-        le=1.0,
-        description="Minimum trust score required for buyers"
+        default=0.0, ge=0.0, le=1.0, description="Minimum trust score required for buyers"
     )
 
     # Availability
     is_active: bool = Field(default=True)
-    available_capacity: int = Field(
-        default=100,
-        description="Current capacity for concurrent jobs"
-    )
+    available_capacity: int = Field(default=100, description="Current capacity for concurrent jobs")
 
     # Metadata
     tags: list[str] = Field(default_factory=list)
@@ -186,10 +154,7 @@ class JobOffering(BaseModel):
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     # On-chain registration
-    registry_id: str | None = Field(
-        default=None,
-        description="ID in the on-chain ACP registry"
-    )
+    registry_id: str | None = Field(default=None, description="ID in the on-chain ACP registry")
     registration_tx_hash: str | None = None
 
 
@@ -200,6 +165,7 @@ class ACPMemo(BaseModel):
     Memos are the fundamental unit of communication in ACP,
     creating an immutable record of agreements and deliverables.
     """
+
     id: str = Field(default_factory=lambda: str(uuid4()))
     memo_type: str = Field(
         description="Type: request, requirement, agreement, transaction, deliverable, evaluation"
@@ -207,12 +173,8 @@ class ACPMemo(BaseModel):
     job_id: str = Field(description="ID of the associated job")
 
     # Content
-    content: dict[str, Any] = Field(
-        description="Memo content (structured based on memo_type)"
-    )
-    content_hash: str = Field(
-        description="SHA-256 hash of content for verification"
-    )
+    content: dict[str, Any] = Field(description="Memo content (structured based on memo_type)")
+    content_hash: str = Field(description="SHA-256 hash of content for verification")
 
     # SECURITY FIX (Audit 4 - M11): Nonce for replay attack prevention
     nonce: int = Field(
@@ -242,6 +204,7 @@ class ACPJob(VirtualsBaseModel):
     3. Transaction - Payment escrowed, work performed
     4. Evaluation - Deliverables verified, funds released
     """
+
     # Job Identity
     job_offering_id: str = Field(description="Reference to the job offering")
 
@@ -251,8 +214,7 @@ class ACPJob(VirtualsBaseModel):
     provider_agent_id: str
     provider_wallet: str
     evaluator_agent_id: str | None = Field(
-        default=None,
-        description="Optional third-party evaluator"
+        default=None, description="Optional third-party evaluator"
     )
 
     # Status Tracking
@@ -261,18 +223,12 @@ class ACPJob(VirtualsBaseModel):
 
     # Request Phase Data
     request_memo: ACPMemo | None = None
-    requirements: str = Field(
-        default="",
-        description="Buyer's requirements for the job"
-    )
+    requirements: str = Field(default="", description="Buyer's requirements for the job")
 
     # Negotiation Phase Data
     requirement_memo: ACPMemo | None = None
     agreement_memo: ACPMemo | None = None
-    negotiated_terms: dict[str, Any] = Field(
-        default_factory=dict,
-        description="Final agreed terms"
-    )
+    negotiated_terms: dict[str, Any] = Field(default_factory=dict, description="Final agreed terms")
     agreed_fee_virtual: float = Field(default=0.0)
     agreed_deadline: datetime | None = None
 
@@ -282,27 +238,18 @@ class ACPJob(VirtualsBaseModel):
     escrow_amount_virtual: float = Field(default=0.0)
     escrow_released: bool = Field(default=False)
     fund_transfer_enabled: bool = Field(
-        default=False,
-        description="Whether this job involves fund transfer beyond service fee"
+        default=False, description="Whether this job involves fund transfer beyond service fee"
     )
     principal_amount: float = Field(
-        default=0.0,
-        description="Principal amount if fund_transfer_enabled"
+        default=0.0, description="Principal amount if fund_transfer_enabled"
     )
 
     # Multi-token payment support
     payment_token: PaymentToken = Field(
-        default=PaymentToken.VIRTUAL,
-        description="Token used for payment"
+        default=PaymentToken.VIRTUAL, description="Token used for payment"
     )
-    payment_amount: float = Field(
-        default=0.0,
-        description="Amount in the payment token"
-    )
-    payment_chain: str = Field(
-        default="base",
-        description="Blockchain used for payment"
-    )
+    payment_amount: float = Field(default=0.0, description="Amount in the payment token")
+    payment_chain: str = Field(default="base", description="Blockchain used for payment")
 
     # Deliverable Data
     deliverable_memo: ACPMemo | None = None
@@ -313,14 +260,9 @@ class ACPJob(VirtualsBaseModel):
     # Evaluation Phase Data
     evaluation_memo: ACPMemo | None = None
     evaluation_result: str | None = Field(
-        default=None,
-        description="approved, rejected, or disputed"
+        default=None, description="approved, rejected, or disputed"
     )
-    evaluation_score: float | None = Field(
-        default=None,
-        ge=0.0,
-        le=1.0
-    )
+    evaluation_score: float | None = Field(default=None, ge=0.0, le=1.0)
     evaluation_feedback: str | None = None
     evaluated_at: datetime | None = None
 
@@ -345,8 +287,12 @@ class ACPJob(VirtualsBaseModel):
 
     def advance_to_phase(self, phase: ACPPhase) -> None:
         """Advance the job to the next phase."""
-        phase_order = [ACPPhase.REQUEST, ACPPhase.NEGOTIATION,
-                       ACPPhase.TRANSACTION, ACPPhase.EVALUATION]
+        phase_order = [
+            ACPPhase.REQUEST,
+            ACPPhase.NEGOTIATION,
+            ACPPhase.TRANSACTION,
+            ACPPhase.EVALUATION,
+        ]
         current_idx = phase_order.index(self.current_phase)
         target_idx = phase_order.index(phase)
 
@@ -372,32 +318,28 @@ class ACPJob(VirtualsBaseModel):
 
 class ACPJobCreate(BaseModel):
     """Schema for initiating a new ACP job."""
+
     job_offering_id: str
     buyer_agent_id: str
-    requirements: str = Field(
-        max_length=5000,
-        description="Detailed requirements for the job"
-    )
+    requirements: str = Field(max_length=5000, description="Detailed requirements for the job")
     max_fee_virtual: float = Field(
-        ge=0,
-        description="Maximum fee buyer is willing to pay (in VIRTUAL equivalent)"
+        ge=0, description="Maximum fee buyer is willing to pay (in VIRTUAL equivalent)"
     )
     preferred_deadline: datetime | None = None
     additional_context: dict[str, Any] = Field(default_factory=dict)
 
     # Multi-token payment support
     payment_token: PaymentToken = Field(
-        default=PaymentToken.VIRTUAL,
-        description="Preferred payment token"
+        default=PaymentToken.VIRTUAL, description="Preferred payment token"
     )
     max_fee_in_token: float | None = Field(
-        default=None,
-        description="Maximum fee in the selected token (if different from VIRTUAL)"
+        default=None, description="Maximum fee in the selected token (if different from VIRTUAL)"
     )
 
 
 class ACPNegotiationTerms(BaseModel):
     """Terms proposed during negotiation phase."""
+
     job_id: str
     proposed_fee_virtual: float
     proposed_deadline: datetime
@@ -410,46 +352,40 @@ class ACPNegotiationTerms(BaseModel):
 
 class ACPDeliverable(BaseModel):
     """Deliverable submission for a job."""
+
     job_id: str
-    content_type: str = Field(
-        description="Type: json, text, url, file_reference"
-    )
-    content: dict[str, Any] = Field(
-        description="The actual deliverable content or reference"
-    )
+    content_type: str = Field(description="Type: json, text, url, file_reference")
+    content: dict[str, Any] = Field(description="The actual deliverable content or reference")
     notes: str = Field(
-        default="",
-        max_length=1000,
-        description="Provider notes about the deliverable"
+        default="", max_length=1000, description="Provider notes about the deliverable"
     )
 
 
 class ACPEvaluation(BaseModel):
     """Evaluation result for a delivered job."""
+
     job_id: str
     evaluator_agent_id: str
     result: str = Field(description="approved, rejected, or needs_revision")
     score: float = Field(ge=0.0, le=1.0)
     feedback: str = Field(max_length=2000)
     met_requirements: list[str] = Field(
-        default_factory=list,
-        description="Requirements that were met"
+        default_factory=list, description="Requirements that were met"
     )
     unmet_requirements: list[str] = Field(
-        default_factory=list,
-        description="Requirements that were not met"
+        default_factory=list, description="Requirements that were not met"
     )
     suggested_improvements: list[str] = Field(default_factory=list)
 
 
 class ACPDispute(BaseModel):
     """Dispute filed for a job."""
+
     job_id: str
     filed_by: str = Field(description="buyer or provider")
     reason: str = Field(max_length=2000)
     evidence: list[dict[str, Any]] = Field(
-        default_factory=list,
-        description="Supporting evidence for the dispute"
+        default_factory=list, description="Supporting evidence for the dispute"
     )
     requested_resolution: str = Field(
         description="full_refund, partial_refund, renegotiate, or arbitration"
@@ -458,6 +394,7 @@ class ACPDispute(BaseModel):
 
 class ACPRegistryEntry(BaseModel):
     """Entry in the ACP service registry."""
+
     id: str
     agent_id: str
     wallet_address: str
@@ -473,6 +410,7 @@ class ACPRegistryEntry(BaseModel):
 
 class ACPStats(BaseModel):
     """Statistics for ACP activity."""
+
     period_start: datetime
     period_end: datetime
     total_jobs_created: int = 0
@@ -488,9 +426,9 @@ class ACPStats(BaseModel):
     # Per-token breakdown
     volume_by_token: dict[str, float] = Field(
         default_factory=lambda: {"VIRTUAL": 0.0, "FROWG": 0.0},
-        description="Volume breakdown by payment token"
+        description="Volume breakdown by payment token",
     )
     jobs_by_token: dict[str, int] = Field(
         default_factory=lambda: {"VIRTUAL": 0, "FROWG": 0},
-        description="Job count breakdown by payment token"
+        description="Job count breakdown by payment token",
     )

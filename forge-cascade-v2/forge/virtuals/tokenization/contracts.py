@@ -25,6 +25,7 @@ from typing import Any
 # CONTRACT ADDRESSES
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class ContractAddresses:
     """
     Official Virtuals Protocol contract addresses.
@@ -38,19 +39,16 @@ class ContractAddresses:
         # Core tokens
         "virtual_token": "0x0b3e328455c4059EEb9e3f84b5543F74E24e7E1b",
         "ve_virtual": "0x14559863b6E695A8aa4B7e68541d240ac1BBeB2f",  # Voting token
-
         # Factory contracts - PENDING: Contact Virtuals Protocol
         "agent_factory": None,  # AgentFactoryV3 - not publicly listed
         "agent_nft": None,  # AgentNFT contract
         "acp_registry": None,  # ACP Registry
-
         # Infrastructure from whitepaper
         "vault": "0xdAd686299FB562f89e55DA05F1D96FaBEb2A2E32",  # Creator token locking
         "sell_wall": "0xe2890629EF31b32132003C02B29a50A025dEeE8a",  # Sell wall wallet
         "sell_executor": "0xF8DD39c71A278FE9F4377D009D7627EF140f809e",  # Sell order execution
         "tax_swapper": "0x8e0253dA409Faf5918FE2A15979fd878F4495D0E",
         "tax_manager": "0x7e26173192d72fd6d75a759f888d61c2cdbb64b1",
-
         # Third-party
         "bridge": "0x3154Cf16ccdb4C6d922629664174b904d80F2C35",
         "multisend": "0x40A2aCCbd92BCA938b02010E17A5b8929b49130D",  # Gnosis Safe
@@ -104,62 +102,53 @@ ERC20_ABI: list[dict[str, Any]] = [
         "name": "balanceOf",
         "outputs": [{"name": "", "type": "uint256"}],
         "stateMutability": "view",
-        "type": "function"
+        "type": "function",
     },
     {
-        "inputs": [
-            {"name": "spender", "type": "address"},
-            {"name": "amount", "type": "uint256"}
-        ],
+        "inputs": [{"name": "spender", "type": "address"}, {"name": "amount", "type": "uint256"}],
         "name": "approve",
         "outputs": [{"name": "", "type": "bool"}],
         "stateMutability": "nonpayable",
-        "type": "function"
+        "type": "function",
     },
     {
-        "inputs": [
-            {"name": "owner", "type": "address"},
-            {"name": "spender", "type": "address"}
-        ],
+        "inputs": [{"name": "owner", "type": "address"}, {"name": "spender", "type": "address"}],
         "name": "allowance",
         "outputs": [{"name": "", "type": "uint256"}],
         "stateMutability": "view",
-        "type": "function"
+        "type": "function",
     },
     {
-        "inputs": [
-            {"name": "recipient", "type": "address"},
-            {"name": "amount", "type": "uint256"}
-        ],
+        "inputs": [{"name": "recipient", "type": "address"}, {"name": "amount", "type": "uint256"}],
         "name": "transfer",
         "outputs": [{"name": "", "type": "bool"}],
         "stateMutability": "nonpayable",
-        "type": "function"
+        "type": "function",
     },
     {
         "inputs": [
             {"name": "sender", "type": "address"},
             {"name": "recipient", "type": "address"},
-            {"name": "amount", "type": "uint256"}
+            {"name": "amount", "type": "uint256"},
         ],
         "name": "transferFrom",
         "outputs": [{"name": "", "type": "bool"}],
         "stateMutability": "nonpayable",
-        "type": "function"
+        "type": "function",
     },
     {
         "inputs": [],
         "name": "decimals",
         "outputs": [{"name": "", "type": "uint8"}],
         "stateMutability": "view",
-        "type": "function"
+        "type": "function",
     },
     {
         "inputs": [],
         "name": "totalSupply",
         "outputs": [{"name": "", "type": "uint256"}],
         "stateMutability": "view",
-        "type": "function"
+        "type": "function",
     },
 ]
 
@@ -181,7 +170,7 @@ AGENT_FACTORY_ABI: list[dict[str, Any]] = [
         "name": "initialize",
         "outputs": [],
         "stateMutability": "nonpayable",
-        "type": "function"
+        "type": "function",
     },
     # proposeAgent - Propose a new agent (requires VIRTUAL stake)
     {
@@ -198,7 +187,7 @@ AGENT_FACTORY_ABI: list[dict[str, Any]] = [
         "name": "proposeAgent",
         "outputs": [{"name": "applicationId", "type": "uint256"}],
         "stateMutability": "nonpayable",
-        "type": "function"
+        "type": "function",
     },
     # getApplication - Get application details
     {
@@ -217,11 +206,11 @@ AGENT_FACTORY_ABI: list[dict[str, Any]] = [
                     {"name": "status", "type": "uint8"},
                 ],
                 "name": "application",
-                "type": "tuple"
+                "type": "tuple",
             }
         ],
         "stateMutability": "view",
-        "type": "function"
+        "type": "function",
     },
     # executeApplication - Execute/reject an application
     {
@@ -232,7 +221,7 @@ AGENT_FACTORY_ABI: list[dict[str, Any]] = [
         "name": "executeApplication",
         "outputs": [],
         "stateMutability": "nonpayable",
-        "type": "function"
+        "type": "function",
     },
     # withdraw - Withdraw stake from rejected application
     {
@@ -240,7 +229,7 @@ AGENT_FACTORY_ABI: list[dict[str, Any]] = [
         "name": "withdraw",
         "outputs": [],
         "stateMutability": "nonpayable",
-        "type": "function"
+        "type": "function",
     },
     # totalAgents - Get total number of created agents
     {
@@ -248,7 +237,7 @@ AGENT_FACTORY_ABI: list[dict[str, Any]] = [
         "name": "totalAgents",
         "outputs": [{"name": "", "type": "uint256"}],
         "stateMutability": "view",
-        "type": "function"
+        "type": "function",
     },
     # setApplicationThreshold - Set minimum stake to propose
     {
@@ -256,7 +245,7 @@ AGENT_FACTORY_ABI: list[dict[str, Any]] = [
         "name": "setApplicationThreshold",
         "outputs": [],
         "stateMutability": "nonpayable",
-        "type": "function"
+        "type": "function",
     },
     # pause/unpause
     {
@@ -264,14 +253,14 @@ AGENT_FACTORY_ABI: list[dict[str, Any]] = [
         "name": "pause",
         "outputs": [],
         "stateMutability": "nonpayable",
-        "type": "function"
+        "type": "function",
     },
     {
         "inputs": [],
         "name": "unpause",
         "outputs": [],
         "stateMutability": "nonpayable",
-        "type": "function"
+        "type": "function",
     },
     # NewPersona event - Emitted when agent is created
     {
@@ -285,7 +274,7 @@ AGENT_FACTORY_ABI: list[dict[str, Any]] = [
             {"indexed": False, "name": "lp", "type": "address"},
         ],
         "name": "NewPersona",
-        "type": "event"
+        "type": "event",
     },
     # NewApplication event
     {
@@ -294,7 +283,7 @@ AGENT_FACTORY_ABI: list[dict[str, Any]] = [
             {"indexed": True, "name": "id", "type": "uint256"},
         ],
         "name": "NewApplication",
-        "type": "event"
+        "type": "event",
     },
     # ApplicationThresholdUpdated event
     {
@@ -303,7 +292,7 @@ AGENT_FACTORY_ABI: list[dict[str, Any]] = [
             {"indexed": False, "name": "newThreshold", "type": "uint256"},
         ],
         "name": "ApplicationThresholdUpdated",
-        "type": "event"
+        "type": "event",
     },
 ]
 
@@ -326,7 +315,7 @@ BONDING_CURVE_ABI: list[dict[str, Any]] = [
         "name": "initialize",
         "outputs": [],
         "stateMutability": "nonpayable",
-        "type": "function"
+        "type": "function",
     },
     # launch - Launch a new token on bonding curve
     {
@@ -346,7 +335,7 @@ BONDING_CURVE_ABI: list[dict[str, Any]] = [
             {"name": "tokensReceived", "type": "uint256"},
         ],
         "stateMutability": "nonpayable",
-        "type": "function"
+        "type": "function",
     },
     # buy - Buy tokens from bonding curve
     {
@@ -359,7 +348,7 @@ BONDING_CURVE_ABI: list[dict[str, Any]] = [
         "name": "buy",
         "outputs": [{"name": "success", "type": "bool"}],
         "stateMutability": "payable",
-        "type": "function"
+        "type": "function",
     },
     # sell - Sell tokens back to bonding curve
     {
@@ -372,7 +361,7 @@ BONDING_CURVE_ABI: list[dict[str, Any]] = [
         "name": "sell",
         "outputs": [{"name": "success", "type": "bool"}],
         "stateMutability": "nonpayable",
-        "type": "function"
+        "type": "function",
     },
     # unwrapToken - Unwrap FERC20 to ERC20 after graduation
     {
@@ -383,7 +372,7 @@ BONDING_CURVE_ABI: list[dict[str, Any]] = [
         "name": "unwrapToken",
         "outputs": [],
         "stateMutability": "nonpayable",
-        "type": "function"
+        "type": "function",
     },
     # setTokenParams - Update token parameters (admin)
     {
@@ -398,7 +387,7 @@ BONDING_CURVE_ABI: list[dict[str, Any]] = [
         "name": "setTokenParams",
         "outputs": [],
         "stateMutability": "nonpayable",
-        "type": "function"
+        "type": "function",
     },
     # View functions for bonding curve state
     {
@@ -406,35 +395,35 @@ BONDING_CURVE_ABI: list[dict[str, Any]] = [
         "name": "gradThreshold",
         "outputs": [{"name": "", "type": "uint256"}],
         "stateMutability": "view",
-        "type": "function"
+        "type": "function",
     },
     {
         "inputs": [],
         "name": "initialSupply",
         "outputs": [{"name": "", "type": "uint256"}],
         "stateMutability": "view",
-        "type": "function"
+        "type": "function",
     },
     {
         "inputs": [],
         "name": "fee",
         "outputs": [{"name": "", "type": "uint256"}],
         "stateMutability": "view",
-        "type": "function"
+        "type": "function",
     },
     {
         "inputs": [],
         "name": "assetRate",
         "outputs": [{"name": "", "type": "uint256"}],
         "stateMutability": "view",
-        "type": "function"
+        "type": "function",
     },
     {
         "inputs": [],
         "name": "maxTx",
         "outputs": [{"name": "", "type": "uint256"}],
         "stateMutability": "view",
-        "type": "function"
+        "type": "function",
     },
     # tokenInfo mapping - get token bonding curve info
     {
@@ -452,11 +441,11 @@ BONDING_CURVE_ABI: list[dict[str, Any]] = [
                     {"name": "status", "type": "uint8"},
                 ],
                 "name": "info",
-                "type": "tuple"
+                "type": "tuple",
             }
         ],
         "stateMutability": "view",
-        "type": "function"
+        "type": "function",
     },
     # profile mapping - get creator profile
     {
@@ -469,11 +458,11 @@ BONDING_CURVE_ABI: list[dict[str, Any]] = [
                     {"name": "count", "type": "uint256"},
                 ],
                 "name": "profileData",
-                "type": "tuple"
+                "type": "tuple",
             }
         ],
         "stateMutability": "view",
-        "type": "function"
+        "type": "function",
     },
 ]
 
@@ -491,7 +480,7 @@ AGENT_TOKEN_ABI: list[dict[str, Any]] = ERC20_ABI + [
         "name": "initialize",
         "outputs": [],
         "stateMutability": "nonpayable",
-        "type": "function"
+        "type": "function",
     },
     # addInitialLiquidity - Create Uniswap LP
     {
@@ -499,7 +488,7 @@ AGENT_TOKEN_ABI: list[dict[str, Any]] = ERC20_ABI + [
         "name": "addInitialLiquidity",
         "outputs": [],
         "stateMutability": "nonpayable",
-        "type": "function"
+        "type": "function",
     },
     # Liquidity pool management
     {
@@ -507,28 +496,28 @@ AGENT_TOKEN_ABI: list[dict[str, Any]] = ERC20_ABI + [
         "name": "isLiquidityPool",
         "outputs": [{"name": "", "type": "bool"}],
         "stateMutability": "view",
-        "type": "function"
+        "type": "function",
     },
     {
         "inputs": [],
         "name": "liquidityPools",
         "outputs": [{"name": "", "type": "address[]"}],
         "stateMutability": "view",
-        "type": "function"
+        "type": "function",
     },
     {
         "inputs": [{"name": "newLiquidityPool_", "type": "address"}],
         "name": "addLiquidityPool",
         "outputs": [],
         "stateMutability": "nonpayable",
-        "type": "function"
+        "type": "function",
     },
     {
         "inputs": [{"name": "removedLiquidityPool_", "type": "address"}],
         "name": "removeLiquidityPool",
         "outputs": [],
         "stateMutability": "nonpayable",
-        "type": "function"
+        "type": "function",
     },
     # Tax configuration
     {
@@ -536,14 +525,14 @@ AGENT_TOKEN_ABI: list[dict[str, Any]] = ERC20_ABI + [
         "name": "setProjectTaxRecipient",
         "outputs": [],
         "stateMutability": "nonpayable",
-        "type": "function"
+        "type": "function",
     },
     {
         "inputs": [{"name": "swapThresholdBasisPoints_", "type": "uint16"}],
         "name": "setSwapThresholdBasisPoints",
         "outputs": [],
         "stateMutability": "nonpayable",
-        "type": "function"
+        "type": "function",
     },
     {
         "inputs": [
@@ -553,7 +542,7 @@ AGENT_TOKEN_ABI: list[dict[str, Any]] = ERC20_ABI + [
         "name": "setProjectTaxRates",
         "outputs": [],
         "stateMutability": "nonpayable",
-        "type": "function"
+        "type": "function",
     },
     # Tax view functions
     {
@@ -561,14 +550,14 @@ AGENT_TOKEN_ABI: list[dict[str, Any]] = ERC20_ABI + [
         "name": "totalBuyTaxBasisPoints",
         "outputs": [{"name": "", "type": "uint256"}],
         "stateMutability": "view",
-        "type": "function"
+        "type": "function",
     },
     {
         "inputs": [],
         "name": "totalSellTaxBasisPoints",
         "outputs": [{"name": "", "type": "uint256"}],
         "stateMutability": "view",
-        "type": "function"
+        "type": "function",
     },
     # Tax distribution
     {
@@ -576,7 +565,7 @@ AGENT_TOKEN_ABI: list[dict[str, Any]] = ERC20_ABI + [
         "name": "distributeTaxTokens",
         "outputs": [],
         "stateMutability": "nonpayable",
-        "type": "function"
+        "type": "function",
     },
     # Burn functions
     {
@@ -584,7 +573,7 @@ AGENT_TOKEN_ABI: list[dict[str, Any]] = ERC20_ABI + [
         "name": "burn",
         "outputs": [],
         "stateMutability": "nonpayable",
-        "type": "function"
+        "type": "function",
     },
     {
         "inputs": [
@@ -594,7 +583,7 @@ AGENT_TOKEN_ABI: list[dict[str, Any]] = ERC20_ABI + [
         "name": "burnFrom",
         "outputs": [],
         "stateMutability": "nonpayable",
-        "type": "function"
+        "type": "function",
     },
     # Withdraw functions (admin)
     {
@@ -602,7 +591,7 @@ AGENT_TOKEN_ABI: list[dict[str, Any]] = ERC20_ABI + [
         "name": "withdrawETH",
         "outputs": [],
         "stateMutability": "nonpayable",
-        "type": "function"
+        "type": "function",
     },
     {
         "inputs": [
@@ -612,7 +601,7 @@ AGENT_TOKEN_ABI: list[dict[str, Any]] = ERC20_ABI + [
         "name": "withdrawERC20",
         "outputs": [],
         "stateMutability": "nonpayable",
-        "type": "function"
+        "type": "function",
     },
     # Valid caller management
     {
@@ -620,35 +609,35 @@ AGENT_TOKEN_ABI: list[dict[str, Any]] = ERC20_ABI + [
         "name": "isValidCaller",
         "outputs": [{"name": "", "type": "bool"}],
         "stateMutability": "view",
-        "type": "function"
+        "type": "function",
     },
     {
         "inputs": [],
         "name": "validCallers",
         "outputs": [{"name": "", "type": "bytes32[]"}],
         "stateMutability": "view",
-        "type": "function"
+        "type": "function",
     },
     {
         "inputs": [{"name": "newValidCallerHash_", "type": "bytes32"}],
         "name": "addValidCaller",
         "outputs": [],
         "stateMutability": "nonpayable",
-        "type": "function"
+        "type": "function",
     },
     {
         "inputs": [{"name": "removedValidCallerHash_", "type": "bytes32"}],
         "name": "removeValidCaller",
         "outputs": [],
         "stateMutability": "nonpayable",
-        "type": "function"
+        "type": "function",
     },
     # Events
     {
         "anonymous": False,
         "inputs": [{"indexed": True, "name": "pool", "type": "address"}],
         "name": "LiquidityPoolCreated",
-        "type": "event"
+        "type": "event",
     },
     {
         "anonymous": False,
@@ -658,25 +647,25 @@ AGENT_TOKEN_ABI: list[dict[str, Any]] = ERC20_ABI + [
             {"indexed": False, "name": "lpTokens", "type": "uint256"},
         ],
         "name": "InitialLiquidityAdded",
-        "type": "event"
+        "type": "event",
     },
     {
         "anonymous": False,
         "inputs": [{"indexed": True, "name": "pool", "type": "address"}],
         "name": "LiquidityPoolAdded",
-        "type": "event"
+        "type": "event",
     },
     {
         "anonymous": False,
         "inputs": [{"indexed": True, "name": "pool", "type": "address"}],
         "name": "LiquidityPoolRemoved",
-        "type": "event"
+        "type": "event",
     },
     {
         "anonymous": False,
         "inputs": [{"indexed": True, "name": "recipient", "type": "address"}],
         "name": "ProjectTaxRecipientUpdated",
-        "type": "event"
+        "type": "event",
     },
     {
         "anonymous": False,
@@ -687,7 +676,7 @@ AGENT_TOKEN_ABI: list[dict[str, Any]] = ERC20_ABI + [
             {"indexed": False, "name": "newSell", "type": "uint16"},
         ],
         "name": "ProjectTaxBasisPointsChanged",
-        "type": "event"
+        "type": "event",
     },
 ]
 
@@ -698,7 +687,7 @@ MULTISEND_ABI: list[dict[str, Any]] = [
         "name": "multiSend",
         "outputs": [],
         "stateMutability": "payable",
-        "type": "function"
+        "type": "function",
     },
 ]
 
@@ -706,6 +695,7 @@ MULTISEND_ABI: list[dict[str, Any]] = [
 # ═══════════════════════════════════════════════════════════════════════════════
 # EVENT TOPICS (for parsing logs)
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class EventTopics:
     """
@@ -735,7 +725,9 @@ class EventTopics:
     # LiquidityPoolRemoved(address)
     LIQUIDITY_POOL_REMOVED = "0x7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f"
     # ProjectTaxRecipientUpdated(address)
-    PROJECT_TAX_RECIPIENT_UPDATED = "0x8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a"
+    PROJECT_TAX_RECIPIENT_UPDATED = (
+        "0x8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a"
+    )
     # ProjectTaxBasisPointsChanged(uint16,uint16,uint16,uint16)
     PROJECT_TAX_CHANGED = "0x9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b"
 
@@ -748,6 +740,7 @@ class EventTopics:
 # ═══════════════════════════════════════════════════════════════════════════════
 # HELPER FUNCTIONS
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 def get_contract_abi(contract_type: str) -> list[dict[str, Any]]:
     """

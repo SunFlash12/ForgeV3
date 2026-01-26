@@ -36,6 +36,7 @@ logger = logging.getLogger(__name__)
 
 class RevenueServiceError(Exception):
     """Base exception for revenue service errors."""
+
     pass
 
 
@@ -90,13 +91,13 @@ class RevenueService:
             # Query for records that haven't been distributed yet
             pending_records = await self._revenue_repo.query_pending()
             self._pending_distributions = list(pending_records)
-            logger.info(f"Loaded {len(self._pending_distributions)} pending distributions from database")
+            logger.info(
+                f"Loaded {len(self._pending_distributions)} pending distributions from database"
+            )
         except AttributeError:
             # Repository doesn't have query_pending method - fall back to basic query
             try:
-                all_records = await self._revenue_repo.query(
-                    distribution_complete=False
-                )
+                all_records = await self._revenue_repo.query(distribution_complete=False)
                 self._pending_distributions = list(all_records)
                 logger.info(f"Loaded {len(self._pending_distributions)} pending distributions")
             except (ConnectionError, TimeoutError, OSError, ValueError, RuntimeError) as e:
@@ -229,8 +230,8 @@ class RevenueService:
         # forms of engagement. Proposing new ideas earns more than voting,
         # while evaluation tasks fall in between.
         reward_amounts = {
-            "vote": 0.01,        # Small reward for voting
-            "proposal": 0.5,    # Larger reward for creating proposals
+            "vote": 0.01,  # Small reward for voting
+            "proposal": 0.5,  # Larger reward for creating proposals
             "evaluation": 0.1,  # Medium reward for evaluation
         }
 
@@ -478,10 +479,7 @@ class RevenueService:
             },
             "total_revenue_virtual": total_revenue,
             "by_type": dict(by_type),
-            "top_entities": [
-                {"entity_id": eid, "revenue": rev}
-                for eid, rev in top_entities
-            ],
+            "top_entities": [{"entity_id": eid, "revenue": rev} for eid, rev in top_entities],
             "daily_totals": dict(daily_totals),
             "record_count": len(records),
             "average_per_record": total_revenue / len(records) if records else 0,
@@ -620,9 +618,7 @@ async def get_revenue_service(
     global _revenue_service
     if _revenue_service is None:
         if revenue_repository is None:
-            raise RevenueServiceError(
-                "Repository required for first initialization"
-            )
+            raise RevenueServiceError("Repository required for first initialization")
         _revenue_service = RevenueService(revenue_repository)
         await _revenue_service.initialize()
     return _revenue_service

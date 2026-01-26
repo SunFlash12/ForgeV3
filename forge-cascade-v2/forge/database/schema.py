@@ -24,7 +24,7 @@ logger = structlog.get_logger(__name__)
 
 # SECURITY FIX (Audit 2): Validate identifiers before using in schema operations
 # Neo4j identifiers must be alphanumeric with underscores only
-_SAFE_IDENTIFIER_PATTERN = re.compile(r'^[a-zA-Z_][a-zA-Z0-9_]*$')
+_SAFE_IDENTIFIER_PATTERN = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
 
 
 def _validate_identifier(name: str) -> bool:
@@ -108,119 +108,105 @@ class SchemaManager:
             (
                 "capsule_id_unique",
                 "CREATE CONSTRAINT capsule_id_unique IF NOT EXISTS "
-                "FOR (c:Capsule) REQUIRE c.id IS UNIQUE"
+                "FOR (c:Capsule) REQUIRE c.id IS UNIQUE",
             ),
-
             # User constraints
             (
                 "user_id_unique",
                 "CREATE CONSTRAINT user_id_unique IF NOT EXISTS "
-                "FOR (u:User) REQUIRE u.id IS UNIQUE"
+                "FOR (u:User) REQUIRE u.id IS UNIQUE",
             ),
             (
                 "user_username_unique",
                 "CREATE CONSTRAINT user_username_unique IF NOT EXISTS "
-                "FOR (u:User) REQUIRE u.username IS UNIQUE"
+                "FOR (u:User) REQUIRE u.username IS UNIQUE",
             ),
             (
                 "user_email_unique",
                 "CREATE CONSTRAINT user_email_unique IF NOT EXISTS "
-                "FOR (u:User) REQUIRE u.email IS UNIQUE"
+                "FOR (u:User) REQUIRE u.email IS UNIQUE",
             ),
-
             # Overlay constraints
             (
                 "overlay_id_unique",
                 "CREATE CONSTRAINT overlay_id_unique IF NOT EXISTS "
-                "FOR (o:Overlay) REQUIRE o.id IS UNIQUE"
+                "FOR (o:Overlay) REQUIRE o.id IS UNIQUE",
             ),
             (
                 "overlay_name_unique",
                 "CREATE CONSTRAINT overlay_name_unique IF NOT EXISTS "
-                "FOR (o:Overlay) REQUIRE o.name IS UNIQUE"
+                "FOR (o:Overlay) REQUIRE o.name IS UNIQUE",
             ),
-
             # Proposal constraints
             (
                 "proposal_id_unique",
                 "CREATE CONSTRAINT proposal_id_unique IF NOT EXISTS "
-                "FOR (p:Proposal) REQUIRE p.id IS UNIQUE"
+                "FOR (p:Proposal) REQUIRE p.id IS UNIQUE",
             ),
-
             # Vote constraints
             (
                 "vote_id_unique",
                 "CREATE CONSTRAINT vote_id_unique IF NOT EXISTS "
-                "FOR (v:Vote) REQUIRE v.id IS UNIQUE"
+                "FOR (v:Vote) REQUIRE v.id IS UNIQUE",
             ),
-
             # AuditLog constraints
             (
                 "auditlog_id_unique",
                 "CREATE CONSTRAINT auditlog_id_unique IF NOT EXISTS "
-                "FOR (a:AuditLog) REQUIRE a.id IS UNIQUE"
+                "FOR (a:AuditLog) REQUIRE a.id IS UNIQUE",
             ),
-
             # Event constraints
             (
                 "event_id_unique",
                 "CREATE CONSTRAINT event_id_unique IF NOT EXISTS "
-                "FOR (e:Event) REQUIRE e.id IS UNIQUE"
+                "FOR (e:Event) REQUIRE e.id IS UNIQUE",
             ),
-
             # ═══════════════════════════════════════════════════════════════
             # GRAPH EXTENSIONS: Temporal & Semantic
             # ═══════════════════════════════════════════════════════════════
-
             # CapsuleVersion constraints
             (
                 "capsuleversion_id_unique",
                 "CREATE CONSTRAINT capsuleversion_id_unique IF NOT EXISTS "
-                "FOR (v:CapsuleVersion) REQUIRE v.id IS UNIQUE"
+                "FOR (v:CapsuleVersion) REQUIRE v.id IS UNIQUE",
             ),
-
             # TrustSnapshot constraints
             (
                 "trustsnapshot_id_unique",
                 "CREATE CONSTRAINT trustsnapshot_id_unique IF NOT EXISTS "
-                "FOR (t:TrustSnapshot) REQUIRE t.id IS UNIQUE"
+                "FOR (t:TrustSnapshot) REQUIRE t.id IS UNIQUE",
             ),
-
             # GraphSnapshot constraints
             (
                 "graphsnapshot_id_unique",
                 "CREATE CONSTRAINT graphsnapshot_id_unique IF NOT EXISTS "
-                "FOR (g:GraphSnapshot) REQUIRE g.id IS UNIQUE"
+                "FOR (g:GraphSnapshot) REQUIRE g.id IS UNIQUE",
             ),
-
             # SemanticEdge constraints
             (
                 "semanticedge_id_unique",
                 "CREATE CONSTRAINT semanticedge_id_unique IF NOT EXISTS "
-                "FOR (s:SemanticEdge) REQUIRE s.id IS UNIQUE"
+                "FOR (s:SemanticEdge) REQUIRE s.id IS UNIQUE",
             ),
-
             # ═══════════════════════════════════════════════════════════════
             # CHAT ROOM ACCESS CONTROL (Audit 6 - Session 4)
             # ═══════════════════════════════════════════════════════════════
-
             # ChatRoom constraints
             (
                 "chatroom_id_unique",
                 "CREATE CONSTRAINT chatroom_id_unique IF NOT EXISTS "
-                "FOR (r:ChatRoom) REQUIRE r.id IS UNIQUE"
+                "FOR (r:ChatRoom) REQUIRE r.id IS UNIQUE",
             ),
             (
                 "chatroom_invite_code_unique",
                 "CREATE CONSTRAINT chatroom_invite_code_unique IF NOT EXISTS "
-                "FOR (r:ChatRoom) REQUIRE r.invite_code IS UNIQUE"
+                "FOR (r:ChatRoom) REQUIRE r.invite_code IS UNIQUE",
             ),
-
             # ChatMessage constraints
             (
                 "chatmessage_id_unique",
                 "CREATE CONSTRAINT chatmessage_id_unique IF NOT EXISTS "
-                "FOR (m:ChatMessage) REQUIRE m.id IS UNIQUE"
+                "FOR (m:ChatMessage) REQUIRE m.id IS UNIQUE",
             ),
         ]
 
@@ -244,7 +230,9 @@ class SchemaManager:
                 logger.error(f"Database error creating constraint: {name}", error=str(e))
             except ServiceUnavailable as e:
                 # Connection lost - re-raise as this is fatal
-                logger.critical(f"Database unavailable while creating constraint: {name}", error=str(e))
+                logger.critical(
+                    f"Database unavailable while creating constraint: {name}", error=str(e)
+                )
                 raise
             except Exception as e:  # Intentional broad catch: last-resort safety net after specific Neo4j exception handlers
                 # Unexpected error - log with full type info
@@ -252,7 +240,7 @@ class SchemaManager:
                 logger.error(
                     f"Unexpected error creating constraint: {name}",
                     error_type=type(e).__name__,
-                    error=str(e)
+                    error=str(e),
                 )
 
         return results
@@ -264,239 +252,202 @@ class SchemaManager:
             # Capsule indexes
             (
                 "capsule_type_idx",
-                "CREATE INDEX capsule_type_idx IF NOT EXISTS "
-                "FOR (c:Capsule) ON (c.type)"
+                "CREATE INDEX capsule_type_idx IF NOT EXISTS FOR (c:Capsule) ON (c.type)",
             ),
             (
                 "capsule_owner_idx",
-                "CREATE INDEX capsule_owner_idx IF NOT EXISTS "
-                "FOR (c:Capsule) ON (c.owner_id)"
+                "CREATE INDEX capsule_owner_idx IF NOT EXISTS FOR (c:Capsule) ON (c.owner_id)",
             ),
             (
                 "capsule_trust_idx",
-                "CREATE INDEX capsule_trust_idx IF NOT EXISTS "
-                "FOR (c:Capsule) ON (c.trust_level)"
+                "CREATE INDEX capsule_trust_idx IF NOT EXISTS FOR (c:Capsule) ON (c.trust_level)",
             ),
             (
                 "capsule_created_idx",
-                "CREATE INDEX capsule_created_idx IF NOT EXISTS "
-                "FOR (c:Capsule) ON (c.created_at)"
+                "CREATE INDEX capsule_created_idx IF NOT EXISTS FOR (c:Capsule) ON (c.created_at)",
             ),
-
             # User indexes
-            (
-                "user_role_idx",
-                "CREATE INDEX user_role_idx IF NOT EXISTS "
-                "FOR (u:User) ON (u.role)"
-            ),
+            ("user_role_idx", "CREATE INDEX user_role_idx IF NOT EXISTS FOR (u:User) ON (u.role)"),
             (
                 "user_active_idx",
-                "CREATE INDEX user_active_idx IF NOT EXISTS "
-                "FOR (u:User) ON (u.is_active)"
+                "CREATE INDEX user_active_idx IF NOT EXISTS FOR (u:User) ON (u.is_active)",
             ),
             (
                 "user_trust_idx",
-                "CREATE INDEX user_trust_idx IF NOT EXISTS "
-                "FOR (u:User) ON (u.trust_flame)"
+                "CREATE INDEX user_trust_idx IF NOT EXISTS FOR (u:User) ON (u.trust_flame)",
             ),
-
             # Overlay indexes
             (
                 "overlay_state_idx",
-                "CREATE INDEX overlay_state_idx IF NOT EXISTS "
-                "FOR (o:Overlay) ON (o.state)"
+                "CREATE INDEX overlay_state_idx IF NOT EXISTS FOR (o:Overlay) ON (o.state)",
             ),
             (
                 "overlay_trust_idx",
-                "CREATE INDEX overlay_trust_idx IF NOT EXISTS "
-                "FOR (o:Overlay) ON (o.trust_level)"
+                "CREATE INDEX overlay_trust_idx IF NOT EXISTS FOR (o:Overlay) ON (o.trust_level)",
             ),
-
             # Proposal indexes
             (
                 "proposal_status_idx",
-                "CREATE INDEX proposal_status_idx IF NOT EXISTS "
-                "FOR (p:Proposal) ON (p.status)"
+                "CREATE INDEX proposal_status_idx IF NOT EXISTS FOR (p:Proposal) ON (p.status)",
             ),
             (
                 "proposal_proposer_idx",
                 "CREATE INDEX proposal_proposer_idx IF NOT EXISTS "
-                "FOR (p:Proposal) ON (p.proposer_id)"
+                "FOR (p:Proposal) ON (p.proposer_id)",
             ),
-
             # AuditLog indexes
             (
                 "audit_entity_idx",
                 "CREATE INDEX audit_entity_idx IF NOT EXISTS "
-                "FOR (a:AuditLog) ON (a.entity_type, a.entity_id)"
+                "FOR (a:AuditLog) ON (a.entity_type, a.entity_id)",
             ),
             (
                 "audit_user_idx",
-                "CREATE INDEX audit_user_idx IF NOT EXISTS "
-                "FOR (a:AuditLog) ON (a.user_id)"
+                "CREATE INDEX audit_user_idx IF NOT EXISTS FOR (a:AuditLog) ON (a.user_id)",
             ),
             (
                 "audit_timestamp_idx",
-                "CREATE INDEX audit_timestamp_idx IF NOT EXISTS "
-                "FOR (a:AuditLog) ON (a.timestamp)"
+                "CREATE INDEX audit_timestamp_idx IF NOT EXISTS FOR (a:AuditLog) ON (a.timestamp)",
             ),
             (
                 "audit_correlation_idx",
                 "CREATE INDEX audit_correlation_idx IF NOT EXISTS "
-                "FOR (a:AuditLog) ON (a.correlation_id)"
+                "FOR (a:AuditLog) ON (a.correlation_id)",
             ),
-
             # Event indexes
             (
                 "event_type_idx",
-                "CREATE INDEX event_type_idx IF NOT EXISTS "
-                "FOR (e:Event) ON (e.type)"
+                "CREATE INDEX event_type_idx IF NOT EXISTS FOR (e:Event) ON (e.type)",
             ),
             (
                 "event_source_idx",
-                "CREATE INDEX event_source_idx IF NOT EXISTS "
-                "FOR (e:Event) ON (e.source)"
+                "CREATE INDEX event_source_idx IF NOT EXISTS FOR (e:Event) ON (e.source)",
             ),
             (
                 "event_timestamp_idx",
-                "CREATE INDEX event_timestamp_idx IF NOT EXISTS "
-                "FOR (e:Event) ON (e.timestamp)"
+                "CREATE INDEX event_timestamp_idx IF NOT EXISTS FOR (e:Event) ON (e.timestamp)",
             ),
-
             # ═══════════════════════════════════════════════════════════════
             # GRAPH EXTENSIONS: Temporal Indexes
             # ═══════════════════════════════════════════════════════════════
-
             # CapsuleVersion indexes
             (
                 "version_capsule_idx",
                 "CREATE INDEX version_capsule_idx IF NOT EXISTS "
-                "FOR (v:CapsuleVersion) ON (v.capsule_id)"
+                "FOR (v:CapsuleVersion) ON (v.capsule_id)",
             ),
             (
                 "version_timestamp_idx",
                 "CREATE INDEX version_timestamp_idx IF NOT EXISTS "
-                "FOR (v:CapsuleVersion) ON (v.created_at)"
+                "FOR (v:CapsuleVersion) ON (v.created_at)",
             ),
             (
                 "version_type_idx",
                 "CREATE INDEX version_type_idx IF NOT EXISTS "
-                "FOR (v:CapsuleVersion) ON (v.snapshot_type)"
+                "FOR (v:CapsuleVersion) ON (v.snapshot_type)",
             ),
             (
                 "version_creator_idx",
                 "CREATE INDEX version_creator_idx IF NOT EXISTS "
-                "FOR (v:CapsuleVersion) ON (v.created_by)"
+                "FOR (v:CapsuleVersion) ON (v.created_by)",
             ),
-
             # TrustSnapshot indexes
             (
                 "trustsnapshot_entity_idx",
                 "CREATE INDEX trustsnapshot_entity_idx IF NOT EXISTS "
-                "FOR (t:TrustSnapshot) ON (t.entity_id, t.entity_type)"
+                "FOR (t:TrustSnapshot) ON (t.entity_id, t.entity_type)",
             ),
             (
                 "trustsnapshot_time_idx",
                 "CREATE INDEX trustsnapshot_time_idx IF NOT EXISTS "
-                "FOR (t:TrustSnapshot) ON (t.timestamp)"
+                "FOR (t:TrustSnapshot) ON (t.timestamp)",
             ),
             (
                 "trustsnapshot_type_idx",
                 "CREATE INDEX trustsnapshot_type_idx IF NOT EXISTS "
-                "FOR (t:TrustSnapshot) ON (t.change_type)"
+                "FOR (t:TrustSnapshot) ON (t.change_type)",
             ),
-
             # GraphSnapshot indexes
             (
                 "graphsnapshot_time_idx",
                 "CREATE INDEX graphsnapshot_time_idx IF NOT EXISTS "
-                "FOR (g:GraphSnapshot) ON (g.created_at)"
+                "FOR (g:GraphSnapshot) ON (g.created_at)",
             ),
-
             # ═══════════════════════════════════════════════════════════════
             # GRAPH EXTENSIONS: Semantic Edge Indexes
             # ═══════════════════════════════════════════════════════════════
-
             # SemanticEdge indexes (for edge node pattern)
             (
                 "semanticedge_source_idx",
                 "CREATE INDEX semanticedge_source_idx IF NOT EXISTS "
-                "FOR (s:SemanticEdge) ON (s.source_id)"
+                "FOR (s:SemanticEdge) ON (s.source_id)",
             ),
             (
                 "semanticedge_target_idx",
                 "CREATE INDEX semanticedge_target_idx IF NOT EXISTS "
-                "FOR (s:SemanticEdge) ON (s.target_id)"
+                "FOR (s:SemanticEdge) ON (s.target_id)",
             ),
             (
                 "semanticedge_type_idx",
                 "CREATE INDEX semanticedge_type_idx IF NOT EXISTS "
-                "FOR (s:SemanticEdge) ON (s.relationship_type)"
+                "FOR (s:SemanticEdge) ON (s.relationship_type)",
             ),
             (
                 "semanticedge_confidence_idx",
                 "CREATE INDEX semanticedge_confidence_idx IF NOT EXISTS "
-                "FOR (s:SemanticEdge) ON (s.confidence)"
+                "FOR (s:SemanticEdge) ON (s.confidence)",
             ),
             (
                 "semanticedge_created_idx",
                 "CREATE INDEX semanticedge_created_idx IF NOT EXISTS "
-                "FOR (s:SemanticEdge) ON (s.created_at)"
+                "FOR (s:SemanticEdge) ON (s.created_at)",
             ),
-
             # ═══════════════════════════════════════════════════════════════
             # CHAT ROOM ACCESS CONTROL (Audit 6 - Session 4)
             # ═══════════════════════════════════════════════════════════════
-
             # ChatRoom indexes
             (
                 "chatroom_owner_idx",
-                "CREATE INDEX chatroom_owner_idx IF NOT EXISTS "
-                "FOR (r:ChatRoom) ON (r.owner_id)"
+                "CREATE INDEX chatroom_owner_idx IF NOT EXISTS FOR (r:ChatRoom) ON (r.owner_id)",
             ),
             (
                 "chatroom_visibility_idx",
                 "CREATE INDEX chatroom_visibility_idx IF NOT EXISTS "
-                "FOR (r:ChatRoom) ON (r.visibility)"
+                "FOR (r:ChatRoom) ON (r.visibility)",
             ),
             (
                 "chatroom_created_idx",
                 "CREATE INDEX chatroom_created_idx IF NOT EXISTS "
-                "FOR (r:ChatRoom) ON (r.created_at)"
+                "FOR (r:ChatRoom) ON (r.created_at)",
             ),
-
             # RoomMember indexes (stored as relationship properties or separate nodes)
             (
                 "roommember_user_idx",
-                "CREATE INDEX roommember_user_idx IF NOT EXISTS "
-                "FOR (m:RoomMember) ON (m.user_id)"
+                "CREATE INDEX roommember_user_idx IF NOT EXISTS FOR (m:RoomMember) ON (m.user_id)",
             ),
             (
                 "roommember_room_idx",
-                "CREATE INDEX roommember_room_idx IF NOT EXISTS "
-                "FOR (m:RoomMember) ON (m.room_id)"
+                "CREATE INDEX roommember_room_idx IF NOT EXISTS FOR (m:RoomMember) ON (m.room_id)",
             ),
             (
                 "roommember_role_idx",
-                "CREATE INDEX roommember_role_idx IF NOT EXISTS "
-                "FOR (m:RoomMember) ON (m.role)"
+                "CREATE INDEX roommember_role_idx IF NOT EXISTS FOR (m:RoomMember) ON (m.role)",
             ),
-
             # ChatMessage indexes
             (
                 "chatmessage_room_idx",
                 "CREATE INDEX chatmessage_room_idx IF NOT EXISTS "
-                "FOR (m:ChatMessage) ON (m.room_id)"
+                "FOR (m:ChatMessage) ON (m.room_id)",
             ),
             (
                 "chatmessage_sender_idx",
                 "CREATE INDEX chatmessage_sender_idx IF NOT EXISTS "
-                "FOR (m:ChatMessage) ON (m.sender_id)"
+                "FOR (m:ChatMessage) ON (m.sender_id)",
             ),
             (
                 "chatmessage_created_idx",
                 "CREATE INDEX chatmessage_created_idx IF NOT EXISTS "
-                "FOR (m:ChatMessage) ON (m.created_at)"
+                "FOR (m:ChatMessage) ON (m.created_at)",
             ),
         ]
 
@@ -524,7 +475,7 @@ class SchemaManager:
                 logger.error(
                     f"Unexpected error creating index: {name}",
                     error_type=type(e).__name__,
-                    error=str(e)
+                    error=str(e),
                 )
 
         return results
@@ -549,7 +500,7 @@ class SchemaManager:
                         `vector.similarity_function`: 'cosine'
                     }}
                 }}
-                """
+                """,
             ),
         ]
 
@@ -577,7 +528,9 @@ class SchemaManager:
                 )
             except ServiceUnavailable as e:
                 # Connection lost - re-raise as this is fatal
-                logger.critical(f"Database unavailable while creating vector index: {name}", error=str(e))
+                logger.critical(
+                    f"Database unavailable while creating vector index: {name}", error=str(e)
+                )
                 raise
             except Exception as e:  # Intentional broad catch: last-resort safety net after specific Neo4j exception handlers
                 # Unexpected error - log with full type info
@@ -612,7 +565,7 @@ class SchemaManager:
             logger.error(
                 "drop_all_blocked",
                 reason="Cannot drop schema in production without force=True",
-                environment=settings.app_env
+                environment=settings.app_env,
             )
             raise RuntimeError(
                 "drop_all() is blocked in production environment. "
@@ -624,15 +577,13 @@ class SchemaManager:
             "drop_all_executing",
             environment=settings.app_env,
             force=force,
-            warning="Dropping all schema elements - this action is destructive"
+            warning="Dropping all schema elements - this action is destructive",
         )
 
         results = {}
 
         # Get all constraints
-        constraints = await self.client.execute(
-            "SHOW CONSTRAINTS YIELD name RETURN name"
-        )
+        constraints = await self.client.execute("SHOW CONSTRAINTS YIELD name RETURN name")
 
         for constraint in constraints:
             name = constraint.get("name")
@@ -652,20 +603,20 @@ class SchemaManager:
                     results[f"drop_constraint_{name}"] = False
                     logger.error(f"Database error dropping constraint: {name}", error=str(e))
                 except ServiceUnavailable as e:
-                    logger.critical(f"Database unavailable while dropping constraint: {name}", error=str(e))
+                    logger.critical(
+                        f"Database unavailable while dropping constraint: {name}", error=str(e)
+                    )
                     raise
                 except Exception as e:  # Intentional broad catch: last-resort safety net after specific Neo4j exception handlers
                     results[f"drop_constraint_{name}"] = False
                     logger.error(
                         f"Unexpected error dropping constraint: {name}",
                         error_type=type(e).__name__,
-                        error=str(e)
+                        error=str(e),
                     )
 
         # Get all indexes
-        indexes = await self.client.execute(
-            "SHOW INDEXES YIELD name RETURN name"
-        )
+        indexes = await self.client.execute("SHOW INDEXES YIELD name RETURN name")
 
         for index in indexes:
             name = index.get("name")
@@ -685,14 +636,16 @@ class SchemaManager:
                     results[f"drop_index_{name}"] = False
                     logger.error(f"Database error dropping index: {name}", error=str(e))
                 except ServiceUnavailable as e:
-                    logger.critical(f"Database unavailable while dropping index: {name}", error=str(e))
+                    logger.critical(
+                        f"Database unavailable while dropping index: {name}", error=str(e)
+                    )
                     raise
                 except Exception as e:  # Intentional broad catch: last-resort safety net after specific Neo4j exception handlers
                     results[f"drop_index_{name}"] = False
                     logger.error(
                         f"Unexpected error dropping index: {name}",
                         error_type=type(e).__name__,
-                        error=str(e)
+                        error=str(e),
                     )
 
         return results
@@ -777,15 +730,11 @@ class SchemaManager:
         }
 
         # Get existing constraints
-        constraints = await self.client.execute(
-            "SHOW CONSTRAINTS YIELD name RETURN name"
-        )
+        constraints = await self.client.execute("SHOW CONSTRAINTS YIELD name RETURN name")
         existing_constraints = {c["name"] for c in constraints}
 
         # Get existing indexes
-        indexes = await self.client.execute(
-            "SHOW INDEXES YIELD name, type RETURN name, type"
-        )
+        indexes = await self.client.execute("SHOW INDEXES YIELD name, type RETURN name, type")
         existing_indexes = {i["name"] for i in indexes if i.get("type") != "VECTOR"}
         existing_vector = {i["name"] for i in indexes if i.get("type") == "VECTOR"}
 

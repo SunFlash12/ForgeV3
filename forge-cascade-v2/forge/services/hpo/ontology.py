@@ -23,6 +23,7 @@ logger = structlog.get_logger(__name__)
 @dataclass
 class HPODownloadProgress:
     """Progress tracking for HPO data download."""
+
     file_name: str
     total_bytes: int = 0
     downloaded_bytes: int = 0
@@ -43,7 +44,9 @@ class HPOOntologyService:
 
     # Official HPO download URLs
     HPO_OBO_URL = "http://purl.obolibrary.org/obo/hp.obo"
-    HPO_JSON_URL = "https://raw.githubusercontent.com/obophenotype/human-phenotype-ontology/master/hp.json"
+    HPO_JSON_URL = (
+        "https://raw.githubusercontent.com/obophenotype/human-phenotype-ontology/master/hp.json"
+    )
     HPO_ANNOTATIONS_URL = "http://purl.obolibrary.org/obo/hp/hpoa/phenotype.hpoa"
 
     def __init__(
@@ -193,7 +196,9 @@ class HPOOntologyService:
         return HPOTerm(
             hpo_id=hpo_id,
             name=node.get("lbl", "Unknown"),
-            definition=meta.get("definition", {}).get("val") if isinstance(meta.get("definition"), dict) else None,
+            definition=meta.get("definition", {}).get("val")
+            if isinstance(meta.get("definition"), dict)
+            else None,
             synonyms=[s for s in synonyms if s],
             is_obsolete=is_obsolete,
             xrefs=meta.get("xrefs", []) if isinstance(meta.get("xrefs"), list) else [],
@@ -495,6 +500,7 @@ class HPOOntologyService:
 # =============================================================================
 # Factory Function
 # =============================================================================
+
 
 def create_hpo_ontology_service(
     data_dir: str = "./data/hpo",

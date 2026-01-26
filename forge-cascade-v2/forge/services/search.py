@@ -33,15 +33,17 @@ logger = structlog.get_logger(__name__)
 
 class SearchMode(str, Enum):
     """Search modes available."""
-    SEMANTIC = "semantic"      # Vector similarity search
-    KEYWORD = "keyword"        # Keyword/full-text search
-    HYBRID = "hybrid"          # Combined semantic + keyword
-    EXACT = "exact"           # Exact content match
+
+    SEMANTIC = "semantic"  # Vector similarity search
+    KEYWORD = "keyword"  # Keyword/full-text search
+    HYBRID = "hybrid"  # Combined semantic + keyword
+    EXACT = "exact"  # Exact content match
 
 
 @dataclass
 class SearchFilters:
     """Filters for search queries."""
+
     capsule_types: list[CapsuleType] | None = None
     owner_ids: list[str] | None = None
     min_trust: int = 40
@@ -67,6 +69,7 @@ class SearchFilters:
 @dataclass
 class SearchRequest:
     """Search request configuration."""
+
     query: str
     mode: SearchMode = SearchMode.SEMANTIC
     limit: int = 10
@@ -80,6 +83,7 @@ class SearchRequest:
 @dataclass
 class SearchResultItem:
     """A single search result."""
+
     capsule: Capsule
     score: float
     highlights: list[str] = field(default_factory=list)
@@ -90,11 +94,17 @@ class SearchResultItem:
             "capsule": {
                 "id": self.capsule.id,
                 "title": self.capsule.title,
-                "content": self.capsule.content[:500] if len(self.capsule.content) > 500 else self.capsule.content,
-                "type": self.capsule.type.value if hasattr(self.capsule.type, 'value') else str(self.capsule.type),
+                "content": self.capsule.content[:500]
+                if len(self.capsule.content) > 500
+                else self.capsule.content,
+                "type": self.capsule.type.value
+                if hasattr(self.capsule.type, "value")
+                else str(self.capsule.type),
                 "owner_id": self.capsule.owner_id,
                 "tags": self.capsule.tags,
-                "created_at": self.capsule.created_at.isoformat() if self.capsule.created_at else None,
+                "created_at": self.capsule.created_at.isoformat()
+                if self.capsule.created_at
+                else None,
             },
             "score": self.score,
             "highlights": self.highlights,
@@ -105,6 +115,7 @@ class SearchResultItem:
 @dataclass
 class SearchResponse:
     """Search response with results and metadata."""
+
     query: str
     mode: str
     results: list[SearchResultItem]
@@ -172,6 +183,7 @@ class SearchService:
             SearchResponse with results
         """
         import time
+
         start_time = time.monotonic()
 
         results: list[SearchResultItem] = []
@@ -191,11 +203,15 @@ class SearchService:
             # Apply post-processing
             results = self._apply_boosts(results, request)
             results = self._filter_by_score(results, request.min_score)
-            results = results[request.offset:request.offset + request.limit]
+            results = results[request.offset : request.offset + request.limit]
 
         except (RuntimeError, ValueError, TypeError, OSError, ConnectionError) as e:
             # SECURITY FIX (Audit 3): Truncate search query in error logs to prevent sensitive data leakage
-            logger.error("search_failed", error=str(e), query=request.query[:50] + ("..." if len(request.query) > 50 else ""))
+            logger.error(
+                "search_failed",
+                error=str(e),
+                query=request.query[:50] + ("..." if len(request.query) > 50 else ""),
+            )
             results = []
 
         took_ms = (time.monotonic() - start_time) * 1000
@@ -241,7 +257,9 @@ class SearchService:
                 query_embedding=query_embedding,
                 limit=request.limit * 2,  # Get more for filtering
                 min_trust=request.filters.min_trust,
-                capsule_type=request.filters.capsule_types[0] if request.filters.capsule_types else None,
+                capsule_type=request.filters.capsule_types[0]
+                if request.filters.capsule_types
+                else None,
                 owner_id=request.filters.owner_ids[0] if request.filters.owner_ids else None,
             )
 
@@ -351,6 +369,7 @@ class SearchService:
         regex patterns that cause ReDoS or unexpected behavior.
         """
         import re
+
         # Escape all regex metacharacters
         return re.escape(text)
 
@@ -418,9 +437,7 @@ class SearchService:
         semantic_task = self._semantic_search(request)
         keyword_task = self._keyword_search(request)
 
-        semantic_results, keyword_results = await asyncio.gather(
-            semantic_task, keyword_task
-        )
+        semantic_results, keyword_results = await asyncio.gather(semantic_task, keyword_task)
 
         # Merge results, preferring semantic matches
         seen_ids = set()

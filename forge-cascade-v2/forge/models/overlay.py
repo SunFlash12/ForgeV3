@@ -28,22 +28,22 @@ class Capability(str, Enum):
     Follows principle of least privilege.
     """
 
-    NETWORK_ACCESS = "NETWORK_ACCESS"       # Can make HTTP requests
-    DATABASE_READ = "DATABASE_READ"         # Can read from Neo4j
-    DATABASE_WRITE = "DATABASE_WRITE"       # Can write to Neo4j
-    EVENT_PUBLISH = "EVENT_PUBLISH"         # Can publish events
-    EVENT_SUBSCRIBE = "EVENT_SUBSCRIBE"     # Can subscribe to events
-    CAPSULE_CREATE = "CAPSULE_CREATE"       # Can create capsules
-    CAPSULE_READ = "CAPSULE_READ"           # Can read capsules
-    CAPSULE_WRITE = "CAPSULE_WRITE"         # Can write/update capsules
-    CAPSULE_MODIFY = "CAPSULE_MODIFY"       # Can modify capsules
-    CAPSULE_DELETE = "CAPSULE_DELETE"       # Can delete capsules
-    GOVERNANCE_VOTE = "GOVERNANCE_VOTE"     # Can vote on proposals
+    NETWORK_ACCESS = "NETWORK_ACCESS"  # Can make HTTP requests
+    DATABASE_READ = "DATABASE_READ"  # Can read from Neo4j
+    DATABASE_WRITE = "DATABASE_WRITE"  # Can write to Neo4j
+    EVENT_PUBLISH = "EVENT_PUBLISH"  # Can publish events
+    EVENT_SUBSCRIBE = "EVENT_SUBSCRIBE"  # Can subscribe to events
+    CAPSULE_CREATE = "CAPSULE_CREATE"  # Can create capsules
+    CAPSULE_READ = "CAPSULE_READ"  # Can read capsules
+    CAPSULE_WRITE = "CAPSULE_WRITE"  # Can write/update capsules
+    CAPSULE_MODIFY = "CAPSULE_MODIFY"  # Can modify capsules
+    CAPSULE_DELETE = "CAPSULE_DELETE"  # Can delete capsules
+    GOVERNANCE_VOTE = "GOVERNANCE_VOTE"  # Can vote on proposals
     GOVERNANCE_PROPOSE = "GOVERNANCE_PROPOSE"  # Can create proposals
     GOVERNANCE_EXECUTE = "GOVERNANCE_EXECUTE"  # Can execute passed proposals
-    USER_READ = "USER_READ"                 # Can read user data
-    SYSTEM_CONFIG = "SYSTEM_CONFIG"         # Can modify system config
-    LLM_ACCESS = "LLM_ACCESS"               # Can call LLM APIs
+    USER_READ = "USER_READ"  # Can read user data
+    SYSTEM_CONFIG = "SYSTEM_CONFIG"  # Can modify system config
+    LLM_ACCESS = "LLM_ACCESS"  # Can call LLM APIs
 
 
 # Core overlay capability sets

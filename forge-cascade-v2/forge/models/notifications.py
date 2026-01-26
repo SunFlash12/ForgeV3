@@ -54,6 +54,7 @@ class NotificationEvent(str, Enum):
 
 class NotificationPriority(str, Enum):
     """Priority levels for notifications."""
+
     LOW = "low"
     NORMAL = "normal"
     HIGH = "high"
@@ -62,6 +63,7 @@ class NotificationPriority(str, Enum):
 
 class DeliveryChannel(str, Enum):
     """Delivery channels for notifications."""
+
     IN_APP = "in_app"
     WEBHOOK = "webhook"
     EMAIL = "email"  # Future
@@ -70,6 +72,7 @@ class DeliveryChannel(str, Enum):
 
 class DigestFrequency(str, Enum):
     """Frequency for notification digests."""
+
     HOURLY = "hourly"
     DAILY = "daily"
     WEEKLY = "weekly"
@@ -89,16 +92,13 @@ class WebhookSubscription(ForgeModel):
 
     # Event filtering
     events: list[NotificationEvent] = Field(
-        default_factory=list,
-        description="Events to subscribe to (empty = all events)"
+        default_factory=list, description="Events to subscribe to (empty = all events)"
     )
     filter_capsule_types: list[str] = Field(
-        default_factory=list,
-        description="Only capsule events for these types"
+        default_factory=list, description="Only capsule events for these types"
     )
     filter_min_priority: NotificationPriority = Field(
-        default=NotificationPriority.LOW,
-        description="Minimum priority to send"
+        default=NotificationPriority.LOW, description="Minimum priority to send"
     )
 
     # State

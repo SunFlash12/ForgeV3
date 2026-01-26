@@ -37,15 +37,15 @@ DEFAULT_REGEX_TIMEOUT = 1.0
 # Patterns that indicate potential ReDoS vulnerability
 # These are patterns known to cause catastrophic backtracking
 REDOS_SUSPICIOUS_PATTERNS = [
-    r'\(.*\+.*\)\+',           # Nested quantifiers like (a+)+
-    r'\(.*\*.*\)\*',           # Nested quantifiers like (a*)*
-    r'\(.*\+.*\)\*',           # Mixed nested quantifiers
-    r'\(.*\*.*\)\+',           # Mixed nested quantifiers
-    r'\(.*\{.*\}.*\)\{',       # Nested counted quantifiers
-    r'\(.*\|.*\)\+',           # Alternation with quantifier
-    r'\(.*\|.*\)\*',           # Alternation with quantifier
-    r'\.[\*\+]\.\*',           # Overlapping wildcards
-    r'\[.*\][\*\+]\[.*\][\*\+]',  # Adjacent character classes with quantifiers
+    r"\(.*\+.*\)\+",  # Nested quantifiers like (a+)+
+    r"\(.*\*.*\)\*",  # Nested quantifiers like (a*)*
+    r"\(.*\+.*\)\*",  # Mixed nested quantifiers
+    r"\(.*\*.*\)\+",  # Mixed nested quantifiers
+    r"\(.*\{.*\}.*\)\{",  # Nested counted quantifiers
+    r"\(.*\|.*\)\+",  # Alternation with quantifier
+    r"\(.*\|.*\)\*",  # Alternation with quantifier
+    r"\.[\*\+]\.\*",  # Overlapping wildcards
+    r"\[.*\][\*\+]\[.*\][\*\+]",  # Adjacent character classes with quantifiers
 ]
 
 # Thread pool for timeout execution
@@ -62,11 +62,13 @@ def _get_executor() -> ThreadPoolExecutor:
 
 class RegexValidationError(Exception):
     """Raised when a regex pattern fails validation."""
+
     pass
 
 
 class RegexTimeoutError(Exception):
     """Raised when a regex operation times out."""
+
     pass
 
 
@@ -137,7 +139,9 @@ def safe_compile(pattern: str, flags: int = 0, validate: bool = True) -> Pattern
         raise RegexValidationError(f"Failed to compile pattern: {e}")
 
 
-def _run_with_timeout(func: Callable[..., Any], *args: Any, timeout: float = DEFAULT_REGEX_TIMEOUT) -> Any:
+def _run_with_timeout(
+    func: Callable[..., Any], *args: Any, timeout: float = DEFAULT_REGEX_TIMEOUT
+) -> Any:
     """
     Run a function with a timeout.
 
@@ -166,7 +170,7 @@ def safe_match(
     string: str,
     flags: int = 0,
     timeout: float = DEFAULT_REGEX_TIMEOUT,
-    validate: bool = True
+    validate: bool = True,
 ) -> Match[str] | None:
     """
     Safely perform re.match with timeout and validation.
@@ -189,7 +193,9 @@ def safe_match(
     if len(string) > MAX_INPUT_LENGTH:
         original_length = len(string)
         string = string[:MAX_INPUT_LENGTH]
-        logger.warning("regex_input_truncated", original_length=original_length, max_length=MAX_INPUT_LENGTH)
+        logger.warning(
+            "regex_input_truncated", original_length=original_length, max_length=MAX_INPUT_LENGTH
+        )
 
     compiled = safe_compile(pattern, flags, validate)
     result: Match[str] | None = _run_with_timeout(compiled.match, string, timeout=timeout)
@@ -201,7 +207,7 @@ def safe_search(
     string: str,
     flags: int = 0,
     timeout: float = DEFAULT_REGEX_TIMEOUT,
-    validate: bool = True
+    validate: bool = True,
 ) -> Match[str] | None:
     """
     Safely perform re.search with timeout and validation.
@@ -224,7 +230,9 @@ def safe_search(
     if len(string) > MAX_INPUT_LENGTH:
         original_length = len(string)
         string = string[:MAX_INPUT_LENGTH]
-        logger.warning("regex_input_truncated", original_length=original_length, max_length=MAX_INPUT_LENGTH)
+        logger.warning(
+            "regex_input_truncated", original_length=original_length, max_length=MAX_INPUT_LENGTH
+        )
 
     compiled = safe_compile(pattern, flags, validate)
     result: Match[str] | None = _run_with_timeout(compiled.search, string, timeout=timeout)
@@ -237,7 +245,7 @@ def safe_findall(
     flags: int = 0,
     timeout: float = DEFAULT_REGEX_TIMEOUT,
     validate: bool = True,
-    max_results: int = 1000
+    max_results: int = 1000,
 ) -> list[Any]:
     """
     Safely perform re.findall with timeout and validation.
@@ -261,14 +269,18 @@ def safe_findall(
     if len(string) > MAX_INPUT_LENGTH:
         original_length = len(string)
         string = string[:MAX_INPUT_LENGTH]
-        logger.warning("regex_input_truncated", original_length=original_length, max_length=MAX_INPUT_LENGTH)
+        logger.warning(
+            "regex_input_truncated", original_length=original_length, max_length=MAX_INPUT_LENGTH
+        )
 
     compiled = safe_compile(pattern, flags, validate)
     results: list[Any] = _run_with_timeout(compiled.findall, string, timeout=timeout)
 
     # Limit result count
     if len(results) > max_results:
-        logger.warning("regex_results_truncated", original_count=len(results), max_results=max_results)
+        logger.warning(
+            "regex_results_truncated", original_count=len(results), max_results=max_results
+        )
         truncated: list[Any] = results[:max_results]
         return truncated
 
@@ -282,7 +294,7 @@ def safe_sub(
     count: int = 0,
     flags: int = 0,
     timeout: float = DEFAULT_REGEX_TIMEOUT,
-    validate: bool = True
+    validate: bool = True,
 ) -> str:
     """
     Safely perform re.sub with timeout and validation.
@@ -307,7 +319,9 @@ def safe_sub(
     if len(string) > MAX_INPUT_LENGTH:
         original_length = len(string)
         string = string[:MAX_INPUT_LENGTH]
-        logger.warning("regex_input_truncated", original_length=original_length, max_length=MAX_INPUT_LENGTH)
+        logger.warning(
+            "regex_input_truncated", original_length=original_length, max_length=MAX_INPUT_LENGTH
+        )
 
     compiled = safe_compile(pattern, flags, validate)
     result: str = _run_with_timeout(compiled.sub, repl, string, count, timeout=timeout)

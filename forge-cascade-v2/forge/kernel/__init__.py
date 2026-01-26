@@ -71,7 +71,6 @@ __all__ = [
     "shutdown_event_bus",
     "emit",
     "on",
-
     # Overlay Manager
     "OverlayManager",
     "OverlayRegistry",
@@ -82,7 +81,6 @@ __all__ = [
     "get_overlay_manager",
     "init_overlay_manager",
     "shutdown_overlay_manager",
-
     # Pipeline
     "Pipeline",
     "CascadePipeline",  # Alias
@@ -97,7 +95,6 @@ __all__ = [
     "get_pipeline",
     "init_pipeline",
     "shutdown_pipeline",
-
     # WASM Runtime
     "SecurityError",
     "OverlaySecurityMode",

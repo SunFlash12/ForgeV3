@@ -39,6 +39,7 @@ from forge.security.capsule_integrity import CapsuleIntegrityService
 # Fixtures
 # =============================================================================
 
+
 @pytest.fixture
 def mock_db_client():
     """Create mock database client."""
@@ -86,11 +87,14 @@ def sample_capsule_data():
 # Capsule Creation Tests
 # =============================================================================
 
+
 class TestCapsuleRepositoryCreate:
     """Tests for capsule creation."""
 
     @pytest.mark.asyncio
-    async def test_create_capsule_success(self, capsule_repository, mock_db_client, sample_capsule_data):
+    async def test_create_capsule_success(
+        self, capsule_repository, mock_db_client, sample_capsule_data
+    ):
         """Successful capsule creation."""
         mock_db_client.execute_single.return_value = {"capsule": sample_capsule_data}
 
@@ -112,7 +116,9 @@ class TestCapsuleRepositoryCreate:
         mock_db_client.execute_single.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_create_capsule_with_embedding(self, capsule_repository, mock_db_client, sample_capsule_data):
+    async def test_create_capsule_with_embedding(
+        self, capsule_repository, mock_db_client, sample_capsule_data
+    ):
         """Capsule creation with embedding vector."""
         sample_capsule_data["embedding"] = [0.1, 0.2, 0.3]
         mock_db_client.execute_single.return_value = {"capsule": sample_capsule_data}
@@ -134,7 +140,9 @@ class TestCapsuleRepositoryCreate:
         assert params["embedding"] == [0.1, 0.2, 0.3]
 
     @pytest.mark.asyncio
-    async def test_create_capsule_with_parent(self, capsule_repository, mock_db_client, sample_capsule_data):
+    async def test_create_capsule_with_parent(
+        self, capsule_repository, mock_db_client, sample_capsule_data
+    ):
         """Capsule creation with parent (fork)."""
         # First call returns parent data, second returns created capsule
         parent_data = {
@@ -145,10 +153,7 @@ class TestCapsuleRepositoryCreate:
         sample_capsule_data["parent_id"] = "parent123"
         sample_capsule_data["parent_content_hash"] = "parent_hash_123"
 
-        mock_db_client.execute_single.side_effect = [
-            parent_data,
-            {"capsule": sample_capsule_data}
-        ]
+        mock_db_client.execute_single.side_effect = [parent_data, {"capsule": sample_capsule_data}]
 
         capsule_create = CapsuleCreate(
             content="Forked content",
@@ -166,7 +171,9 @@ class TestCapsuleRepositoryCreate:
         assert result.parent_id == "parent123"
 
     @pytest.mark.asyncio
-    async def test_create_capsule_computes_content_hash(self, capsule_repository, mock_db_client, sample_capsule_data):
+    async def test_create_capsule_computes_content_hash(
+        self, capsule_repository, mock_db_client, sample_capsule_data
+    ):
         """Capsule creation computes content hash."""
         mock_db_client.execute_single.return_value = {"capsule": sample_capsule_data}
 
@@ -193,11 +200,14 @@ class TestCapsuleRepositoryCreate:
 # Capsule Update Tests
 # =============================================================================
 
+
 class TestCapsuleRepositoryUpdate:
     """Tests for capsule update operations."""
 
     @pytest.mark.asyncio
-    async def test_update_capsule_content(self, capsule_repository, mock_db_client, sample_capsule_data):
+    async def test_update_capsule_content(
+        self, capsule_repository, mock_db_client, sample_capsule_data
+    ):
         """Update capsule content recomputes hash."""
         sample_capsule_data["content"] = "Updated content"
         mock_db_client.execute_single.return_value = {"capsule": sample_capsule_data}
@@ -211,7 +221,9 @@ class TestCapsuleRepositoryUpdate:
         assert "content_hash" in params
 
     @pytest.mark.asyncio
-    async def test_update_capsule_with_authorization(self, capsule_repository, mock_db_client, sample_capsule_data):
+    async def test_update_capsule_with_authorization(
+        self, capsule_repository, mock_db_client, sample_capsule_data
+    ):
         """Update capsule checks caller_id authorization."""
         mock_db_client.execute_single.return_value = {"capsule": sample_capsule_data}
 
@@ -225,12 +237,14 @@ class TestCapsuleRepositoryUpdate:
         assert "owner_id = $caller_id" in query
 
     @pytest.mark.asyncio
-    async def test_update_capsule_unauthorized_logs_warning(self, capsule_repository, mock_db_client, sample_capsule_data):
+    async def test_update_capsule_unauthorized_logs_warning(
+        self, capsule_repository, mock_db_client, sample_capsule_data
+    ):
         """Unauthorized update logs warning."""
         # First query returns None (unauthorized), second returns owner info
         mock_db_client.execute_single.side_effect = [
             None,  # Update failed
-            {"owner_id": "other_user"}  # Owner check
+            {"owner_id": "other_user"},  # Owner check
         ]
 
         update = CapsuleUpdate(title="New Title")
@@ -242,6 +256,7 @@ class TestCapsuleRepositoryUpdate:
 # =============================================================================
 # Capsule Retrieval Tests
 # =============================================================================
+
 
 class TestCapsuleRepositoryRetrieval:
     """Tests for capsule retrieval operations."""
@@ -257,7 +272,9 @@ class TestCapsuleRepositoryRetrieval:
         assert result[0].owner_id == "user123"
 
     @pytest.mark.asyncio
-    async def test_get_by_owner_includes_archived(self, capsule_repository, mock_db_client, sample_capsule_data):
+    async def test_get_by_owner_includes_archived(
+        self, capsule_repository, mock_db_client, sample_capsule_data
+    ):
         """Get capsules including archived."""
         sample_capsule_data["is_archived"] = True
         mock_db_client.execute.return_value = [{"capsule": sample_capsule_data}]
@@ -298,6 +315,7 @@ class TestCapsuleRepositoryRetrieval:
 # Lineage Tests
 # =============================================================================
 
+
 class TestCapsuleRepositoryLineage:
     """Tests for capsule lineage operations."""
 
@@ -306,15 +324,17 @@ class TestCapsuleRepositoryLineage:
         """Get capsule with full lineage."""
         lineage_result = {
             "capsule": sample_capsule_data,
-            "lineage": [{
-                "id": "ancestor1",
-                "version": "1.0.0",
-                "title": "Ancestor",
-                "type": "insight",
-                "created_at": datetime.now(UTC).isoformat(),
-                "trust_level": 60,
-                "depth": 1,
-            }],
+            "lineage": [
+                {
+                    "id": "ancestor1",
+                    "version": "1.0.0",
+                    "title": "Ancestor",
+                    "type": "insight",
+                    "created_at": datetime.now(UTC).isoformat(),
+                    "trust_level": 60,
+                    "depth": 1,
+                }
+            ],
             "children": [],
             "lineage_depth": 1,
         }
@@ -350,8 +370,17 @@ class TestCapsuleRepositoryLineage:
     async def test_get_descendants_with_depth_limit(self, capsule_repository, mock_db_client):
         """Get descendants respects max depth."""
         mock_db_client.execute.return_value = [
-            {"node": {"id": "desc1", "version": "1.0.0", "title": "Desc", "type": "insight",
-                     "created_at": datetime.now(UTC).isoformat(), "trust_level": 60, "depth": 1}}
+            {
+                "node": {
+                    "id": "desc1",
+                    "version": "1.0.0",
+                    "title": "Desc",
+                    "type": "insight",
+                    "created_at": datetime.now(UTC).isoformat(),
+                    "trust_level": 60,
+                    "depth": 1,
+                }
+            }
         ]
 
         result = await capsule_repository.get_descendants("cap123", max_depth=5)
@@ -388,6 +417,7 @@ class TestCapsuleRepositoryLineage:
 # Archive Tests
 # =============================================================================
 
+
 class TestCapsuleRepositoryArchive:
     """Tests for capsule archive operations."""
 
@@ -415,15 +445,16 @@ class TestCapsuleRepositoryArchive:
 # Semantic Search Tests
 # =============================================================================
 
+
 class TestCapsuleRepositorySemanticSearch:
     """Tests for semantic search operations."""
 
     @pytest.mark.asyncio
-    async def test_semantic_search_success(self, capsule_repository, mock_db_client, sample_capsule_data):
+    async def test_semantic_search_success(
+        self, capsule_repository, mock_db_client, sample_capsule_data
+    ):
         """Semantic search returns scored results."""
-        mock_db_client.execute.return_value = [
-            {"capsule": sample_capsule_data, "score": 0.95}
-        ]
+        mock_db_client.execute.return_value = [{"capsule": sample_capsule_data, "score": 0.95}]
 
         embedding = [0.1] * 1536
         result = await capsule_repository.semantic_search(
@@ -435,11 +466,11 @@ class TestCapsuleRepositorySemanticSearch:
         assert result[0].score == 0.95
 
     @pytest.mark.asyncio
-    async def test_semantic_search_with_filters(self, capsule_repository, mock_db_client, sample_capsule_data):
+    async def test_semantic_search_with_filters(
+        self, capsule_repository, mock_db_client, sample_capsule_data
+    ):
         """Semantic search with type and owner filters."""
-        mock_db_client.execute.return_value = [
-            {"capsule": sample_capsule_data, "score": 0.9}
-        ]
+        mock_db_client.execute.return_value = [{"capsule": sample_capsule_data, "score": 0.9}]
 
         embedding = [0.1] * 1536
         await capsule_repository.semantic_search(
@@ -469,11 +500,11 @@ class TestCapsuleRepositorySemanticSearch:
         assert result == []
 
     @pytest.mark.asyncio
-    async def test_find_similar_by_embedding(self, capsule_repository, mock_db_client, sample_capsule_data):
+    async def test_find_similar_by_embedding(
+        self, capsule_repository, mock_db_client, sample_capsule_data
+    ):
         """Find similar capsules by embedding."""
-        mock_db_client.execute.return_value = [
-            {"capsule": sample_capsule_data, "score": 0.85}
-        ]
+        mock_db_client.execute.return_value = [{"capsule": sample_capsule_data, "score": 0.85}]
 
         embedding = [0.1] * 1536
         result = await capsule_repository.find_similar_by_embedding(
@@ -490,6 +521,7 @@ class TestCapsuleRepositorySemanticSearch:
 # =============================================================================
 # Integrity Verification Tests
 # =============================================================================
+
 
 class TestCapsuleRepositoryIntegrity:
     """Tests for capsule integrity verification."""
@@ -568,6 +600,7 @@ class TestCapsuleRepositoryIntegrity:
 # =============================================================================
 # Semantic Edge Tests
 # =============================================================================
+
 
 class TestCapsuleRepositorySemanticEdges:
     """Tests for semantic edge operations."""
@@ -714,6 +747,7 @@ class TestCapsuleRepositorySemanticEdges:
 # Federation Sync Tests
 # =============================================================================
 
+
 class TestCapsuleRepositoryFederation:
     """Tests for federation sync operations."""
 
@@ -738,7 +772,14 @@ class TestCapsuleRepositoryFederation:
     async def test_get_edges_since(self, capsule_repository, mock_db_client):
         """Get edge changes since timestamp."""
         mock_db_client.execute.return_value = [
-            {"edge": {"id": "e1->e2", "source_id": "e1", "target_id": "e2", "relationship_type": "DERIVED_FROM"}}
+            {
+                "edge": {
+                    "id": "e1->e2",
+                    "source_id": "e1",
+                    "target_id": "e2",
+                    "relationship_type": "DERIVED_FROM",
+                }
+            }
         ]
 
         since = datetime.now(UTC) - timedelta(hours=1)

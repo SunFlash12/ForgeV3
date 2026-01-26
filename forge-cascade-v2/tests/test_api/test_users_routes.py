@@ -22,6 +22,7 @@ from forge.models.user import AuthProvider, User, UserRole
 # Fixtures
 # =============================================================================
 
+
 @pytest.fixture
 def sample_user():
     """Create sample user for testing."""
@@ -61,6 +62,7 @@ def admin_user():
 # =============================================================================
 # User Search Tests
 # =============================================================================
+
 
 class TestUserSearchRoute:
     """Tests for GET /users/search endpoint."""
@@ -135,6 +137,7 @@ class TestUserSearchRoute:
 # User List Tests (Admin)
 # =============================================================================
 
+
 class TestUserListRoute:
     """Tests for GET /users endpoint (admin only)."""
 
@@ -202,6 +205,7 @@ class TestUserListRoute:
 # Get User By ID Tests
 # =============================================================================
 
+
 class TestGetUserRoute:
     """Tests for GET /users/{user_id} endpoint."""
 
@@ -239,6 +243,7 @@ class TestGetUserRoute:
 # =============================================================================
 # User Capsules Tests
 # =============================================================================
+
 
 class TestUserCapsulesRoute:
     """Tests for GET /users/{user_id}/capsules endpoint."""
@@ -287,6 +292,7 @@ class TestUserCapsulesRoute:
 # User Activity Tests
 # =============================================================================
 
+
 class TestUserActivityRoute:
     """Tests for GET /users/{user_id}/activity endpoint."""
 
@@ -324,6 +330,7 @@ class TestUserActivityRoute:
 # User Governance Tests
 # =============================================================================
 
+
 class TestUserGovernanceRoute:
     """Tests for GET /users/{user_id}/governance endpoint."""
 
@@ -349,14 +356,18 @@ class TestUserGovernanceRoute:
 # Admin Update User Tests
 # =============================================================================
 
+
 class TestAdminUpdateUserRoute:
     """Tests for PATCH /users/{user_id} endpoint (admin only)."""
 
     def test_update_unauthorized(self, client: TestClient):
         """Update user without auth fails."""
-        response = client.patch("/api/v1/users/user123", json={
-            "trust_flame": 80,
-        })
+        response = client.patch(
+            "/api/v1/users/user123",
+            json={
+                "trust_flame": 80,
+            },
+        )
 
         assert response.status_code == 401
 
@@ -399,15 +410,19 @@ class TestAdminUpdateUserRoute:
 # Update Trust Level Tests
 # =============================================================================
 
+
 class TestUpdateTrustRoute:
     """Tests for PUT /users/{user_id}/trust endpoint (admin only)."""
 
     def test_update_trust_unauthorized(self, client: TestClient):
         """Update trust without auth fails."""
-        response = client.put("/api/v1/users/user123/trust", json={
-            "trust_flame": 80,
-            "reason": "Good behavior in the community",
-        })
+        response = client.put(
+            "/api/v1/users/user123/trust",
+            json={
+                "trust_flame": 80,
+                "reason": "Good behavior in the community",
+            },
+        )
 
         assert response.status_code == 401
 
@@ -457,6 +472,7 @@ class TestUpdateTrustRoute:
 # =============================================================================
 # IDOR Protection Tests
 # =============================================================================
+
 
 class TestIDORProtection:
     """Tests for IDOR (Insecure Direct Object Reference) protection."""

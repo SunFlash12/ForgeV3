@@ -12,6 +12,7 @@ from typing import Any
 
 class PhenotypeSeverity(str, Enum):
     """Severity of a phenotype presentation."""
+
     MILD = "mild"
     MODERATE = "moderate"
     SEVERE = "severe"
@@ -21,12 +22,13 @@ class PhenotypeSeverity(str, Enum):
 
 class PhenotypeOccurrence(str, Enum):
     """Frequency of phenotype occurrence in a disease."""
-    ALWAYS = "always"              # 100%
+
+    ALWAYS = "always"  # 100%
     VERY_FREQUENT = "very_frequent"  # 80-99%
-    FREQUENT = "frequent"          # 30-79%
-    OCCASIONAL = "occasional"      # 5-29%
-    RARE = "rare"                  # 1-4%
-    EXCLUDED = "excluded"          # 0%
+    FREQUENT = "frequent"  # 30-79%
+    OCCASIONAL = "occasional"  # 5-29%
+    RARE = "rare"  # 1-4%
+    EXCLUDED = "excluded"  # 0%
     UNKNOWN = "unknown"
 
 
@@ -38,9 +40,10 @@ class HPOTerm:
     HPO provides a standardized vocabulary for phenotypic abnormalities.
     Each term has an ID (e.g., HP:0001250) and a name (e.g., "Seizure").
     """
-    hpo_id: str                     # e.g., "HP:0001250"
-    name: str                       # e.g., "Seizure"
-    definition: str | None = None   # Full definition text
+
+    hpo_id: str  # e.g., "HP:0001250"
+    name: str  # e.g., "Seizure"
+    definition: str | None = None  # Full definition text
     synonyms: list[str] = field(default_factory=list)
     parents: list[str] = field(default_factory=list)  # Parent HPO IDs
     children: list[str] = field(default_factory=list)  # Child HPO IDs
@@ -48,7 +51,7 @@ class HPOTerm:
     replaced_by: str | None = None  # If obsolete, new term
 
     # Additional metadata
-    category: str | None = None     # Top-level category
+    category: str | None = None  # Top-level category
     xrefs: list[str] = field(default_factory=list)  # Cross-references (UMLS, SNOMED)
     created_at: datetime | None = None
 
@@ -80,13 +83,14 @@ class HPOAnnotation:
 
     Links an HPO term to a disease with frequency information.
     """
+
     hpo_id: str
-    disease_id: str               # MONDO, OMIM, or ORPHA ID
+    disease_id: str  # MONDO, OMIM, or ORPHA ID
     disease_name: str
     occurrence: PhenotypeOccurrence = PhenotypeOccurrence.UNKNOWN
-    onset: str | None = None      # Age of onset (HPO term)
-    modifier: str | None = None   # Severity modifier
-    source: str | None = None     # Evidence source (PMID, expert)
+    onset: str | None = None  # Age of onset (HPO term)
+    modifier: str | None = None  # Severity modifier
+    source: str | None = None  # Evidence source (PMID, expert)
     evidence_code: str | None = None  # PCS, IEA, TAS
 
     @property
@@ -111,18 +115,19 @@ class PhenotypeMatch:
 
     Used in phenotype extraction and normalization.
     """
+
     hpo_id: str
     hpo_name: str
-    match_type: str               # "exact", "synonym", "semantic", "parent"
-    confidence: float             # 0.0 to 1.0
-    original_text: str            # The text that was matched
+    match_type: str  # "exact", "synonym", "semantic", "parent"
+    confidence: float  # 0.0 to 1.0
+    original_text: str  # The text that was matched
     character_offset: tuple[int, int] | None = None  # Start, end position
 
     # Additional context
-    negated: bool = False         # True if phenotype is absent
+    negated: bool = False  # True if phenotype is absent
     severity: PhenotypeSeverity = PhenotypeSeverity.UNKNOWN
     laterality: str | None = None  # "left", "right", "bilateral"
-    temporal: str | None = None    # "onset", "progression", etc.
+    temporal: str | None = None  # "onset", "progression", etc.
 
     def __lt__(self, other: "PhenotypeMatch") -> bool:
         """Enable sorting by confidence."""
@@ -136,10 +141,11 @@ class ExtractedPhenotype:
 
     Contains the matched HPO term, context, and extraction metadata.
     """
+
     hpo_id: str
     hpo_name: str
     original_text: str
-    context: str | None = None     # Surrounding text for context
+    context: str | None = None  # Surrounding text for context
 
     # Match quality
     confidence: float = 0.0
@@ -182,6 +188,7 @@ class HPOHierarchy:
 
     Stores parent-child relationships and precomputed paths.
     """
+
     terms: dict[str, HPOTerm] = field(default_factory=dict)
     parent_map: dict[str, set[str]] = field(default_factory=dict)
     child_map: dict[str, set[str]] = field(default_factory=dict)
@@ -280,6 +287,7 @@ class HPOHierarchy:
             return 0.0
 
         import math
+
         ic_lca = -math.log(lca_desc / total)
         ic_term1 = -math.log(term1_desc / total)
         ic_term2 = -math.log(term2_desc / total)

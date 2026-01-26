@@ -13,10 +13,10 @@ import structlog
 logger = structlog.get_logger(__name__)
 
 # Valid patterns (case-insensitive for user convenience, ASCII-only for security)
-HPO_PATTERN = re.compile(r'^HP:[0-9]{7}$', re.IGNORECASE)
-MONDO_PATTERN = re.compile(r'^MONDO:[0-9]{7}$', re.IGNORECASE)
-OMIM_PATTERN = re.compile(r'^[0-9]{6}$')
-GENE_SYMBOL_PATTERN = re.compile(r'^[A-Za-z][A-Za-z0-9\-]{1,15}$')
+HPO_PATTERN = re.compile(r"^HP:[0-9]{7}$", re.IGNORECASE)
+MONDO_PATTERN = re.compile(r"^MONDO:[0-9]{7}$", re.IGNORECASE)
+OMIM_PATTERN = re.compile(r"^[0-9]{6}$")
+GENE_SYMBOL_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9\-]{1,15}$")
 
 
 def is_valid_hpo_code(code: str | None) -> bool:
@@ -112,11 +112,7 @@ def sanitize_gene_symbols(symbols: list[Any]) -> list[str]:
             valid.append(symbol.strip().upper())
         elif isinstance(symbol, dict):
             # Handle dict format
-            gene = (
-                symbol.get("gene_symbol") or
-                symbol.get("code") or
-                symbol.get("gene")
-            )
+            gene = symbol.get("gene_symbol") or symbol.get("code") or symbol.get("gene")
             if gene and is_valid_gene_symbol(gene):
                 valid.append(gene.strip().upper())
     return valid

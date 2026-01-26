@@ -39,6 +39,7 @@ logger = structlog.get_logger(__name__)
 # Try to import redis for distributed blacklist
 try:
     import redis.asyncio as aioredis
+
     REDIS_AVAILABLE = True
 except ImportError:
     aioredis: types.ModuleType | None = None  # type: ignore[no-redef]
@@ -106,7 +107,9 @@ class TokenBlacklist:
             return cls._redis_client is not None
 
         if not REDIS_AVAILABLE:
-            logger.warning("token_blacklist_redis_unavailable", reason="redis library not installed")
+            logger.warning(
+                "token_blacklist_redis_unavailable", reason="redis library not installed"
+            )
             cls._redis_initialized = True
             return False
 
@@ -188,7 +191,7 @@ class TokenBlacklist:
                     size=len(cls._blacklist),
                     max_size=cls._MAX_BLACKLIST_SIZE,
                     jti=jti[:16] + "...",
-                    action="rejected"
+                    action="rejected",
                 )
                 # Still add to blacklist - security is more important than memory
                 # In production, should alert ops team to investigate
@@ -246,7 +249,7 @@ class TokenBlacklist:
                     size=len(cls._blacklist),
                     max_size=cls._MAX_BLACKLIST_SIZE,
                     jti=jti[:16] + "...",
-                    action="adding_anyway"
+                    action="adding_anyway",
                 )
 
             cls._blacklist.add(jti)
@@ -302,10 +305,7 @@ class TokenBlacklist:
             return
 
         cls._last_cleanup = now
-        expired = [
-            jti for jti, exp in cls._expiry_times.items()
-            if exp < now
-        ]
+        expired = [jti for jti, exp in cls._expiry_times.items() if exp < now]
 
         if expired:
             for jti in expired:
@@ -313,9 +313,7 @@ class TokenBlacklist:
                 cls._expiry_times.pop(jti, None)
 
             logger.debug(
-                "token_blacklist_cleanup",
-                expired_count=len(expired),
-                remaining=len(cls._blacklist)
+                "token_blacklist_cleanup", expired_count=len(expired), remaining=len(cls._blacklist)
             )
 
     @classmethod
@@ -362,16 +360,19 @@ class TokenBlacklist:
 
 class TokenError(Exception):
     """Base exception for token-related errors."""
+
     pass
 
 
 class TokenExpiredError(TokenError):
     """Token has expired."""
+
     pass
 
 
 class TokenInvalidError(TokenError):
     """Token is invalid or malformed."""
+
     pass
 
 
@@ -385,17 +386,20 @@ MAX_TOKEN_SIZE_BYTES = 16 * 1024  # 16KB max token size
 
 class TokenTooLargeError(TokenError):
     """Token exceeds maximum allowed size."""
+
     pass
 
 
 class TokenVersionOutdatedError(TokenError):
     """Token version is outdated due to privilege change."""
+
     pass
 
 
 # =============================================================================
 # SECURITY FIX (Audit 6): Token Version Caching
 # =============================================================================
+
 
 class TokenVersionCache:
     """
@@ -464,11 +468,7 @@ class TokenVersionCache:
                 await cls.set_version(user_id, db_version)
                 return db_version
             except (ValueError, TypeError, KeyError, RuntimeError) as e:
-                logger.warning(
-                    "token_version_db_fetch_error",
-                    user_id=user_id,
-                    error=str(e)
-                )
+                logger.warning("token_version_db_fetch_error", user_id=user_id, error=str(e))
 
         # Default to version 1 (will be valid for legacy users)
         return 1
@@ -610,6 +610,7 @@ def verify_refresh_token_hash(token: str, stored_hash: str) -> bool:
         True if the token matches the hash, False otherwise
     """
     import secrets
+
     token_hash = hash_refresh_token(token)
     return secrets.compare_digest(token_hash, stored_hash)
 
@@ -617,6 +618,7 @@ def verify_refresh_token_hash(token: str, stored_hash: str) -> bool:
 # =============================================================================
 # SECURITY FIX (Audit 3): Key Rotation Support
 # =============================================================================
+
 
 class KeyRotationManager:
     """
@@ -720,10 +722,7 @@ class KeyRotationManager:
 
             # Remove oldest keys if we have too many
             while len(cls._keys) > keep_previous + 1:
-                oldest_key = min(
-                    cls._key_created_at.keys(),
-                    key=lambda k: cls._key_created_at[k]
-                )
+                oldest_key = min(cls._key_created_at.keys(), key=lambda k: cls._key_created_at[k])
                 if oldest_key != cls._current_key_id:
                     del cls._keys[oldest_key]
                     del cls._key_created_at[oldest_key]
@@ -733,7 +732,7 @@ class KeyRotationManager:
                 "key_rotated",
                 new_key_id=new_key_id,
                 old_key_id=old_key_id,
-                total_keys=len(cls._keys)
+                total_keys=len(cls._keys),
             )
 
             return new_key_id
@@ -787,11 +786,7 @@ class KeyRotationManager:
             if kid and kid in cls._keys:
                 # Try the specific key first
                 try:
-                    result: dict[str, Any] = pyjwt.decode(
-                        token,
-                        cls._keys[kid],
-                        **decode_kwargs
-                    )
+                    result: dict[str, Any] = pyjwt.decode(token, cls._keys[kid], **decode_kwargs)
                     return result
                 except (InvalidTokenError, DecodeError):
                     pass  # Fall through to try all keys
@@ -802,11 +797,7 @@ class KeyRotationManager:
         last_error = None
         for key in cls.get_all_keys():
             try:
-                decoded: dict[str, Any] = pyjwt.decode(
-                    token,
-                    key,
-                    **decode_kwargs
-                )
+                decoded: dict[str, Any] = pyjwt.decode(token, key, **decode_kwargs)
                 return decoded
             except ExpiredSignatureError:
                 raise  # Don't try other keys for expired tokens
@@ -833,7 +824,7 @@ class KeyRotationManager:
             "key_ages": {
                 kid: (datetime.now(UTC) - created).total_seconds()
                 for kid, created in cls._key_created_at.items()
-            }
+            },
         }
 
 
@@ -843,7 +834,7 @@ def create_access_token(
     role: str,
     trust_flame: int,
     token_version: int = 1,
-    additional_claims: dict[str, Any] | None = None
+    additional_claims: dict[str, Any] | None = None,
 ) -> str:
     """
     Create a JWT access token.
@@ -876,7 +867,7 @@ def create_access_token(
         "iss": settings.jwt_issuer,  # SECURITY FIX (Audit 6): Issuer claim
         "aud": settings.jwt_audience,  # SECURITY FIX (Audit 6): Audience claim
         "jti": str(uuid4()),  # JWT ID for token revocation
-        "type": "access"
+        "type": "access",
     }
 
     if additional_claims:
@@ -888,15 +879,12 @@ def create_access_token(
         payload,
         secret,
         algorithm=settings.jwt_algorithm,
-        headers={"kid": key_id}  # Include key ID in header for rotation support
+        headers={"kid": key_id},  # Include key ID in header for rotation support
     )
     return encoded
 
 
-def create_refresh_token(
-    user_id: str,
-    username: str
-) -> str:
+def create_refresh_token(user_id: str, username: str) -> str:
     """
     Create a JWT refresh token.
 
@@ -923,16 +911,13 @@ def create_refresh_token(
         "iss": settings.jwt_issuer,  # SECURITY FIX (Audit 6): Issuer claim
         "aud": settings.jwt_audience,  # SECURITY FIX (Audit 6): Audience claim
         "jti": str(uuid4()),
-        "type": "refresh"
+        "type": "refresh",
     }
 
     # SECURITY FIX (Audit 3): Use KeyRotationManager for signing
     key_id, secret = KeyRotationManager.get_current_key()
     encoded: str = pyjwt.encode(
-        payload,
-        secret,
-        algorithm=settings.jwt_algorithm,
-        headers={"kid": key_id}
+        payload, secret, algorithm=settings.jwt_algorithm, headers={"kid": key_id}
     )
     return encoded
 
@@ -981,10 +966,7 @@ def create_mfa_pending_token(
 
     key_id, secret = KeyRotationManager.get_current_key()
     encoded: str = pyjwt.encode(
-        payload,
-        secret,
-        algorithm=settings.jwt_algorithm,
-        headers={"kid": key_id}
+        payload, secret, algorithm=settings.jwt_algorithm, headers={"kid": key_id}
     )
     return encoded
 
@@ -1027,10 +1009,7 @@ def verify_mfa_pending_token(
     if ip_address:
         try:
             # Decode without validation to get ip_hash claim
-            raw_payload = pyjwt.decode(
-                token,
-                options={"verify_signature": False}
-            )
+            raw_payload = pyjwt.decode(token, options={"verify_signature": False})
             token_ip_hash = raw_payload.get("ip_hash")
             if token_ip_hash:
                 current_ip_hash = hashlib.sha256(ip_address.encode()).hexdigest()[:16]
@@ -1047,11 +1026,7 @@ def verify_mfa_pending_token(
 
 
 def create_token_pair(
-    user_id: str,
-    username: str,
-    role: str,
-    trust_flame: int,
-    token_version: int = 1
+    user_id: str, username: str, role: str, trust_flame: int, token_version: int = 1
 ) -> Token:
     """
     Create both access and refresh tokens.
@@ -1066,16 +1041,14 @@ def create_token_pair(
     Returns:
         Token model with both access and refresh tokens
     """
-    access_token = create_access_token(
-        user_id, username, role, trust_flame, token_version
-    )
+    access_token = create_access_token(user_id, username, role, trust_flame, token_version)
     refresh_token = create_refresh_token(user_id, username)
 
     return Token(
         access_token=access_token,
         refresh_token=refresh_token,
         token_type="bearer",
-        expires_in=settings.jwt_access_token_expire_minutes * 60  # Convert to seconds
+        expires_in=settings.jwt_access_token_expire_minutes * 60,  # Convert to seconds
     )
 
 
@@ -1138,7 +1111,9 @@ def decode_token(token: str, verify_exp: bool = True) -> TokenPayload:
             iat=payload.get("iat"),
             jti=payload.get("jti"),
             type=payload.get("type", "access"),
-            tv=payload.get("tv"),  # SECURITY FIX (Audit 6): Token version for privilege change validation
+            tv=payload.get(
+                "tv"
+            ),  # SECURITY FIX (Audit 6): Token version for privilege change validation
         )
 
     except ExpiredSignatureError:
@@ -1176,7 +1151,7 @@ def verify_access_token(token: str) -> TokenPayload:
         logger.warning(
             "blacklisted_token_rejected",
             jti=payload.jti[:8] + "..." if payload.jti else "none",
-            user_id=payload.sub
+            user_id=payload.sub,
         )
         raise TokenInvalidError("Token has been revoked")
 
@@ -1199,8 +1174,7 @@ def verify_access_token(token: str) -> TokenPayload:
 
 
 async def verify_access_token_async(
-    token: str,
-    token_version_getter: Any | None = None
+    token: str, token_version_getter: Any | None = None
 ) -> TokenPayload:
     """
     Verify an access token (async version with full blacklist support).
@@ -1234,7 +1208,7 @@ async def verify_access_token_async(
         logger.warning(
             "blacklisted_token_rejected",
             jti=payload.jti[:8] + "..." if payload.jti else "none",
-            user_id=payload.sub
+            user_id=payload.sub,
         )
         raise TokenInvalidError("Token has been revoked")
 
@@ -1259,8 +1233,7 @@ async def verify_access_token_async(
     if token_version_getter is not None:
         token_version = payload.tv or 1  # Default to 1 for legacy tokens
         current_version = await TokenVersionCache.get_version(
-            payload.sub,
-            db_fallback=token_version_getter
+            payload.sub, db_fallback=token_version_getter
         )
 
         if token_version < current_version:
@@ -1308,7 +1281,7 @@ def get_token_claims(token: str) -> dict[str, Any]:
                 "verify_exp": False,
                 "verify_iss": False,
                 "verify_aud": False,
-            }
+            },
         )
         return payload
     except (InvalidTokenError, DecodeError) as e:
@@ -1446,7 +1419,9 @@ def extract_token_from_header(authorization: str) -> str:
     return token
 
 
-def verify_token(token: str, secret_key: str | None = None, expected_type: str = "access") -> TokenPayload:
+def verify_token(
+    token: str, secret_key: str | None = None, expected_type: str = "access"
+) -> TokenPayload:
     """
     Verify a JWT token.
 

@@ -61,6 +61,7 @@ security = HTTPBearer(auto_error=False)
 # Settings
 # =============================================================================
 
+
 def get_app_settings() -> Settings:
     """Get application settings."""
     return get_settings()
@@ -73,9 +74,10 @@ SettingsDep = Annotated[Settings, Depends(get_app_settings)]
 # Forge App Access
 # =============================================================================
 
+
 def get_forge_app(request: Request) -> ForgeApp:
     """Get the ForgeApp instance from request state."""
-    if not hasattr(request.app.state, 'forge'):
+    if not hasattr(request.app.state, "forge"):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Forge application not initialized",
@@ -87,6 +89,7 @@ def get_forge_app(request: Request) -> ForgeApp:
 # =============================================================================
 # Database
 # =============================================================================
+
 
 async def get_db_client(request: Request) -> Neo4jClient:
     """Get database client."""
@@ -105,6 +108,7 @@ DbClientDep = Annotated[Neo4jClient, Depends(get_db_client)]
 # =============================================================================
 # Repositories
 # =============================================================================
+
 
 async def get_capsule_repository(db: DbClientDep) -> CapsuleRepository:
     """Get capsule repository."""
@@ -160,6 +164,7 @@ SessionRepoDep = Annotated[SessionRepository, Depends(get_session_repository)]
 # Services
 # =============================================================================
 
+
 def get_embedding_svc() -> EmbeddingService:
     """Get embedding service."""
     return get_embedding_service()
@@ -171,6 +176,7 @@ EmbeddingServiceDep = Annotated[EmbeddingService, Depends(get_embedding_svc)]
 # =============================================================================
 # Kernel Components
 # =============================================================================
+
 
 async def get_event_system(request: Request) -> EventSystem:
     """Get event system."""
@@ -213,6 +219,7 @@ PipelineDep = Annotated[CascadePipeline, Depends(get_pipeline)]
 # =============================================================================
 # Immune System
 # =============================================================================
+
 
 async def get_circuit_registry(request: Request) -> CircuitBreakerRegistry:
     """Get circuit breaker registry."""
@@ -272,6 +279,7 @@ CanaryManagerDep = Annotated["CanaryManager[dict[str, Any]]", Depends(get_canary
 # Authentication
 # =============================================================================
 
+
 async def get_token_payload(
     request: Request,
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(security)],
@@ -323,6 +331,7 @@ async def get_current_user_optional(
     are invalidated immediately when user privileges change.
     """
     import structlog
+
     logger = structlog.get_logger(__name__)
 
     if not token:
@@ -398,8 +407,12 @@ ActiveUserDep = Annotated[User, Depends(get_current_active_user)]
 # Authorization
 # =============================================================================
 
-def require_trust_level(min_level: TrustLevel) -> Callable[[ActiveUserDep], Coroutine[object, object, User]]:
+
+def require_trust_level(
+    min_level: TrustLevel,
+) -> Callable[[ActiveUserDep], Coroutine[object, object, User]]:
     """Dependency factory to require minimum trust level."""
+
     async def dependency(user: ActiveUserDep) -> User:
         authorizer = TrustAuthorizer(min_level)
         if not authorizer.authorize(user):
@@ -408,11 +421,13 @@ def require_trust_level(min_level: TrustLevel) -> Callable[[ActiveUserDep], Coro
                 detail=f"Requires trust level {min_level.name} or higher",
             )
         return user
+
     return dependency
 
 
 def require_roles(*roles: str) -> Callable[[ActiveUserDep], Coroutine[object, object, User]]:
     """Dependency factory to require specific roles."""
+
     async def dependency(user: ActiveUserDep) -> User:
         authorizer = RoleAuthorizer(set(roles))
         if not authorizer.authorize(user):
@@ -421,13 +436,18 @@ def require_roles(*roles: str) -> Callable[[ActiveUserDep], Coroutine[object, ob
                 detail=f"Requires one of roles: {', '.join(roles)}",
             )
         return user
+
     return dependency
 
 
-def require_capabilities(*capabilities: str) -> Callable[[ActiveUserDep], Coroutine[object, object, User]]:
+def require_capabilities(
+    *capabilities: str,
+) -> Callable[[ActiveUserDep], Coroutine[object, object, User]]:
     """Dependency factory to require specific capabilities."""
+
     async def dependency(user: ActiveUserDep) -> User:
         from forge.models.overlay import Capability
+
         caps = {Capability(c) for c in capabilities}
         authorizer = CapabilityAuthorizer(caps)
         if not authorizer.authorize(user):
@@ -436,6 +456,7 @@ def require_capabilities(*capabilities: str) -> Callable[[ActiveUserDep], Corout
                 detail=f"Requires capabilities: {', '.join(capabilities)}",
             )
         return user
+
     return dependency
 
 
@@ -453,6 +474,7 @@ ModeratorUserDep = Annotated[User, Depends(require_roles("admin", "moderator"))]
 # =============================================================================
 # Services
 # =============================================================================
+
 
 async def get_auth_service(
     user_repo: UserRepoDep,
@@ -476,6 +498,7 @@ SessionServiceDep = Annotated[SessionBindingService, Depends(get_session_service
 # =============================================================================
 # Pagination
 # =============================================================================
+
 
 class PaginationParams:
     """Standard pagination parameters."""
@@ -517,9 +540,10 @@ PaginationDep = Annotated[PaginationParams, Depends(get_pagination)]
 # Request Context
 # =============================================================================
 
+
 async def get_correlation_id(request: Request) -> str:
     """Get request correlation ID."""
-    return getattr(request.state, 'correlation_id', 'unknown')
+    return getattr(request.state, "correlation_id", "unknown")
 
 
 CorrelationIdDep = Annotated[str, Depends(get_correlation_id)]
@@ -633,11 +657,9 @@ __all__ = [
     # Settings
     "SettingsDep",
     "get_app_settings",
-
     # Database
     "DbClientDep",
     "get_db_client",
-
     # Repositories
     "CapsuleRepoDep",
     "UserRepoDep",
@@ -647,23 +669,19 @@ __all__ = [
     "GraphRepoDep",
     "TemporalRepoDep",
     "SessionRepoDep",
-
     # Kernel
     "EventSystemDep",
     "OverlayManagerDep",
     "PipelineDep",
-
     # Immune
     "CircuitRegistryDep",
     "HealthCheckerDep",
     "AnomalySystemDep",
     "CanaryManagerDep",
-
     # Auth
     "OptionalUserDep",
     "CurrentUserDep",
     "ActiveUserDep",
-
     # Authorization
     "SandboxUserDep",
     "StandardUserDep",
@@ -674,15 +692,12 @@ __all__ = [
     "require_trust_level",
     "require_roles",
     "require_capabilities",
-
     # Services
     "AuthServiceDep",
     "SessionServiceDep",
-
     # Pagination
     "PaginationParams",
     "PaginationDep",
-
     # Context
     "CorrelationIdDep",
     "ClientInfo",

@@ -33,22 +33,26 @@ logger = structlog.get_logger()
 
 class SecurityValidationError(OverlayError):
     """Security validation failed."""
+
     pass
 
 
 class ThreatDetectedError(SecurityValidationError):
     """Potential threat detected."""
+
     pass
 
 
 class RateLimitExceededError(SecurityValidationError):
     """Rate limit exceeded."""
+
     pass
 
 
 @dataclass
 class ValidationRule:
     """A security validation rule."""
+
     name: str
     description: str
     severity: str  # "low", "medium", "high", "critical"
@@ -79,6 +83,7 @@ class ValidationRule:
 @dataclass
 class ContentPolicyRule(ValidationRule):
     """Content policy validation rule."""
+
     blocked_patterns: list[str] = field(default_factory=list)
     max_content_length: int = 100000  # 100KB
 
@@ -100,9 +105,7 @@ class ContentPolicyRule(ValidationRule):
             except (RegexTimeoutError, RegexValidationError) as e:
                 # Log but don't block - invalid pattern is a configuration error
                 structlog.get_logger().warning(
-                    "invalid_blocked_pattern",
-                    pattern=pattern[:30],
-                    error=str(e)
+                    "invalid_blocked_pattern", pattern=pattern[:30], error=str(e)
                 )
                 continue
 
@@ -112,6 +115,7 @@ class ContentPolicyRule(ValidationRule):
 @dataclass
 class TrustRule(ValidationRule):
     """Trust level validation rule."""
+
     min_trust_level: int = 0
     action_trust_requirements: dict[str, int] = field(default_factory=dict)
 
@@ -122,7 +126,10 @@ class TrustRule(ValidationRule):
         required = self.action_trust_requirements.get(action, self.min_trust_level)
 
         if user_trust < required:
-            return False, f"Insufficient trust level ({user_trust} < {required}) for action: {action}"
+            return (
+                False,
+                f"Insufficient trust level ({user_trust} < {required}) for action: {action}",
+            )
 
         return True, None
 
@@ -138,6 +145,7 @@ class RateLimitRule(ValidationRule):
     SECURITY FIX (Audit 4 - M8): Uses asyncio.Lock instead of threading.Lock
     to avoid blocking the event loop in async contexts.
     """
+
     requests_per_minute: int = 60
     requests_per_hour: int = 1000
 
@@ -229,20 +237,25 @@ class RateLimitRule(ValidationRule):
 @dataclass
 class InputSanitizationRule(ValidationRule):
     """Input sanitization rule."""
+
     # Common injection patterns
-    sql_patterns: list[str] = field(default_factory=lambda: [
-        r"(\bUNION\b.*\bSELECT\b)",
-        r"(\bDROP\b.*\bTABLE\b)",
-        r"(\bINSERT\b.*\bINTO\b)",
-        r"(--|\#|\/\*)",
-        r"(\bOR\b.*=.*\bOR\b)",
-    ])
-    xss_patterns: list[str] = field(default_factory=lambda: [
-        r"<script[^>]*>",
-        r"javascript:",
-        r"on\w+\s*=",
-        r"<iframe[^>]*>",
-    ])
+    sql_patterns: list[str] = field(
+        default_factory=lambda: [
+            r"(\bUNION\b.*\bSELECT\b)",
+            r"(\bDROP\b.*\bTABLE\b)",
+            r"(\bINSERT\b.*\bINTO\b)",
+            r"(--|\#|\/\*)",
+            r"(\bOR\b.*=.*\bOR\b)",
+        ]
+    )
+    xss_patterns: list[str] = field(
+        default_factory=lambda: [
+            r"<script[^>]*>",
+            r"javascript:",
+            r"on\w+\s*=",
+            r"<iframe[^>]*>",
+        ]
+    )
 
     def validate(self, data: dict[str, Any]) -> tuple[bool, str | None]:
         content = str(data.get("content", ""))
@@ -271,6 +284,7 @@ class InputSanitizationRule(ValidationRule):
 @dataclass
 class ValidationResult:
     """Result of security validation."""
+
     valid: bool
     rule_results: dict[str, tuple[bool, str | None]] = field(default_factory=dict)
     threats_detected: list[str] = field(default_factory=list)
@@ -281,14 +295,16 @@ class ValidationResult:
     @property
     def critical_failures(self) -> list[str]:
         """Get critical rule failures."""
-        return [name for name, (valid, _) in self.rule_results.items()
-                if not valid and "critical" in name.lower()]
+        return [
+            name
+            for name, (valid, _) in self.rule_results.items()
+            if not valid and "critical" in name.lower()
+        ]
 
     @property
     def all_errors(self) -> list[str]:
         """Get all error messages."""
-        return [msg for _, (valid, msg) in self.rule_results.items()
-                if not valid and msg]
+        return [msg for _, (valid, msg) in self.rule_results.items() if not valid and msg]
 
 
 class SecurityValidatorOverlay(BaseOverlay):
@@ -320,7 +336,7 @@ class SecurityValidatorOverlay(BaseOverlay):
         enable_content_policy: bool = True,
         enable_trust_validation: bool = True,
         enable_input_sanitization: bool = True,
-        custom_rules: list[ValidationRule] | None = None
+        custom_rules: list[ValidationRule] | None = None,
     ) -> None:
         """
         Initialize the security validator.
@@ -337,47 +353,55 @@ class SecurityValidatorOverlay(BaseOverlay):
 
         # Initialize default rules
         if enable_content_policy:
-            self._rules.append(ContentPolicyRule(
-                name="content_policy",
-                description="Validates content against policy",
-                severity="high",
-                blocked_patterns=[
-                    r"\b(password|secret|api_key)\s*[:=]\s*['\"]?\w+",  # Exposed secrets
-                ]
-            ))
+            self._rules.append(
+                ContentPolicyRule(
+                    name="content_policy",
+                    description="Validates content against policy",
+                    severity="high",
+                    blocked_patterns=[
+                        r"\b(password|secret|api_key)\s*[:=]\s*['\"]?\w+",  # Exposed secrets
+                    ],
+                )
+            )
 
         if enable_trust_validation:
-            self._rules.append(TrustRule(
-                name="trust_validation",
-                description="Validates trust levels for actions",
-                severity="high",
-                min_trust_level=TrustLevel.SANDBOX.value,
-                action_trust_requirements={
-                    "create_capsule": TrustLevel.SANDBOX.value,
-                    "update_capsule": TrustLevel.STANDARD.value,
-                    "delete_capsule": TrustLevel.TRUSTED.value,
-                    "create_proposal": TrustLevel.STANDARD.value,
-                    "vote": TrustLevel.SANDBOX.value,
-                    "execute_overlay": TrustLevel.TRUSTED.value,
-                    "admin_action": TrustLevel.CORE.value,
-                }
-            ))
+            self._rules.append(
+                TrustRule(
+                    name="trust_validation",
+                    description="Validates trust levels for actions",
+                    severity="high",
+                    min_trust_level=TrustLevel.SANDBOX.value,
+                    action_trust_requirements={
+                        "create_capsule": TrustLevel.SANDBOX.value,
+                        "update_capsule": TrustLevel.STANDARD.value,
+                        "delete_capsule": TrustLevel.TRUSTED.value,
+                        "create_proposal": TrustLevel.STANDARD.value,
+                        "vote": TrustLevel.SANDBOX.value,
+                        "execute_overlay": TrustLevel.TRUSTED.value,
+                        "admin_action": TrustLevel.CORE.value,
+                    },
+                )
+            )
 
         if enable_rate_limiting:
-            self._rules.append(RateLimitRule(
-                name="rate_limit",
-                description="Enforces rate limits",
-                severity="medium",
-                requests_per_minute=60,
-                requests_per_hour=1000
-            ))
+            self._rules.append(
+                RateLimitRule(
+                    name="rate_limit",
+                    description="Enforces rate limits",
+                    severity="medium",
+                    requests_per_minute=60,
+                    requests_per_hour=1000,
+                )
+            )
 
         if enable_input_sanitization:
-            self._rules.append(InputSanitizationRule(
-                name="input_sanitization",
-                description="Sanitizes input against injection attacks",
-                severity="critical"
-            ))
+            self._rules.append(
+                InputSanitizationRule(
+                    name="input_sanitization",
+                    description="Sanitizes input against injection attacks",
+                    severity="critical",
+                )
+            )
 
         # Add custom rules
         if custom_rules:
@@ -393,6 +417,7 @@ class SecurityValidatorOverlay(BaseOverlay):
         # This ensures we evict the oldest blocked user (who has been blocked longest)
         # rather than a random one, which could accidentally unblock an active attacker
         from collections import OrderedDict
+
         self._blocked_users: OrderedDict[str, datetime] = OrderedDict()  # user_id -> blocked_at
         self._threat_cache_access_order: list[str] = []  # For LRU eviction
 
@@ -403,7 +428,7 @@ class SecurityValidatorOverlay(BaseOverlay):
         self._logger.info(
             "security_validator_initialized",
             rules=len(self._rules),
-            rule_names=[r.name for r in self._rules]
+            rule_names=[r.name for r in self._rules],
         )
         return True
 
@@ -411,7 +436,7 @@ class SecurityValidatorOverlay(BaseOverlay):
         self,
         context: OverlayContext,
         event: Event | None = None,
-        input_data: dict[str, Any] | None = None
+        input_data: dict[str, Any] | None = None,
     ) -> OverlayResult:
         """
         Execute security validation.
@@ -425,6 +450,7 @@ class SecurityValidatorOverlay(BaseOverlay):
             Validation result
         """
         import time
+
         start_time = time.time()
 
         data = input_data or {}
@@ -441,7 +467,7 @@ class SecurityValidatorOverlay(BaseOverlay):
             return OverlayResult(
                 success=False,
                 error="User is temporarily blocked due to security violations",
-                data={"blocked": True}
+                data={"blocked": True},
             )
 
         # Run validation
@@ -459,20 +485,22 @@ class SecurityValidatorOverlay(BaseOverlay):
             "security_validation_complete",
             valid=validation_result.valid,
             threats=len(validation_result.threats_detected),
-            duration_ms=round(duration_ms, 2)
+            duration_ms=round(duration_ms, 2),
         )
 
         # Prepare events to emit
         events_to_emit = []
         if not validation_result.valid:
-            events_to_emit.append({
-                "event_type": EventType.SECURITY_ALERT,
-                "payload": {
-                    "errors": validation_result.all_errors,
-                    "threats": validation_result.threats_detected,
-                    "user_id": context.user_id
+            events_to_emit.append(
+                {
+                    "event_type": EventType.SECURITY_ALERT,
+                    "payload": {
+                        "errors": validation_result.all_errors,
+                        "threats": validation_result.threats_detected,
+                        "user_id": context.user_id,
+                    },
                 }
-            })
+            )
 
         return OverlayResult(
             success=validation_result.valid,
@@ -486,23 +514,19 @@ class SecurityValidatorOverlay(BaseOverlay):
                     },
                     "threats": validation_result.threats_detected,
                     "warnings": validation_result.warnings,
-                    "validation_time_ms": round(duration_ms, 2)
+                    "validation_time_ms": round(duration_ms, 2),
                 },
-                "sanitized_data": validation_result.sanitized_data
+                "sanitized_data": validation_result.sanitized_data,
             },
             events_to_emit=events_to_emit,
             metrics={
                 "rules_checked": len(self._rules),
                 "rules_passed": sum(1 for v, _ in validation_result.rule_results.values() if v),
-                "threats_detected": len(validation_result.threats_detected)
-            }
+                "threats_detected": len(validation_result.threats_detected),
+            },
         )
 
-    async def _validate(
-        self,
-        data: dict[str, Any],
-        context: OverlayContext
-    ) -> ValidationResult:
+    async def _validate(self, data: dict[str, Any], context: OverlayContext) -> ValidationResult:
         """Run all validation rules."""
         rule_results = {}
         threats = []
@@ -527,7 +551,16 @@ class SecurityValidatorOverlay(BaseOverlay):
                     else:
                         warnings.append(f"[LOW] {rule.name}: {error}")
 
-            except (SecurityValidationError, OverlayError, ValueError, TypeError, KeyError, RuntimeError, RegexTimeoutError, RegexValidationError) as e:
+            except (
+                SecurityValidationError,
+                OverlayError,
+                ValueError,
+                TypeError,
+                KeyError,
+                RuntimeError,
+                RegexTimeoutError,
+                RegexValidationError,
+            ) as e:
                 self._logger.error(
                     "rule_validation_error",
                     rule=rule.name,
@@ -551,7 +584,7 @@ class SecurityValidatorOverlay(BaseOverlay):
             rule_results=rule_results,
             threats_detected=threats,
             warnings=warnings,
-            sanitized_data=sanitized
+            sanitized_data=sanitized,
         )
 
     def _sanitize_data(self, data: dict[str, Any]) -> dict[str, Any]:
@@ -562,8 +595,7 @@ class SecurityValidatorOverlay(BaseOverlay):
             if isinstance(value, str):
                 # Basic HTML entity encoding
                 sanitized[key] = (
-                    value
-                    .replace("&", "&amp;")
+                    value.replace("&", "&amp;")
                     .replace("<", "&lt;")
                     .replace(">", "&gt;")
                     .replace('"', "&quot;")
@@ -573,19 +605,14 @@ class SecurityValidatorOverlay(BaseOverlay):
                 sanitized[key] = self._sanitize_data(value)
             elif isinstance(value, list):
                 sanitized[key] = [
-                    self._sanitize_data(v) if isinstance(v, dict)
-                    else v for v in value
+                    self._sanitize_data(v) if isinstance(v, dict) else v for v in value
                 ]
             else:
                 sanitized[key] = value
 
         return sanitized
 
-    async def _track_threats(
-        self,
-        user_id: str | None,
-        threats: list[str]
-    ) -> None:
+    async def _track_threats(self, user_id: str | None, threats: list[str]) -> None:
         """Track threats and potentially block users."""
         if not user_id:
             return
@@ -612,7 +639,7 @@ class SecurityValidatorOverlay(BaseOverlay):
         cutoff = now - timedelta(hours=1)
         recent_threats = [t for t in self._threat_cache[user_id] if t > cutoff]
         # Keep only the most recent threats up to limit
-        self._threat_cache[user_id] = recent_threats[-self._MAX_THREATS_PER_USER:]
+        self._threat_cache[user_id] = recent_threats[-self._MAX_THREATS_PER_USER :]
 
         # Block user if too many threats
         if len(self._threat_cache[user_id]) >= 10:
@@ -634,7 +661,7 @@ class SecurityValidatorOverlay(BaseOverlay):
             self._logger.warning(
                 "user_blocked_for_threats",
                 user_id=user_id,
-                threat_count=len(self._threat_cache[user_id])
+                threat_count=len(self._threat_cache[user_id]),
             )
 
     def unblock_user(self, user_id: str) -> None:
@@ -663,7 +690,7 @@ class SecurityValidatorOverlay(BaseOverlay):
                 "name": r.name,
                 "description": r.description,
                 "severity": r.severity,
-                "enabled": r.enabled
+                "enabled": r.enabled,
             }
             for r in self._rules
         ]
@@ -679,23 +706,19 @@ class SecurityValidatorOverlay(BaseOverlay):
         cutoff_hour = now - timedelta(hours=1)
 
         total_threats = sum(
-            len([t for t in threats if t > cutoff_hour])
-            for threats in self._threat_cache.values()
+            len([t for t in threats if t > cutoff_hour]) for threats in self._threat_cache.values()
         )
 
         return {
             "total_threats_last_hour": total_threats,
             "blocked_users": len(self._blocked_users),
             "users_with_threats": len(self._threat_cache),
-            "rules_active": sum(1 for r in self._rules if r.enabled)
+            "rules_active": sum(1 for r in self._rules if r.enabled),
         }
 
 
 # Convenience function
-def create_security_validator(
-    strict_mode: bool = False,
-    **kwargs: Any
-) -> SecurityValidatorOverlay:
+def create_security_validator(strict_mode: bool = False, **kwargs: Any) -> SecurityValidatorOverlay:
     """
     Create a security validator with common configurations.
 

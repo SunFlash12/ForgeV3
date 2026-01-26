@@ -122,9 +122,7 @@ class CapsuleIntegrityService:
         return secrets.compare_digest(computed, expected_hash)
 
     @staticmethod
-    def verify_content_hash_detailed(
-        content: str, expected_hash: str
-    ) -> tuple[bool, str, str]:
+    def verify_content_hash_detailed(content: str, expected_hash: str) -> tuple[bool, str, str]:
         """
         Verify content hash with detailed results.
 
@@ -331,9 +329,7 @@ class CapsuleIntegrityService:
         Returns:
             True if Merkle root is valid
         """
-        computed = CapsuleIntegrityService.compute_merkle_root(
-            content_hash, parent_merkle_root
-        )
+        computed = CapsuleIntegrityService.compute_merkle_root(content_hash, parent_merkle_root)
         return secrets.compare_digest(computed, expected_merkle_root)
 
     @staticmethod
@@ -359,9 +355,7 @@ class CapsuleIntegrityService:
             # Get content hash - compute if not stored
             content_hash = getattr(capsule, "content_hash", None)
             if not content_hash:
-                content_hash = CapsuleIntegrityService.compute_content_hash(
-                    capsule.content
-                )
+                content_hash = CapsuleIntegrityService.compute_content_hash(capsule.content)
 
             # Get merkle root - must be stored
             merkle_root = getattr(capsule, "merkle_root", None)
@@ -435,9 +429,7 @@ class CapsuleIntegrityService:
 
         if stored_hash:
             result["content_hash_expected"] = stored_hash
-            result["content_hash_valid"] = secrets.compare_digest(
-                computed_hash, stored_hash
-            )
+            result["content_hash_valid"] = secrets.compare_digest(computed_hash, stored_hash)
             if not result["content_hash_valid"]:
                 result["errors"].append("Content hash mismatch")
         else:

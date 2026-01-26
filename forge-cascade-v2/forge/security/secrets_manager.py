@@ -153,9 +153,7 @@ class EnvironmentSecretsManager(BaseSecretsManager):
                     self._warned_keys.add(key)
                 return value
 
-        raise SecretNotFoundError(
-            f"Secret '{key}' not found. Set one of: {env_vars}"
-        )
+        raise SecretNotFoundError(f"Secret '{key}' not found. Set one of: {env_vars}")
 
     async def get_secret_with_metadata(self, key: str) -> dict[str, Any]:
         """Get secret with basic metadata."""

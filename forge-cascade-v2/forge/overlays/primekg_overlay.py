@@ -40,6 +40,7 @@ logger = structlog.get_logger(__name__)
 
 class PrimeKGError(OverlayError):
     """PrimeKG-specific error."""
+
     pass
 
 
@@ -124,21 +125,25 @@ class PrimeKGOverlay(BaseOverlay):
             if self._neo4j:
                 stats = await self._verify_primekg_data()
                 if stats.get("disease_count", 0) < 1000:
-                    self._logger.warning(
-                        "primekg_data_incomplete",
-                        stats=stats
-                    )
+                    self._logger.warning("primekg_data_incomplete", stats=stats)
 
                 # Preload HPO hierarchy
                 self._hpo_hierarchy = await self._load_hpo_hierarchy()
                 self._logger.info(
                     "primekg_hpo_loaded",
-                    terms=len(self._hpo_hierarchy) if self._hpo_hierarchy else 0
+                    terms=len(self._hpo_hierarchy) if self._hpo_hierarchy else 0,
                 )
 
             return await super().initialize()
 
-        except (PrimeKGError, OverlayError, RuntimeError, ValueError, ConnectionError, OSError) as e:
+        except (
+            PrimeKGError,
+            OverlayError,
+            RuntimeError,
+            ValueError,
+            ConnectionError,
+            OSError,
+        ) as e:
             self._logger.error(
                 "primekg_init_error",
                 error=str(e),
@@ -176,11 +181,7 @@ class PrimeKGOverlay(BaseOverlay):
 
         operation = data.get("operation", "semantic_search")
 
-        self._logger.info(
-            "primekg_execute",
-            operation=operation,
-            execution_id=context.execution_id
-        )
+        self._logger.info("primekg_execute", operation=operation, execution_id=context.execution_id)
 
         try:
             if operation == "phenotype_to_disease":
@@ -214,7 +215,7 @@ class PrimeKGOverlay(BaseOverlay):
                             "source": "primekg",
                             "operation": operation,
                             "result_count": len(result.get("results", [])),
-                        }
+                        },
                     )
                 )
 
@@ -224,10 +225,19 @@ class PrimeKGOverlay(BaseOverlay):
                 metrics={
                     "operation": operation,
                     "results_count": len(result.get("results", [])),
-                }
+                },
             )
 
-        except (PrimeKGError, OverlayError, RuntimeError, ValueError, TypeError, KeyError, ConnectionError, OSError) as e:
+        except (
+            PrimeKGError,
+            OverlayError,
+            RuntimeError,
+            ValueError,
+            TypeError,
+            KeyError,
+            ConnectionError,
+            OSError,
+        ) as e:
             self._logger.error(
                 "primekg_execution_error",
                 operation=operation,
@@ -285,10 +295,13 @@ class PrimeKGOverlay(BaseOverlay):
         LIMIT $limit
         """
 
-        results = await self._neo4j.run(query, {
-            "phenotypes": phenotypes,
-            "limit": limit,
-        })
+        results = await self._neo4j.run(
+            query,
+            {
+                "phenotypes": phenotypes,
+                "limit": limit,
+            },
+        )
 
         return {
             "operation": "phenotype_to_disease",
@@ -423,7 +436,10 @@ class PrimeKGOverlay(BaseOverlay):
             results = await self._neo4j.run(query, {"disease_id": disease_id, "limit": limit})
 
         else:
-            return {"operation": "gene_disease_association", "error": "gene_id or disease_id required"}
+            return {
+                "operation": "gene_disease_association",
+                "error": "gene_id or disease_id required",
+            }
 
         return {
             "operation": "gene_disease_association",
@@ -533,8 +549,7 @@ class PrimeKGOverlay(BaseOverlay):
 
         # Phase 1: Phenotype-based candidates
         phenotype_result = await self._phenotype_to_disease(
-            {"phenotypes": phenotypes, "limit": 30},
-            context
+            {"phenotypes": phenotypes, "limit": 30}, context
         )
         candidates = phenotype_result.get("results", [])
 
@@ -542,16 +557,16 @@ class PrimeKGOverlay(BaseOverlay):
         if genes and candidates:
             gene_diseases = set()
             for gene in genes:
-                gene_result = await self._gene_disease_association(
-                    {"gene_id": gene},
-                    context
-                )
+                gene_result = await self._gene_disease_association({"gene_id": gene}, context)
                 for assoc in gene_result.get("associations", []):
                     gene_diseases.add(assoc["disease_id"])
 
             # Boost candidates with genetic support
             for candidate in candidates:
-                if candidate["disease_id"] in gene_diseases or candidate.get("mondo_id") in gene_diseases:
+                if (
+                    candidate["disease_id"] in gene_diseases
+                    or candidate.get("mondo_id") in gene_diseases
+                ):
                     candidate["gene_support"] = True
                     candidate["score"] *= 1.5  # 50% boost
                 else:
@@ -565,10 +580,7 @@ class PrimeKGOverlay(BaseOverlay):
                 # Simplified for now - actual implementation would use _med
                 pass
 
-            candidates = [
-                c for c in candidates
-                if c["disease_id"] not in contraindicated_diseases
-            ]
+            candidates = [c for c in candidates if c["disease_id"] not in contraindicated_diseases]
 
         # Re-sort by adjusted score
         candidates.sort(key=lambda c: c.get("score", 0), reverse=True)
@@ -645,7 +657,10 @@ class PrimeKGOverlay(BaseOverlay):
         already_present = data.get("already_present", [])
 
         if not disease_a or not disease_b:
-            return {"operation": "find_discriminating_phenotypes", "error": "disease_a and disease_b required"}
+            return {
+                "operation": "find_discriminating_phenotypes",
+                "error": "disease_a and disease_b required",
+            }
 
         query = """
         // Get phenotypes for disease A
@@ -681,11 +696,14 @@ class PrimeKGOverlay(BaseOverlay):
         LIMIT 5
         """
 
-        results = await self._neo4j.run(query, {
-            "disease_a": disease_a,
-            "disease_b": disease_b,
-            "already_present": already_present,
-        })
+        results = await self._neo4j.run(
+            query,
+            {
+                "disease_a": disease_a,
+                "disease_b": disease_b,
+                "already_present": already_present,
+            },
+        )
 
         return {
             "operation": "find_discriminating_phenotypes",
@@ -794,20 +812,25 @@ class PrimeKGOverlay(BaseOverlay):
                    }) as contraindications
             """
 
-            results = await self._neo4j.run(query, {
-                "drug_id": drug_id,
-                "diseases": diseases,
-            })
+            results = await self._neo4j.run(
+                query,
+                {
+                    "drug_id": drug_id,
+                    "diseases": diseases,
+                },
+            )
 
             if results:
                 r = results[0]
                 contraindications = [c for c in r["contraindications"] if c["disease_id"]]
                 if contraindications:
-                    interactions.append({
-                        "drug_name": r["drug_name"],
-                        "drug_id": r["drug_id"],
-                        "contraindications": contraindications,
-                    })
+                    interactions.append(
+                        {
+                            "drug_name": r["drug_name"],
+                            "drug_id": r["drug_id"],
+                            "contraindications": contraindications,
+                        }
+                    )
 
         return {
             "operation": "check_drug_interactions",
@@ -887,6 +910,7 @@ class PrimeKGOverlay(BaseOverlay):
 # =============================================================================
 # Factory Function
 # =============================================================================
+
 
 def create_primekg_overlay(
     neo4j_client: Any = None,

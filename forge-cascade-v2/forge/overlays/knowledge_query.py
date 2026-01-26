@@ -40,22 +40,26 @@ logger = structlog.get_logger()
 
 class QueryCompilationError(OverlayError):
     """Error during query compilation."""
+
     pass
 
 
 class QueryExecutionError(OverlayError):
     """Error during query execution."""
+
     pass
 
 
 class QuerySecurityError(OverlayError):
     """Error when query fails security validation."""
+
     pass
 
 
 @dataclass
 class QueryConfig:
     """Configuration for knowledge queries."""
+
     # Query limits
     max_results: int = 100
     default_limit: int = 20
@@ -78,6 +82,7 @@ class QueryConfig:
 @dataclass
 class QueryHistoryEntry:
     """Record of a past query."""
+
     query_id: str
     question: str
     compiled_cypher: str
@@ -107,16 +112,13 @@ class KnowledgeQueryOverlay(BaseOverlay):
     # SECURITY FIX (Audit 4 - M): Add cache size limit to prevent memory exhaustion
     MAX_QUERY_CACHE_SIZE = 1000  # Maximum cached compiled queries
 
-    REQUIRED_CAPABILITIES = {
-        Capability.DATABASE_READ,
-        Capability.LLM_ACCESS
-    }
+    REQUIRED_CAPABILITIES = {Capability.DATABASE_READ, Capability.LLM_ACCESS}
 
     def __init__(
         self,
         query_service: KnowledgeQueryService | None = None,
         config: QueryConfig | None = None,
-        schema: GraphSchema | None = None
+        schema: GraphSchema | None = None,
     ) -> None:
         """
         Initialize the knowledge query overlay.
@@ -145,7 +147,7 @@ class KnowledgeQueryOverlay(BaseOverlay):
             "queries_successful": 0,
             "queries_failed": 0,
             "avg_execution_time_ms": 0.0,
-            "cache_hits": 0
+            "cache_hits": 0,
         }
 
         self._logger = logger.bind(overlay=self.NAME)
@@ -159,7 +161,7 @@ class KnowledgeQueryOverlay(BaseOverlay):
         self._logger.info(
             "knowledge_query_initialized",
             schema_labels=len(self._schema.nodes),
-            schema_relationships=len(self._schema.relationships)
+            schema_relationships=len(self._schema.relationships),
         )
         return await super().initialize()
 
@@ -167,7 +169,7 @@ class KnowledgeQueryOverlay(BaseOverlay):
         self,
         context: OverlayContext,
         event: Event | None = None,
-        input_data: dict[str, Any] | None = None
+        input_data: dict[str, Any] | None = None,
     ) -> OverlayResult:
         """
         Execute a knowledge query.
@@ -217,10 +219,7 @@ class KnowledgeQueryOverlay(BaseOverlay):
                     self._query_cache[cache_key] = compiled
 
             # Apply limits
-            limit = min(
-                data.get("limit", self._config.default_limit),
-                self._config.max_results
-            )
+            limit = min(data.get("limit", self._config.default_limit), self._config.max_results)
 
             # Execute and get results
             start_time = datetime.now(UTC)
@@ -242,7 +241,7 @@ class KnowledgeQueryOverlay(BaseOverlay):
                 cypher=compiled.cypher,
                 result_count=result.total_count,
                 execution_time=execution_time,
-                user_id=context.user_id
+                user_id=context.user_id,
             )
 
             # Build response
@@ -256,9 +255,7 @@ class KnowledgeQueryOverlay(BaseOverlay):
 
             # Include results if requested
             if data.get("include_results", True):
-                response_data["results"] = [
-                    row.data for row in result.rows[:limit]
-                ]
+                response_data["results"] = [row.data for row in result.rows[:limit]]
 
             # Include explanation if configured
             if self._config.include_explanation:
@@ -274,11 +271,19 @@ class KnowledgeQueryOverlay(BaseOverlay):
                 metrics={
                     "execution_time_ms": execution_time,
                     "result_count": result.total_count,
-                    "cache_hit": cache_key in self._query_cache
-                }
+                    "cache_hit": cache_key in self._query_cache,
+                },
             )
 
-        except (QueryCompilationError, QueryExecutionError, OverlayError, ValueError, TypeError, KeyError, RuntimeError) as e:
+        except (
+            QueryCompilationError,
+            QueryExecutionError,
+            OverlayError,
+            ValueError,
+            TypeError,
+            KeyError,
+            RuntimeError,
+        ) as e:
             self._stats["queries_failed"] += 1
             self._logger.error(
                 "query_execution_failed",
@@ -288,11 +293,7 @@ class KnowledgeQueryOverlay(BaseOverlay):
             )
             return OverlayResult.fail(f"Query failed: {str(e)}")
 
-    async def compile_only(
-        self,
-        question: str,
-        user_trust: int = 60
-    ) -> CompiledQuery:
+    async def compile_only(self, question: str, user_trust: int = 60) -> CompiledQuery:
         """
         Compile a question without executing.
 
@@ -307,10 +308,7 @@ class KnowledgeQueryOverlay(BaseOverlay):
         )
 
     async def execute_raw(
-        self,
-        cypher: str,
-        parameters: dict[str, Any] | None = None,
-        limit: int = 20
+        self, cypher: str, parameters: dict[str, Any] | None = None, limit: int = 20
     ) -> QueryResult:
         """
         Execute raw Cypher query.
@@ -331,9 +329,7 @@ class KnowledgeQueryOverlay(BaseOverlay):
                 CypherValidator.validate_parameters(parameters)
         except CypherSecurityError as e:
             self._logger.warning(
-                "raw_query_rejected",
-                reason=str(e),
-                cypher_preview=cypher[:100] if cypher else ""
+                "raw_query_rejected", reason=str(e), cypher_preview=cypher[:100] if cypher else ""
             )
             raise QuerySecurityError(f"Query rejected for security reasons: {e}") from e
 
@@ -343,9 +339,7 @@ class KnowledgeQueryOverlay(BaseOverlay):
             parameters=params,
             explanation="Raw Cypher query",
         )
-        results: list[dict[str, Any]] = await self._query_service.db.execute(
-            cypher, params
-        )
+        results: list[dict[str, Any]] = await self._query_service.db.execute(cypher, params)
         rows = [QueryResultRow(data=r) for r in results[:limit]]
         return QueryResult(
             query=compiled,
@@ -357,9 +351,7 @@ class KnowledgeQueryOverlay(BaseOverlay):
         )
 
     def get_query_history(
-        self,
-        user_id: str | None = None,
-        limit: int = 20
+        self, user_id: str | None = None, limit: int = 20
     ) -> list[dict[str, Any]]:
         """Get recent query history."""
         history = self._history
@@ -373,7 +365,7 @@ class KnowledgeQueryOverlay(BaseOverlay):
                 "question": h.question,
                 "result_count": h.result_count,
                 "execution_time_ms": h.execution_time_ms,
-                "timestamp": h.timestamp.isoformat()
+                "timestamp": h.timestamp.isoformat(),
             }
             for h in history[-limit:]
         ]
@@ -390,7 +382,7 @@ class KnowledgeQueryOverlay(BaseOverlay):
             "Who has the highest trust flame?",
             "Find all proposals pending approval",
             "What overlays are currently active?",
-            "Show recent trust changes"
+            "Show recent trust changes",
         ]
 
     def get_schema_info(self) -> dict[str, Any]:
@@ -399,10 +391,9 @@ class KnowledgeQueryOverlay(BaseOverlay):
             "node_labels": [n.label for n in self._schema.nodes],
             "relationship_types": [r.type for r in self._schema.relationships],
             "node_properties": {
-                n.label: [p.name for p in n.properties]
-                for n in self._schema.nodes
+                n.label: [p.name for p in n.properties] for n in self._schema.nodes
             },
-            "examples": self.get_suggested_queries()
+            "examples": self.get_suggested_queries(),
         }
 
     def _get_cache_key(self, question: str, trust: int) -> str:
@@ -419,7 +410,7 @@ class KnowledgeQueryOverlay(BaseOverlay):
         cypher: str,
         result_count: int,
         execution_time: float,
-        user_id: str | None
+        user_id: str | None,
     ) -> None:
         """Record query in history."""
         from uuid import uuid4
@@ -430,14 +421,14 @@ class KnowledgeQueryOverlay(BaseOverlay):
             compiled_cypher=cypher,
             result_count=result_count,
             execution_time_ms=execution_time,
-            user_id=user_id
+            user_id=user_id,
         )
 
         self._history.append(entry)
 
         # Trim history
         if len(self._history) > self._max_history:
-            self._history = self._history[-self._max_history:]
+            self._history = self._history[-self._max_history :]
 
     def _update_avg_time(self, new_time: float) -> None:
         """Update rolling average execution time."""
@@ -448,9 +439,7 @@ class KnowledgeQueryOverlay(BaseOverlay):
             self._stats["avg_execution_time_ms"] = new_time
         else:
             # Rolling average
-            self._stats["avg_execution_time_ms"] = (
-                current * (count - 1) + new_time
-            ) / count
+            self._stats["avg_execution_time_ms"] = (current * (count - 1) + new_time) / count
 
     def clear_cache(self) -> int:
         """Clear compiled query cache."""
@@ -463,7 +452,7 @@ class KnowledgeQueryOverlay(BaseOverlay):
         return {
             **self._stats,
             "cache_size": len(self._query_cache),
-            "history_size": len(self._history)
+            "history_size": len(self._history),
         }
 
 

@@ -133,8 +133,7 @@ class EVMChainClient(BaseChainClient):
         """Return the Web3 instance, raising if not initialized."""
         if self._w3 is None:
             raise ChainClientError(
-                f"Chain client for {self.chain} not initialized. "
-                "Call initialize() first."
+                f"Chain client for {self.chain} not initialized. Call initialize() first."
             )
         return self._w3
 
@@ -160,12 +159,8 @@ class EVMChainClient(BaseChainClient):
         # account is the wallet that signs transactions for Forge operations.
         if self.config.operator_private_key:
             try:
-                self._operator_account = Account.from_key(
-                    self.config.operator_private_key
-                )
-                logger.info(
-                    f"Operator account loaded: {self._operator_account.address}"
-                )
+                self._operator_account = Account.from_key(self.config.operator_private_key)
+                logger.info(f"Operator account loaded: {self._operator_account.address}")
             except (ValueError, TypeError, RuntimeError) as e:
                 logger.warning(f"Failed to load operator account: {e}")
 
@@ -178,7 +173,7 @@ class EVMChainClient(BaseChainClient):
         This properly disposes of the Web3 provider and clears cached data
         to prevent memory leaks during shutdown.
         """
-        if self._w3 and hasattr(self._w3.provider, 'disconnect'):  # type: ignore[attr-defined]
+        if self._w3 and hasattr(self._w3.provider, "disconnect"):  # type: ignore[attr-defined]
             await self._w3.provider.disconnect()  # type: ignore[attr-defined]
         self._w3 = None
         self._operator_account = None
@@ -188,11 +183,7 @@ class EVMChainClient(BaseChainClient):
 
     # ==================== Wallet Operations ====================
 
-    async def get_wallet_balance(
-        self,
-        address: str,
-        token_address: str | None = None
-    ) -> float:
+    async def get_wallet_balance(self, address: str, token_address: str | None = None) -> float:
         """
         Get the balance of a wallet.
 
@@ -217,7 +208,7 @@ class EVMChainClient(BaseChainClient):
         if token_address is None:
             # Query native currency balance (wei) and convert to ETH
             balance_wei: int = await w3.eth.get_balance(address)
-            return float(w3.from_wei(balance_wei, 'ether'))
+            return float(w3.from_wei(balance_wei, "ether"))
         else:
             # Query ERC-20 token balance using the standard balanceOf function
             token_address = w3.to_checksum_address(token_address)
@@ -228,7 +219,7 @@ class EVMChainClient(BaseChainClient):
             decimals: int = await self._get_token_decimals(token_address)
 
             # Convert from smallest unit to human-readable
-            return float(balance_raw / (10 ** decimals))
+            return float(balance_raw / (10**decimals))
 
     async def get_virtual_balance(self, address: str) -> float:
         """
@@ -245,9 +236,7 @@ class EVMChainClient(BaseChainClient):
         """
         virtual_address = self.virtual_token_address
         if not virtual_address:
-            raise ChainClientError(
-                f"VIRTUAL token address not configured for {self.chain}"
-            )
+            raise ChainClientError(f"VIRTUAL token address not configured for {self.chain}")
         return await self.get_wallet_balance(address, virtual_address)
 
     async def create_wallet(self) -> tuple[WalletInfo, str]:
@@ -285,6 +274,7 @@ class EVMChainClient(BaseChainClient):
         private_key_hex: str = account.key.hex()
 
         import structlog
+
         structlog.get_logger().info(
             "wallet_created",
             address=account.address,
@@ -339,41 +329,37 @@ class EVMChainClient(BaseChainClient):
         operator_account: LocalAccount = self._operator_account
 
         to_address = w3.to_checksum_address(to_address)
-        value_wei: Any = w3.to_wei(value, 'ether')
+        value_wei: Any = w3.to_wei(value, "ether")
 
         # Build the transaction with EIP-1559 fee parameters
         tx: dict[str, Any] = {
-            'from': operator_account.address,
-            'to': to_address,
-            'value': value_wei,
-            'nonce': await w3.eth.get_transaction_count(
-                operator_account.address
-            ),
-            'chainId': await w3.eth.chain_id,  # type: ignore[misc]
+            "from": operator_account.address,
+            "to": to_address,
+            "value": value_wei,
+            "nonce": await w3.eth.get_transaction_count(operator_account.address),
+            "chainId": await w3.eth.chain_id,  # type: ignore[misc]
         }
 
         # Add calldata if provided
         if data:
-            tx['data'] = data
+            tx["data"] = data
 
         # Estimate gas if not provided
         if gas_limit:
-            tx['gas'] = gas_limit
+            tx["gas"] = gas_limit
         else:
-            tx['gas'] = await w3.eth.estimate_gas(tx)  # type: ignore[arg-type]
+            tx["gas"] = await w3.eth.estimate_gas(tx)  # type: ignore[arg-type]
 
         # Get EIP-1559 fee parameters
-        latest_block: Any = await w3.eth.get_block('latest')
-        base_fee: int = latest_block['baseFeePerGas']
+        latest_block: Any = await w3.eth.get_block("latest")
+        base_fee: int = latest_block["baseFeePerGas"]
         max_priority_fee: int = await w3.eth.max_priority_fee  # type: ignore[attr-defined]
-        tx['maxFeePerGas'] = base_fee * 2 + max_priority_fee
-        tx['maxPriorityFeePerGas'] = max_priority_fee
+        tx["maxFeePerGas"] = base_fee * 2 + max_priority_fee
+        tx["maxPriorityFeePerGas"] = max_priority_fee
 
         # Sign and send the transaction
         signed_tx: Any = operator_account.sign_transaction(tx)
-        tx_hash: Any = await w3.eth.send_raw_transaction(
-            signed_tx.raw_transaction
-        )
+        tx_hash: Any = await w3.eth.send_raw_transaction(signed_tx.raw_transaction)
 
         return TransactionRecord(
             tx_hash=tx_hash.hex(),
@@ -389,9 +375,7 @@ class EVMChainClient(BaseChainClient):
         )
 
     async def wait_for_transaction(
-        self,
-        tx_hash: str,
-        timeout_seconds: int = 120
+        self, tx_hash: str, timeout_seconds: int = 120
     ) -> TransactionRecord:
         """
         Wait for a transaction to be confirmed.
@@ -417,32 +401,28 @@ class EVMChainClient(BaseChainClient):
         while True:
             elapsed: float = asyncio.get_event_loop().time() - start_time
             if elapsed > timeout_seconds:
-                raise TimeoutError(
-                    f"Transaction {tx_hash} not confirmed within {timeout_seconds}s"
-                )
+                raise TimeoutError(f"Transaction {tx_hash} not confirmed within {timeout_seconds}s")
 
             try:
                 receipt: Any = await w3.eth.get_transaction_receipt(tx_hash)
                 if receipt:
                     # Transaction confirmed
                     tx_detail: Any = await w3.eth.get_transaction(tx_hash)
-                    block: Any = await w3.eth.get_block(receipt['blockNumber'])
+                    block: Any = await w3.eth.get_block(receipt["blockNumber"])
 
-                    status: str = "success" if receipt['status'] == 1 else "failed"
+                    status: str = "success" if receipt["status"] == 1 else "failed"
                     if status == "failed":
-                        raise TransactionFailedError(
-                            f"Transaction {tx_hash} reverted"
-                        )
+                        raise TransactionFailedError(f"Transaction {tx_hash} reverted")
 
                     return TransactionRecord(
                         tx_hash=tx_hash,
                         chain=self.chain.value,
-                        block_number=receipt['blockNumber'],
-                        timestamp=datetime.fromtimestamp(block['timestamp'], tz=UTC),
-                        from_address=tx_detail['from'],
-                        to_address=tx_detail['to'] or "",
-                        value=float(w3.from_wei(tx_detail['value'], 'ether')),
-                        gas_used=receipt['gasUsed'],
+                        block_number=receipt["blockNumber"],
+                        timestamp=datetime.fromtimestamp(block["timestamp"], tz=UTC),
+                        from_address=tx_detail["from"],
+                        to_address=tx_detail["to"] or "",
+                        value=float(w3.from_wei(tx_detail["value"], "ether")),
+                        gas_used=receipt["gasUsed"],
                         status=status,
                         transaction_type="transfer",
                     )
@@ -465,9 +445,9 @@ class EVMChainClient(BaseChainClient):
             receipt: Any = await w3.eth.get_transaction_receipt(tx_hash)
 
             if receipt:
-                block: Any = await w3.eth.get_block(receipt['blockNumber'])
-                status: str = "success" if receipt['status'] == 1 else "failed"
-                timestamp: datetime = datetime.fromtimestamp(block['timestamp'], tz=UTC)
+                block: Any = await w3.eth.get_block(receipt["blockNumber"])
+                status: str = "success" if receipt["status"] == 1 else "failed"
+                timestamp: datetime = datetime.fromtimestamp(block["timestamp"], tz=UTC)
             else:
                 status = "pending"
                 timestamp = datetime.now(UTC)
@@ -475,12 +455,12 @@ class EVMChainClient(BaseChainClient):
             return TransactionRecord(
                 tx_hash=tx_hash,
                 chain=self.chain.value,
-                block_number=receipt['blockNumber'] if receipt else 0,
+                block_number=receipt["blockNumber"] if receipt else 0,
                 timestamp=timestamp,
-                from_address=tx_detail['from'],
-                to_address=tx_detail['to'] or "",
-                value=float(w3.from_wei(tx_detail['value'], 'ether')),
-                gas_used=receipt['gasUsed'] if receipt else 0,
+                from_address=tx_detail["from"],
+                to_address=tx_detail["to"] or "",
+                value=float(w3.from_wei(tx_detail["value"], "ether")),
+                gas_used=receipt["gasUsed"] if receipt else 0,
                 status=status,
                 transaction_type="transfer",
             )
@@ -498,13 +478,13 @@ class EVMChainClient(BaseChainClient):
         w3 = self._get_w3()
 
         tx: dict[str, Any] = {
-            'to': w3.to_checksum_address(to_address),
-            'value': w3.to_wei(value, 'ether'),
+            "to": w3.to_checksum_address(to_address),
+            "value": w3.to_wei(value, "ether"),
         }
         if data:
-            tx['data'] = data
+            tx["data"] = data
         if self._operator_account:
-            tx['from'] = self._operator_account.address
+            tx["from"] = self._operator_account.address
 
         result: int = await w3.eth.estimate_gas(tx)  # type: ignore[arg-type]
         return result
@@ -532,15 +512,13 @@ class EVMChainClient(BaseChainClient):
 
         # Get decimals and convert amount using Decimal for precision
         from decimal import Decimal
+
         decimals: int = await self._get_token_decimals(token_address)
-        amount_raw: int = int(Decimal(str(amount)) * Decimal(10 ** decimals))
+        amount_raw: int = int(Decimal(str(amount)) * Decimal(10**decimals))
 
         # Encode the transfer function call
         contract: Any = self._get_token_contract(token_address)
-        encoded_data: str = contract.encodeABI(
-            fn_name='transfer',
-            args=[to_address, amount_raw]
-        )
+        encoded_data: str = contract.encodeABI(fn_name="transfer", args=[to_address, amount_raw])
 
         # Send the transaction
         tx_record: TransactionRecord = await self.send_transaction(
@@ -584,7 +562,7 @@ class EVMChainClient(BaseChainClient):
 
         # SECURITY FIX (Audit 4 - M12): Handle unlimited approval with explicit opt-in
         amount_raw: int
-        if amount == float('inf'):
+        if amount == float("inf"):
             if not allow_unlimited:
                 raise ValueError(
                     "Unlimited token approvals require explicit allow_unlimited=True. "
@@ -600,13 +578,12 @@ class EVMChainClient(BaseChainClient):
             amount_raw = 2**256 - 1  # Max uint256
         else:
             decimals: int = await self._get_token_decimals(token_address)
-            amount_raw = int(amount * (10 ** decimals))
+            amount_raw = int(amount * (10**decimals))
 
         # Encode the approve function call
         contract: Any = self._get_token_contract(token_address)
         encoded_data: str = contract.encodeABI(
-            fn_name='approve',
-            args=[spender_address, amount_raw]
+            fn_name="approve", args=[spender_address, amount_raw]
         )
 
         tx_record: TransactionRecord = await self.send_transaction(
@@ -642,8 +619,8 @@ class EVMChainClient(BaseChainClient):
             chain=self.chain.value,
             symbol=symbol,
             name=name,
-            total_supply=total_supply // (10 ** token_decimals),
-            circulating_supply=total_supply // (10 ** token_decimals),
+            total_supply=total_supply // (10**token_decimals),
+            circulating_supply=total_supply // (10**token_decimals),
         )
 
     # ==================== Contract Operations ====================
@@ -707,9 +684,7 @@ class EVMChainClient(BaseChainClient):
         )
 
         func: Any = getattr(contract.functions, function_name)
-        tx_data: Any = func(*args).build_transaction(
-            {'from': operator_account.address}
-        )['data']
+        tx_data: Any = func(*args).build_transaction({"from": operator_account.address})["data"]
 
         tx_record: TransactionRecord = await self.send_transaction(
             to_address=contract_address,
@@ -733,7 +708,7 @@ class EVMChainClient(BaseChainClient):
         self._ensure_initialized()
         w3 = self._get_w3()
         block: Any = await w3.eth.get_block(block_number)
-        return datetime.fromtimestamp(block['timestamp'], tz=UTC)
+        return datetime.fromtimestamp(block["timestamp"], tz=UTC)
 
     # ==================== Helper Methods ====================
 

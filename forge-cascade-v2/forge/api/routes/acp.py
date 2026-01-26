@@ -25,11 +25,15 @@ router = APIRouter(prefix="/acp", tags=["Agent Commerce Protocol"])
 # Request/Response Models
 # ============================================================================
 
+
 class CreateOfferingRequest(BaseModel):
     """Request to create a service offering."""
+
     agent_id: str = Field(description="ID of the agent offering the service")
     wallet_address: str = Field(description="Agent's wallet address")
-    service_type: str = Field(description="Type of service (knowledge_query, semantic_search, etc.)")
+    service_type: str = Field(
+        description="Type of service (knowledge_query, semantic_search, etc.)"
+    )
     title: str = Field(max_length=200, description="Human-readable title")
     description: str = Field(max_length=2000, description="Detailed description")
     base_fee_virtual: float = Field(ge=0, description="Base fee in VIRTUAL tokens")
@@ -37,12 +41,15 @@ class CreateOfferingRequest(BaseModel):
     unit_type: str | None = Field(default=None, description="Unit type for per-unit fees")
     max_execution_time_seconds: int = Field(default=300, ge=1, description="Max execution time")
     tags: list[str] = Field(default_factory=list, description="Tags for discovery")
-    input_schema: dict[str, Any] = Field(default_factory=dict, description="Expected input JSON schema")
+    input_schema: dict[str, Any] = Field(
+        default_factory=dict, description="Expected input JSON schema"
+    )
     output_schema: dict[str, Any] = Field(default_factory=dict, description="Output JSON schema")
 
 
 class OfferingResponse(BaseModel):
     """Service offering response."""
+
     id: str
     provider_agent_id: str
     provider_wallet: str
@@ -62,6 +69,7 @@ class OfferingResponse(BaseModel):
 
 class CreateJobRequest(BaseModel):
     """Request to create an ACP job."""
+
     job_offering_id: str = Field(description="ID of the offering to use")
     buyer_agent_id: str = Field(description="ID of the buying agent")
     requirements: str = Field(max_length=5000, description="Detailed requirements")
@@ -72,6 +80,7 @@ class CreateJobRequest(BaseModel):
 
 class NegotiationTermsRequest(BaseModel):
     """Provider's proposed terms."""
+
     proposed_fee_virtual: float = Field(ge=0)
     proposed_deadline: datetime
     deliverable_format: str
@@ -83,6 +92,7 @@ class NegotiationTermsRequest(BaseModel):
 
 class DeliverableRequest(BaseModel):
     """Deliverable submission."""
+
     content_type: str = Field(description="Type: json, text, url, file_reference")
     content: dict[str, Any] = Field(description="Deliverable content or reference")
     notes: str = Field(default="", max_length=1000)
@@ -90,6 +100,7 @@ class DeliverableRequest(BaseModel):
 
 class EvaluationRequest(BaseModel):
     """Evaluation result."""
+
     evaluator_agent_id: str
     result: str = Field(description="approved, rejected, or needs_revision")
     score: float = Field(ge=0.0, le=1.0)
@@ -101,14 +112,18 @@ class EvaluationRequest(BaseModel):
 
 class DisputeRequest(BaseModel):
     """Dispute filing."""
+
     filed_by: str = Field(description="buyer or provider")
     reason: str = Field(max_length=2000)
     evidence: list[dict[str, Any]] = Field(default_factory=list)
-    requested_resolution: str = Field(description="full_refund, partial_refund, renegotiate, arbitration")
+    requested_resolution: str = Field(
+        description="full_refund, partial_refund, renegotiate, arbitration"
+    )
 
 
 class JobResponse(BaseModel):
     """ACP job response."""
+
     id: str
     job_offering_id: str
     buyer_agent_id: str
@@ -129,6 +144,7 @@ class JobResponse(BaseModel):
 
 class JobListResponse(BaseModel):
     """List of jobs response."""
+
     jobs: list[JobResponse]
     total: int
 
@@ -136,6 +152,7 @@ class JobListResponse(BaseModel):
 # ============================================================================
 # Offerings Endpoints
 # ============================================================================
+
 
 @router.post("/offerings", response_model=OfferingResponse)
 async def create_offering(
@@ -292,6 +309,7 @@ async def get_offering(offering_id: str) -> OfferingResponse:
 # ============================================================================
 # Jobs Endpoints
 # ============================================================================
+
 
 @router.post("/jobs", response_model=JobResponse)
 async def create_job(
@@ -643,6 +661,7 @@ async def get_provider_jobs(
 # Helper Functions
 # ============================================================================
 
+
 def _job_to_response(job: ACPJob) -> JobResponse:
     """Convert ACPJob to JobResponse."""
     return JobResponse(
@@ -652,8 +671,10 @@ def _job_to_response(job: ACPJob) -> JobResponse:
         buyer_wallet=job.buyer_wallet,
         provider_agent_id=job.provider_agent_id,
         provider_wallet=job.provider_wallet,
-        current_phase=job.current_phase.value if hasattr(job.current_phase, 'value') else str(job.current_phase),
-        status=job.status.value if hasattr(job.status, 'value') else str(job.status),
+        current_phase=job.current_phase.value
+        if hasattr(job.current_phase, "value")
+        else str(job.current_phase),
+        status=job.status.value if hasattr(job.status, "value") else str(job.status),
         requirements=job.requirements,
         agreed_fee_virtual=job.agreed_fee_virtual,
         agreed_deadline=job.agreed_deadline,

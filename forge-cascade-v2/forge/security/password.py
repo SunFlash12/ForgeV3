@@ -25,6 +25,7 @@ logger = structlog.get_logger(__name__)
 zxcvbn_check: Callable[[str, list[str] | None], Any] | None
 try:
     from zxcvbn import zxcvbn as zxcvbn_check
+
     ZXCVBN_AVAILABLE = True
 except ImportError:
     zxcvbn_check = None
@@ -47,76 +48,200 @@ PASSWORD_MAX_LENGTH = 128
 # with the HaveIBeenPwned API using the k-anonymity model:
 # https://haveibeenpwned.com/API/v3#PwnedPasswords
 # This would check against billions of breached passwords without exposing the password.
-COMMON_WEAK_PASSWORDS = frozenset({
-    # Original list
-    "password", "password1", "password123", "password!",
-    "12345678", "123456789", "1234567890",
-    "qwerty123", "qwertyuiop", "qwerty1234",
-    "letmein1", "welcome1", "admin123", "admin1234",
-    "iloveyou1", "sunshine1", "princess1",
-    "football1", "baseball1", "dragon123",
-    "master123", "monkey123", "shadow123",
-    "abc12345", "abcd1234", "abcdefgh",
-    "passw0rd", "p@ssw0rd", "p@ssword",
-    "changeme", "changeme1", "temp1234",
-    # SECURITY FIX (Audit 3): Extended common password list
-    # Top breach passwords
-    "password12", "password2", "password3",
-    "12345678!", "qwerty12", "letmein!", "welcome!", "welcome12",
-    "iloveyou", "iloveyou!", "trustno1", "trustno1!",
-    "1qaz2wsx", "1q2w3e4r", "1q2w3e4r5t", "zaq12wsx",
-    "!qaz2wsx", "qazwsx123", "1qazxsw2",
-    # Simple words with numbers
-    "dragon12", "michael1", "jennifer1", "jordan23",
-    "mustang1", "hunter12", "summer12", "winter12",
-    "charlie1", "yankees1", "rangers1", "cowboys1",
-    "superman1", "batman123", "spiderman1",
-    # Keyboard patterns
-    "asdfghjkl", "zxcvbnm1", "asdf1234", "qweasdzxc",
-    "asdfqwer", "1234qwer", "qwer1234!", "asdf!234",
-    # Common with substitutions
-    "p4ssw0rd", "passw0rd!", "pa$$word", "pa$$w0rd",
-    "l3tm31n", "w3lc0me", "adm1n123", "r00tpass",
-    # Year-based
-    "password2020", "password2021", "password2022", "password2023",
-    "password2024", "password2025", "qwerty2020", "qwerty2021",
-    "summer2020", "summer2021", "winter2020", "winter2021",
-    # Company/service patterns (will also check dynamically)
-    "admin1234!", "root1234", "test1234", "guest1234",
-    "demo1234", "user1234", "login1234", "access123",
-    # Sports teams and names
-    "yankees123", "cowboys123", "lakers123", "steelers1",
-    "patriots1", "eagles123", "broncos123", "giants123",
-    # Popular names with numbers
-    "michael123", "jennifer12", "jessica123", "ashley123",
-    "matthew123", "andrew123", "joshua123", "daniel123",
-    # More keyboard patterns
-    "qwertyui", "asdfghjk", "zxcvbnm!", "!qazxsw2",
-    "1234abcd", "abcd!234", "aaaa1111", "1111aaaa",
-    # Love/emotion patterns
-    "iloveu123", "loveyou12", "mylove123",
-    "babe1234", "honey1234", "sweetie1", "darling1",
-    # Tech patterns
-    "computer1", "internet1", "windows10", "apple123",
-    "google123", "facebook1", "twitter1", "instagram1",
-    # Animal patterns
-    "tiger1234", "lion12345",
-    "bear12345", "wolf12345", "eagle1234", "shark1234",
-})
+COMMON_WEAK_PASSWORDS = frozenset(
+    {
+        # Original list
+        "password",
+        "password1",
+        "password123",
+        "password!",
+        "12345678",
+        "123456789",
+        "1234567890",
+        "qwerty123",
+        "qwertyuiop",
+        "qwerty1234",
+        "letmein1",
+        "welcome1",
+        "admin123",
+        "admin1234",
+        "iloveyou1",
+        "sunshine1",
+        "princess1",
+        "football1",
+        "baseball1",
+        "dragon123",
+        "master123",
+        "monkey123",
+        "shadow123",
+        "abc12345",
+        "abcd1234",
+        "abcdefgh",
+        "passw0rd",
+        "p@ssw0rd",
+        "p@ssword",
+        "changeme",
+        "changeme1",
+        "temp1234",
+        # SECURITY FIX (Audit 3): Extended common password list
+        # Top breach passwords
+        "password12",
+        "password2",
+        "password3",
+        "12345678!",
+        "qwerty12",
+        "letmein!",
+        "welcome!",
+        "welcome12",
+        "iloveyou",
+        "iloveyou!",
+        "trustno1",
+        "trustno1!",
+        "1qaz2wsx",
+        "1q2w3e4r",
+        "1q2w3e4r5t",
+        "zaq12wsx",
+        "!qaz2wsx",
+        "qazwsx123",
+        "1qazxsw2",
+        # Simple words with numbers
+        "dragon12",
+        "michael1",
+        "jennifer1",
+        "jordan23",
+        "mustang1",
+        "hunter12",
+        "summer12",
+        "winter12",
+        "charlie1",
+        "yankees1",
+        "rangers1",
+        "cowboys1",
+        "superman1",
+        "batman123",
+        "spiderman1",
+        # Keyboard patterns
+        "asdfghjkl",
+        "zxcvbnm1",
+        "asdf1234",
+        "qweasdzxc",
+        "asdfqwer",
+        "1234qwer",
+        "qwer1234!",
+        "asdf!234",
+        # Common with substitutions
+        "p4ssw0rd",
+        "passw0rd!",
+        "pa$$word",
+        "pa$$w0rd",
+        "l3tm31n",
+        "w3lc0me",
+        "adm1n123",
+        "r00tpass",
+        # Year-based
+        "password2020",
+        "password2021",
+        "password2022",
+        "password2023",
+        "password2024",
+        "password2025",
+        "qwerty2020",
+        "qwerty2021",
+        "summer2020",
+        "summer2021",
+        "winter2020",
+        "winter2021",
+        # Company/service patterns (will also check dynamically)
+        "admin1234!",
+        "root1234",
+        "test1234",
+        "guest1234",
+        "demo1234",
+        "user1234",
+        "login1234",
+        "access123",
+        # Sports teams and names
+        "yankees123",
+        "cowboys123",
+        "lakers123",
+        "steelers1",
+        "patriots1",
+        "eagles123",
+        "broncos123",
+        "giants123",
+        # Popular names with numbers
+        "michael123",
+        "jennifer12",
+        "jessica123",
+        "ashley123",
+        "matthew123",
+        "andrew123",
+        "joshua123",
+        "daniel123",
+        # More keyboard patterns
+        "qwertyui",
+        "asdfghjk",
+        "zxcvbnm!",
+        "!qazxsw2",
+        "1234abcd",
+        "abcd!234",
+        "aaaa1111",
+        "1111aaaa",
+        # Love/emotion patterns
+        "iloveu123",
+        "loveyou12",
+        "mylove123",
+        "babe1234",
+        "honey1234",
+        "sweetie1",
+        "darling1",
+        # Tech patterns
+        "computer1",
+        "internet1",
+        "windows10",
+        "apple123",
+        "google123",
+        "facebook1",
+        "twitter1",
+        "instagram1",
+        # Animal patterns
+        "tiger1234",
+        "lion12345",
+        "bear12345",
+        "wolf12345",
+        "eagle1234",
+        "shark1234",
+    }
+)
 
 # SECURITY FIX (Audit 3): Context-aware banned substrings
-BANNED_PASSWORD_SUBSTRINGS = frozenset({
-    "forge", "cascade", "admin", "root", "test", "demo",
-    "user", "pass", "login", "guest", "temp", "default",
-})
+BANNED_PASSWORD_SUBSTRINGS = frozenset(
+    {
+        "forge",
+        "cascade",
+        "admin",
+        "root",
+        "test",
+        "demo",
+        "user",
+        "pass",
+        "login",
+        "guest",
+        "temp",
+        "default",
+    }
+)
 
 
 class PasswordValidationError(Exception):
     """Password does not meet requirements."""
+
     pass
 
 
-def validate_password_strength(password: str, username: str | None = None, email: str | None = None) -> None:
+def validate_password_strength(
+    password: str, username: str | None = None, email: str | None = None
+) -> None:
     """
     Validate password meets minimum security requirements.
 
@@ -157,7 +282,9 @@ def validate_password_strength(password: str, username: str | None = None, email
     # SECURITY FIX (Audit 3): Check for banned substrings (service/product names)
     for banned in BANNED_PASSWORD_SUBSTRINGS:
         if banned in password_lower:
-            raise PasswordValidationError("Password cannot contain common words like 'admin', 'password', or service names")
+            raise PasswordValidationError(
+                "Password cannot contain common words like 'admin', 'password', or service names"
+            )
 
     # SECURITY FIX (Audit 3): Context-aware validation - check username similarity
     if username:
@@ -181,9 +308,9 @@ def validate_password_strength(password: str, username: str | None = None, email
 
     # Check for common weak patterns
     common_patterns = [
-        r'^(.)\1+$',  # All same character
-        r'^(012|123|234|345|456|567|678|789|890)+',  # Sequential numbers
-        r'^(abc|bcd|cde|def|efg|fgh|ghi|hij|ijk|jkl|klm|lmn|mno|nop|opq|pqr|qrs|rst|stu|tuv|uvw|vwx|wxy|xyz)+',  # Sequential letters
+        r"^(.)\1+$",  # All same character
+        r"^(012|123|234|345|456|567|678|789|890)+",  # Sequential numbers
+        r"^(abc|bcd|cde|def|efg|fgh|ghi|hij|ijk|jkl|klm|lmn|mno|nop|opq|pqr|qrs|rst|stu|tuv|uvw|vwx|wxy|xyz)+",  # Sequential letters
     ]
     for pattern in common_patterns:
         if re.match(pattern, password_lower):
@@ -233,7 +360,7 @@ def _has_repeated_pattern(password: str) -> bool:
     for pattern_len in range(2, min(5, length // 2 + 1)):
         pattern = password[:pattern_len]
         # Check if entire password is just this pattern repeated
-        if pattern * (length // pattern_len) == password[:pattern_len * (length // pattern_len)]:
+        if pattern * (length // pattern_len) == password[: pattern_len * (length // pattern_len)]:
             # At least 3 repetitions to be considered weak
             if length // pattern_len >= 3:
                 return True
@@ -241,10 +368,7 @@ def _has_repeated_pattern(password: str) -> bool:
 
 
 def hash_password(
-    password: str,
-    validate: bool = True,
-    username: str | None = None,
-    email: str | None = None
+    password: str, validate: bool = True, username: str | None = None, email: str | None = None
 ) -> str:
     """
     Hash a password using bcrypt.
@@ -268,11 +392,12 @@ def hash_password(
     # This ensures consistent hashing regardless of Unicode representation variants
     # (e.g., é as single char vs e + combining accent)
     import unicodedata
-    normalized_password = unicodedata.normalize('NFKC', password)
-    password_bytes = normalized_password.encode('utf-8')
+
+    normalized_password = unicodedata.normalize("NFKC", password)
+    password_bytes = normalized_password.encode("utf-8")
     salt = bcrypt.gensalt(rounds=_bcrypt_rounds)
     hashed = bcrypt.hashpw(password_bytes, salt)
-    return hashed.decode('utf-8')
+    return hashed.decode("utf-8")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -297,12 +422,12 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     try:
         # SECURITY FIX (Audit 4 - L10): Apply same Unicode normalization as hash_password
         import unicodedata
-        normalized_password = unicodedata.normalize('NFKC', plain_password)
+
+        normalized_password = unicodedata.normalize("NFKC", plain_password)
 
         # bcrypt.checkpw is designed to be constant-time
         result = bcrypt.checkpw(
-            normalized_password.encode('utf-8'),
-            hashed_password.encode('utf-8')
+            normalized_password.encode("utf-8"), hashed_password.encode("utf-8")
         )
         return result
     except (ValueError, TypeError) as e:
@@ -327,7 +452,7 @@ def needs_rehash(hashed_password: str) -> bool:
     """
     try:
         # Extract rounds from the hash (format: $2b$XX$...)
-        parts = hashed_password.split('$')
+        parts = hashed_password.split("$")
         if len(parts) >= 3:
             stored_rounds = int(parts[2])
             result: bool = stored_rounds < _bcrypt_rounds
@@ -338,9 +463,7 @@ def needs_rehash(hashed_password: str) -> bool:
 
 
 def check_password_history(
-    new_password: str,
-    password_history: list[str],
-    history_count: int | None = None
+    new_password: str, password_history: list[str], history_count: int | None = None
 ) -> bool:
     """
     SECURITY FIX (Audit 6): Check if a password was recently used.
@@ -371,14 +494,12 @@ def check_password_history(
 
     # Apply same normalization as verify_password
     import unicodedata
-    normalized_password = unicodedata.normalize('NFKC', new_password)
+
+    normalized_password = unicodedata.normalize("NFKC", new_password)
 
     for old_hash in passwords_to_check:
         try:
-            if bcrypt.checkpw(
-                normalized_password.encode('utf-8'),
-                old_hash.encode('utf-8')
-            ):
+            if bcrypt.checkpw(normalized_password.encode("utf-8"), old_hash.encode("utf-8")):
                 logger.warning(
                     "password_reuse_detected",
                     history_position=passwords_to_check.index(old_hash) + 1,
@@ -396,9 +517,7 @@ def check_password_history(
 
 
 def update_password_history(
-    current_hash: str,
-    password_history: list[str],
-    max_history: int | None = None
+    current_hash: str, password_history: list[str], max_history: int | None = None
 ) -> list[str]:
     """
     SECURITY FIX (Audit 6): Update password history with new hash.
@@ -423,7 +542,9 @@ def update_password_history(
     return new_history[:max_history]
 
 
-def get_password_strength(password: str, username: str | None = None, email: str | None = None) -> dict[str, Any]:
+def get_password_strength(
+    password: str, username: str | None = None, email: str | None = None
+) -> dict[str, Any]:
     """
     Evaluate password strength.
 
@@ -452,13 +573,7 @@ def get_password_strength(password: str, username: str | None = None, email: str
         feedback_obj = result.get("feedback", {})
 
         # Map zxcvbn score (0-4) to labels
-        score_labels = {
-            0: "very_weak",
-            1: "weak",
-            2: "fair",
-            3: "strong",
-            4: "very_strong"
-        }
+        score_labels = {0: "very_weak", 1: "weak", 2: "fair", 3: "strong", 4: "very_strong"}
 
         return {
             "length": len(password),
@@ -470,7 +585,9 @@ def get_password_strength(password: str, username: str | None = None, email: str
             "label": score_labels.get(result["score"], "unknown"),
             "feedback": feedback_obj.get("suggestions", []),
             "warning": feedback_obj.get("warning", ""),
-            "crack_time_display": result.get("crack_times_display", {}).get("offline_slow_hashing_1e4_per_second", ""),
+            "crack_time_display": result.get("crack_times_display", {}).get(
+                "offline_slow_hashing_1e4_per_second", ""
+            ),
             "entropy_based": True,
         }
 

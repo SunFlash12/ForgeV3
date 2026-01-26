@@ -214,7 +214,7 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
         # SECURITY FIX (Audit 3): Use explicit field list to exclude password_hash
         query = f"""
         MATCH (u:User {{id: $id}})
-        SET {', '.join(set_clauses)}
+        SET {", ".join(set_clauses)}
         RETURN u {{{USER_SAFE_FIELDS}}} AS user
         """
 
@@ -551,11 +551,7 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
             {"min_trust": min_trust, "limit": limit},
         )
 
-        return [
-            UserPublic.model_validate(r["user"])
-            for r in results
-            if r.get("user")
-        ]
+        return [UserPublic.model_validate(r["user"]) for r in results if r.get("user")]
 
     async def deactivate(self, user_id: str) -> bool:
         """
@@ -908,8 +904,10 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
 
         # Generate a random password hash (user won't use password login)
         import secrets
+
         random_password = secrets.token_urlsafe(32)
         from forge.security.password import hash_password
+
         password_hash = hash_password(random_password)
 
         params = {
@@ -972,9 +970,7 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
         RETURN u {{{USER_SAFE_FIELDS}}} AS user
         """
 
-        result = await self.client.execute_single(
-            query, {"stripe_customer_id": stripe_customer_id}
-        )
+        result = await self.client.execute_single(query, {"stripe_customer_id": stripe_customer_id})
 
         if result and result.get("user"):
             return self._to_model(result["user"])
@@ -1035,9 +1031,7 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
 
         results = await self.client.execute(query, params)
         users: list[User] = [
-            u
-            for r in results
-            if r.get("user") and (u := self._to_model(r["user"])) is not None
+            u for r in results if r.get("user") and (u := self._to_model(r["user"])) is not None
         ]
 
         return users, total

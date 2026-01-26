@@ -33,9 +33,11 @@ logger = structlog.get_logger(__name__)
 # Metric Types
 # =============================================================================
 
+
 @dataclass
 class Counter:
     """A monotonically increasing counter."""
+
     name: str
     description: str
     labels: list[str] = field(default_factory=list)
@@ -80,6 +82,7 @@ class Counter:
 @dataclass
 class Gauge:
     """A metric that can go up and down."""
+
     name: str
     description: str
     labels: list[str] = field(default_factory=list)
@@ -139,12 +142,13 @@ class Gauge:
 @dataclass
 class Histogram:
     """A metric that samples observations into buckets."""
+
     name: str
     description: str
     labels: list[str] = field(default_factory=list)
-    buckets: list[float] = field(default_factory=lambda: [
-        0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0
-    ])
+    buckets: list[float] = field(
+        default_factory=lambda: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0]
+    )
     # FIX: Store running statistics instead of all observations to prevent unbounded memory
     _stats: dict[tuple[str, ...], dict[str, Any]] = field(default_factory=dict)
     # Keep last N observations for percentile calculation (bounded)
@@ -169,7 +173,11 @@ class Histogram:
                     self._cardinality_warned = True
                 return
 
-            self._stats[key] = {"count": 0, "sum": 0.0, "bucket_counts": dict.fromkeys(self.buckets, 0)}
+            self._stats[key] = {
+                "count": 0,
+                "sum": 0.0,
+                "bucket_counts": dict.fromkeys(self.buckets, 0),
+            }
             self._stats[key]["bucket_counts"][float("inf")] = 0
             self._recent_observations[key] = []
 
@@ -198,14 +206,16 @@ class Histogram:
         for key, stats in self._stats.items():
             labels = dict(zip(self.labels, key, strict=False))
 
-            results.append({
-                "name": self.name,
-                "type": "histogram",
-                "labels": labels,
-                "buckets": stats["bucket_counts"].copy(),
-                "sum": stats["sum"],
-                "count": stats["count"],
-            })
+            results.append(
+                {
+                    "name": self.name,
+                    "type": "histogram",
+                    "labels": labels,
+                    "buckets": stats["bucket_counts"].copy(),
+                    "sum": stats["sum"],
+                    "count": stats["count"],
+                }
+            )
 
         return results
 
@@ -213,6 +223,7 @@ class Histogram:
 @dataclass
 class Summary:
     """A metric that calculates quantiles."""
+
     name: str
     description: str
     labels: list[str] = field(default_factory=list)
@@ -273,14 +284,16 @@ class Summary:
                 else:
                     quantile_values[q] = 0
 
-            results.append({
-                "name": self.name,
-                "type": "summary",
-                "labels": labels,
-                "quantiles": quantile_values,
-                "sum": stats["sum"],  # Use running total
-                "count": stats["count"],  # Use running count
-            })
+            results.append(
+                {
+                    "name": self.name,
+                    "type": "summary",
+                    "labels": labels,
+                    "quantiles": quantile_values,
+                    "sum": stats["sum"],  # Use running total
+                    "count": stats["count"],  # Use running count
+                }
+            )
 
         return results
 
@@ -288,6 +301,7 @@ class Summary:
 # =============================================================================
 # Metrics Registry
 # =============================================================================
+
 
 class MetricsRegistry:
     """
@@ -608,8 +622,10 @@ canary_traffic_percent = metrics.gauge(
 # Decorators and Context Managers
 # =============================================================================
 
+
 def track_time(histogram: Histogram, **labels: str) -> Callable[[F], F]:
     """Decorator to track function execution time."""
+
     def decorator(func: F) -> F:
         @wraps(func)
         async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
@@ -630,6 +646,7 @@ def track_time(histogram: Histogram, **labels: str) -> Callable[[F], F]:
         if asyncio.iscoroutinefunction(func):
             return cast(F, async_wrapper)
         return cast(F, sync_wrapper)
+
     return decorator
 
 
@@ -647,6 +664,7 @@ async def track_in_progress(gauge: Gauge, **labels: str) -> AsyncIterator[None]:
 # FastAPI Integration
 # =============================================================================
 
+
 def add_metrics_middleware(app: Any) -> None:
     """Add metrics middleware to FastAPI app."""
     from fastapi import Request
@@ -654,7 +672,9 @@ def add_metrics_middleware(app: Any) -> None:
     from starlette.responses import Response as StarletteResponse
 
     class MetricsMiddleware(BaseHTTPMiddleware):
-        async def dispatch(self, request: Request, call_next: Callable[..., Any]) -> StarletteResponse:
+        async def dispatch(
+            self, request: Request, call_next: Callable[..., Any]
+        ) -> StarletteResponse:
             method = request.method
             path = request.url.path
 
@@ -699,6 +719,7 @@ def create_metrics_endpoint(app: Any) -> None:
 # =============================================================================
 # Global Functions
 # =============================================================================
+
 
 def get_metrics_registry() -> MetricsRegistry:
     """Get the global metrics registry."""

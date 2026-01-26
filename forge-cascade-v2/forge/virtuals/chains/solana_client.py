@@ -60,8 +60,7 @@ class SolanaChainClient(BaseChainClient):
         """Return the Solana client, raising if not initialized."""
         if self._client is None:
             raise ChainClientError(
-                f"Chain client for {self.chain} not initialized. "
-                "Call initialize() first."
+                f"Chain client for {self.chain} not initialized. Call initialize() first."
             )
         return self._client
 
@@ -101,8 +100,7 @@ class SolanaChainClient(BaseChainClient):
 
         except ImportError:
             raise ChainClientError(
-                "Solana dependencies not installed. "
-                "Install with: pip install solana solders"
+                "Solana dependencies not installed. Install with: pip install solana solders"
             )
 
     async def close(self) -> None:
@@ -115,11 +113,7 @@ class SolanaChainClient(BaseChainClient):
 
     # ==================== Wallet Operations ====================
 
-    async def get_wallet_balance(
-        self,
-        address: str,
-        token_address: str | None = None
-    ) -> float:
+    async def get_wallet_balance(self, address: str, token_address: str | None = None) -> float:
         """
         Get the balance of a Solana wallet.
 
@@ -164,12 +158,12 @@ class SolanaChainClient(BaseChainClient):
                 account_data: Any = account.account.data
                 # Token account data structure: amount is at bytes 64-72
                 if len(account_data) >= 72:
-                    amount: int = int.from_bytes(account_data[64:72], 'little')
+                    amount: int = int.from_bytes(account_data[64:72], "little")
                     total_balance += amount
 
             # Get decimals for proper conversion
             decimals: int = await self._get_token_decimals(token_address)
-            return float(total_balance / (10 ** decimals))
+            return float(total_balance / (10**decimals))
 
     async def get_virtual_balance(self, address: str) -> float:
         """
@@ -179,9 +173,7 @@ class SolanaChainClient(BaseChainClient):
         """
         virtual_address: str | None = self.virtual_token_address
         if not virtual_address:
-            raise ChainClientError(
-                f"VIRTUAL token address not configured for {self.chain}"
-            )
+            raise ChainClientError(f"VIRTUAL token address not configured for {self.chain}")
         return await self.get_wallet_balance(address, virtual_address)
 
     async def create_wallet(self) -> tuple[WalletInfo, str]:
@@ -214,9 +206,10 @@ class SolanaChainClient(BaseChainClient):
         # SECURITY FIX (Audit 4): Return secret key so it can be stored
         # Solana secret keys are typically represented as base58
         secret_key_bytes: bytes = bytes(keypair)
-        secret_key_base58: str = b58.b58encode(secret_key_bytes).decode('ascii')
+        secret_key_base58: str = b58.b58encode(secret_key_bytes).decode("ascii")
 
         import structlog
+
         structlog.get_logger().info(
             "wallet_created",
             address=str(keypair.pubkey()),
@@ -312,9 +305,7 @@ class SolanaChainClient(BaseChainClient):
         )
 
     async def wait_for_transaction(
-        self,
-        tx_hash: str,
-        timeout_seconds: int = 120
+        self, tx_hash: str, timeout_seconds: int = 120
     ) -> TransactionRecord:
         """
         Wait for a Solana transaction to be confirmed.
@@ -334,9 +325,7 @@ class SolanaChainClient(BaseChainClient):
         while True:
             elapsed: float = asyncio.get_event_loop().time() - start_time
             if elapsed > timeout_seconds:
-                raise TimeoutError(
-                    f"Transaction {tx_hash} not confirmed within {timeout_seconds}s"
-                )
+                raise TimeoutError(f"Transaction {tx_hash} not confirmed within {timeout_seconds}s")
 
             response: Any = await client.get_signature_statuses([signature])
 
@@ -344,9 +333,7 @@ class SolanaChainClient(BaseChainClient):
                 status: Any = response.value[0]
 
                 if status.err:
-                    raise TransactionFailedError(
-                        f"Transaction {tx_hash} failed: {status.err}"
-                    )
+                    raise TransactionFailedError(f"Transaction {tx_hash} failed: {status.err}")
 
                 if status.confirmation_status in ["confirmed", "finalized"]:
                     # Get transaction details for complete record
@@ -354,9 +341,7 @@ class SolanaChainClient(BaseChainClient):
 
                     gas_used: int = 0
                     if tx_response.value and tx_response.value.meta:
-                        gas_used = int(
-                            tx_response.value.meta.compute_units_consumed or 0
-                        )
+                        gas_used = int(tx_response.value.meta.compute_units_consumed or 0)
 
                     return TransactionRecord(
                         tx_hash=tx_hash,
@@ -390,9 +375,7 @@ class SolanaChainClient(BaseChainClient):
 
             block_time: Any = tx.block_time
             timestamp: datetime = (
-                datetime.fromtimestamp(int(block_time), tz=UTC)
-                if block_time
-                else datetime.now(UTC)
+                datetime.fromtimestamp(int(block_time), tz=UTC) if block_time else datetime.now(UTC)
             )
 
             gas_used: int = 0
@@ -470,13 +453,12 @@ class SolanaChainClient(BaseChainClient):
 
         # Get decimals for the token (use Decimal for precision)
         from decimal import Decimal
+
         decimals: int = await self._get_token_decimals(token_address)
-        amount_raw: int = int(Decimal(str(amount)) * Decimal(10 ** decimals))
+        amount_raw: int = int(Decimal(str(amount)) * Decimal(10**decimals))
 
         # Find associated token accounts
-        source_ata: Any = self._get_associated_token_address(
-            keypair.pubkey(), token_mint
-        )
+        source_ata: Any = self._get_associated_token_address(keypair.pubkey(), token_mint)
         dest_ata: Any = self._get_associated_token_address(to_pubkey, token_mint)
 
         # Build transfer instruction
@@ -552,14 +534,12 @@ class SolanaChainClient(BaseChainClient):
         decimals: int = await self._get_token_decimals(token_address)
 
         amount_raw: int
-        if amount == float('inf'):
+        if amount == float("inf"):
             amount_raw = 2**64 - 1  # Max u64 for SPL tokens
         else:
-            amount_raw = int(amount * (10 ** decimals))
+            amount_raw = int(amount * (10**decimals))
 
-        source_ata: Any = self._get_associated_token_address(
-            keypair.pubkey(), token_mint
-        )
+        source_ata: Any = self._get_associated_token_address(keypair.pubkey(), token_mint)
 
         approve_ix: Any = approve(
             ApproveParams(
@@ -615,17 +595,15 @@ class SolanaChainClient(BaseChainClient):
         # Parse mint data (Mint account structure)
         data: Any = response.value.data
         decimals: int = int(data[44]) if len(data) > 44 else 9
-        supply: int = (
-            int.from_bytes(data[36:44], 'little') if len(data) >= 44 else 0
-        )
+        supply: int = int.from_bytes(data[36:44], "little") if len(data) >= 44 else 0
 
         return TokenInfo(
             token_address=token_address,
             chain=self.chain.value,
             symbol="UNKNOWN",  # Solana doesn't store symbol in mint
             name="Unknown Token",
-            total_supply=supply // (10 ** decimals),
-            circulating_supply=supply // (10 ** decimals),
+            total_supply=supply // (10**decimals),
+            circulating_supply=supply // (10**decimals),
         )
 
     # ==================== Contract Operations ====================
@@ -745,12 +723,14 @@ class SolanaChainClient(BaseChainClient):
                 if acc is None:
                     results.append(None)
                 else:
-                    results.append({
-                        "address": args[i],
-                        "lamports": acc.lamports,
-                        "owner": str(acc.owner),
-                        "data_len": len(acc.data) if acc.data else 0,
-                    })
+                    results.append(
+                        {
+                            "address": args[i],
+                            "lamports": acc.lamports,
+                            "owner": str(acc.owner),
+                            "data_len": len(acc.data) if acc.data else 0,
+                        }
+                    )
             return results
 
         else:
@@ -816,10 +796,8 @@ class SolanaChainClient(BaseChainClient):
 
             instruction = Instruction(
                 program_id=memo_program_id,
-                accounts=[
-                    AccountMeta(pubkey=keypair.pubkey(), is_signer=True, is_writable=False)
-                ],
-                data=memo_text.encode('utf-8'),
+                accounts=[AccountMeta(pubkey=keypair.pubkey(), is_signer=True, is_writable=False)],
+                data=memo_text.encode("utf-8"),
             )
 
         elif function_name == "custom" or function_name == "raw":
@@ -922,7 +900,6 @@ class SolanaChainClient(BaseChainClient):
 
         # Add SOL transfer if value > 0
         if value > 0:
-
             # If this is a program call with value, we might need to transfer to the program
             # or a specific account. For now, we skip value transfer for program calls
             # as it's typically handled differently in Solana
@@ -937,9 +914,7 @@ class SolanaChainClient(BaseChainClient):
         response: Any = await client.send_transaction(tx)
 
         if response.value is None:
-            raise TransactionFailedError(
-                f"Failed to execute program instruction: {function_name}"
-            )
+            raise TransactionFailedError(f"Failed to execute program instruction: {function_name}")
 
         tx_sig: str = str(response.value)
 

@@ -37,7 +37,7 @@ def _handle_internal_error(e: Exception, context: str) -> HTTPException:  # noqa
     )
     return HTTPException(
         status_code=500,
-        detail=f"Internal error during {context}. Please try again or contact support."
+        detail=f"Internal error during {context}. Please try again or contact support.",
     )
 
 
@@ -45,8 +45,10 @@ def _handle_internal_error(e: Exception, context: str) -> HTTPException:  # noqa
 # Request/Response Models
 # =============================================================================
 
+
 class PhenotypeInput(BaseModel):
     """A phenotype input."""
+
     code: str | None = Field(None, description="HPO code (e.g., HP:0001250)")
     value: str | None = Field(None, description="Text description")
     negated: bool = Field(False, description="Whether phenotype is absent")
@@ -55,6 +57,7 @@ class PhenotypeInput(BaseModel):
 
 class GeneticVariantInput(BaseModel):
     """A genetic variant input."""
+
     notation: str | None = Field(None, description="Variant notation (e.g., NM_000546.6:c.215C>G)")
     gene_symbol: str | None = Field(None, description="Gene symbol (e.g., BRCA1)")
     pathogenicity: str | None = Field(None, description="Pathogenicity classification")
@@ -63,6 +66,7 @@ class GeneticVariantInput(BaseModel):
 
 class PatientDemographics(BaseModel):
     """Patient demographics."""
+
     age: int | None = Field(None, description="Current age in years")
     age_of_onset: int | None = Field(None, description="Age at symptom onset")
     sex: str | None = Field(None, description="Sex: male, female, other")
@@ -71,13 +75,17 @@ class PatientDemographics(BaseModel):
 
 class CreateSessionRequest(BaseModel):
     """Request to create a diagnosis session."""
+
     patient_id: str | None = Field(None, description="Optional patient ID")
     auto_advance: bool = Field(True, description="Auto-advance through diagnosis states")
 
 
 class StartDiagnosisRequest(BaseModel):
     """Request to start diagnosis with initial data."""
-    phenotypes: list[str | PhenotypeInput] = Field(default=[], description="Phenotypes (HPO codes or descriptions)")
+
+    phenotypes: list[str | PhenotypeInput] = Field(
+        default=[], description="Phenotypes (HPO codes or descriptions)"
+    )
     genetic_variants: list[GeneticVariantInput] = Field(default=[], description="Genetic variants")
     medical_history: list[str] = Field(default=[], description="Medical history items")
     family_history: list[str] = Field(default=[], description="Family history items")
@@ -86,14 +94,15 @@ class StartDiagnosisRequest(BaseModel):
 
 class AnswerQuestionRequest(BaseModel):
     """Request to answer follow-up questions."""
+
     answers: list[dict[str, Any]] = Field(
-        ...,
-        description="List of {question_id, answer, additional_info}"
+        ..., description="List of {question_id, answer, additional_info}"
     )
 
 
 class SessionResponse(BaseModel):
     """Session state response."""
+
     session_id: str
     state: str
     is_complete: bool
@@ -107,6 +116,7 @@ class SessionResponse(BaseModel):
 
 class DiagnosisResultResponse(BaseModel):
     """Final diagnosis result response."""
+
     session_id: str
     primary_diagnosis: dict[str, Any] | None
     confidence: float
@@ -119,6 +129,7 @@ class DiagnosisResultResponse(BaseModel):
 
 class MultiAgentDiagnosisRequest(BaseModel):
     """Request for multi-agent diagnosis."""
+
     phenotypes: list[str | PhenotypeInput] = Field(default=[], description="Phenotypes")
     genetic_variants: list[GeneticVariantInput] = Field(default=[], description="Genetic variants")
     medical_history: list[str] = Field(default=[], description="Medical history")
@@ -179,26 +190,21 @@ _services = _DiagnosisServices()
 def get_session_controller() -> Any:
     """Get the session controller."""
     if not _services.is_initialized or _services.session_controller is None:
-        raise HTTPException(
-            status_code=503,
-            detail="Diagnosis service not initialized"
-        )
+        raise HTTPException(status_code=503, detail="Diagnosis service not initialized")
     return _services.session_controller
 
 
 def get_diagnostic_coordinator() -> Any:
     """Get the diagnostic coordinator."""
     if not _services.is_initialized or _services.diagnostic_coordinator is None:
-        raise HTTPException(
-            status_code=503,
-            detail="Multi-agent diagnosis not initialized"
-        )
+        raise HTTPException(status_code=503, detail="Multi-agent diagnosis not initialized")
     return _services.diagnostic_coordinator
 
 
 # =============================================================================
 # Session Management Endpoints
 # =============================================================================
+
 
 @router.post(
     "/sessions",
@@ -484,7 +490,9 @@ async def get_result(
 
         return DiagnosisResultResponse(
             session_id=result.session_id,
-            primary_diagnosis=result.primary_diagnosis.to_dict() if result.primary_diagnosis else None,
+            primary_diagnosis=result.primary_diagnosis.to_dict()
+            if result.primary_diagnosis
+            else None,
             confidence=result.confidence,
             differential=[h.to_dict() for h in result.differential],
             key_findings=result.key_findings,
@@ -551,6 +559,7 @@ async def delete_session(
 # =============================================================================
 # Multi-Agent Diagnosis Endpoints
 # =============================================================================
+
 
 @router.post(
     "/multi-agent/diagnose",
@@ -646,6 +655,7 @@ async def get_discriminating_phenotypes(
 # Utility Endpoints
 # =============================================================================
 
+
 @router.get(
     "/health",
     summary="Health check",
@@ -664,6 +674,7 @@ async def health_check() -> dict[str, str | bool]:
 # =============================================================================
 # Service Initialization
 # =============================================================================
+
 
 def initialize_diagnosis_services(
     session_controller: Any,

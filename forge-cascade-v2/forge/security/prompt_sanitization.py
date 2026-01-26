@@ -52,8 +52,7 @@ INJECTION_PATTERNS = [
 
 # Compiled regex for efficiency
 _INJECTION_REGEX = re.compile(
-    "|".join(f"({p})" for p in INJECTION_PATTERNS),
-    re.IGNORECASE | re.MULTILINE
+    "|".join(f"({p})" for p in INJECTION_PATTERNS), re.IGNORECASE | re.MULTILINE
 )
 
 
@@ -138,6 +137,7 @@ def sanitize_dict_for_prompt(
     Returns:
         Sanitized JSON string wrapped in delimiters
     """
+
     # Deep sanitize string values
     def sanitize_value(v: Any, path: str) -> Any:
         if isinstance(v, str):

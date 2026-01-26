@@ -17,8 +17,8 @@ from forge.models.base import ForgeModel
 class GraphBackend(str, Enum):
     """Available backends for graph algorithms."""
 
-    GDS = "gds"          # Neo4j Graph Data Science
-    CYPHER = "cypher"    # Pure Cypher queries
+    GDS = "gds"  # Neo4j Graph Data Science
+    CYPHER = "cypher"  # Pure Cypher queries
     NETWORKX = "networkx"  # In-memory NetworkX
 
 

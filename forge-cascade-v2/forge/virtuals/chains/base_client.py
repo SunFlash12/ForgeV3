@@ -25,21 +25,25 @@ logger = logging.getLogger(__name__)
 
 class ChainClientError(Exception):
     """Base exception for chain client errors."""
+
     pass
 
 
 class InsufficientFundsError(ChainClientError):
     """Raised when wallet has insufficient funds for operation."""
+
     pass
 
 
 class TransactionFailedError(ChainClientError):
     """Raised when a transaction fails to execute."""
+
     pass
 
 
 class ContractNotFoundError(ChainClientError):
     """Raised when a contract address is not found or invalid."""
+
     pass
 
 
@@ -88,11 +92,7 @@ class BaseChainClient(ABC):
     # ==================== Wallet Operations ====================
 
     @abstractmethod
-    async def get_wallet_balance(
-        self,
-        address: str,
-        token_address: str | None = None
-    ) -> float:
+    async def get_wallet_balance(self, address: str, token_address: str | None = None) -> float:
         """
         Get the balance of a wallet.
 
@@ -164,9 +164,7 @@ class BaseChainClient(ABC):
 
     @abstractmethod
     async def wait_for_transaction(
-        self,
-        tx_hash: str,
-        timeout_seconds: int = 120
+        self, tx_hash: str, timeout_seconds: int = 120
     ) -> TransactionRecord:
         """
         Wait for a transaction to be confirmed.
@@ -360,8 +358,7 @@ class BaseChainClient(ABC):
         """Raise error if client is not initialized."""
         if not self._initialized:
             raise ChainClientError(
-                f"Chain client for {self.chain} not initialized. "
-                "Call initialize() first."
+                f"Chain client for {self.chain} not initialized. Call initialize() first."
             )
 
 
@@ -424,9 +421,7 @@ class MultiChainManager:
             ChainClientError: If chain is not enabled or initialized
         """
         if chain not in self._clients:
-            raise ChainClientError(
-                f"Chain {chain} is not enabled or initialized"
-            )
+            raise ChainClientError(f"Chain {chain} is not enabled or initialized")
         return self._clients[chain]
 
     @property

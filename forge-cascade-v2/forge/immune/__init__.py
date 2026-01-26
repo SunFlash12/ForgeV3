@@ -76,6 +76,7 @@ from forge.immune.health_checker import (
 
 # Convenience factory functions
 
+
 def create_immune_system(
     db_client: Neo4jClient | None = None,
     overlay_manager: OverlayManagerProtocol | None = None,
@@ -122,7 +123,6 @@ __all__ = [
     "get_circuit_registry",
     "circuit_breaker",
     "ForgeCircuits",
-
     # Health Checker
     "HealthStatus",
     "HealthCheckResult",
@@ -138,7 +138,6 @@ __all__ = [
     "DiskHealthCheck",
     "ForgeHealthChecker",
     "create_forge_health_checker",
-
     # Canary
     "CanaryState",
     "RolloutStrategy",
@@ -147,7 +146,6 @@ __all__ = [
     "CanaryDeployment",
     "CanaryManager",
     "OverlayCanaryManager",
-
     # Anomaly Detection
     "AnomalyType",
     "AnomalySeverity",
@@ -161,7 +159,6 @@ __all__ = [
     "CompositeAnomalyDetector",
     "ForgeAnomalySystem",
     "create_forge_anomaly_system",
-
     # Factory
     "create_immune_system",
 ]

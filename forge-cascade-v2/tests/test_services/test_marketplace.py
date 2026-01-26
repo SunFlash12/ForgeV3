@@ -304,10 +304,10 @@ class TestRevenueDistribution:
     def test_distribution_adds_to_100(self):
         service = MarketplaceService()
         total = (
-            service.SELLER_SHARE +
-            service.LINEAGE_SHARE +
-            service.PLATFORM_SHARE +
-            service.TREASURY_SHARE
+            service.SELLER_SHARE
+            + service.LINEAGE_SHARE
+            + service.PLATFORM_SHARE
+            + service.TREASURY_SHARE
         )
         assert total == Decimal("1.00")
 
@@ -390,11 +390,11 @@ class TestPriceSuggestion:
     def test_trust_multiplier(self):
         service = MarketplaceService()
 
-        assert service._trust_multiplier(10) == 0.5   # Quarantine
-        assert service._trust_multiplier(30) == 1.0   # Sandbox
-        assert service._trust_multiplier(50) == 1.5   # Standard
-        assert service._trust_multiplier(70) == 2.0   # Trusted
-        assert service._trust_multiplier(90) == 3.0   # Core
+        assert service._trust_multiplier(10) == 0.5  # Quarantine
+        assert service._trust_multiplier(30) == 1.0  # Sandbox
+        assert service._trust_multiplier(50) == 1.5  # Standard
+        assert service._trust_multiplier(70) == 2.0  # Trusted
+        assert service._trust_multiplier(90) == 3.0  # Core
 
     def test_demand_multiplier(self):
         service = MarketplaceService()

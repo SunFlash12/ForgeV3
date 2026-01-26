@@ -18,6 +18,7 @@ def _utc_now() -> datetime:
 
 class HistoryType(str, Enum):
     """Types of medical history."""
+
     CONDITION = "condition"
     DIAGNOSIS = "diagnosis"
     SYMPTOM = "symptom"
@@ -34,6 +35,7 @@ class HistoryType(str, Enum):
 
 class FamilyMember(str, Enum):
     """Family member relationships."""
+
     MOTHER = "mother"
     FATHER = "father"
     SIBLING = "sibling"
@@ -58,6 +60,7 @@ class HistoryItem:
     Represents conditions, diagnoses, symptoms, or other
     historical medical information.
     """
+
     id: str = field(default_factory=lambda: str(uuid4()))
     history_type: HistoryType = HistoryType.CONDITION
     description: str = ""
@@ -116,6 +119,7 @@ class MedicationRecord:
 
     Tracks current and past medications with dosing.
     """
+
     id: str = field(default_factory=lambda: str(uuid4()))
     medication_name: str = ""
     generic_name: str | None = None
@@ -163,6 +167,7 @@ class ProcedureRecord:
     """
     A procedure or surgery record.
     """
+
     id: str = field(default_factory=lambda: str(uuid4()))
     procedure_name: str = ""
     procedure_type: str = "procedure"  # procedure, surgery, test
@@ -207,6 +212,7 @@ class HistoryTimeline:
 
     Aggregates all history types into a chronological view.
     """
+
     patient_id: str = ""
 
     # Demographics
@@ -254,10 +260,7 @@ class HistoryTimeline:
     def get_family_history_for(self, condition: str) -> list[HistoryItem]:
         """Get family history items matching a condition."""
         condition_lower = condition.lower()
-        return [
-            fh for fh in self.family_history
-            if condition_lower in fh.description.lower()
-        ]
+        return [fh for fh in self.family_history if condition_lower in fh.description.lower()]
 
     def to_dict(self) -> dict[str, Any]:
         return {

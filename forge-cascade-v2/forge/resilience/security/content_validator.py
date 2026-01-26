@@ -27,11 +27,11 @@ logger: structlog.stdlib.BoundLogger = structlog.get_logger(__name__)
 class ThreatLevel(Enum):
     """Threat classification levels."""
 
-    NONE = "none"           # No threat detected
-    LOW = "low"             # Minor policy violation
-    MEDIUM = "medium"       # Potential security concern
-    HIGH = "high"           # Active threat detected
-    CRITICAL = "critical"   # Immediate action required
+    NONE = "none"  # No threat detected
+    LOW = "low"  # Minor policy violation
+    MEDIUM = "medium"  # Potential security concern
+    HIGH = "high"  # Active threat detected
+    CRITICAL = "critical"  # Immediate action required
 
 
 class ValidationStage(Enum):
@@ -130,109 +130,103 @@ class ContentValidator:
                 name="sql_injection",
                 pattern=r"(\b(SELECT|INSERT|UPDATE|DELETE|DROP|UNION|ALTER)\b.*\b(FROM|INTO|WHERE|TABLE)\b)",
                 severity=ThreatLevel.HIGH,
-                description="SQL injection attempt"
+                description="SQL injection attempt",
             ),
             ContentPattern(
                 name="nosql_injection",
                 pattern=r"(\$where|\$regex|\$ne|\$gt|\$lt|\$or|\$and|\$exists)",
                 severity=ThreatLevel.HIGH,
-                description="NoSQL injection attempt"
+                description="NoSQL injection attempt",
             ),
             ContentPattern(
                 name="ldap_injection",
                 pattern=r"(\([\|\&]|\)[\|\&]|\*\)|\(\*)",
                 severity=ThreatLevel.HIGH,
-                description="LDAP injection attempt"
+                description="LDAP injection attempt",
             ),
             ContentPattern(
                 name="xpath_injection",
                 pattern=r"(\[\s*@[^\]]+\s*=|\[\s*\d+\s*\]|\/\/\*|\/\*)",
                 severity=ThreatLevel.MEDIUM,
-                description="XPath injection attempt"
+                description="XPath injection attempt",
             ),
-
             # XSS attacks
             ContentPattern(
                 name="xss_script",
                 pattern=r"<script[^>]*>.*?</script>",
                 severity=ThreatLevel.HIGH,
-                description="Script tag injection"
+                description="Script tag injection",
             ),
             ContentPattern(
                 name="xss_event",
                 pattern=r"\bon\w+\s*=",
                 severity=ThreatLevel.MEDIUM,
-                description="Event handler injection"
+                description="Event handler injection",
             ),
             ContentPattern(
                 name="xss_javascript",
                 pattern=r"javascript\s*:",
                 severity=ThreatLevel.HIGH,
-                description="JavaScript protocol injection"
+                description="JavaScript protocol injection",
             ),
             ContentPattern(
                 name="xss_data",
                 pattern=r"data\s*:\s*(text|image|application)",
                 severity=ThreatLevel.MEDIUM,
-                description="Data URL injection"
+                description="Data URL injection",
             ),
-
             # Path traversal
             ContentPattern(
                 name="path_traversal",
                 pattern=r"\.\.\/|\.\.\\|%2e%2e%2f|%2e%2e\/|\.\.%2f|%2e%2e%5c",
                 severity=ThreatLevel.HIGH,
-                description="Path traversal attempt"
+                description="Path traversal attempt",
             ),
-
             # Command injection
             ContentPattern(
                 name="command_injection",
                 pattern=r"[;&|`$]|\|\||&&",
                 severity=ThreatLevel.MEDIUM,
-                description="Command injection characters"
+                description="Command injection characters",
             ),
-
             # Sensitive data patterns
             ContentPattern(
                 name="api_key",
                 pattern=r"(api[_-]?key|apikey)\s*[=:]\s*['\"][a-zA-Z0-9]{20,}['\"]",
                 severity=ThreatLevel.MEDIUM,
-                description="Potential API key exposure"
+                description="Potential API key exposure",
             ),
             ContentPattern(
                 name="private_key",
                 pattern=r"-----BEGIN (RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----",
                 severity=ThreatLevel.CRITICAL,
-                description="Private key exposure"
+                description="Private key exposure",
             ),
             ContentPattern(
                 name="jwt_token",
                 pattern=r"eyJ[a-zA-Z0-9_-]*\.eyJ[a-zA-Z0-9_-]*\.[a-zA-Z0-9_-]*",
                 severity=ThreatLevel.MEDIUM,
-                description="JWT token in content"
+                description="JWT token in content",
             ),
-
             # PII patterns
             ContentPattern(
                 name="ssn",
                 pattern=r"\b\d{3}-\d{2}-\d{4}\b",
                 severity=ThreatLevel.LOW,
-                description="Potential SSN pattern"
+                description="Potential SSN pattern",
             ),
             ContentPattern(
                 name="credit_card",
                 pattern=r"\b(?:\d{4}[-\s]?){3}\d{4}\b",
                 severity=ThreatLevel.LOW,
-                description="Potential credit card pattern"
+                description="Potential credit card pattern",
             ),
-
             # Suspicious encoded content
             ContentPattern(
                 name="base64_script",
                 pattern=r"(?:eval|Function)\s*\(\s*(?:atob|decode)",
                 severity=ThreatLevel.HIGH,
-                description="Encoded script execution"
+                description="Encoded script execution",
             ),
         ]
 
@@ -247,10 +241,7 @@ class ContentValidator:
         self._custom_validators.append(validator)
 
     async def validate(
-        self,
-        content: str,
-        content_type: str = "text",
-        context: dict[str, Any] | None = None
+        self, content: str, content_type: str = "text", context: dict[str, Any] | None = None
     ) -> ValidationResult:
         """
         Validate content through the full pipeline.
@@ -270,7 +261,7 @@ class ContentValidator:
         result = ValidationResult(
             valid=True,
             threat_level=ThreatLevel.NONE,
-            content_hash=hashlib.sha256(content.encode()).hexdigest()[:16]
+            content_hash=hashlib.sha256(content.encode()).hexdigest()[:16],
         )
 
         self._stats["total_validations"] += 1
@@ -280,11 +271,13 @@ class ContentValidator:
 
         # Check content length
         if len(content) > self._config.max_content_length:
-            result.add_issue(ValidationIssue(
-                stage=ValidationStage.INPUT_SANITIZATION,
-                severity=ThreatLevel.MEDIUM,
-                message=f"Content exceeds maximum length ({len(content)} > {self._config.max_content_length})"
-            ))
+            result.add_issue(
+                ValidationIssue(
+                    stage=ValidationStage.INPUT_SANITIZATION,
+                    severity=ThreatLevel.MEDIUM,
+                    message=f"Content exceeds maximum length ({len(content)} > {self._config.max_content_length})",
+                )
+            )
             result.valid = False
 
         # Stage 1: Input sanitization
@@ -328,7 +321,7 @@ class ContentValidator:
                     "content_threat_detected",
                     threat_level=result.threat_level.value,
                     issues=[i.message for i in result.issues],
-                    content_hash=result.content_hash
+                    content_hash=result.content_hash,
                 )
 
         result.sanitized_content = sanitized
@@ -341,33 +334,39 @@ class ContentValidator:
         sanitized = content
 
         # Remove null bytes
-        if '\x00' in sanitized:
-            sanitized = sanitized.replace('\x00', '')
-            result.add_issue(ValidationIssue(
-                stage=ValidationStage.INPUT_SANITIZATION,
-                severity=ThreatLevel.LOW,
-                message="Null bytes removed from content"
-            ))
+        if "\x00" in sanitized:
+            sanitized = sanitized.replace("\x00", "")
+            result.add_issue(
+                ValidationIssue(
+                    stage=ValidationStage.INPUT_SANITIZATION,
+                    severity=ThreatLevel.LOW,
+                    message="Null bytes removed from content",
+                )
+            )
 
         # Normalize Unicode
         import unicodedata
+
         try:
-            sanitized = unicodedata.normalize('NFC', sanitized)
+            sanitized = unicodedata.normalize("NFC", sanitized)
         except (ValueError, TypeError):
             pass
 
         # Remove control characters (except newlines and tabs)
-        control_chars = ''.join(
-            chr(i) for i in range(32)
+        control_chars = "".join(
+            chr(i)
+            for i in range(32)
             if i not in (9, 10, 13)  # Keep tab, newline, carriage return
         )
         if any(c in sanitized for c in control_chars):
-            sanitized = ''.join(c for c in sanitized if c not in control_chars)
-            result.add_issue(ValidationIssue(
-                stage=ValidationStage.INPUT_SANITIZATION,
-                severity=ThreatLevel.LOW,
-                message="Control characters removed from content"
-            ))
+            sanitized = "".join(c for c in sanitized if c not in control_chars)
+            result.add_issue(
+                ValidationIssue(
+                    stage=ValidationStage.INPUT_SANITIZATION,
+                    severity=ThreatLevel.LOW,
+                    message="Control characters removed from content",
+                )
+            )
 
         return sanitized
 
@@ -398,40 +397,40 @@ class ContentValidator:
                         matches = await asyncio.wait_for(
                             loop.run_in_executor(
                                 executor,
-                                lambda: re.findall(pattern.pattern, content, pattern.flags)
+                                lambda: re.findall(pattern.pattern, content, pattern.flags),
                             ),
-                            timeout=self.REGEX_TIMEOUT_SECONDS
+                            timeout=self.REGEX_TIMEOUT_SECONDS,
                         )
                     except TimeoutError:
                         logger.warning(
                             "regex_timeout_redos_protection",
                             pattern=pattern.name,
                             content_length=len(content),
-                            timeout=self.REGEX_TIMEOUT_SECONDS
+                            timeout=self.REGEX_TIMEOUT_SECONDS,
                         )
-                        result.add_issue(ValidationIssue(
-                            stage=ValidationStage.PATTERN_MATCHING,
-                            severity=ThreatLevel.MEDIUM,
-                            message=f"Pattern check timed out (possible ReDoS): {pattern.name}",
-                            pattern=pattern.name,
-                            metadata={"timeout": True}
-                        ))
+                        result.add_issue(
+                            ValidationIssue(
+                                stage=ValidationStage.PATTERN_MATCHING,
+                                severity=ThreatLevel.MEDIUM,
+                                message=f"Pattern check timed out (possible ReDoS): {pattern.name}",
+                                pattern=pattern.name,
+                                metadata={"timeout": True},
+                            )
+                        )
                         continue
 
                 if matches:
-                    result.add_issue(ValidationIssue(
-                        stage=ValidationStage.PATTERN_MATCHING,
-                        severity=pattern.severity,
-                        message=pattern.description,
-                        pattern=pattern.name,
-                        metadata={"matches": len(matches)}
-                    ))
+                    result.add_issue(
+                        ValidationIssue(
+                            stage=ValidationStage.PATTERN_MATCHING,
+                            severity=pattern.severity,
+                            message=pattern.description,
+                            pattern=pattern.name,
+                            metadata={"matches": len(matches)},
+                        )
+                    )
             except re.error as e:
-                logger.warning(
-                    "pattern_error",
-                    pattern=pattern.name,
-                    error=str(e)
-                )
+                logger.warning("pattern_error", pattern=pattern.name, error=str(e))
 
     async def _detect_anomalies(self, content: str, result: ValidationResult) -> None:
         """Detect anomalous content patterns."""
@@ -442,32 +441,38 @@ class ContentValidator:
             special_ratio = special_count / len(content)
 
             if special_ratio > self._config.anomaly_threshold:
-                result.add_issue(ValidationIssue(
-                    stage=ValidationStage.ANOMALY_DETECTION,
-                    severity=ThreatLevel.LOW,
-                    message=f"High special character ratio ({special_ratio:.2f})",
-                    metadata={"ratio": special_ratio}
-                ))
+                result.add_issue(
+                    ValidationIssue(
+                        stage=ValidationStage.ANOMALY_DETECTION,
+                        severity=ThreatLevel.LOW,
+                        message=f"High special character ratio ({special_ratio:.2f})",
+                        metadata={"ratio": special_ratio},
+                    )
+                )
 
             # Unusual repetition patterns
             unique_chars = len(set(content))
             if len(content) > 100 and unique_chars < 10:
-                result.add_issue(ValidationIssue(
-                    stage=ValidationStage.ANOMALY_DETECTION,
-                    severity=ThreatLevel.LOW,
-                    message="Unusual character repetition pattern",
-                    metadata={"unique_chars": unique_chars}
-                ))
+                result.add_issue(
+                    ValidationIssue(
+                        stage=ValidationStage.ANOMALY_DETECTION,
+                        severity=ThreatLevel.LOW,
+                        message="Unusual character repetition pattern",
+                        metadata={"unique_chars": unique_chars},
+                    )
+                )
 
             # Very high entropy (potential encoded/encrypted content)
             entropy = self._calculate_entropy(content)
             if entropy > 4.5 and len(content) > 200:
-                result.add_issue(ValidationIssue(
-                    stage=ValidationStage.ANOMALY_DETECTION,
-                    severity=ThreatLevel.LOW,
-                    message=f"High content entropy ({entropy:.2f})",
-                    metadata={"entropy": entropy}
-                ))
+                result.add_issue(
+                    ValidationIssue(
+                        stage=ValidationStage.ANOMALY_DETECTION,
+                        severity=ThreatLevel.LOW,
+                        message=f"High content entropy ({entropy:.2f})",
+                        metadata={"entropy": entropy},
+                    )
+                )
 
     def _calculate_entropy(self, data: str) -> float:
         """Calculate Shannon entropy of content."""
@@ -487,12 +492,7 @@ class ContentValidator:
 
         return entropy
 
-    async def _ml_classify(
-        self,
-        content: str,
-        content_type: str,
-        result: ValidationResult
-    ) -> None:
+    async def _ml_classify(self, content: str, content_type: str, result: ValidationResult) -> None:
         """
         LLM-based content classification for security threats.
 
@@ -549,6 +549,7 @@ Respond with JSON classification only:"""
 
             # Parse the JSON response
             import json
+
             try:
                 content_text = response.content.strip()
                 # Handle markdown code blocks
@@ -567,21 +568,24 @@ Respond with JSON classification only:"""
                         "critical": ThreatLevel.CRITICAL,
                     }
                     severity = threat_level_map.get(
-                        classification.get("threat_level", "low"),
-                        ThreatLevel.LOW
+                        classification.get("threat_level", "low"), ThreatLevel.LOW
                     )
 
-                    result.add_issue(ValidationIssue(
-                        stage=ValidationStage.ML_CLASSIFICATION,
-                        severity=severity,
-                        message=classification.get("explanation", "LLM detected potential threat"),
-                        metadata={
-                            "classifier": "llm",
-                            "categories": classification.get("categories", []),
-                            "confidence": classification.get("confidence", 0.5),
-                            "model": response.model,
-                        }
-                    ))
+                    result.add_issue(
+                        ValidationIssue(
+                            stage=ValidationStage.ML_CLASSIFICATION,
+                            severity=severity,
+                            message=classification.get(
+                                "explanation", "LLM detected potential threat"
+                            ),
+                            metadata={
+                                "classifier": "llm",
+                                "categories": classification.get("categories", []),
+                                "confidence": classification.get("confidence", 0.5),
+                                "model": response.model,
+                            },
+                        )
+                    )
 
                     logger.info(
                         "ml_classification_threat_detected",
@@ -592,31 +596,21 @@ Respond with JSON classification only:"""
 
             except json.JSONDecodeError:
                 logger.warning(
-                    "ml_classification_parse_error",
-                    response_preview=response.content[:200]
+                    "ml_classification_parse_error", response_preview=response.content[:200]
                 )
 
         except LLMConfigurationError as e:
-            logger.warning(
-                "ml_classification_skipped_no_llm",
-                error=str(e)
-            )
+            logger.warning("ml_classification_skipped_no_llm", error=str(e))
             # Fall back to heuristic classification when LLM not configured
             await self._heuristic_classify(content, content_type, result)
 
         except (RuntimeError, OSError, ConnectionError, TimeoutError, ValueError, TypeError) as e:
-            logger.error(
-                "ml_classification_error",
-                error=str(e)
-            )
+            logger.error("ml_classification_error", error=str(e))
             # Fall back to heuristic classification on error
             await self._heuristic_classify(content, content_type, result)
 
     async def _heuristic_classify(
-        self,
-        content: str,
-        content_type: str,
-        result: ValidationResult
+        self, content: str, content_type: str, result: ValidationResult
     ) -> None:
         """
         Fallback heuristic classification when LLM is unavailable.
@@ -625,17 +619,24 @@ Respond with JSON classification only:"""
         """
         if content_type == "code":
             dangerous_functions = [
-                "eval", "exec", "compile", "__import__",
-                "os.system", "subprocess", "shell",
+                "eval",
+                "exec",
+                "compile",
+                "__import__",
+                "os.system",
+                "subprocess",
+                "shell",
             ]
             for func in dangerous_functions:
                 if func in content.lower():
-                    result.add_issue(ValidationIssue(
-                        stage=ValidationStage.ML_CLASSIFICATION,
-                        severity=ThreatLevel.MEDIUM,
-                        message=f"Potentially dangerous function: {func}",
-                        metadata={"function": func, "classifier": "heuristic"}
-                    ))
+                    result.add_issue(
+                        ValidationIssue(
+                            stage=ValidationStage.ML_CLASSIFICATION,
+                            severity=ThreatLevel.MEDIUM,
+                            message=f"Potentially dangerous function: {func}",
+                            metadata={"function": func, "classifier": "heuristic"},
+                        )
+                    )
 
     def get_stats(self) -> dict[str, Any]:
         """Get validation statistics."""
@@ -656,9 +657,7 @@ def get_content_validator() -> ContentValidator:
 
 
 async def validate_content(
-    content: str,
-    content_type: str = "text",
-    context: dict[str, Any] | None = None
+    content: str, content_type: str = "text", context: dict[str, Any] | None = None
 ) -> ValidationResult:
     """Convenience function to validate content."""
     validator = get_content_validator()

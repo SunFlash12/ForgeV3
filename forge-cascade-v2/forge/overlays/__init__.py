@@ -133,7 +133,6 @@ __all__ = [
     "CapabilityError",
     "ResourceLimitError",
     "OverlayTimeoutError",
-
     # Security Validator
     "SecurityValidatorOverlay",
     "create_security_validator",
@@ -146,7 +145,6 @@ __all__ = [
     "SecurityValidationError",
     "ThreatDetectedError",
     "RateLimitExceededError",
-
     # ML Intelligence
     "MLIntelligenceOverlay",
     "create_ml_intelligence",
@@ -157,7 +155,6 @@ __all__ = [
     "AnalysisResult",
     "MLProcessingError",
     "EmbeddingError",
-
     # Governance
     "GovernanceOverlay",
     "create_governance_overlay",
@@ -171,7 +168,6 @@ __all__ = [
     "InsufficientQuorumError",
     "PolicyViolationError",
     "ConsensusFailedError",
-
     # Lineage Tracker
     "LineageTrackerOverlay",
     "create_lineage_tracker",
@@ -182,33 +178,27 @@ __all__ = [
     "LineageError",
     "CircularLineageError",
     "BrokenChainError",
-
     # Performance Optimizer
     "PerformanceOptimizerOverlay",
-
     # Capsule Analyzer
     "CapsuleAnalyzerOverlay",
-
     # Graph Algorithms
     "GraphAlgorithmsOverlay",
     "create_graph_algorithms_overlay",
     "GraphAlgorithmError",
     "AlgorithmConfig",
-
     # Knowledge Query
     "KnowledgeQueryOverlay",
     "create_knowledge_query_overlay",
     "QueryCompilationError",
     "QueryExecutionError",
     "QueryConfig",
-
     # Temporal Tracker
     "TemporalTrackerOverlay",
     "create_temporal_tracker_overlay",
     "TemporalError",
     "VersionNotFoundError",
     "TemporalConfig",
-
     # PrimeKG Biomedical Knowledge Graph
     "PrimeKGOverlay",
     "create_primekg_overlay",

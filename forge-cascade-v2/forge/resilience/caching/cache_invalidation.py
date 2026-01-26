@@ -25,9 +25,9 @@ logger: structlog.stdlib.BoundLogger = structlog.get_logger(__name__)
 class InvalidationStrategy(Enum):
     """Strategies for cache invalidation."""
 
-    IMMEDIATE = "immediate"      # Invalidate immediately on change
-    DEBOUNCED = "debounced"      # Wait for burst of changes to complete
-    LAZY = "lazy"                # Mark stale, invalidate on next access
+    IMMEDIATE = "immediate"  # Invalidate immediately on change
+    DEBOUNCED = "debounced"  # Wait for burst of changes to complete
+    LAZY = "lazy"  # Mark stale, invalidate on next access
 
 
 @dataclass
@@ -63,7 +63,7 @@ class CacheInvalidator:
         self,
         cache: QueryCache | None = None,
         strategy: InvalidationStrategy = InvalidationStrategy.IMMEDIATE,
-        debounce_seconds: float = 0.5
+        debounce_seconds: float = 0.5,
     ) -> None:
         self._cache = cache
         self._strategy = strategy
@@ -87,10 +87,7 @@ class CacheInvalidator:
         elif self._cache is None:
             self._cache = await get_query_cache()
 
-        logger.info(
-            "cache_invalidator_initialized",
-            strategy=self._strategy.value
-        )
+        logger.info("cache_invalidator_initialized", strategy=self._strategy.value)
 
     async def close(self) -> None:
         """Clean up resources."""
@@ -105,57 +102,39 @@ class CacheInvalidator:
         if self._pending:
             await self._flush_pending()
 
-    def register_callback(
-        self,
-        callback: Callable[[InvalidationEvent], None]
-    ) -> None:
+    def register_callback(self, callback: Callable[[InvalidationEvent], None]) -> None:
         """Register a callback for invalidation events."""
         self._callbacks.append(callback)
 
     async def on_capsule_created(
-        self,
-        capsule_id: str,
-        metadata: dict[str, Any] | None = None
+        self, capsule_id: str, metadata: dict[str, Any] | None = None
     ) -> None:
         """Handle capsule creation event."""
         event = InvalidationEvent(
-            capsule_id=capsule_id,
-            event_type="created",
-            metadata=metadata or {}
+            capsule_id=capsule_id, event_type="created", metadata=metadata or {}
         )
         await self._handle_event(event)
 
     async def on_capsule_updated(
-        self,
-        capsule_id: str,
-        metadata: dict[str, Any] | None = None
+        self, capsule_id: str, metadata: dict[str, Any] | None = None
     ) -> None:
         """Handle capsule update event."""
         event = InvalidationEvent(
-            capsule_id=capsule_id,
-            event_type="updated",
-            metadata=metadata or {}
+            capsule_id=capsule_id, event_type="updated", metadata=metadata or {}
         )
         await self._handle_event(event)
 
     async def on_capsule_deleted(
-        self,
-        capsule_id: str,
-        metadata: dict[str, Any] | None = None
+        self, capsule_id: str, metadata: dict[str, Any] | None = None
     ) -> None:
         """Handle capsule deletion event."""
         event = InvalidationEvent(
-            capsule_id=capsule_id,
-            event_type="deleted",
-            metadata=metadata or {}
+            capsule_id=capsule_id, event_type="deleted", metadata=metadata or {}
         )
         await self._handle_event(event)
 
     async def on_lineage_changed(
-        self,
-        capsule_id: str,
-        parent_ids: list[str],
-        metadata: dict[str, Any] | None = None
+        self, capsule_id: str, parent_ids: list[str], metadata: dict[str, Any] | None = None
     ) -> None:
         """Handle lineage relationship change."""
         # Invalidate cache for all affected capsules
@@ -165,7 +144,7 @@ class CacheInvalidator:
             event = InvalidationEvent(
                 capsule_id=cid,
                 event_type="lineage_changed",
-                metadata={**(metadata or {}), "related_ids": all_ids}
+                metadata={**(metadata or {}), "related_ids": all_ids},
             )
             await self._handle_event(event)
 
@@ -203,19 +182,12 @@ class CacheInvalidator:
                     else:
                         callback(event)
                 except (RuntimeError, ValueError, TypeError, OSError) as e:
-                    logger.warning(
-                        "invalidation_callback_error",
-                        error=str(e)
-                    )
+                    logger.warning("invalidation_callback_error", error=str(e))
 
             self._stats.events_processed += 1
 
         except (RuntimeError, ValueError, TypeError, OSError, ConnectionError) as e:
-            logger.error(
-                "invalidation_error",
-                capsule_id=event.capsule_id,
-                error=str(e)
-            )
+            logger.error("invalidation_error", capsule_id=event.capsule_id, error=str(e))
             self._stats.errors += 1
 
     async def _invalidate_immediate(self, event: InvalidationEvent) -> None:
@@ -224,11 +196,7 @@ class CacheInvalidator:
             count = await self._cache.invalidate_for_capsule(event.capsule_id)
             self._stats.entries_invalidated += count
 
-            logger.debug(
-                "cache_invalidated_immediate",
-                capsule_id=event.capsule_id,
-                entries=count
-            )
+            logger.debug("cache_invalidated_immediate", capsule_id=event.capsule_id, entries=count)
 
     async def _invalidate_debounced(self, event: InvalidationEvent) -> None:
         """Debounce invalidations to handle burst updates."""
@@ -237,10 +205,7 @@ class CacheInvalidator:
         if existing:
             # Merge events - keep most recent
             self._stats.debounce_merges += 1
-            logger.debug(
-                "invalidation_debounce_merge",
-                capsule_id=event.capsule_id
-            )
+            logger.debug("invalidation_debounce_merge", capsule_id=event.capsule_id)
 
         self._pending[event.capsule_id] = event
 
@@ -252,9 +217,7 @@ class CacheInvalidator:
             except asyncio.CancelledError:
                 pass
 
-        self._debounce_task = asyncio.create_task(
-            self._debounce_timer()
-        )
+        self._debounce_task = asyncio.create_task(self._debounce_timer())
 
     async def _debounce_timer(self) -> None:
         """Wait for debounce period then flush pending invalidations."""
@@ -277,7 +240,7 @@ class CacheInvalidator:
             logger.debug(
                 "cache_invalidated_debounced",
                 count=len(pending),
-                entries=self._stats.entries_invalidated
+                entries=self._stats.entries_invalidated,
             )
 
     async def _invalidate_lazy(self, event: InvalidationEvent) -> None:
@@ -287,24 +250,20 @@ class CacheInvalidator:
 
         # Build cache keys that would be affected
         from forge.resilience.config import get_resilience_config
+
         config = get_resilience_config().cache
 
         # Mark potential cache keys as stale
         stale_patterns = [
             config.capsule_key_pattern.format(capsule_id=event.capsule_id),
-            config.lineage_key_pattern.format(
-                capsule_id=event.capsule_id,
-                depth="*"
-            ),
+            config.lineage_key_pattern.format(capsule_id=event.capsule_id, depth="*"),
         ]
 
         for pattern in stale_patterns:
             self._stale_entries.add(pattern)
 
         logger.debug(
-            "cache_marked_stale",
-            capsule_id=event.capsule_id,
-            patterns=len(stale_patterns)
+            "cache_marked_stale", capsule_id=event.capsule_id, patterns=len(stale_patterns)
         )
 
 
@@ -321,10 +280,7 @@ async def get_cache_invalidator() -> CacheInvalidator:
     return _cache_invalidator
 
 
-async def invalidate_on_capsule_change(
-    capsule_id: str,
-    event_type: str = "updated"
-) -> None:
+async def invalidate_on_capsule_change(capsule_id: str, event_type: str = "updated") -> None:
     """Convenience function to trigger cache invalidation."""
     invalidator = await get_cache_invalidator()
 

@@ -39,12 +39,14 @@ if TYPE_CHECKING:
 
 class ListingUpdateFields(TypedDict, total=False):
     """Fields that can be updated on a listing."""
+
     price: Decimal
     description: str | None
     tags: list[str]
     preview_content: str | None
     license_terms: str | None
     visibility: str
+
 
 logger = logging.getLogger(__name__)
 
@@ -183,7 +185,7 @@ class MarketplaceService:
         else:  # created_at
             listings.sort(key=lambda l: l.created_at, reverse=True)
 
-        return listings[offset:offset + limit]
+        return listings[offset : offset + limit]
 
     async def update_listing(
         self,
@@ -200,8 +202,12 @@ class MarketplaceService:
 
         # Can only update certain fields
         allowed_fields = {
-            "price", "description", "tags", "preview_content",
-            "license_terms", "visibility"
+            "price",
+            "description",
+            "tags",
+            "preview_content",
+            "license_terms",
+            "visibility",
         }
 
         for key, value in updates.items():
@@ -266,13 +272,15 @@ class MarketplaceService:
         if any(item.listing_id == listing_id for item in cart.items):
             raise ValueError("Already in cart")
 
-        cart.items.append(CartItem(
-            listing_id=listing_id,
-            capsule_id=listing.capsule_id,
-            price=listing.price,
-            currency=listing.currency,
-            title=listing.title,
-        ))
+        cart.items.append(
+            CartItem(
+                listing_id=listing_id,
+                capsule_id=listing.capsule_id,
+                price=listing.price,
+                currency=listing.currency,
+                title=listing.title,
+            )
+        )
         cart.updated_at = datetime.now(UTC)
 
         # PERSISTENCE: Save cart to database
@@ -357,7 +365,8 @@ class MarketplaceService:
 
             # Check if already purchased (inside lock to prevent TOCTOU)
             existing = [
-                p for p in self._purchases.values()
+                p
+                for p in self._purchases.values()
                 if p.buyer_id == buyer_id and p.capsule_id == listing.capsule_id
             ]
             if existing:
@@ -383,7 +392,10 @@ class MarketplaceService:
             )
 
             # Set license expiration for subscriptions
-            if listing.license_type == LicenseType.SUBSCRIPTION and listing.subscription_period_days:
+            if (
+                listing.license_type == LicenseType.SUBSCRIPTION
+                and listing.subscription_period_days
+            ):
                 purchase.license_expires_at = datetime.now(UTC) + timedelta(
                     days=listing.subscription_period_days
                 )
@@ -502,7 +514,12 @@ class MarketplaceService:
         demand_mult = self._demand_multiplier(view_count, citation_count)
         rarity_mult = self._rarity_multiplier(pagerank_score)
 
-        suggested = self.BASE_PRICE * Decimal(str(trust_mult)) * Decimal(str(demand_mult)) * Decimal(str(rarity_mult))
+        suggested = (
+            self.BASE_PRICE
+            * Decimal(str(trust_mult))
+            * Decimal(str(demand_mult))
+            * Decimal(str(rarity_mult))
+        )
 
         return PriceSuggestion(
             capsule_id=capsule_id,
@@ -595,16 +612,14 @@ class MarketplaceService:
         # Top sellers
         seller_revenue: dict[str, Decimal] = {}
         for p in all_purchases:
-            seller_revenue[p.seller_id] = seller_revenue.get(p.seller_id, Decimal("0")) + p.seller_revenue
+            seller_revenue[p.seller_id] = (
+                seller_revenue.get(p.seller_id, Decimal("0")) + p.seller_revenue
+            )
 
         top_sellers_list: list[dict[str, Any]] = [
             {"seller_id": k, "revenue": float(v)} for k, v in seller_revenue.items()
         ]
-        top_sellers = sorted(
-            top_sellers_list,
-            key=lambda x: float(x["revenue"]),
-            reverse=True
-        )[:10]
+        top_sellers = sorted(top_sellers_list, key=lambda x: float(x["revenue"]), reverse=True)[:10]
 
         # Top capsules
         capsule_sales: dict[str, int] = {}
@@ -614,11 +629,7 @@ class MarketplaceService:
         top_capsules_list: list[dict[str, Any]] = [
             {"capsule_id": k, "sales": v} for k, v in capsule_sales.items()
         ]
-        top_capsules = sorted(
-            top_capsules_list,
-            key=lambda x: int(x["sales"]),
-            reverse=True
-        )[:10]
+        top_capsules = sorted(top_capsules_list, key=lambda x: int(x["sales"]), reverse=True)[:10]
 
         # Calculate averages
         prices = [l.price for l in active_listings]
@@ -705,8 +716,10 @@ class MarketplaceService:
                     "description": listing.description or "",
                     "tags": listing.tags,
                     "created_at": listing.created_at.isoformat() if listing.created_at else None,
-                    "published_at": listing.published_at.isoformat() if listing.published_at else None,
-                }
+                    "published_at": listing.published_at.isoformat()
+                    if listing.published_at
+                    else None,
+                },
             )
             logger.debug(f"Persisted listing {listing.id} to database")
             return True
@@ -756,8 +769,10 @@ class MarketplaceService:
                     "currency": purchase.currency.value,
                     "license_type": purchase.license_type.value,
                     "payment_status": purchase.payment_status.value,
-                    "purchased_at": purchase.purchased_at.isoformat() if purchase.purchased_at else None,
-                }
+                    "purchased_at": purchase.purchased_at.isoformat()
+                    if purchase.purchased_at
+                    else None,
+                },
             )
             return True
         except (RuntimeError, OSError, ConnectionError, ValueError) as e:
@@ -774,16 +789,19 @@ class MarketplaceService:
         try:
             # Store cart with items serialized as JSON
             import json
-            items_json = json.dumps([
-                {
-                    "listing_id": item.listing_id,
-                    "capsule_id": item.capsule_id,
-                    "price": str(item.price),
-                    "currency": item.currency.value,
-                    "title": item.title,
-                }
-                for item in cart.items
-            ])
+
+            items_json = json.dumps(
+                [
+                    {
+                        "listing_id": item.listing_id,
+                        "capsule_id": item.capsule_id,
+                        "price": str(item.price),
+                        "currency": item.currency.value,
+                        "title": item.title,
+                    }
+                    for item in cart.items
+                ]
+            )
 
             query = """
             MERGE (c:MarketplaceCart {user_id: $user_id})
@@ -798,7 +816,7 @@ class MarketplaceService:
                     "user_id": cart.user_id,
                     "items": items_json,
                     "total": str(cart.total),
-                }
+                },
             )
             return True
         except (RuntimeError, OSError, ConnectionError, ValueError) as e:
@@ -812,27 +830,34 @@ class MarketplaceService:
 
         try:
             import json
+
             query = """
             MATCH (c:MarketplaceCart {user_id: $user_id})
             RETURN c.user_id as user_id, c.items as items, c.total as total
             """
-            results: list[dict[str, Any]] = await self.neo4j.execute(query, parameters={"user_id": user_id})
+            results: list[dict[str, Any]] = await self.neo4j.execute(
+                query, parameters={"user_id": user_id}
+            )
 
             if not results:
                 return None
 
             record: dict[str, Any] = results[0]
-            items_data: list[dict[str, Any]] = json.loads(str(record["items"])) if record["items"] else []
+            items_data: list[dict[str, Any]] = (
+                json.loads(str(record["items"])) if record["items"] else []
+            )
 
             cart = Cart(user_id=user_id)
             for item_data in items_data:
-                cart.items.append(CartItem(
-                    listing_id=str(item_data["listing_id"]),
-                    capsule_id=str(item_data.get("capsule_id", "")),
-                    price=Decimal(str(item_data.get("price", "0"))),
-                    currency=Currency(str(item_data.get("currency", "forge"))),
-                    title=str(item_data.get("title", "")),
-                ))
+                cart.items.append(
+                    CartItem(
+                        listing_id=str(item_data["listing_id"]),
+                        capsule_id=str(item_data.get("capsule_id", "")),
+                        price=Decimal(str(item_data.get("price", "0"))),
+                        currency=Currency(str(item_data.get("currency", "forge"))),
+                        title=str(item_data.get("title", "")),
+                    )
+                )
 
             return cart
         except (RuntimeError, OSError, ConnectionError, ValueError, KeyError) as e:
@@ -884,7 +909,7 @@ class MarketplaceService:
                     "can_derive": license.can_derive,
                     "access_count": license.access_count,
                     "created_at": license.granted_at.isoformat() if license.granted_at else None,
-                }
+                },
             )
             return True
         except (RuntimeError, OSError, ConnectionError, ValueError) as e:
@@ -923,8 +948,12 @@ class MarketplaceService:
                     seller_id=str(rec["seller_id"]),
                     price=Decimal(str(rec["price"])) if rec["price"] else Decimal("0"),
                     currency=Currency(str(rec["currency"])) if rec["currency"] else Currency.FORGE,
-                    license_type=LicenseType(str(rec["license_type"])) if rec["license_type"] else LicenseType.PERPETUAL,
-                    status=ListingStatus(str(rec["status"])) if rec["status"] else ListingStatus.DRAFT,
+                    license_type=LicenseType(str(rec["license_type"]))
+                    if rec["license_type"]
+                    else LicenseType.PERPETUAL,
+                    status=ListingStatus(str(rec["status"]))
+                    if rec["status"]
+                    else ListingStatus.DRAFT,
                     title=str(rec["title"]) if rec["title"] else "",
                     description=str(rec["description"]) if rec["description"] else None,
                     tags=tags_list,
@@ -950,9 +979,15 @@ class MarketplaceService:
                     buyer_id=str(prec["buyer_id"]),
                     seller_id=str(prec["seller_id"]),
                     price=Decimal(str(prec["price"])) if prec["price"] else Decimal("0"),
-                    currency=Currency(str(prec["currency"])) if prec["currency"] else Currency.FORGE,
-                    license_type=LicenseType(str(prec["license_type"])) if prec["license_type"] else LicenseType.PERPETUAL,
-                    payment_status=PaymentStatus(str(prec["payment_status"])) if prec["payment_status"] else PaymentStatus.PENDING,
+                    currency=Currency(str(prec["currency"]))
+                    if prec["currency"]
+                    else Currency.FORGE,
+                    license_type=LicenseType(str(prec["license_type"]))
+                    if prec["license_type"]
+                    else LicenseType.PERPETUAL,
+                    payment_status=PaymentStatus(str(prec["payment_status"]))
+                    if prec["payment_status"]
+                    else PaymentStatus.PENDING,
                 )
                 self._purchases[purchase.id] = purchase
 
@@ -971,14 +1006,18 @@ class MarketplaceService:
                 expires_at = None
                 if lrec["expires_at"]:
                     try:
-                        expires_at = datetime.fromisoformat(str(lrec["expires_at"]).replace("Z", "+00:00"))
+                        expires_at = datetime.fromisoformat(
+                            str(lrec["expires_at"]).replace("Z", "+00:00")
+                        )
                     except (ValueError, AttributeError):
                         pass
 
                 revoked_at = None
                 if lrec["revoked_at"]:
                     try:
-                        revoked_at = datetime.fromisoformat(str(lrec["revoked_at"]).replace("Z", "+00:00"))
+                        revoked_at = datetime.fromisoformat(
+                            str(lrec["revoked_at"]).replace("Z", "+00:00")
+                        )
                     except (ValueError, AttributeError):
                         pass
 
@@ -988,7 +1027,9 @@ class MarketplaceService:
                     capsule_id=str(lrec["capsule_id"]),
                     holder_id=str(lrec["holder_id"]),
                     grantor_id=str(lrec["grantor_id"]),
-                    license_type=LicenseType(str(lrec["license_type"])) if lrec["license_type"] else LicenseType.PERPETUAL,
+                    license_type=LicenseType(str(lrec["license_type"]))
+                    if lrec["license_type"]
+                    else LicenseType.PERPETUAL,
                     expires_at=expires_at,
                     revoked_at=revoked_at,
                     can_derive=bool(lrec.get("can_derive", False)),
@@ -1049,6 +1090,7 @@ async def get_marketplace_service(
         if neo4j_client is None:
             try:
                 from forge.api.app import forge_app
+
                 neo4j_client = forge_app.db_client
             except (ImportError, AttributeError):
                 logger.warning("Could not get Neo4j client from ForgeApp")
@@ -1057,6 +1099,7 @@ async def get_marketplace_service(
         if neo4j_client and _marketplace_repository is None:
             try:
                 from forge.repositories.marketplace_repository import MarketplaceRepository
+
                 _marketplace_repository = MarketplaceRepository(neo4j_client)
                 await _marketplace_repository.initialize()
                 logger.info("MarketplaceRepository initialized")

@@ -152,7 +152,7 @@ class AgentGatewayService:
 
         # Trim access logs to keep only most recent
         if len(self._access_logs) > self.MAX_ACCESS_LOGS:
-            self._access_logs = self._access_logs[-self.MAX_ACCESS_LOGS:]
+            self._access_logs = self._access_logs[-self.MAX_ACCESS_LOGS :]
 
     # =========================================================================
     # Session Management
@@ -437,7 +437,7 @@ class AgentGatewayService:
                 query_id=query.id,
                 session_id=session.id,
                 success=True,
-                results=filtered_records[:query.max_results],
+                results=filtered_records[: query.max_results],
                 total_count=len(filtered_records),
                 generated_cypher=compiled.cypher,
                 cypher_explanation=compiled.explanation,
@@ -470,14 +470,20 @@ class AgentGatewayService:
                 if not await self._can_access_capsule(session, capsule):
                     continue
 
-                results.append({
-                    "capsule_id": capsule.id,
-                    "title": getattr(capsule, 'title', ''),
-                    "type": capsule.type.value if hasattr(capsule.type, 'value') else str(capsule.type),
-                    "content_preview": capsule.content[:500] if capsule.content else "",
-                    "trust_level": capsule.trust_level,
-                    "created_at": capsule.created_at.isoformat() if capsule.created_at else None,
-                })
+                results.append(
+                    {
+                        "capsule_id": capsule.id,
+                        "title": getattr(capsule, "title", ""),
+                        "type": capsule.type.value
+                        if hasattr(capsule.type, "value")
+                        else str(capsule.type),
+                        "content_preview": capsule.content[:500] if capsule.content else "",
+                        "trust_level": capsule.trust_level,
+                        "created_at": capsule.created_at.isoformat()
+                        if capsule.created_at
+                        else None,
+                    }
+                )
 
                 if len(results) >= query.max_results:
                     break
@@ -508,7 +514,9 @@ class AgentGatewayService:
 
         if self.db and start_node:
             # Build traversal Cypher
-            rel_pattern = "|".join(relationship_types) if relationship_types else "DERIVED_FROM|RELATED_TO"
+            rel_pattern = (
+                "|".join(relationship_types) if relationship_types else "DERIVED_FROM|RELATED_TO"
+            )
             direction_pattern = {
                 "out": f"-[r:{rel_pattern}*1..{max_depth}]->",
                 "in": f"<-[r:{rel_pattern}*1..{max_depth}]-",
@@ -528,8 +536,7 @@ class AgentGatewayService:
 
             async with self.db.session() as db_session:
                 result_data = await db_session.run(
-                    cypher,
-                    {"start_node": start_node, "limit": query.max_results * 2}
+                    cypher, {"start_node": start_node, "limit": query.max_results * 2}
                 )
                 records = [dict(r) for r in await result_data.data()]
 
@@ -570,13 +577,13 @@ class AgentGatewayService:
         import unicodedata
 
         # Step 1: Unicode normalize to catch homoglyphs
-        normalized = unicodedata.normalize('NFKC', cypher_query)
+        normalized = unicodedata.normalize("NFKC", cypher_query)
 
         # Step 2: Remove comments (// line comments and /* block comments */)
         # Remove block comments
-        no_comments = re.sub(r'/\*.*?\*/', ' ', normalized, flags=re.DOTALL)
+        no_comments = re.sub(r"/\*.*?\*/", " ", normalized, flags=re.DOTALL)
         # Remove line comments
-        no_comments = re.sub(r'//.*?$', ' ', no_comments, flags=re.MULTILINE)
+        no_comments = re.sub(r"//.*?$", " ", no_comments, flags=re.MULTILINE)
 
         # Step 3: Convert to uppercase for analysis
         query_upper = no_comments.upper()
@@ -585,28 +592,28 @@ class AgentGatewayService:
         # Using word boundaries to avoid false positives
         dangerous_patterns = [
             # Node/Relationship mutations
-            r'\bCREATE\b',
-            r'\bMERGE\b',
-            r'\bDELETE\b',
-            r'\bDETACH\b',  # DETACH DELETE
-            r'\bSET\b',
-            r'\bREMOVE\b',
+            r"\bCREATE\b",
+            r"\bMERGE\b",
+            r"\bDELETE\b",
+            r"\bDETACH\b",  # DETACH DELETE
+            r"\bSET\b",
+            r"\bREMOVE\b",
             # Schema operations
-            r'\bDROP\b',
-            r'\bCONSTRAINT\b',
-            r'\bINDEX\b',
+            r"\bDROP\b",
+            r"\bCONSTRAINT\b",
+            r"\bINDEX\b",
             # Procedure calls (can execute arbitrary mutations)
-            r'\bCALL\b',
+            r"\bCALL\b",
             # Admin operations
-            r'\bGRANT\b',
-            r'\bREVOKE\b',
-            r'\bDENY\b',
+            r"\bGRANT\b",
+            r"\bREVOKE\b",
+            r"\bDENY\b",
             # Iteration that allows mutations
-            r'\bFOREACH\b',
+            r"\bFOREACH\b",
             # Load CSV can be dangerous
-            r'\bLOAD\s+CSV\b',
+            r"\bLOAD\s+CSV\b",
             # Subquery operations that might allow writes
-            r'\bCALL\s*\{',
+            r"\bCALL\s*\{",
         ]
 
         for pattern in dangerous_patterns:
@@ -616,22 +623,24 @@ class AgentGatewayService:
 
         # Step 5: Whitelist-based validation - must start with allowed clauses
         allowed_start_patterns = [
-            r'^\s*MATCH\b',
-            r'^\s*OPTIONAL\s+MATCH\b',
-            r'^\s*WITH\b',
-            r'^\s*RETURN\b',
-            r'^\s*UNWIND\b',
-            r'^\s*PROFILE\b',
-            r'^\s*EXPLAIN\b',
+            r"^\s*MATCH\b",
+            r"^\s*OPTIONAL\s+MATCH\b",
+            r"^\s*WITH\b",
+            r"^\s*RETURN\b",
+            r"^\s*UNWIND\b",
+            r"^\s*PROFILE\b",
+            r"^\s*EXPLAIN\b",
         ]
 
         starts_with_allowed = any(
-            re.match(pattern, query_upper)
-            for pattern in allowed_start_patterns
+            re.match(pattern, query_upper) for pattern in allowed_start_patterns
         )
 
         if not starts_with_allowed:
-            return False, "Query must start with MATCH, OPTIONAL MATCH, WITH, RETURN, UNWIND, PROFILE, or EXPLAIN"
+            return (
+                False,
+                "Query must start with MATCH, OPTIONAL MATCH, WITH, RETURN, UNWIND, PROFILE, or EXPLAIN",
+            )
 
         return True, ""
 
@@ -642,7 +651,10 @@ class AgentGatewayService:
     ) -> QueryResult:
         """Execute a direct Cypher query (trusted agents only)."""
         # Only trusted+ agents can run direct Cypher
-        if self.TRUST_LEVEL_VALUES.get(session.trust_level, 0) < self.TRUST_LEVEL_VALUES[AgentTrustLevel.TRUSTED]:
+        if (
+            self.TRUST_LEVEL_VALUES.get(session.trust_level, 0)
+            < self.TRUST_LEVEL_VALUES[AgentTrustLevel.TRUSTED]
+        ):
             return QueryResult(
                 query_id=query.id,
                 session_id=session.id,
@@ -675,7 +687,7 @@ class AgentGatewayService:
             query_id=query.id,
             session_id=session.id,
             success=True,
-            results=results[:query.max_results],
+            results=results[: query.max_results],
             total_count=len(results),
             generated_cypher=query.query_text,
         )
@@ -765,15 +777,17 @@ class AgentGatewayService:
             )
 
             # Log access
-            self._access_logs.append(CapsuleAccess(
-                session_id=session.id,
-                agent_id=session.agent_id,
-                capsule_id=capsule.id,
-                access_type=AccessType.WRITE,
-                capsule_trust_level=capsule.trust_level,
-                agent_trust_level=session.trust_level,
-                access_granted=True,
-            ))
+            self._access_logs.append(
+                CapsuleAccess(
+                    session_id=session.id,
+                    agent_id=session.agent_id,
+                    capsule_id=capsule.id,
+                    access_type=AccessType.WRITE,
+                    capsule_trust_level=capsule.trust_level,
+                    agent_trust_level=session.trust_level,
+                    access_granted=True,
+                )
+            )
 
             self._stats.capsules_created += 1
 
@@ -867,7 +881,8 @@ class AgentGatewayService:
             return None  # Don't cache direct queries
 
         return hashlib.md5(
-            f"{query.query_type.value}:{query.query_text}:{query.max_results}".encode()
+            f"{query.query_type.value}:{query.query_text}:{query.max_results}".encode(),
+            usedforsecurity=False,
         ).hexdigest()
 
     async def _filter_by_trust(
@@ -912,7 +927,9 @@ class AgentGatewayService:
         """Check if agent can access a specific capsule."""
         # Check type restrictions
         if session.allowed_capsule_types:
-            capsule_type = capsule.type.value if hasattr(capsule.type, 'value') else str(capsule.type)
+            capsule_type = (
+                capsule.type.value if hasattr(capsule.type, "value") else str(capsule.type)
+            )
             if capsule_type not in session.allowed_capsule_types:
                 return False
 
@@ -966,11 +983,13 @@ class AgentGatewayService:
         sources = []
         for r in results:
             if "capsule_id" in r:
-                sources.append({
-                    "capsule_id": r["capsule_id"],
-                    "title": r.get("title", ""),
-                    "type": r.get("type", ""),
-                })
+                sources.append(
+                    {
+                        "capsule_id": r["capsule_id"],
+                        "title": r.get("title", ""),
+                        "type": r.get("type", ""),
+                    }
+                )
         return sources
 
     # =========================================================================
@@ -1021,8 +1040,12 @@ class AgentGatewayService:
         # Auto-detect service type from capabilities
         if service_type is None:
             # Use the highest-value capability as the primary service type
-            for cap in [AgentCapability.EXECUTE_CASCADE, AgentCapability.QUERY_GRAPH,
-                        AgentCapability.SEMANTIC_SEARCH, AgentCapability.CREATE_CAPSULES]:
+            for cap in [
+                AgentCapability.EXECUTE_CASCADE,
+                AgentCapability.QUERY_GRAPH,
+                AgentCapability.SEMANTIC_SEARCH,
+                AgentCapability.CREATE_CAPSULES,
+            ]:
                 if cap in session.capabilities:
                     service_type = self.CAPABILITY_SERVICE_MAP.get(cap, "knowledge_query")
                     break
@@ -1114,9 +1137,7 @@ class AgentGatewayService:
 
         # Verify this session is the provider
         if job.provider_agent_id != session.agent_id:
-            raise ValueError(
-                f"Session {session_id} is not the provider for job {job_id}"
-            )
+            raise ValueError(f"Session {session_id} is not the provider for job {job_id}")
 
         # Execute the job using the existing execute_acp_job method
         result = await self.execute_acp_job(
@@ -1129,9 +1150,7 @@ class AgentGatewayService:
         from forge.virtuals.models import ACPDeliverable
 
         # Create and submit the deliverable
-        content_hash = hashlib.sha256(
-            json.dumps(result, sort_keys=True).encode()
-        ).hexdigest()
+        content_hash = hashlib.sha256(json.dumps(result, sort_keys=True).encode()).hexdigest()
 
         deliverable = ACPDeliverable(
             job_id=job_id,
@@ -1218,28 +1237,25 @@ class AgentGatewayService:
                 "results": {"type": "array"},
                 "answer": {"type": "string"},
                 "sources": {"type": "array"},
-            }
+            },
         }
 
         for cap in session.capabilities:
             if cap == AgentCapability.QUERY_GRAPH:
                 input_schema["properties"]["query_text"] = {
                     "type": "string",
-                    "description": "Natural language query"
+                    "description": "Natural language query",
                 }
                 input_schema["properties"]["query_type"] = {
                     "type": "string",
-                    "enum": ["natural_language", "semantic_search", "graph_traverse"]
+                    "enum": ["natural_language", "semantic_search", "graph_traverse"],
                 }
             elif cap == AgentCapability.SEMANTIC_SEARCH:
                 input_schema["properties"]["query"] = {
                     "type": "string",
-                    "description": "Semantic search query"
+                    "description": "Semantic search query",
                 }
-                input_schema["properties"]["max_results"] = {
-                    "type": "integer",
-                    "default": 10
-                }
+                input_schema["properties"]["max_results"] = {"type": "integer", "default": 10}
             elif cap == AgentCapability.CREATE_CAPSULES:
                 input_schema["properties"]["capsule_data"] = {
                     "type": "object",
@@ -1247,7 +1263,7 @@ class AgentGatewayService:
                         "title": {"type": "string"},
                         "content": {"type": "string"},
                         "capsule_type": {"type": "string"},
-                    }
+                    },
                 }
 
         return {

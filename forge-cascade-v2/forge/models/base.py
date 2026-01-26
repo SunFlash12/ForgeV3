@@ -29,12 +29,12 @@ def convert_neo4j_datetime(value: object) -> datetime:
             return value.replace(tzinfo=UTC)
         return value
     # Handle Neo4j DateTime object
-    if hasattr(value, 'to_native'):
+    if hasattr(value, "to_native"):
         native_value: datetime = value.to_native()
         return native_value
     # Handle string format
     if isinstance(value, str):
-        return datetime.fromisoformat(value.replace('Z', '+00:00'))
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
     # Fallback: return current time for unknown types
     return datetime.now(UTC)
 
@@ -57,7 +57,7 @@ class TimestampMixin(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
-    @field_validator('created_at', 'updated_at', mode='before')
+    @field_validator("created_at", "updated_at", mode="before")
     @classmethod
     def convert_datetime(cls, v: object) -> datetime:
         """Convert Neo4j DateTime to Python datetime."""
@@ -71,11 +71,11 @@ class TrustLevel(IntEnum):
     Higher values indicate more trust and more capabilities.
     """
 
-    QUARANTINE = 0    # Blocked - no execution allowed
-    SANDBOX = 40      # Experimental - limited, heavily monitored
-    STANDARD = 60     # Default level - basic operations
-    TRUSTED = 80      # Verified, reliable - most operations
-    CORE = 100        # System-critical - full access, immune to quarantine
+    QUARANTINE = 0  # Blocked - no execution allowed
+    SANDBOX = 40  # Experimental - limited, heavily monitored
+    STANDARD = 60  # Default level - basic operations
+    TRUSTED = 80  # Verified, reliable - most operations
+    CORE = 100  # System-critical - full access, immune to quarantine
 
     @classmethod
     def from_value(cls, value: int) -> "TrustLevel":
@@ -100,43 +100,43 @@ class CapsuleType(str, Enum):
     """Types of knowledge capsules - matches frontend CapsuleType."""
 
     # Frontend-compatible types
-    INSIGHT = "INSIGHT"        # AI-generated insights
-    DECISION = "DECISION"      # Recorded decisions with rationale
-    LESSON = "LESSON"          # Learned lessons
-    WARNING = "WARNING"        # Warnings and cautions
-    PRINCIPLE = "PRINCIPLE"    # Guiding principles
-    MEMORY = "MEMORY"          # Institutional memory
+    INSIGHT = "INSIGHT"  # AI-generated insights
+    DECISION = "DECISION"  # Recorded decisions with rationale
+    LESSON = "LESSON"  # Learned lessons
+    WARNING = "WARNING"  # Warnings and cautions
+    PRINCIPLE = "PRINCIPLE"  # Guiding principles
+    MEMORY = "MEMORY"  # Institutional memory
 
     # Additional backend types
-    KNOWLEDGE = "KNOWLEDGE"    # General knowledge/information
-    CODE = "CODE"              # Code snippets, functions
-    CONFIG = "CONFIG"          # Configuration data
-    TEMPLATE = "TEMPLATE"      # Reusable templates
-    DOCUMENT = "DOCUMENT"      # Full documents
+    KNOWLEDGE = "KNOWLEDGE"  # General knowledge/information
+    CODE = "CODE"  # Code snippets, functions
+    CONFIG = "CONFIG"  # Configuration data
+    TEMPLATE = "TEMPLATE"  # Reusable templates
+    DOCUMENT = "DOCUMENT"  # Full documents
 
 
 class OverlayState(str, Enum):
     """Lifecycle states for overlays."""
 
     REGISTERED = "registered"  # Known but not loaded
-    LOADING = "loading"        # Currently being loaded
-    ACTIVE = "active"          # Running and healthy
-    DEGRADED = "degraded"      # Running but with issues
-    STOPPING = "stopping"      # Graceful shutdown in progress
-    STOPPED = "stopped"        # Stopped but can be restarted
-    INACTIVE = "inactive"      # Not active, available for activation
+    LOADING = "loading"  # Currently being loaded
+    ACTIVE = "active"  # Running and healthy
+    DEGRADED = "degraded"  # Running but with issues
+    STOPPING = "stopping"  # Graceful shutdown in progress
+    STOPPED = "stopped"  # Stopped but can be restarted
+    INACTIVE = "inactive"  # Not active, available for activation
     QUARANTINED = "quarantined"  # Blocked due to failures
-    ERROR = "error"            # Fatal error state
+    ERROR = "error"  # Fatal error state
 
 
 class OverlayPhase(str, Enum):
     """Pipeline phases that overlays can participate in."""
 
-    VALIDATION = "validation"      # Input validation
-    SECURITY = "security"          # Security checks
-    ENRICHMENT = "enrichment"      # Data enrichment
-    PROCESSING = "processing"      # Core processing
-    GOVERNANCE = "governance"      # Governance checks
+    VALIDATION = "validation"  # Input validation
+    SECURITY = "security"  # Security checks
+    ENRICHMENT = "enrichment"  # Data enrichment
+    PROCESSING = "processing"  # Core processing
+    GOVERNANCE = "governance"  # Governance checks
     FINALIZATION = "finalization"  # Final processing
     NOTIFICATION = "notification"  # Notifications
 
@@ -144,13 +144,13 @@ class OverlayPhase(str, Enum):
 class ProposalStatus(str, Enum):
     """Status of governance proposals."""
 
-    DRAFT = "draft"            # Not yet submitted
-    ACTIVE = "active"          # Open for discussion
-    VOTING = "voting"          # Voting period active
-    PASSED = "passed"          # Approved
-    REJECTED = "rejected"      # Rejected
-    EXECUTED = "executed"      # Implemented
-    CANCELLED = "cancelled"    # Withdrawn
+    DRAFT = "draft"  # Not yet submitted
+    ACTIVE = "active"  # Open for discussion
+    VOTING = "voting"  # Voting period active
+    PASSED = "passed"  # Approved
+    REJECTED = "rejected"  # Rejected
+    EXECUTED = "executed"  # Implemented
+    CANCELLED = "cancelled"  # Withdrawn
 
 
 class AuditOperation(str, Enum):
@@ -243,12 +243,24 @@ def generate_uuid() -> UUID:
 # ═══════════════════════════════════════════════════════════════
 
 # SECURITY FIX (Audit 5): Dangerous keys that could indicate injection attempts
-FORBIDDEN_DICT_KEYS = frozenset({
-    "__proto__", "__prototype__", "__class__", "__bases__",
-    "__mro__", "__subclasses__", "__init__", "__new__",
-    "__reduce__", "__reduce_ex__", "__getstate__", "__setstate__",
-    "constructor", "prototype",
-})
+FORBIDDEN_DICT_KEYS = frozenset(
+    {
+        "__proto__",
+        "__prototype__",
+        "__class__",
+        "__bases__",
+        "__mro__",
+        "__subclasses__",
+        "__init__",
+        "__new__",
+        "__reduce__",
+        "__reduce_ex__",
+        "__getstate__",
+        "__setstate__",
+        "constructor",
+        "prototype",
+    }
+)
 
 # Default limits for dict validation
 DEFAULT_MAX_DICT_DEPTH = 5

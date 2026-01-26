@@ -27,6 +27,7 @@ logger = structlog.get_logger(__name__)
 @dataclass
 class ImportProgress:
     """Progress tracking for import operations."""
+
     phase: str  # "nodes" or "edges"
     total_records: int = 0
     imported_records: int = 0
@@ -53,6 +54,7 @@ class ImportProgress:
 @dataclass
 class ImportResult:
     """Result of an import operation."""
+
     success: bool
     nodes_imported: int = 0
     edges_imported: int = 0
@@ -140,10 +142,7 @@ class PrimeKGImportService:
         self._progress_callbacks: list[Callable[[ImportProgress], None]] = []
         self._cancelled = False
 
-    def add_progress_callback(
-        self,
-        callback: Callable[[ImportProgress], None]
-    ) -> None:
+    def add_progress_callback(self, callback: Callable[[ImportProgress], None]) -> None:
         """Add a callback to receive progress updates."""
         self._progress_callbacks.append(callback)
 
@@ -181,14 +180,12 @@ class PrimeKGImportService:
             "CREATE CONSTRAINT primekg_phenotype_id IF NOT EXISTS FOR (n:PrimeKGPhenotype) REQUIRE n.hpo_id IS UNIQUE",
             "CREATE CONSTRAINT primekg_anatomy_id IF NOT EXISTS FOR (n:PrimeKGAnatomy) REQUIRE n.uberon_id IS UNIQUE",
             "CREATE CONSTRAINT primekg_pathway_id IF NOT EXISTS FOR (n:PrimeKGPathway) REQUIRE n.reactome_id IS UNIQUE",
-
             # Indexes for common queries
             "CREATE INDEX primekg_node_type IF NOT EXISTS FOR (n:PrimeKGNode) ON (n.node_type)",
             "CREATE INDEX primekg_node_name IF NOT EXISTS FOR (n:PrimeKGNode) ON (n.node_name)",
             "CREATE INDEX primekg_disease_name IF NOT EXISTS FOR (n:PrimeKGDisease) ON (n.name)",
             "CREATE INDEX primekg_gene_symbol IF NOT EXISTS FOR (n:PrimeKGGene) ON (n.symbol)",
             "CREATE INDEX primekg_drug_name IF NOT EXISTS FOR (n:PrimeKGDrug) ON (n.name)",
-
             # Full-text index for clinical descriptions
             """
             CREATE FULLTEXT INDEX primekg_description IF NOT EXISTS
@@ -274,16 +271,13 @@ class PrimeKGImportService:
                 progress.resume_from_batch = saved_progress.get("current_batch", 0)
                 progress.imported_records = saved_progress.get("imported_records", 0)
                 progress.is_resuming = True
-                logger.info(
-                    "primekg_resuming_nodes",
-                    from_batch=progress.resume_from_batch
-                )
+                logger.info("primekg_resuming_nodes", from_batch=progress.resume_from_batch)
 
         logger.info(
             "primekg_importing_nodes",
             total=progress.total_records,
             batches=progress.total_batches,
-            resuming=progress.is_resuming
+            resuming=progress.is_resuming,
         )
 
         batch_num = 0
@@ -322,7 +316,7 @@ class PrimeKGImportService:
             "primekg_nodes_imported",
             imported=progress.imported_records,
             failed=progress.failed_records,
-            duration_seconds=duration
+            duration_seconds=duration,
         )
 
         return progress
@@ -416,13 +410,9 @@ class PrimeKGImportService:
                 return True
 
             except (RuntimeError, OSError, ConnectionError, ValueError) as e:
-                logger.warning(
-                    "primekg_node_batch_retry",
-                    attempt=attempt + 1,
-                    error=str(e)
-                )
+                logger.warning("primekg_node_batch_retry", attempt=attempt + 1, error=str(e))
                 if attempt < retries - 1:
-                    await asyncio.sleep(2 ** attempt)  # Exponential backoff
+                    await asyncio.sleep(2**attempt)  # Exponential backoff
 
         return False
 
@@ -483,7 +473,9 @@ class PrimeKGImportService:
 
         # Count total records
         progress.total_records = self.parser.count_lines(edges_file)
-        progress.total_batches = (progress.total_records + self.edge_batch_size - 1) // self.edge_batch_size
+        progress.total_batches = (
+            progress.total_records + self.edge_batch_size - 1
+        ) // self.edge_batch_size
 
         # Check for resume
         if resume:
@@ -494,9 +486,7 @@ class PrimeKGImportService:
                 progress.is_resuming = True
 
         logger.info(
-            "primekg_importing_edges",
-            total=progress.total_records,
-            batches=progress.total_batches
+            "primekg_importing_edges", total=progress.total_records, batches=progress.total_batches
         )
 
         batch_num = 0
@@ -526,7 +516,7 @@ class PrimeKGImportService:
         logger.info(
             "primekg_edges_imported",
             imported=progress.imported_records,
-            failed=progress.failed_records
+            failed=progress.failed_records,
         )
 
         return progress
@@ -582,13 +572,9 @@ class PrimeKGImportService:
                 return True
 
             except (RuntimeError, OSError, ConnectionError, ValueError) as e:
-                logger.warning(
-                    "primekg_edge_batch_retry",
-                    attempt=attempt + 1,
-                    error=str(e)
-                )
+                logger.warning("primekg_edge_batch_retry", attempt=attempt + 1, error=str(e))
                 if attempt < retries - 1:
-                    await asyncio.sleep(2 ** attempt)
+                    await asyncio.sleep(2**attempt)
 
         return False
 
@@ -654,7 +640,7 @@ class PrimeKGImportService:
             "primekg_import_complete",
             nodes_imported=result.nodes_imported,
             edges_imported=result.edges_imported,
-            duration_seconds=result.duration_seconds
+            duration_seconds=result.duration_seconds,
         )
 
         return result

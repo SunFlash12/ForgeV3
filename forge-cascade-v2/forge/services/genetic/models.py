@@ -12,12 +12,13 @@ from typing import Any
 
 class VariantType(str, Enum):
     """Type of genetic variant."""
-    SNV = "snv"                    # Single Nucleotide Variant
+
+    SNV = "snv"  # Single Nucleotide Variant
     INSERTION = "insertion"
     DELETION = "deletion"
-    INDEL = "indel"               # Insertion/Deletion
-    CNV = "cnv"                   # Copy Number Variant
-    SV = "sv"                     # Structural Variant
+    INDEL = "indel"  # Insertion/Deletion
+    CNV = "cnv"  # Copy Number Variant
+    SV = "sv"  # Structural Variant
     TRANSLOCATION = "translocation"
     INVERSION = "inversion"
     DUPLICATION = "duplication"
@@ -26,6 +27,7 @@ class VariantType(str, Enum):
 
 class VariantPathogenicity(str, Enum):
     """ACMG pathogenicity classification."""
+
     PATHOGENIC = "pathogenic"
     LIKELY_PATHOGENIC = "likely_pathogenic"
     UNCERTAIN_SIGNIFICANCE = "uncertain_significance"
@@ -36,6 +38,7 @@ class VariantPathogenicity(str, Enum):
 
 class InheritancePattern(str, Enum):
     """Inheritance pattern for genetic conditions."""
+
     AUTOSOMAL_DOMINANT = "autosomal_dominant"
     AUTOSOMAL_RECESSIVE = "autosomal_recessive"
     X_LINKED_DOMINANT = "x_linked_dominant"
@@ -48,6 +51,7 @@ class InheritancePattern(str, Enum):
 
 class Zygosity(str, Enum):
     """Zygosity of a variant."""
+
     HOMOZYGOUS = "homozygous"
     HETEROZYGOUS = "heterozygous"
     HEMIZYGOUS = "hemizygous"
@@ -62,16 +66,17 @@ class GeneticVariant:
 
     Follows VCF format conventions.
     """
+
     # Core identifiers
-    chromosome: str               # e.g., "chr1", "1", "chrX"
-    position: int                 # 1-based position
-    ref_allele: str               # Reference allele
-    alt_allele: str               # Alternative allele
+    chromosome: str  # e.g., "chr1", "1", "chrX"
+    position: int  # 1-based position
+    ref_allele: str  # Reference allele
+    alt_allele: str  # Alternative allele
 
     # Optional identifiers
     variant_id: str | None = None  # dbSNP ID (rs...)
     gene_symbol: str | None = None
-    gene_id: str | None = None     # Entrez or Ensembl ID
+    gene_id: str | None = None  # Entrez or Ensembl ID
     transcript_id: str | None = None
 
     # Variant characteristics
@@ -86,12 +91,12 @@ class GeneticVariant:
     # Clinical annotations
     pathogenicity: VariantPathogenicity = VariantPathogenicity.NOT_PROVIDED
     clinvar_id: str | None = None
-    hgvs_c: str | None = None      # cDNA notation
-    hgvs_p: str | None = None      # Protein notation
+    hgvs_c: str | None = None  # cDNA notation
+    hgvs_p: str | None = None  # Protein notation
 
     # Functional impact
     consequence: str | None = None  # e.g., "missense_variant", "frameshift"
-    impact: str | None = None       # e.g., "HIGH", "MODERATE", "LOW"
+    impact: str | None = None  # e.g., "HIGH", "MODERATE", "LOW"
     sift_score: float | None = None
     polyphen_score: float | None = None
 
@@ -138,8 +143,9 @@ class VariantAnnotation:
 
     From databases like ClinVar, OMIM, gnomAD.
     """
+
     variant: GeneticVariant
-    source: str                   # e.g., "clinvar", "omim", "gnomad"
+    source: str  # e.g., "clinvar", "omim", "gnomad"
 
     # Clinical significance
     clinical_significance: str | None = None
@@ -168,8 +174,9 @@ class GeneInfo:
 
     Includes disease associations and functional annotations.
     """
-    gene_symbol: str              # e.g., "BRCA1"
-    gene_id: str                  # Entrez ID
+
+    gene_symbol: str  # e.g., "BRCA1"
+    gene_id: str  # Entrez ID
     ensembl_id: str | None = None
     full_name: str | None = None
 
@@ -217,9 +224,10 @@ class GeneticTestResult:
 
     Contains all variants found and overall interpretation.
     """
+
     test_id: str
     patient_id: str | None = None
-    test_type: str = "wes"        # wes, wgs, panel, single_gene
+    test_type: str = "wes"  # wes, wgs, panel, single_gene
 
     # Variants found
     variants: list[GeneticVariant] = field(default_factory=list)
@@ -237,7 +245,7 @@ class GeneticTestResult:
     # Metadata
     lab_name: str | None = None
     report_date: datetime | None = None
-    platform: str | None = None   # Sequencing platform
+    platform: str | None = None  # Sequencing platform
 
     @property
     def total_variants(self) -> int:
@@ -265,9 +273,10 @@ class GeneDiseaseAssociation:
 
     From sources like OMIM, ClinGen, DisGeNET.
     """
+
     gene_symbol: str
     gene_id: str
-    disease_id: str               # MONDO, OMIM, or ORPHA ID
+    disease_id: str  # MONDO, OMIM, or ORPHA ID
     disease_name: str
 
     # Association details

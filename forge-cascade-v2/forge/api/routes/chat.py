@@ -617,7 +617,9 @@ async def generate_invite_code(
     current_user: ActiveUserDep,
     chat_service: ChatServiceDep,
     audit_repo: AuditRepoDep,
-    expires_in_hours: int | None = Query(default=168, ge=1, le=720, description="Hours until expiry (1-720)"),
+    expires_in_hours: int | None = Query(
+        default=168, ge=1, le=720, description="Hours until expiry (1-720)"
+    ),
 ) -> InviteCodeResponse:
     """Generate an invite code for a room."""
     try:

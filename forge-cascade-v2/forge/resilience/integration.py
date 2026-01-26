@@ -30,7 +30,7 @@ from forge.resilience.security.content_validator import (
 
 logger = structlog.get_logger(__name__)
 
-F = TypeVar('F', bound=Callable[..., Any])
+F = TypeVar("F", bound=Callable[..., Any])
 
 
 class ObservabilityMiddleware(BaseHTTPMiddleware):
@@ -58,7 +58,7 @@ class ObservabilityMiddleware(BaseHTTPMiddleware):
                 "http.method": request.method,
                 "http.url": str(request.url),
                 "http.route": path_template,
-            }
+            },
         ) as span:
             try:
                 response: Response = await call_next(request)
@@ -73,7 +73,7 @@ class ObservabilityMiddleware(BaseHTTPMiddleware):
                 )
 
                 # Add response info to span
-                if hasattr(span, 'set_attribute'):
+                if hasattr(span, "set_attribute"):
                     span.set_attribute("http.status_code", response.status_code)
 
                 return response
@@ -96,9 +96,11 @@ class ObservabilityMiddleware(BaseHTTPMiddleware):
         import re
 
         # Replace UUIDs and common ID patterns
-        path = re.sub(r'/cap_[a-f0-9]+', '/{capsule_id}', path)
-        path = re.sub(r'/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}', '/{id}', path)
-        path = re.sub(r'/[a-f0-9]{24,}', '/{id}', path)
+        path = re.sub(r"/cap_[a-f0-9]+", "/{capsule_id}", path)
+        path = re.sub(
+            r"/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}", "/{id}", path
+        )
+        path = re.sub(r"/[a-f0-9]{24,}", "/{id}", path)
 
         return path
 
@@ -177,7 +179,7 @@ async def initialize_resilience(app: FastAPI) -> None:
 
 async def shutdown_resilience(app: FastAPI) -> None:
     """Shutdown resilience components."""
-    if hasattr(app.state, 'resilience'):
+    if hasattr(app.state, "resilience"):
         await app.state.resilience.close()
     logger.info("resilience_shutdown")
 
@@ -185,6 +187,7 @@ async def shutdown_resilience(app: FastAPI) -> None:
 # =============================================================================
 # Caching Helpers
 # =============================================================================
+
 
 async def get_cached_capsule(capsule_id: str) -> dict[str, Any] | None:
     """Get a capsule from cache."""
@@ -206,11 +209,7 @@ async def cache_capsule(capsule_id: str, capsule_data: dict[str, Any], ttl: int 
     config = get_resilience_config()
     key = config.cache.capsule_key_pattern.format(capsule_id=capsule_id)
     return await state.cache.set(
-        key,
-        capsule_data,
-        ttl=ttl,
-        query_type="capsule",
-        related_capsule_ids=[capsule_id]
+        key, capsule_data, ttl=ttl, query_type="capsule", related_capsule_ids=[capsule_id]
     )
 
 
@@ -235,11 +234,7 @@ async def get_cached_search(query_hash: str) -> list[Any] | None:
     return await state.cache.get(key)
 
 
-async def cache_search_results(
-    query_hash: str,
-    results: list[Any],
-    ttl: int = 600
-) -> bool:
+async def cache_search_results(query_hash: str, results: list[Any], ttl: int = 600) -> bool:
     """Cache search results."""
     state = await get_resilience_state()
     if not state.cache:
@@ -253,18 +248,14 @@ async def cache_search_results(
     capsule_ids: list[str] = []
     for r in results:
         if isinstance(r, dict):
-            capsule_id_val: Any = r.get('id')
+            capsule_id_val: Any = r.get("id")
             if capsule_id_val and isinstance(capsule_id_val, str):
                 capsule_ids.append(capsule_id_val)
         elif isinstance(r, str):
             capsule_ids.append(r)
 
     return await state.cache.set(
-        key,
-        results,
-        ttl=ttl,
-        query_type="search",
-        related_capsule_ids=capsule_ids
+        key, results, ttl=ttl, query_type="search", related_capsule_ids=capsule_ids
     )
 
 
@@ -280,10 +271,7 @@ async def get_cached_lineage(capsule_id: str, depth: int) -> dict[str, Any] | No
 
 
 async def cache_lineage(
-    capsule_id: str,
-    depth: int,
-    lineage_data: dict[str, Any],
-    ttl: int = 1800
+    capsule_id: str, depth: int, lineage_data: dict[str, Any], ttl: int = 1800
 ) -> bool:
     """Cache lineage data."""
     state = await get_resilience_state()
@@ -295,17 +283,13 @@ async def cache_lineage(
 
     # Extract all capsule IDs from lineage
     capsule_ids = [capsule_id]
-    if 'ancestors' in lineage_data:
-        capsule_ids.extend([a.get('id') for a in lineage_data['ancestors'] if a.get('id')])
-    if 'descendants' in lineage_data:
-        capsule_ids.extend([d.get('id') for d in lineage_data['descendants'] if d.get('id')])
+    if "ancestors" in lineage_data:
+        capsule_ids.extend([a.get("id") for a in lineage_data["ancestors"] if a.get("id")])
+    if "descendants" in lineage_data:
+        capsule_ids.extend([d.get("id") for d in lineage_data["descendants"] if d.get("id")])
 
     return await state.cache.set(
-        key,
-        lineage_data,
-        ttl=ttl,
-        query_type="lineage",
-        related_capsule_ids=capsule_ids
+        key, lineage_data, ttl=ttl, query_type="lineage", related_capsule_ids=capsule_ids
     )
 
 
@@ -313,10 +297,8 @@ async def cache_lineage(
 # Content Validation Helpers
 # =============================================================================
 
-async def validate_capsule_content(
-    content: str,
-    content_type: str = "text"
-) -> ValidationResult:
+
+async def validate_capsule_content(content: str, content_type: str = "text") -> ValidationResult:
     """
     Validate capsule content for security threats.
 
@@ -352,13 +334,14 @@ def check_content_validation(result: ValidationResult) -> None:
                     {"message": issue.message, "severity": issue.severity.value}
                     for issue in result.issues[:5]  # Limit exposed issues
                 ],
-            }
+            },
         )
 
 
 # =============================================================================
 # Metrics Helpers
 # =============================================================================
+
 
 def record_capsule_created(capsule_type: str) -> None:
     """Record capsule creation metric."""
@@ -405,6 +388,7 @@ def record_cache_miss(cache_type: str = "query") -> None:
 # =============================================================================
 # Governance Caching Helpers
 # =============================================================================
+
 
 async def get_cached_proposal(proposal_id: str) -> dict[str, Any] | None:
     """Get a proposal from cache."""
@@ -497,6 +481,7 @@ async def cache_governance_metrics(data: dict[str, Any], ttl: int = 60) -> bool:
 # Governance Metrics Helpers
 # =============================================================================
 
+
 def record_proposal_created(proposal_type: str) -> None:
     """Record proposal creation metric."""
     metrics = get_metrics()
@@ -518,17 +503,22 @@ def record_proposal_finalized(status: str) -> None:
 def record_ghost_council_query(latency: float, use_ai: bool) -> None:
     """Record Ghost Council query metric."""
     metrics = get_metrics()
-    metrics.record_latency("governance_ghost_council_latency", latency, labels={"ai_enabled": str(use_ai)})
+    metrics.record_latency(
+        "governance_ghost_council_latency", latency, labels={"ai_enabled": str(use_ai)}
+    )
 
 
 # =============================================================================
 # Authentication Metrics Helpers
 # =============================================================================
 
+
 def record_login_attempt(success: bool, reason: str = "") -> None:
     """Record login attempt metric."""
     metrics = get_metrics()
-    metrics.increment("auth_login_attempts", labels={"success": str(success).lower(), "reason": reason})
+    metrics.increment(
+        "auth_login_attempts", labels={"success": str(success).lower(), "reason": reason}
+    )
 
 
 def record_registration() -> None:
@@ -559,6 +549,7 @@ def record_password_change() -> None:
 # Overlay Management Metrics Helpers
 # =============================================================================
 
+
 def record_overlay_activated(overlay_id: str) -> None:
     """Record overlay activation metric."""
     metrics = get_metrics()
@@ -586,7 +577,9 @@ def record_canary_started(overlay_id: str) -> None:
 def record_canary_advanced(overlay_id: str, stage: int) -> None:
     """Record canary deployment advancement metric."""
     metrics = get_metrics()
-    metrics.increment("canary_deployments_advanced", labels={"overlay_id": overlay_id, "stage": str(stage)})
+    metrics.increment(
+        "canary_deployments_advanced", labels={"overlay_id": overlay_id, "stage": str(stage)}
+    )
 
 
 def record_canary_rolled_back(overlay_id: str) -> None:
@@ -604,6 +597,7 @@ def record_overlays_reloaded(count: int) -> None:
 # =============================================================================
 # Overlay Caching Helpers
 # =============================================================================
+
 
 async def get_cached_overlay_list() -> list[Any] | None:
     """Get overlay list from cache."""
@@ -644,6 +638,7 @@ async def invalidate_overlay_cache() -> int:
 # System Metrics Helpers
 # =============================================================================
 
+
 def record_health_check_access() -> None:
     """Record health check access metric."""
     metrics = get_metrics()
@@ -683,6 +678,7 @@ def record_cache_cleared(caches: list[str]) -> None:
 # =============================================================================
 # System Caching Helpers
 # =============================================================================
+
 
 async def get_cached_system_metrics() -> dict[str, Any] | None:
     """Get system metrics from cache."""
@@ -734,22 +730,30 @@ async def cache_health_status(health_data: dict[str, Any], ttl: int = 15) -> boo
 # Cascade Effect Metrics Helpers
 # =============================================================================
 
+
 def record_cascade_triggered(source_overlay: str, insight_type: str) -> None:
     """Record cascade trigger metric."""
     metrics = get_metrics()
-    metrics.increment("cascade_triggered", labels={"source_overlay": source_overlay, "insight_type": insight_type})
+    metrics.increment(
+        "cascade_triggered", labels={"source_overlay": source_overlay, "insight_type": insight_type}
+    )
 
 
 def record_cascade_propagated(cascade_id: str, target_overlay: str, hop_count: int) -> None:
     """Record cascade propagation metric."""
     metrics = get_metrics()
-    metrics.increment("cascade_propagated", labels={"target_overlay": target_overlay, "hop_count": str(hop_count)})
+    metrics.increment(
+        "cascade_propagated", labels={"target_overlay": target_overlay, "hop_count": str(hop_count)}
+    )
 
 
 def record_cascade_completed(cascade_id: str, total_hops: int, overlays_affected: int) -> None:
     """Record cascade completion metric."""
     metrics = get_metrics()
-    metrics.increment("cascade_completed", labels={"total_hops": str(total_hops), "overlays_affected": str(overlays_affected)})
+    metrics.increment(
+        "cascade_completed",
+        labels={"total_hops": str(total_hops), "overlays_affected": str(overlays_affected)},
+    )
 
 
 def record_pipeline_executed(pipeline_id: str, status: str, duration_ms: float) -> None:
@@ -762,6 +766,7 @@ def record_pipeline_executed(pipeline_id: str, status: str, duration_ms: float) 
 # =============================================================================
 # Cascade Caching Helpers
 # =============================================================================
+
 
 async def get_cached_active_cascades() -> list[Any] | None:
     """Get active cascades from cache."""

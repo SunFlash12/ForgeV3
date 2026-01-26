@@ -54,6 +54,7 @@ logger = logging.getLogger(__name__)
 
 class AgentState(str, Enum):
     """State of the Copilot agent."""
+
     STOPPED = "stopped"
     STARTING = "starting"
     RUNNING = "running"
@@ -77,6 +78,7 @@ class CopilotConfig:
         timeout_seconds: Request timeout in seconds
         max_retries: Maximum retry attempts for failed requests
     """
+
     model: str = "gpt-5"
     streaming: bool = True
     system_prompt: str | None = None
@@ -92,6 +94,7 @@ class CopilotConfig:
 @dataclass
 class ChatMessage:
     """A message in the chat history."""
+
     role: str  # "user", "assistant", "system"
     content: str
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
@@ -102,6 +105,7 @@ class ChatMessage:
 @dataclass
 class ChatResponse:
     """Response from a chat interaction."""
+
     content: str
     tool_calls: list[dict[str, Any]] = field(default_factory=list)
     reasoning: str | None = None
@@ -257,17 +261,18 @@ When creating capsules, ensure they are well-structured with appropriate tags an
             cli_path = self.config.cli_path
             if not cli_path:
                 import os
+
                 cli_path = os.environ.get("COPILOT_CLI_PATH")
             if not cli_path:
                 # Auto-discover common installation paths
                 import shutil
+
                 cli_path = shutil.which("copilot")
                 if not cli_path:
                     # Check npm global install location on Windows
                     import os as _os
-                    npm_path = _os.path.expandvars(
-                        r"%APPDATA%\npm\copilot.cmd"
-                    )
+
+                    npm_path = _os.path.expandvars(r"%APPDATA%\npm\copilot.cmd")
                     if _os.path.exists(npm_path):
                         cli_path = npm_path
 
@@ -348,15 +353,17 @@ When creating capsules, ensure they are well-structured with appropriate tags an
         start_time = datetime.now(UTC)
 
         # Add user message to history (original for display)
-        self._history.append(ChatMessage(
-            role="user",
-            content=message,
-            metadata=metadata or {},
-        ))
+        self._history.append(
+            ChatMessage(
+                role="user",
+                content=message,
+                metadata=metadata or {},
+            )
+        )
         # SECURITY FIX (Audit 7 - Session 9): Bound chat history to prevent memory exhaustion
         if len(self._history) > self.MAX_HISTORY_LENGTH:
             # Keep system messages and last N messages
-            self._history = self._history[-self.MAX_HISTORY_LENGTH:]
+            self._history = self._history[-self.MAX_HISTORY_LENGTH :]
 
         # Set up response collection
         response_content: list[str] = []
@@ -370,10 +377,12 @@ When creating capsules, ensure they are well-structured with appropriate tags an
             elif event.type.value == "assistant.reasoning":
                 reasoning_content.append(event.data.content)
             elif event.type.value == "tool.call":
-                tool_calls.append({
-                    "name": event.data.name,
-                    "arguments": event.data.arguments,
-                })
+                tool_calls.append(
+                    {
+                        "name": event.data.name,
+                        "arguments": event.data.arguments,
+                    }
+                )
             elif event.type.value == "session.idle":
                 done.set()
 
@@ -385,10 +394,7 @@ When creating capsules, ensure they are well-structured with appropriate tags an
             await self._session.send({"prompt": sanitized_message})
 
             # Wait for completion with timeout
-            await asyncio.wait_for(
-                done.wait(),
-                timeout=self.config.timeout_seconds
-            )
+            await asyncio.wait_for(done.wait(), timeout=self.config.timeout_seconds)
 
         except TimeoutError:
             logger.error(f"Chat request timed out after {self.config.timeout_seconds}s")
@@ -409,15 +415,17 @@ When creating capsules, ensure they are well-structured with appropriate tags an
         )
 
         # Add assistant message to history
-        self._history.append(ChatMessage(
-            role="assistant",
-            content=content,
-            tool_calls=tool_calls,
-        ))
+        self._history.append(
+            ChatMessage(
+                role="assistant",
+                content=content,
+                tool_calls=tool_calls,
+            )
+        )
         # SECURITY FIX (Audit 7 - Session 9): Bound chat history to prevent memory exhaustion
         if len(self._history) > self.MAX_HISTORY_LENGTH:
             # Keep system messages and last N messages
-            self._history = self._history[-self.MAX_HISTORY_LENGTH:]
+            self._history = self._history[-self.MAX_HISTORY_LENGTH :]
 
         return response
 
@@ -452,15 +460,17 @@ When creating capsules, ensure they are well-structured with appropriate tags an
             return
 
         # Add user message to history (original for display)
-        self._history.append(ChatMessage(
-            role="user",
-            content=message,
-            metadata=metadata or {},
-        ))
+        self._history.append(
+            ChatMessage(
+                role="user",
+                content=message,
+                metadata=metadata or {},
+            )
+        )
         # SECURITY FIX (Audit 7 - Session 9): Bound chat history to prevent memory exhaustion
         if len(self._history) > self.MAX_HISTORY_LENGTH:
             # Keep system messages and last N messages
-            self._history = self._history[-self.MAX_HISTORY_LENGTH:]
+            self._history = self._history[-self.MAX_HISTORY_LENGTH :]
 
         # Queue for streaming chunks
         chunk_queue: asyncio.Queue[str | None] = asyncio.Queue()
@@ -486,8 +496,7 @@ When creating capsules, ensure they are well-structured with appropriate tags an
         while True:
             try:
                 chunk = await asyncio.wait_for(
-                    chunk_queue.get(),
-                    timeout=self.config.timeout_seconds
+                    chunk_queue.get(), timeout=self.config.timeout_seconds
                 )
                 if chunk is None:  # Sentinel - we're done
                     break
@@ -497,14 +506,16 @@ When creating capsules, ensure they are well-structured with appropriate tags an
                 break
 
         # Add complete response to history
-        self._history.append(ChatMessage(
-            role="assistant",
-            content="".join(full_response),
-        ))
+        self._history.append(
+            ChatMessage(
+                role="assistant",
+                content="".join(full_response),
+            )
+        )
         # SECURITY FIX (Audit 7 - Session 9): Bound chat history to prevent memory exhaustion
         if len(self._history) > self.MAX_HISTORY_LENGTH:
             # Keep system messages and last N messages
-            self._history = self._history[-self.MAX_HISTORY_LENGTH:]
+            self._history = self._history[-self.MAX_HISTORY_LENGTH :]
 
     def on_event(self, handler: Callable[..., Any]) -> None:
         """

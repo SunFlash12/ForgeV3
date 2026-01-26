@@ -33,17 +33,19 @@ logger = logging.getLogger(__name__)
 
 class BridgeStatus(str, Enum):
     """Status of a bridge transfer."""
-    PENDING = "pending"           # Transfer initiated
+
+    PENDING = "pending"  # Transfer initiated
     SOURCE_CONFIRMED = "source_confirmed"  # Source chain confirmed
-    IN_TRANSIT = "in_transit"     # Wormhole processing
+    IN_TRANSIT = "in_transit"  # Wormhole processing
     DESTINATION_PENDING = "destination_pending"  # Awaiting destination claim
-    COMPLETED = "completed"       # Successfully bridged
-    FAILED = "failed"             # Transfer failed
-    REFUNDED = "refunded"         # Transfer refunded
+    COMPLETED = "completed"  # Successfully bridged
+    FAILED = "failed"  # Transfer failed
+    REFUNDED = "refunded"  # Transfer refunded
 
 
 class BridgeRoute(str, Enum):
     """Available bridge routes."""
+
     BASE_TO_ETHEREUM = "base_to_ethereum"
     ETHEREUM_TO_BASE = "ethereum_to_base"
     BASE_TO_SOLANA = "base_to_solana"
@@ -54,6 +56,7 @@ class BridgeRoute(str, Enum):
 
 class BridgeRequest(BaseModel):
     """Request for a cross-chain bridge transfer."""
+
     id: str = Field(default_factory=lambda: str(uuid4()))
     route: BridgeRoute = Field(description="Bridge route")
     source_chain: ChainNetwork = Field(description="Source blockchain")
@@ -86,14 +89,14 @@ BRIDGE_ABI = [
         "name": "transferTokens",
         "outputs": [{"name": "sequence", "type": "uint64"}],
         "stateMutability": "payable",
-        "type": "function"
+        "type": "function",
     },
     {
         "inputs": [{"name": "vaa", "type": "bytes"}],
         "name": "completeTransfer",
         "outputs": [],
         "stateMutability": "nonpayable",
-        "type": "function"
+        "type": "function",
     },
     {
         "inputs": [
@@ -105,7 +108,7 @@ BRIDGE_ABI = [
             {"name": "targetChainRefundPerGasUnused", "type": "uint256"},
         ],
         "stateMutability": "view",
-        "type": "function"
+        "type": "function",
     },
 ]
 
@@ -148,9 +151,12 @@ class BridgeService:
     """
 
     # Bridge contract address (same on Base and Ethereum)
-    BRIDGE_CONTRACT: str = ContractAddresses.BASE_MAINNET.get(
-        "bridge",
-    ) or "0x3154Cf16ccdb4C6d922629664174b904d80F2C35"
+    BRIDGE_CONTRACT: str = (
+        ContractAddresses.BASE_MAINNET.get(
+            "bridge",
+        )
+        or "0x3154Cf16ccdb4C6d922629664174b904d80F2C35"
+    )
 
     # Minimum and maximum bridge amounts
     MIN_BRIDGE_AMOUNT = Decimal("1.0")
@@ -337,13 +343,9 @@ class BridgeService:
         try:
             # Execute bridge based on source chain type
             if source_chain in [ChainNetwork.BASE, ChainNetwork.ETHEREUM]:
-                tx_record = await self._initiate_evm_bridge(
-                    request, source_chain, dest_chain
-                )
+                tx_record = await self._initiate_evm_bridge(request, source_chain, dest_chain)
             else:
-                tx_record = await self._initiate_solana_bridge(
-                    request, dest_chain
-                )
+                tx_record = await self._initiate_solana_bridge(request, dest_chain)
 
             request.source_tx_hash = tx_record.tx_hash
             request.status = BridgeStatus.SOURCE_CONFIRMED
@@ -385,13 +387,12 @@ class BridgeService:
         if dest_chain == ChainNetwork.SOLANA:
             # Solana addresses need base58 -> bytes32 conversion
             import base58  # type: ignore[import-not-found]
+
             recipient_bytes = base58.b58decode(request.recipient_address)
-            recipient_bytes32 = recipient_bytes.rjust(32, b'\x00')
+            recipient_bytes32 = recipient_bytes.rjust(32, b"\x00")
         else:
             # EVM address to bytes32
-            recipient_bytes32 = bytes.fromhex(
-                request.recipient_address[2:].rjust(64, '0')
-            )
+            recipient_bytes32 = bytes.fromhex(request.recipient_address[2:].rjust(64, "0"))
 
         # Execute bridge transfer
         amount_wei = int(request.amount * Decimal("1e18"))
@@ -430,14 +431,11 @@ class BridgeService:
         tx_record = await client.execute_contract(
             contract_address="MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr",
             function_name="memo",
-            args=[
-                f"BRIDGE:{request.amount}:{dest_wormhole_id}:{request.recipient_address}"
-            ],
+            args=[f"BRIDGE:{request.amount}:{dest_wormhole_id}:{request.recipient_address}"],
         )
 
         logger.warning(
-            "Solana bridge: Using memo for bridge intent. "
-            "Full Wormhole integration pending."
+            "Solana bridge: Using memo for bridge intent. Full Wormhole integration pending."
         )
 
         return tx_record
@@ -544,13 +542,13 @@ class BridgeService:
 
         if address:
             bridges = [
-                b for b in bridges
-                if b.sender_address == address or b.recipient_address == address
+                b for b in bridges if b.sender_address == address or b.recipient_address == address
             ]
 
         # Filter to non-completed
         bridges = [
-            b for b in bridges
+            b
+            for b in bridges
             if b.status not in [BridgeStatus.COMPLETED, BridgeStatus.FAILED, BridgeStatus.REFUNDED]
         ]
 
@@ -568,27 +566,29 @@ class BridgeService:
             source, dest = self._get_chain_from_route(route)
 
             # Check if both chains are enabled
-            if not (self._config.is_chain_enabled(source) and
-                    self._config.is_chain_enabled(dest)):
+            if not (self._config.is_chain_enabled(source) and self._config.is_chain_enabled(dest)):
                 continue
 
             is_solana = source == ChainNetwork.SOLANA or dest == ChainNetwork.SOLANA
 
-            routes.append({
-                "route": route.value,
-                "source_chain": source.value,
-                "destination_chain": dest.value,
-                "fee_percentage": 0.3 if is_solana else 0.1,
-                "estimated_time_minutes": 20 if is_solana else 10,
-                "min_amount": float(self.MIN_BRIDGE_AMOUNT),
-                "max_amount": float(self.MAX_BRIDGE_AMOUNT),
-            })
+            routes.append(
+                {
+                    "route": route.value,
+                    "source_chain": source.value,
+                    "destination_chain": dest.value,
+                    "fee_percentage": 0.3 if is_solana else 0.1,
+                    "estimated_time_minutes": 20 if is_solana else 10,
+                    "min_amount": float(self.MIN_BRIDGE_AMOUNT),
+                    "max_amount": float(self.MAX_BRIDGE_AMOUNT),
+                }
+            )
 
         return routes
 
 
 class BridgeError(Exception):
     """Error raised when a bridge operation fails."""
+
     pass
 
 

@@ -18,31 +18,34 @@ def _utc_now() -> datetime:
 
 class DiagnosisState(str, Enum):
     """State of a diagnosis session."""
-    INTAKE = "intake"           # Gathering initial information
-    ANALYZING = "analyzing"     # Processing initial data
-    QUESTIONING = "questioning" # Asking follow-up questions
-    REFINING = "refining"       # Refining hypotheses
-    COMPLETE = "complete"       # Diagnosis complete
-    PAUSED = "paused"           # Session paused by user
-    EXPIRED = "expired"         # Session timed out
+
+    INTAKE = "intake"  # Gathering initial information
+    ANALYZING = "analyzing"  # Processing initial data
+    QUESTIONING = "questioning"  # Asking follow-up questions
+    REFINING = "refining"  # Refining hypotheses
+    COMPLETE = "complete"  # Diagnosis complete
+    PAUSED = "paused"  # Session paused by user
+    EXPIRED = "expired"  # Session timed out
 
 
 class EvidenceType(str, Enum):
     """Type of clinical evidence."""
-    PHENOTYPE = "phenotype"     # HPO phenotype
-    GENETIC = "genetic"         # Genetic variant
-    LABORATORY = "laboratory"   # Lab test result
-    IMAGING = "imaging"         # Imaging finding
-    HISTORY = "history"         # Medical history
-    FAMILY = "family"           # Family history
-    MEDICATION = "medication"   # Current medications
-    PROCEDURE = "procedure"     # Surgical/procedural history
-    WEARABLE = "wearable"       # Wearable device data
+
+    PHENOTYPE = "phenotype"  # HPO phenotype
+    GENETIC = "genetic"  # Genetic variant
+    LABORATORY = "laboratory"  # Lab test result
+    IMAGING = "imaging"  # Imaging finding
+    HISTORY = "history"  # Medical history
+    FAMILY = "family"  # Family history
+    MEDICATION = "medication"  # Current medications
+    PROCEDURE = "procedure"  # Surgical/procedural history
+    WEARABLE = "wearable"  # Wearable device data
     OTHER = "other"
 
 
 class EvidencePolarity(str, Enum):
     """Whether evidence supports or refutes a hypothesis."""
+
     SUPPORTS = "supports"
     REFUTES = "refutes"
     NEUTRAL = "neutral"
@@ -56,21 +59,22 @@ class EvidenceItem:
 
     Could be a phenotype, genetic variant, lab result, etc.
     """
+
     id: str = field(default_factory=lambda: str(uuid4()))
     evidence_type: EvidenceType = EvidenceType.OTHER
-    value: str = ""                  # The evidence value/description
-    code: str | None = None          # Standardized code (HPO, LOINC, etc.)
-    source: str | None = None        # Where this evidence came from
+    value: str = ""  # The evidence value/description
+    code: str | None = None  # Standardized code (HPO, LOINC, etc.)
+    source: str | None = None  # Where this evidence came from
 
     # Clinical context
-    negated: bool = False            # Evidence is absent/negative
+    negated: bool = False  # Evidence is absent/negative
     severity: str | None = None
-    onset: str | None = None         # Age of onset
+    onset: str | None = None  # Age of onset
     progression: str | None = None
 
     # Confidence
-    confidence: float = 1.0          # How certain we are about this evidence
-    confirmed: bool = False          # Explicitly confirmed by user
+    confidence: float = 1.0  # How certain we are about this evidence
+    confirmed: bool = False  # Explicitly confirmed by user
 
     # Timestamps
     observed_at: datetime | None = None
@@ -97,18 +101,19 @@ class DiagnosisHypothesis:
 
     Contains the disease, supporting/refuting evidence, and scores.
     """
+
     id: str = field(default_factory=lambda: str(uuid4()))
-    disease_id: str = ""              # MONDO or OMIM ID
+    disease_id: str = ""  # MONDO or OMIM ID
     disease_name: str = ""
     description: str | None = None
 
     # Scores
-    prior_probability: float = 0.001   # Base prevalence
+    prior_probability: float = 0.001  # Base prevalence
     posterior_probability: float = 0.0  # After evidence
-    phenotype_score: float = 0.0       # From phenotype matching
-    genetic_score: float = 0.0         # From genetic evidence
-    history_score: float = 0.0         # From medical history
-    combined_score: float = 0.0        # Final weighted score
+    phenotype_score: float = 0.0  # From phenotype matching
+    genetic_score: float = 0.0  # From genetic evidence
+    history_score: float = 0.0  # From medical history
+    combined_score: float = 0.0  # Final weighted score
 
     # Evidence
     supporting_evidence: list[EvidenceItem] = field(default_factory=list)
@@ -181,21 +186,22 @@ class FollowUpQuestion:
 
     Generated to discriminate between top hypotheses.
     """
+
     id: str = field(default_factory=lambda: str(uuid4()))
     question_text: str = ""
-    question_type: str = "binary"    # binary, multiple_choice, free_text, numeric
+    question_type: str = "binary"  # binary, multiple_choice, free_text, numeric
 
     # What this question is about
     target_phenotype: str | None = None  # HPO ID if asking about phenotype
-    target_evidence: str | None = None   # Evidence type
+    target_evidence: str | None = None  # Evidence type
 
     # Answer options for multiple choice
     options: list[dict[str, Any]] = field(default_factory=list)
 
     # Expected impact
     hypotheses_affected: list[str] = field(default_factory=list)  # Hypothesis IDs
-    information_gain: float = 0.0        # Expected info gain if answered
-    priority: int = 1                    # 1 = highest priority
+    information_gain: float = 0.0  # Expected info gain if answered
+    priority: int = 1  # 1 = highest priority
 
     # Answer (when filled)
     answer: str | None = None
@@ -222,12 +228,13 @@ class PatientProfile:
 
     Contains demographics, history, and collected evidence.
     """
+
     id: str = field(default_factory=lambda: str(uuid4()))
 
     # Demographics
     age: int | None = None
     age_of_onset: int | None = None
-    sex: str | None = None           # "male", "female", "other"
+    sex: str | None = None  # "male", "female", "other"
     ethnicity: str | None = None
 
     # Clinical data
@@ -252,30 +259,24 @@ class PatientProfile:
     def all_evidence(self) -> list[EvidenceItem]:
         """Get all evidence items."""
         return (
-            self.phenotypes +
-            self.genetic_variants +
-            self.laboratory_results +
-            self.imaging_findings +
-            self.medical_history +
-            self.family_history +
-            self.wearable_data
+            self.phenotypes
+            + self.genetic_variants
+            + self.laboratory_results
+            + self.imaging_findings
+            + self.medical_history
+            + self.family_history
+            + self.wearable_data
         )
 
     @property
     def phenotype_codes(self) -> list[str]:
         """Get all HPO codes."""
-        return [
-            e.code for e in self.phenotypes
-            if e.code and not e.negated
-        ]
+        return [e.code for e in self.phenotypes if e.code and not e.negated]
 
     @property
     def negated_phenotype_codes(self) -> list[str]:
         """Get all negated HPO codes."""
-        return [
-            e.code for e in self.phenotypes
-            if e.code and e.negated
-        ]
+        return [e.code for e in self.phenotypes if e.code and e.negated]
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
@@ -298,6 +299,7 @@ class DiagnosisSession:
 
     Tracks state, hypotheses, questions, and user interactions.
     """
+
     id: str = field(default_factory=lambda: str(uuid4()))
     state: DiagnosisState = DiagnosisState.INTAKE
     patient: PatientProfile = field(default_factory=PatientProfile)
@@ -321,9 +323,9 @@ class DiagnosisSession:
     expires_at: datetime | None = None
 
     # Configuration
-    auto_advance: bool = True        # Automatically advance state
+    auto_advance: bool = True  # Automatically advance state
     confidence_threshold: float = 0.7  # Threshold to consider diagnosis confident
-    max_questions: int = 20          # Max follow-up questions
+    max_questions: int = 20  # Max follow-up questions
 
     @property
     def is_complete(self) -> bool:
@@ -354,11 +356,13 @@ class DiagnosisSession:
 
     def add_event(self, event_type: str, data: dict[str, Any]) -> None:
         """Add an event to session history."""
-        self.events.append({
-            "type": event_type,
-            "data": data,
-            "timestamp": _utc_now().isoformat(),
-        })
+        self.events.append(
+            {
+                "type": event_type,
+                "data": data,
+                "timestamp": _utc_now().isoformat(),
+            }
+        )
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for API responses."""
@@ -383,6 +387,7 @@ class DiagnosisResult:
 
     Produced when a session completes.
     """
+
     session_id: str
     patient_id: str | None = None
 
@@ -411,7 +416,9 @@ class DiagnosisResult:
         return {
             "session_id": self.session_id,
             "patient_id": self.patient_id,
-            "primary_diagnosis": self.primary_diagnosis.to_dict() if self.primary_diagnosis else None,
+            "primary_diagnosis": self.primary_diagnosis.to_dict()
+            if self.primary_diagnosis
+            else None,
             "confidence": self.confidence,
             "differential": [h.to_dict() for h in self.differential[:10]],
             "key_findings": self.key_findings,

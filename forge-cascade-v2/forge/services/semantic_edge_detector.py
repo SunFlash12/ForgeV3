@@ -29,6 +29,7 @@ logger = structlog.get_logger(__name__)
 @dataclass
 class RelationshipClassification:
     """Result of LLM relationship classification."""
+
     relationship_type: SemanticRelationType | None
     confidence: float
     reasoning: str
@@ -38,6 +39,7 @@ class RelationshipClassification:
 @dataclass
 class DetectionConfig:
     """Configuration for semantic edge detection."""
+
     # Similarity threshold for candidate selection
     similarity_threshold: float = 0.7
     # Confidence threshold for edge creation
@@ -47,18 +49,21 @@ class DetectionConfig:
     # Enable auto-detection (can be disabled for testing)
     enabled: bool = True
     # Relationship types to detect
-    enabled_types: set[SemanticRelationType] = field(default_factory=lambda: {
-        SemanticRelationType.SUPPORTS,
-        SemanticRelationType.CONTRADICTS,
-        SemanticRelationType.ELABORATES,
-        SemanticRelationType.REFERENCES,
-        SemanticRelationType.RELATED_TO,
-    })
+    enabled_types: set[SemanticRelationType] = field(
+        default_factory=lambda: {
+            SemanticRelationType.SUPPORTS,
+            SemanticRelationType.CONTRADICTS,
+            SemanticRelationType.ELABORATES,
+            SemanticRelationType.REFERENCES,
+            SemanticRelationType.RELATED_TO,
+        }
+    )
 
 
 @dataclass
 class DetectionResult:
     """Result of semantic edge detection for a capsule."""
+
     capsule_id: str
     candidates_analyzed: int
     edges_created: int
@@ -151,6 +156,7 @@ Only return the JSON object, no other text."""
             DetectionResult with detected edges
         """
         import time
+
         start = time.time()
 
         result = DetectionResult(
@@ -224,7 +230,7 @@ Only return the JSON object, no other text."""
     ) -> list[tuple[Capsule, float]]:
         """Find capsules similar to the given one via embedding."""
         embedding_vector: list[float]
-        capsule_embedding: list[float] | None = getattr(capsule, 'embedding', None)
+        capsule_embedding: list[float] | None = getattr(capsule, "embedding", None)
         if not capsule_embedding:
             # Generate embedding if not present
             title_str = capsule.title or ""
@@ -242,13 +248,9 @@ Only return the JSON object, no other text."""
         )
 
         # Filter out the source capsule and sort by similarity
-        results = [
-            (c, score)
-            for c, score in similar
-            if c.id != capsule.id
-        ]
+        results = [(c, score) for c, score in similar if c.id != capsule.id]
 
-        return results[:self.config.max_candidates]
+        return results[: self.config.max_candidates]
 
     async def _classify_relationship(
         self,
@@ -259,21 +261,29 @@ Only return the JSON object, no other text."""
         # SECURITY FIX (Audit 4): Sanitize all user-provided content
         from forge.security.prompt_sanitization import sanitize_for_prompt
 
-        safe_source_title = sanitize_for_prompt(source.title or "", field_name="source_title", max_length=500)
+        safe_source_title = sanitize_for_prompt(
+            source.title or "", field_name="source_title", max_length=500
+        )
         safe_source_type = sanitize_for_prompt(
-            source.type.value if hasattr(source.type, 'value') else str(source.type),
+            source.type.value if hasattr(source.type, "value") else str(source.type),
             field_name="source_type",
-            max_length=100
+            max_length=100,
         )
-        safe_source_content = sanitize_for_prompt(source.content[:2000], field_name="source_content", max_length=2000)
+        safe_source_content = sanitize_for_prompt(
+            source.content[:2000], field_name="source_content", max_length=2000
+        )
 
-        safe_target_title = sanitize_for_prompt(target.title or "", field_name="target_title", max_length=500)
-        safe_target_type = sanitize_for_prompt(
-            target.type.value if hasattr(target.type, 'value') else str(target.type),
-            field_name="target_type",
-            max_length=100
+        safe_target_title = sanitize_for_prompt(
+            target.title or "", field_name="target_title", max_length=500
         )
-        safe_target_content = sanitize_for_prompt(target.content[:2000], field_name="target_content", max_length=2000)
+        safe_target_type = sanitize_for_prompt(
+            target.type.value if hasattr(target.type, "value") else str(target.type),
+            field_name="target_type",
+            max_length=100,
+        )
+        safe_target_content = sanitize_for_prompt(
+            target.content[:2000], field_name="target_content", max_length=2000
+        )
 
         prompt = self.CLASSIFICATION_PROMPT.format(
             source_title=safe_source_title,
@@ -294,6 +304,7 @@ Only return the JSON object, no other text."""
 
         # Parse JSON response
         import json
+
         try:
             # Extract JSON from response (handle potential markdown wrapping)
             # FIX: Use .content instead of .text to match LLMResponse
@@ -320,7 +331,9 @@ Only return the JSON object, no other text."""
             )
 
         except (json.JSONDecodeError, ValueError, KeyError) as e:
-            logger.warning("classification_parse_error", error=str(e), response=response.content[:200])
+            logger.warning(
+                "classification_parse_error", error=str(e), response=response.content[:200]
+            )
             return RelationshipClassification(
                 relationship_type=None,
                 confidence=0.0,
@@ -389,13 +402,15 @@ Only return the JSON object, no other text."""
                 result = await self.analyze_capsule(capsule, created_by)
                 results.append(result)
             else:
-                results.append(DetectionResult(
-                    capsule_id=capsule_id,
-                    candidates_analyzed=0,
-                    edges_created=0,
-                    edges=[],
-                    errors=[f"Capsule {capsule_id} not found"],
-                ))
+                results.append(
+                    DetectionResult(
+                        capsule_id=capsule_id,
+                        candidates_analyzed=0,
+                        edges_created=0,
+                        edges=[],
+                        errors=[f"Capsule {capsule_id} not found"],
+                    )
+                )
         return results
 
 

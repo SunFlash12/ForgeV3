@@ -24,10 +24,10 @@ logger = structlog.get_logger(__name__)
 class DiffOperation(Enum):
     """Types of diff operations."""
 
-    ADD = "add"           # New field/value added
-    REMOVE = "remove"     # Field/value removed
-    MODIFY = "modify"     # Value changed
-    MOVE = "move"         # Position changed (for arrays)
+    ADD = "add"  # New field/value added
+    REMOVE = "remove"  # Field/value removed
+    MODIFY = "modify"  # Value changed
+    MOVE = "move"  # Position changed (for arrays)
 
 
 @dataclass
@@ -35,7 +35,7 @@ class DiffEntry:
     """Represents a single difference in a delta."""
 
     operation: DiffOperation
-    path: str                      # JSONPath to the changed element
+    path: str  # JSONPath to the changed element
     old_value: Any | None = None
     new_value: Any | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -46,8 +46,8 @@ class LineageDiff:
     """Represents the difference between two lineage snapshots."""
 
     diff_id: str
-    base_hash: str                 # Hash of the base snapshot
-    target_hash: str               # Hash of the resulting snapshot
+    base_hash: str  # Hash of the base snapshot
+    target_hash: str  # Hash of the resulting snapshot
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     entries: list[DiffEntry] = field(default_factory=list)
     compression_ratio: float = 1.0
@@ -136,10 +136,7 @@ class DeltaCompressor:
         }
 
     def create_snapshot(
-        self,
-        capsule_id: str,
-        data: dict[str, Any],
-        version: int = 1
+        self, capsule_id: str, data: dict[str, Any], version: int = 1
     ) -> LineageSnapshot:
         """
         Create a new lineage snapshot.
@@ -164,17 +161,13 @@ class DeltaCompressor:
         self._stats["snapshots_created"] += 1
 
         logger.debug(
-            "lineage_snapshot_created",
-            snapshot_id=snapshot.snapshot_id,
-            hash=snapshot.hash
+            "lineage_snapshot_created", snapshot_id=snapshot.snapshot_id, hash=snapshot.hash
         )
 
         return snapshot
 
     def compute_diff(
-        self,
-        old_snapshot: LineageSnapshot,
-        new_snapshot: LineageSnapshot
+        self, old_snapshot: LineageSnapshot, new_snapshot: LineageSnapshot
     ) -> LineageDiff:
         """
         Compute the difference between two snapshots.
@@ -209,17 +202,12 @@ class DeltaCompressor:
             "lineage_diff_computed",
             diff_id=diff.diff_id,
             entries=len(entries),
-            compression_ratio=compression_ratio
+            compression_ratio=compression_ratio,
         )
 
         return diff
 
-    def _diff_dicts(
-        self,
-        path: str,
-        old: dict[str, Any],
-        new: dict[str, Any]
-    ) -> list[DiffEntry]:
+    def _diff_dicts(self, path: str, old: dict[str, Any], new: dict[str, Any]) -> list[DiffEntry]:
         """Recursively compute differences between dictionaries."""
         entries = []
 
@@ -230,18 +218,22 @@ class DeltaCompressor:
 
             if key not in old:
                 # Added
-                entries.append(DiffEntry(
-                    operation=DiffOperation.ADD,
-                    path=key_path,
-                    new_value=new[key],
-                ))
+                entries.append(
+                    DiffEntry(
+                        operation=DiffOperation.ADD,
+                        path=key_path,
+                        new_value=new[key],
+                    )
+                )
             elif key not in new:
                 # Removed
-                entries.append(DiffEntry(
-                    operation=DiffOperation.REMOVE,
-                    path=key_path,
-                    old_value=old[key],
-                ))
+                entries.append(
+                    DiffEntry(
+                        operation=DiffOperation.REMOVE,
+                        path=key_path,
+                        old_value=old[key],
+                    )
+                )
             elif old[key] != new[key]:
                 # Modified
                 if isinstance(old[key], dict) and isinstance(new[key], dict):
@@ -251,21 +243,18 @@ class DeltaCompressor:
                     # Handle list diffs
                     entries.extend(self._diff_lists(key_path, old[key], new[key]))
                 else:
-                    entries.append(DiffEntry(
-                        operation=DiffOperation.MODIFY,
-                        path=key_path,
-                        old_value=old[key],
-                        new_value=new[key],
-                    ))
+                    entries.append(
+                        DiffEntry(
+                            operation=DiffOperation.MODIFY,
+                            path=key_path,
+                            old_value=old[key],
+                            new_value=new[key],
+                        )
+                    )
 
         return entries
 
-    def _diff_lists(
-        self,
-        path: str,
-        old: list[Any],
-        new: list[Any]
-    ) -> list[DiffEntry]:
+    def _diff_lists(self, path: str, old: list[Any], new: list[Any]) -> list[DiffEntry]:
         """Compute differences between lists."""
         entries = []
 
@@ -277,37 +266,39 @@ class DeltaCompressor:
 
             if i >= len(old):
                 # Added
-                entries.append(DiffEntry(
-                    operation=DiffOperation.ADD,
-                    path=item_path,
-                    new_value=new[i],
-                ))
+                entries.append(
+                    DiffEntry(
+                        operation=DiffOperation.ADD,
+                        path=item_path,
+                        new_value=new[i],
+                    )
+                )
             elif i >= len(new):
                 # Removed
-                entries.append(DiffEntry(
-                    operation=DiffOperation.REMOVE,
-                    path=item_path,
-                    old_value=old[i],
-                ))
+                entries.append(
+                    DiffEntry(
+                        operation=DiffOperation.REMOVE,
+                        path=item_path,
+                        old_value=old[i],
+                    )
+                )
             elif old[i] != new[i]:
                 # Modified
                 if isinstance(old[i], dict) and isinstance(new[i], dict):
                     entries.extend(self._diff_dicts(item_path, old[i], new[i]))
                 else:
-                    entries.append(DiffEntry(
-                        operation=DiffOperation.MODIFY,
-                        path=item_path,
-                        old_value=old[i],
-                        new_value=new[i],
-                    ))
+                    entries.append(
+                        DiffEntry(
+                            operation=DiffOperation.MODIFY,
+                            path=item_path,
+                            old_value=old[i],
+                            new_value=new[i],
+                        )
+                    )
 
         return entries
 
-    def apply_diff(
-        self,
-        base_snapshot: LineageSnapshot,
-        diff: LineageDiff
-    ) -> LineageSnapshot:
+    def apply_diff(self, base_snapshot: LineageSnapshot, diff: LineageDiff) -> LineageSnapshot:
         """
         Apply a diff to a base snapshot to reconstruct target state.
 
@@ -320,9 +311,7 @@ class DeltaCompressor:
         """
         # Verify base hash matches
         if base_snapshot.hash != diff.base_hash:
-            raise ValueError(
-                f"Base hash mismatch: {base_snapshot.hash} != {diff.base_hash}"
-            )
+            raise ValueError(f"Base hash mismatch: {base_snapshot.hash} != {diff.base_hash}")
 
         # Deep copy base data
         result_data = json.loads(json.dumps(base_snapshot.data))
@@ -343,9 +332,7 @@ class DeltaCompressor:
         # Verify result hash
         if result.hash != diff.target_hash:
             logger.warning(
-                "diff_application_hash_mismatch",
-                expected=diff.target_hash,
-                actual=result.hash
+                "diff_application_hash_mismatch", expected=diff.target_hash, actual=result.hash
             )
 
         return result
@@ -393,17 +380,17 @@ class DeltaCompressor:
 
         i = 0
         while i < len(path):
-            if path[i] == '.':
+            if path[i] == ".":
                 if current:
                     parts.append(current)
                     current = ""
-            elif path[i] == '[':
+            elif path[i] == "[":
                 if current:
                     parts.append(current)
                     current = ""
                 # Find closing bracket
-                j = path.index(']', i)
-                index = int(path[i+1:j])
+                j = path.index("]", i)
+                index = int(path[i + 1 : j])
                 parts.append(index)
                 i = j
             else:
@@ -433,7 +420,7 @@ class DeltaCompressor:
             logger.info(
                 "delta_chain_consolidation_needed",
                 capsule_id=capsule_id,
-                delta_count=len(self._deltas[capsule_id])
+                delta_count=len(self._deltas[capsule_id]),
             )
             # In production, would trigger snapshot consolidation
 
@@ -451,14 +438,11 @@ class DeltaCompressor:
         Returns:
             Compressed bytes
         """
-        data = json.dumps(snapshot.data, sort_keys=True).encode('utf-8')
+        data = json.dumps(snapshot.data, sort_keys=True).encode("utf-8")
         return zlib.compress(data, level=9)
 
     def decompress_snapshot(
-        self,
-        compressed: bytes,
-        snapshot_id: str,
-        capsule_id: str
+        self, compressed: bytes, snapshot_id: str, capsule_id: str
     ) -> LineageSnapshot:
         """
         Decompress a stored snapshot.

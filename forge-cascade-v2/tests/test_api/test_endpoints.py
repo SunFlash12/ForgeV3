@@ -29,19 +29,25 @@ class TestAuthEndpoints:
     """Tests for authentication endpoints."""
 
     def test_login_invalid_credentials(self, client: TestClient):
-        response = client.post("/api/v1/auth/login", json={
-            "username": "invalid",
-            "password": "invalid",
-        })
+        response = client.post(
+            "/api/v1/auth/login",
+            json={
+                "username": "invalid",
+                "password": "invalid",
+            },
+        )
         # Should fail with invalid credentials
         assert response.status_code in [401, 422]
 
     def test_register_new_user(self, client: TestClient):
-        response = client.post("/api/v1/auth/register", json={
-            "username": "testuser123",
-            "email": "test123@example.com",
-            "password": "SecurePassword123!",
-        })
+        response = client.post(
+            "/api/v1/auth/register",
+            json={
+                "username": "testuser123",
+                "email": "test123@example.com",
+                "password": "SecurePassword123!",
+            },
+        )
         # May fail if user exists, but should be 201 or 409
         assert response.status_code in [201, 409, 422]
 
@@ -61,18 +67,25 @@ class TestCapsuleEndpoints:
         assert response.status_code == 200
 
     def test_create_capsule_unauthorized(self, client: TestClient):
-        response = client.post("/api/v1/capsules", json={
-            "content": "Test capsule content",
-            "type": "knowledge",
-        })
+        response = client.post(
+            "/api/v1/capsules",
+            json={
+                "content": "Test capsule content",
+                "type": "knowledge",
+            },
+        )
         assert response.status_code == 401
 
     def test_create_capsule_authorized(self, client: TestClient, auth_headers: dict):
-        response = client.post("/api/v1/capsules", json={
-            "content": "Test capsule content for testing",
-            "type": "knowledge",
-            "title": "Test Capsule",
-        }, headers=auth_headers)
+        response = client.post(
+            "/api/v1/capsules",
+            json={
+                "content": "Test capsule content for testing",
+                "type": "knowledge",
+                "title": "Test Capsule",
+            },
+            headers=auth_headers,
+        )
         if response.status_code == 500:
             pytest.skip("Database unavailable - use mock_db_client fixture for reliable tests")
         assert response.status_code == 201

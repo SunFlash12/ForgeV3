@@ -30,6 +30,7 @@ class SecurityWarning(UserWarning):
 
 class ChainNetwork(str, Enum):
     """Supported blockchain networks for Virtuals Protocol integration."""
+
     BASE = "base"
     BASE_SEPOLIA = "base_sepolia"  # Testnet
     ETHEREUM = "ethereum"
@@ -40,6 +41,7 @@ class ChainNetwork(str, Enum):
 
 class VirtualsEnvironment(str, Enum):
     """Virtuals Protocol deployment environment."""
+
     PRODUCTION = "production"
     TESTNET = "testnet"
     LOCAL = "local"
@@ -86,30 +88,27 @@ class VirtualsConfig(BaseSettings):
 
     # API Configuration
     api_key: str = Field(
-        default="",
-        description="GAME API key obtained from console.game.virtuals.io"
+        default="", description="GAME API key obtained from console.game.virtuals.io"
     )
     api_base_url: str = Field(
-        default="https://sdk.game.virtuals.io/v2",
-        description="Base URL for GAME SDK API"
+        default="https://sdk.game.virtuals.io/v2", description="Base URL for GAME SDK API"
     )
     auth_url: str = Field(
         default="https://api.virtuals.io/api/accesses/tokens",
-        description="URL for exchanging API key for access token"
+        description="URL for exchanging API key for access token",
     )
 
     # Environment Configuration
     environment: VirtualsEnvironment = Field(
         default=VirtualsEnvironment.TESTNET,
-        description="Deployment environment (production, testnet, local)"
+        description="Deployment environment (production, testnet, local)",
     )
     primary_chain: ChainNetwork = Field(
-        default=ChainNetwork.BASE,
-        description="Primary blockchain for agent deployment"
+        default=ChainNetwork.BASE, description="Primary blockchain for agent deployment"
     )
     enabled_chains: list[ChainNetwork] = Field(
         default=[ChainNetwork.BASE, ChainNetwork.ETHEREUM, ChainNetwork.SOLANA],
-        description="List of enabled chains for multi-chain operations"
+        description="List of enabled chains for multi-chain operations",
     )
 
     # Wallet Configuration
@@ -118,118 +117,100 @@ class VirtualsConfig(BaseSettings):
     operator_private_key: str | None = Field(
         default=None,
         description="Private key for the Forge operator wallet (EVM hex format). "
-        "SECURITY: Use secrets manager in production!"
+        "SECURITY: Use secrets manager in production!",
     )
     solana_private_key: str | None = Field(
         default=None,
         description="Private key for Solana operations (base58 format). "
-        "SECURITY: Use secrets manager in production!"
+        "SECURITY: Use secrets manager in production!",
     )
 
     # Secrets Backend Configuration
     secrets_backend: str | None = Field(
-        default=None,
-        description="Secrets backend: environment, vault, aws_secrets_manager"
+        default=None, description="Secrets backend: environment, vault, aws_secrets_manager"
     )
 
     # Agent Configuration
     default_agent_goal: str = Field(
         default="Provide intelligent knowledge management and governance services",
-        description="Default goal for Forge agents"
+        description="Default goal for Forge agents",
     )
     agent_creation_fee: int = Field(
-        default=100,
-        description="VIRTUAL tokens required to create an agent"
+        default=100, description="VIRTUAL tokens required to create an agent"
     )
     graduation_threshold: int = Field(
-        default=42000,
-        description="VIRTUAL tokens needed for agent to graduate from bonding curve"
+        default=42000, description="VIRTUAL tokens needed for agent to graduate from bonding curve"
     )
 
     # Revenue Configuration
     inference_fee_per_query: float = Field(
-        default=0.001,
-        description="VIRTUAL tokens charged per knowledge query"
+        default=0.001, description="VIRTUAL tokens charged per knowledge query"
     )
     overlay_service_fee_percentage: float = Field(
-        default=0.05,
-        description="Percentage fee for overlay-as-a-service (5% default)"
+        default=0.05, description="Percentage fee for overlay-as-a-service (5% default)"
     )
     governance_reward_pool_percentage: float = Field(
-        default=0.10,
-        description="Percentage of revenue allocated to governance rewards"
+        default=0.10, description="Percentage of revenue allocated to governance rewards"
     )
 
     # Contract Addresses (can override defaults from CONTRACT_ADDRESSES)
     bonding_curve_address: str | None = Field(
-        default=None,
-        description="BondingCurve contract address for token graduation"
+        default=None, description="BondingCurve contract address for token graduation"
     )
     multisend_address: str | None = Field(
         default="0x40A2aCCbd92BCA938b02010E17A5b8929b49130D",
-        description="Gnosis Safe MultiSend contract for batch transfers"
+        description="Gnosis Safe MultiSend contract for batch transfers",
     )
 
     # ACP Configuration
     acp_escrow_timeout_hours: int = Field(
-        default=24,
-        description="Default timeout for ACP escrow transactions"
+        default=24, description="Default timeout for ACP escrow transactions"
     )
     acp_evaluation_timeout_hours: int = Field(
-        default=48,
-        description="Timeout for evaluation phase in ACP"
+        default=48, description="Timeout for evaluation phase in ACP"
     )
 
     # Rate Limiting
     game_api_rate_limit: int = Field(
-        default=10,
-        description="Maximum GAME API calls per 5 minutes (free tier)"
+        default=10, description="Maximum GAME API calls per 5 minutes (free tier)"
     )
     game_api_cost_per_call: float = Field(
-        default=0.003,
-        description="Cost per GAME API call in USD (paid tier)"
+        default=0.003, description="Cost per GAME API call in USD (paid tier)"
     )
 
     # Feature Flags
     enable_tokenization: bool = Field(
-        default=True,
-        description="Enable opt-in tokenization features"
+        default=True, description="Enable opt-in tokenization features"
     )
-    enable_acp: bool = Field(
-        default=True,
-        description="Enable Agent Commerce Protocol features"
-    )
+    enable_acp: bool = Field(default=True, description="Enable Agent Commerce Protocol features")
     enable_cross_chain: bool = Field(
-        default=True,
-        description="Enable cross-chain bridging features"
+        default=True, description="Enable cross-chain bridging features"
     )
     enable_revenue_sharing: bool = Field(
-        default=True,
-        description="Enable revenue sharing and buyback-burn mechanics"
+        default=True, description="Enable revenue sharing and buyback-burn mechanics"
     )
 
     # Privacy and Compliance
     enable_privacy_layer: bool = Field(
-        default=True,
-        description="Enable additional privacy protections for enterprise use"
+        default=True, description="Enable additional privacy protections for enterprise use"
     )
     kyc_required_for_tokenization: bool = Field(
-        default=False,
-        description="Require KYC verification before tokenization"
+        default=False, description="Require KYC verification before tokenization"
     )
 
-    @field_validator('api_key')
+    @field_validator("api_key")
     @classmethod
     def validate_api_key(cls, v: str) -> str:
         """Warn if API key is not set but don't fail."""
         if not v:
             warnings.warn(
                 "VIRTUALS_API_KEY not set. Agent features will be disabled. "
-                "Get your API key from https://console.game.virtuals.io", stacklevel=2
+                "Get your API key from https://console.game.virtuals.io",
+                stacklevel=2,
             )
         return v
 
-    @field_validator('operator_private_key', 'solana_private_key')
+    @field_validator("operator_private_key", "solana_private_key")
     @classmethod
     def validate_private_key_security(cls, v: str | None, info: ValidationInfo) -> str | None:
         """
@@ -240,8 +221,9 @@ class VirtualsConfig(BaseSettings):
         Secrets Manager instead.
         """
         if v is not None:
-            environment = os.environ.get("VIRTUALS_ENVIRONMENT",
-                                         os.environ.get("ENVIRONMENT", "development"))
+            environment = os.environ.get(
+                "VIRTUALS_ENVIRONMENT", os.environ.get("ENVIRONMENT", "development")
+            )
             secrets_backend = os.environ.get("SECRETS_BACKEND", "environment")
 
             if environment == "production" and secrets_backend == "environment":

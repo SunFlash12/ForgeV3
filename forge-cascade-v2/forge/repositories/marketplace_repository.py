@@ -138,9 +138,7 @@ class ListingRepository(BaseRepository[CapsuleListing, CapsuleListing, CapsuleLi
         SKIP $skip
         LIMIT $limit
         """
-        results = await self.client.execute(
-            query, {"skip": skip, "limit": limit}
-        )
+        results = await self.client.execute(query, {"skip": skip, "limit": limit})
         return self._to_models([r["entity"] for r in results if r.get("entity")])
 
     async def find_by_seller(self, seller_id: str, limit: int = 100) -> list[CapsuleListing]:
@@ -270,9 +268,7 @@ class PurchaseRepository(BaseRepository[Purchase, Purchase, Purchase]):
         """Find all sales by a seller."""
         return await self.find_by_field("seller_id", seller_id, limit)
 
-    async def find_by_capsule(
-        self, capsule_id: str, buyer_id: str
-    ) -> Purchase | None:
+    async def find_by_capsule(self, capsule_id: str, buyer_id: str) -> Purchase | None:
         """Check if buyer has purchased a specific capsule."""
         query = """
         MATCH (p:MarketplacePurchase {capsule_id: $capsule_id, buyer_id: $buyer_id})
@@ -422,9 +418,7 @@ class CartRepository:
         DELETE r, i
         SET c.updated_at = $now
         """
-        await self.client.execute(
-            query, {"user_id": user_id, "now": datetime.now(UTC).isoformat()}
-        )
+        await self.client.execute(query, {"user_id": user_id, "now": datetime.now(UTC).isoformat()})
 
 
 class LicenseRepository(BaseRepository[License, License, License]):
@@ -518,9 +512,7 @@ class LicenseRepository(BaseRepository[License, License, License]):
             return self._to_model(result["entity"])
         return None
 
-    async def find_valid_license(
-        self, capsule_id: str, holder_id: str
-    ) -> License | None:
+    async def find_valid_license(self, capsule_id: str, holder_id: str) -> License | None:
         """Find a valid (non-expired, non-revoked) license."""
         query = """
         MATCH (lic:CapsuleLicense {capsule_id: $capsule_id, holder_id: $holder_id})
@@ -547,9 +539,7 @@ class LicenseRepository(BaseRepository[License, License, License]):
         SET lic.access_count = lic.access_count + 1,
             lic.last_accessed_at = $now
         """
-        await self.client.execute(
-            query, {"id": license_id, "now": datetime.now(UTC).isoformat()}
-        )
+        await self.client.execute(query, {"id": license_id, "now": datetime.now(UTC).isoformat()})
 
     async def revoke(self, license_id: str) -> License | None:
         """Revoke a license."""

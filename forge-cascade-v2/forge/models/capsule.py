@@ -44,7 +44,9 @@ class ContentBlock(ForgeModel):
     """
 
     content: str = Field(description="The content text")
-    content_type: str = Field(default="text", description="Type of content (text, code, markdown, etc.)")
+    content_type: str = Field(
+        default="text", description="Type of content (text, code, markdown, etc.)"
+    )
     language: str | None = Field(default=None, description="Programming language for code blocks")
     metadata: dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
 
@@ -245,8 +247,7 @@ class CapsuleInDB(Capsule):
         valid_dimensions = {384, 768, 1024, 1536, 3072}
         if len(v) not in valid_dimensions:
             raise ValueError(
-                f"Embedding must have valid dimensions ({valid_dimensions}), "
-                f"got {len(v)}"
+                f"Embedding must have valid dimensions ({valid_dimensions}), got {len(v)}"
             )
         # Check value ranges (embeddings should be normalized, typically -1 to 1)
         for i, val in enumerate(v):
@@ -352,9 +353,7 @@ class IntegrityReport(ForgeModel):
     """Comprehensive integrity verification report for a capsule."""
 
     capsule_id: str = Field(description="Capsule ID that was verified")
-    content_hash_valid: bool = Field(
-        description="Whether content hash matches computed hash"
-    )
+    content_hash_valid: bool = Field(description="Whether content hash matches computed hash")
     content_hash_expected: str | None = Field(
         default=None,
         description="Expected SHA-256 hash (stored)",

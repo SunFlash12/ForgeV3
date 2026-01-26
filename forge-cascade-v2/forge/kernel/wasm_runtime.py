@@ -43,6 +43,7 @@ class SecurityError(Exception):
 
     SECURITY FIX (Audit 4): Explicit exception for security violations.
     """
+
     pass
 
 
@@ -53,21 +54,23 @@ class Capability(str, Enum):
     Overlays must declare required capabilities in their manifest.
     Only declared capabilities are available at runtime.
     """
-    NETWORK_ACCESS = "network_access"          # HTTP requests
-    DATABASE_READ = "database_read"            # Neo4j read queries
-    DATABASE_WRITE = "database_write"          # Neo4j write queries
-    EVENT_PUBLISH = "event_publish"            # Publish to event bus
-    EVENT_SUBSCRIBE = "event_subscribe"        # Subscribe to events
-    CAPSULE_CREATE = "capsule_create"          # Create capsules
-    CAPSULE_MODIFY = "capsule_modify"          # Modify capsules
-    GOVERNANCE_VOTE = "governance_vote"        # Participate in governance
-    LLM_ACCESS = "llm_access"                  # Use LLM service
-    FILE_READ = "file_read"                    # Read local files
-    FILE_WRITE = "file_write"                  # Write local files
+
+    NETWORK_ACCESS = "network_access"  # HTTP requests
+    DATABASE_READ = "database_read"  # Neo4j read queries
+    DATABASE_WRITE = "database_write"  # Neo4j write queries
+    EVENT_PUBLISH = "event_publish"  # Publish to event bus
+    EVENT_SUBSCRIBE = "event_subscribe"  # Subscribe to events
+    CAPSULE_CREATE = "capsule_create"  # Create capsules
+    CAPSULE_MODIFY = "capsule_modify"  # Modify capsules
+    GOVERNANCE_VOTE = "governance_vote"  # Participate in governance
+    LLM_ACCESS = "llm_access"  # Use LLM service
+    FILE_READ = "file_read"  # Read local files
+    FILE_WRITE = "file_write"  # Write local files
 
 
 class ExecutionState(str, Enum):
     """State of an overlay execution instance."""
+
     INITIALIZING = "initializing"
     READY = "ready"
     RUNNING = "running"
@@ -84,10 +87,11 @@ class FuelBudget:
     Fuel metering prevents runaway computations.
     Each operation consumes fuel; execution halts when fuel is exhausted.
     """
-    total_fuel: int = 10_000_000       # Total fuel allocated
-    consumed_fuel: int = 0              # Fuel consumed so far
-    memory_limit_mb: int = 256          # Memory limit in MB
-    timeout_seconds: float = 30.0       # Maximum execution time
+
+    total_fuel: int = 10_000_000  # Total fuel allocated
+    consumed_fuel: int = 0  # Fuel consumed so far
+    memory_limit_mb: int = 256  # Memory limit in MB
+    timeout_seconds: float = 30.0  # Maximum execution time
 
     @property
     def remaining_fuel(self) -> int:
@@ -114,8 +118,9 @@ class OverlaySecurityMode(str, Enum):
 
     SECURITY FIX (Audit 4): Explicit security mode to prevent sandbox escape.
     """
-    WASM_STRICT = "wasm_strict"        # Full WASM isolation (default, safest)
-    WASM_RELAXED = "wasm_relaxed"      # WASM with some relaxed constraints
+
+    WASM_STRICT = "wasm_strict"  # Full WASM isolation (default, safest)
+    WASM_RELAXED = "wasm_relaxed"  # WASM with some relaxed constraints
     PYTHON_TRUSTED = "python_trusted"  # Python mode - ONLY for internal trusted overlays
     # Note: There is NO "python_untrusted" mode - untrusted code MUST use WASM
 
@@ -128,6 +133,7 @@ class OverlayManifest:
     In full Wasm implementation, this would be loaded from manifest.json
     and the wasm_path would point to compiled .wasm binary.
     """
+
     id: str
     name: str
     version: str
@@ -146,20 +152,24 @@ class OverlayManifest:
     source_hash: str | None = None
 
     # Fuel budgets per function
-    fuel_budgets: dict[str, int] = field(default_factory=lambda: {
-        "initialize": 10_000_000,
-        "run": 5_000_000,
-        "health_check": 100_000,
-        "shutdown": 500_000,
-    })
+    fuel_budgets: dict[str, int] = field(
+        default_factory=lambda: {
+            "initialize": 10_000_000,
+            "run": 5_000_000,
+            "health_check": 100_000,
+            "shutdown": 500_000,
+        }
+    )
 
     # Exported functions
-    exports: list[str] = field(default_factory=lambda: [
-        "initialize",
-        "run",
-        "health_check",
-        "shutdown",
-    ])
+    exports: list[str] = field(
+        default_factory=lambda: [
+            "initialize",
+            "run",
+            "health_check",
+            "shutdown",
+        ]
+    )
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -178,6 +188,7 @@ class OverlayManifest:
 @dataclass
 class ExecutionMetrics:
     """Metrics collected during overlay execution."""
+
     invocations: int = 0
     total_fuel_consumed: int = 0
     total_execution_time_ms: float = 0.0
@@ -224,8 +235,12 @@ class ExecutionMetrics:
             "total_execution_time_ms": self.total_execution_time_ms,
             "errors": self.errors,
             "error_rate": self.errors / self.invocations if self.invocations > 0 else 0,
-            "avg_fuel_per_invocation": self.total_fuel_consumed / self.invocations if self.invocations > 0 else 0,
-            "avg_time_per_invocation_ms": self.total_execution_time_ms / self.invocations if self.invocations > 0 else 0,
+            "avg_fuel_per_invocation": self.total_fuel_consumed / self.invocations
+            if self.invocations > 0
+            else 0,
+            "avg_time_per_invocation_ms": self.total_execution_time_ms / self.invocations
+            if self.invocations > 0
+            else 0,
             "last_invocation": self.last_invocation.isoformat() if self.last_invocation else None,
             "function_metrics": self.function_metrics,
         }
@@ -278,25 +293,25 @@ def _validate_cypher_query(query: str) -> None:
         ValueError: If query appears to contain injection patterns
     """
     # Check for multiple statements (query chaining)
-    if ';' in query:
+    if ";" in query:
         raise ValueError("Multiple statements not allowed in query")
 
     # Check for CALL clauses that could execute procedures
     query_lower = query.lower()
-    if 'call ' in query_lower and 'apoc' not in query_lower:
+    if "call " in query_lower and "apoc" not in query_lower:
         # Allow APOC procedures but block other CALL usage for safety
         raise ValueError("CALL statements restricted")
 
     # Check for LOAD CSV or other data import
-    if 'load csv' in query_lower:
+    if "load csv" in query_lower:
         raise ValueError("LOAD CSV not allowed")
 
     # Check for periodic commit (batch operations)
-    if 'periodic commit' in query_lower:
+    if "periodic commit" in query_lower:
         raise ValueError("PERIODIC COMMIT not allowed")
 
     # Check for USING clause which could affect query planning
-    if 'using index' in query_lower or 'using scan' in query_lower:
+    if "using index" in query_lower or "using scan" in query_lower:
         raise ValueError("Query hints not allowed from overlays")
 
 
@@ -309,7 +324,9 @@ class DatabaseReadHostFunction(HostFunction):
     def __init__(self, db_client: Any):
         self.db = db_client
 
-    async def __call__(self, query: str, params: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    async def __call__(
+        self, query: str, params: dict[str, Any] | None = None
+    ) -> list[dict[str, Any]]:
         """Execute a read query."""
         # SECURITY FIX: Validate query for injection patterns
         _validate_cypher_query(query)
@@ -332,7 +349,9 @@ class DatabaseWriteHostFunction(HostFunction):
     def __init__(self, db_client: Any):
         self.db = db_client
 
-    async def __call__(self, query: str, params: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    async def __call__(
+        self, query: str, params: dict[str, Any] | None = None
+    ) -> list[dict[str, Any]]:
         """Execute a write query."""
         # SECURITY FIX: Validate query for injection patterns
         _validate_cypher_query(query)
@@ -358,7 +377,9 @@ class EventPublishHostFunction(HostFunction):
 
         event = Event(
             id=str(uuid4()),
-            type=EventType(event_type) if event_type in EventType.__members__ else EventType.SYSTEM_EVENT,
+            type=EventType(event_type)
+            if event_type in EventType.__members__
+            else EventType.SYSTEM_EVENT,
             source=f"overlay:{self.overlay_id}",
             payload=payload,
         )
@@ -374,6 +395,7 @@ class WasmInstance:
     In full implementation, this would wrap wasmtime.Instance.
     Currently wraps Python overlay with Wasm-like interface.
     """
+
     id: str
     manifest: OverlayManifest
     state: ExecutionState = ExecutionState.INITIALIZING
@@ -391,9 +413,9 @@ class WasmInstance:
     def is_active(self) -> bool:
         """Check if instance is active."""
         return (
-            self.state in (ExecutionState.READY, ExecutionState.RUNNING) and
-            not self._terminated and
-            not self.fuel_budget.is_exhausted()
+            self.state in (ExecutionState.READY, ExecutionState.RUNNING)
+            and not self._terminated
+            and not self.fuel_budget.is_exhausted()
         )
 
     def has_capability(self, capability: Capability) -> bool:
@@ -455,9 +477,7 @@ class WasmOverlayRuntime:
             host_funcs["db_write"] = DatabaseWriteHostFunction(self._db)
 
         if instance.has_capability(Capability.EVENT_PUBLISH):
-            host_funcs["event_publish"] = EventPublishHostFunction(
-                self._events, instance.id
-            )
+            host_funcs["event_publish"] = EventPublishHostFunction(self._events, instance.id)
 
         return host_funcs
 
@@ -482,6 +502,7 @@ class WasmOverlayRuntime:
         # SECURITY FIX (Audit 7 - Session 2): Validate source_hash integrity when provided
         if manifest.wasm_path and manifest.source_hash:
             import hashlib
+
             try:
                 wasm_bytes = manifest.wasm_path.read_bytes()
                 computed_hash = hashlib.sha256(wasm_bytes).hexdigest()
@@ -519,7 +540,7 @@ class WasmOverlayRuntime:
                 "loading_python_overlay",
                 overlay_name=manifest.name,
                 warning="Loading Python overlay - bypasses WASM isolation. "
-                        "Only use for internal trusted overlays.",
+                "Only use for internal trusted overlays.",
             )
 
         instance_id = f"{manifest.id}-{int(time.time() * 1000)}"
@@ -676,7 +697,14 @@ class WasmOverlayRuntime:
             instance.state = ExecutionState.FAILED
             raise RuntimeError(f"Execution timeout after {instance.fuel_budget.timeout_seconds}s")
 
-        except (SecurityError, PermissionError, ValueError, RuntimeError, AttributeError, OSError) as e:
+        except (
+            SecurityError,
+            PermissionError,
+            ValueError,
+            RuntimeError,
+            AttributeError,
+            OSError,
+        ) as e:
             execution_time_ms = (time.monotonic() - start_time) * 1000
             instance.metrics.record_invocation(
                 function=function,
@@ -751,9 +779,7 @@ class WasmOverlayRuntime:
             "total_fuel_consumed": sum(
                 i.metrics.total_fuel_consumed for i in self._instances.values()
             ),
-            "total_invocations": sum(
-                i.metrics.invocations for i in self._instances.values()
-            ),
+            "total_invocations": sum(i.metrics.invocations for i in self._instances.values()),
         }
 
 
@@ -787,12 +813,14 @@ def shutdown_wasm_runtime() -> None:
     global _wasm_runtime
     if _wasm_runtime is not None:
         runtime = _wasm_runtime
+
         # SECURITY FIX (Audit 3): Track background tasks and handle exceptions
         async def _safe_terminate(instance_id: str) -> None:
             try:
                 await runtime.terminate(instance_id)
             except (RuntimeError, ValueError, KeyError, OSError) as e:
                 import structlog
+
                 structlog.get_logger().error(
                     "wasm_terminate_error",
                     instance_id=instance_id,

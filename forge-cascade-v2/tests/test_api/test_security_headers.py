@@ -52,7 +52,7 @@ class TestCORSHeaders:
             headers={
                 "Origin": "http://localhost:3000",
                 "Access-Control-Request-Method": "GET",
-            }
+            },
         )
         # Should not return 405 Method Not Allowed for OPTIONS
         assert response.status_code in [200, 204]
@@ -65,7 +65,7 @@ class TestCORSHeaders:
                 "Origin": "http://localhost:3000",
                 "Access-Control-Request-Method": "POST",
                 "Access-Control-Request-Headers": "Content-Type",
-            }
+            },
         )
         assert response.status_code in [200, 204]
 
@@ -80,7 +80,7 @@ class TestCORSHeaders:
             headers={
                 "Origin": "http://malicious-site.com",
                 "Access-Control-Request-Method": "GET",
-            }
+            },
         )
         # Should either deny or not include the origin in allowed origins
         if "Access-Control-Allow-Origin" in response.headers:
@@ -95,17 +95,23 @@ class TestCSRFProtection:
     def test_csrf_token_in_login_response(self, client: TestClient):
         """Test that login response includes CSRF token."""
         # First register a user
-        client.post("/api/v1/auth/register", json={
-            "username": "csrftest_user",
-            "email": "csrftest@example.com",
-            "password": "SecurePassword123!",
-        })
+        client.post(
+            "/api/v1/auth/register",
+            json={
+                "username": "csrftest_user",
+                "email": "csrftest@example.com",
+                "password": "SecurePassword123!",
+            },
+        )
 
         # Try to login
-        response = client.post("/api/v1/auth/login", json={
-            "username": "csrftest_user",
-            "password": "SecurePassword123!",
-        })
+        response = client.post(
+            "/api/v1/auth/login",
+            json={
+                "username": "csrftest_user",
+                "password": "SecurePassword123!",
+            },
+        )
 
         # If login succeeds, should have CSRF token
         if response.status_code == 200:
@@ -116,16 +122,22 @@ class TestCSRFProtection:
     def test_csrf_cookie_attributes(self, client: TestClient):
         """Test CSRF cookie security attributes."""
         # Register and login to get cookies
-        client.post("/api/v1/auth/register", json={
-            "username": "csrfcookie_user",
-            "email": "csrfcookie@example.com",
-            "password": "SecurePassword123!",
-        })
+        client.post(
+            "/api/v1/auth/register",
+            json={
+                "username": "csrfcookie_user",
+                "email": "csrfcookie@example.com",
+                "password": "SecurePassword123!",
+            },
+        )
 
-        response = client.post("/api/v1/auth/login", json={
-            "username": "csrfcookie_user",
-            "password": "SecurePassword123!",
-        })
+        response = client.post(
+            "/api/v1/auth/login",
+            json={
+                "username": "csrfcookie_user",
+                "password": "SecurePassword123!",
+            },
+        )
 
         if response.status_code == 200:
             # Check for csrf_token cookie
@@ -225,7 +237,7 @@ class TestErrorResponseSecurity:
         body = response.text.lower()
         # Should not contain stack trace indicators
         assert "traceback" not in body
-        assert "file \"" not in body
+        assert 'file "' not in body
         assert "line " not in body or "line" not in body
 
     def test_405_no_internal_details(self, client: TestClient):

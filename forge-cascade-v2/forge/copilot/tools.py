@@ -30,120 +30,84 @@ logger = logging.getLogger(__name__)
 # TOOL PARAMETER MODELS
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class KnowledgeQueryParams(BaseModel):
     """Parameters for knowledge graph queries."""
-    query: str = Field(
-        description="Natural language query to search the knowledge graph"
-    )
-    limit: int = Field(
-        default=10,
-        ge=1,
-        le=100,
-        description="Maximum number of results to return"
-    )
+
+    query: str = Field(description="Natural language query to search the knowledge graph")
+    limit: int = Field(default=10, ge=1, le=100, description="Maximum number of results to return")
     filters: dict[str, Any] | None = Field(
         default=None,
-        description="Optional filters (e.g., {'type': 'note', 'created_after': '2024-01-01'})"
+        description="Optional filters (e.g., {'type': 'note', 'created_after': '2024-01-01'})",
     )
 
 
 class SemanticSearchParams(BaseModel):
     """Parameters for semantic search operations."""
-    query: str = Field(
-        description="Text query to search semantically"
-    )
+
+    query: str = Field(description="Text query to search semantically")
     top_k: int = Field(
-        default=5,
-        ge=1,
-        le=50,
-        description="Number of most similar results to return"
+        default=5, ge=1, le=50, description="Number of most similar results to return"
     )
     threshold: float = Field(
-        default=0.7,
-        ge=0.0,
-        le=1.0,
-        description="Minimum similarity score threshold"
+        default=0.7, ge=0.0, le=1.0, description="Minimum similarity score threshold"
     )
     capsule_types: list[str] | None = Field(
-        default=None,
-        description="Filter by capsule types (e.g., ['note', 'document', 'code'])"
+        default=None, description="Filter by capsule types (e.g., ['note', 'document', 'code'])"
     )
 
 
 class CreateCapsuleParams(BaseModel):
     """Parameters for capsule creation."""
-    title: str = Field(
-        description="Title of the new capsule"
-    )
-    content: str = Field(
-        description="Main content of the capsule"
-    )
+
+    title: str = Field(description="Title of the new capsule")
+    content: str = Field(description="Main content of the capsule")
     capsule_type: str = Field(
-        default="note",
-        description="Type of capsule: 'note', 'document', 'code', 'link', 'image'"
+        default="note", description="Type of capsule: 'note', 'document', 'code', 'link', 'image'"
     )
-    tags: list[str] = Field(
-        default_factory=list,
-        description="Tags for categorization"
-    )
-    metadata: dict[str, Any] = Field(
-        default_factory=dict,
-        description="Additional metadata"
-    )
+    tags: list[str] = Field(default_factory=list, description="Tags for categorization")
+    metadata: dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
 
 
 class GetCapsuleParams(BaseModel):
     """Parameters for retrieving a capsule."""
-    capsule_id: str = Field(
-        description="Unique identifier of the capsule to retrieve"
-    )
+
+    capsule_id: str = Field(description="Unique identifier of the capsule to retrieve")
     include_lineage: bool = Field(
-        default=False,
-        description="Include capsule lineage/provenance information"
+        default=False, description="Include capsule lineage/provenance information"
     )
-    include_relations: bool = Field(
-        default=False,
-        description="Include related capsules"
-    )
+    include_relations: bool = Field(default=False, description="Include related capsules")
 
 
 class ListOverlaysParams(BaseModel):
     """Parameters for listing overlays."""
-    active_only: bool = Field(
-        default=True,
-        description="Only return active overlays"
-    )
-    category: str | None = Field(
-        default=None,
-        description="Filter by overlay category"
-    )
+
+    active_only: bool = Field(default=True, description="Only return active overlays")
+    category: str | None = Field(default=None, description="Filter by overlay category")
 
 
 class ExecuteOverlayParams(BaseModel):
     """Parameters for executing an overlay."""
-    overlay_id: str = Field(
-        description="ID of the overlay to execute"
-    )
+
+    overlay_id: str = Field(description="ID of the overlay to execute")
     input_data: dict[str, Any] = Field(
-        default_factory=dict,
-        description="Input data for the overlay"
+        default_factory=dict, description="Input data for the overlay"
     )
 
 
 class GovernanceQueryParams(BaseModel):
     """Parameters for governance queries."""
-    query_type: str = Field(
-        description="Type of query: 'proposals', 'votes', 'council', 'metrics'"
-    )
+
+    query_type: str = Field(description="Type of query: 'proposals', 'votes', 'council', 'metrics'")
     status: str | None = Field(
-        default=None,
-        description="Filter by status (e.g., 'active', 'passed', 'rejected')"
+        default=None, description="Filter by status (e.g., 'active', 'passed', 'rejected')"
     )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # TOOL IMPLEMENTATIONS
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class ForgeToolRegistry:
     """
@@ -204,49 +168,49 @@ class ForgeToolRegistry:
             Tool(
                 name="forge_knowledge_query",
                 description="Query Forge's knowledge graph using natural language. "
-                           "Returns capsules, relationships, and insights.",
+                "Returns capsules, relationships, and insights.",
                 parameters=KnowledgeQueryParams.model_json_schema(),
                 handler=self._handle_knowledge_query,
             ),
             Tool(
                 name="forge_semantic_search",
                 description="Perform semantic similarity search across all capsules. "
-                           "Finds conceptually related content even without keyword matches.",
+                "Finds conceptually related content even without keyword matches.",
                 parameters=SemanticSearchParams.model_json_schema(),
                 handler=self._handle_semantic_search,
             ),
             Tool(
                 name="forge_create_capsule",
                 description="Create a new knowledge capsule in Forge. "
-                           "Capsules are atomic units of knowledge that can be linked.",
+                "Capsules are atomic units of knowledge that can be linked.",
                 parameters=CreateCapsuleParams.model_json_schema(),
                 handler=self._handle_create_capsule,
             ),
             Tool(
                 name="forge_get_capsule",
                 description="Retrieve a specific capsule by ID with optional "
-                           "lineage and relationship information.",
+                "lineage and relationship information.",
                 parameters=GetCapsuleParams.model_json_schema(),
                 handler=self._handle_get_capsule,
             ),
             Tool(
                 name="forge_list_overlays",
                 description="List available overlays (knowledge processing pipelines) "
-                           "that can be executed on capsules.",
+                "that can be executed on capsules.",
                 parameters=ListOverlaysParams.model_json_schema(),
                 handler=self._handle_list_overlays,
             ),
             Tool(
                 name="forge_execute_overlay",
                 description="Execute an overlay to process knowledge. "
-                           "Overlays can analyze, transform, or generate insights.",
+                "Overlays can analyze, transform, or generate insights.",
                 parameters=ExecuteOverlayParams.model_json_schema(),
                 handler=self._handle_execute_overlay,
             ),
             Tool(
                 name="forge_governance",
                 description="Query Forge's governance system including proposals, "
-                           "votes, and the Ghost Council.",
+                "votes, and the Ghost Council.",
                 parameters=GovernanceQueryParams.model_json_schema(),
                 handler=self._handle_governance_query,
             ),
@@ -399,7 +363,7 @@ class ForgeToolRegistry:
 
             return ToolResult(
                 textResultForLlm=f"Overlay {params.overlay_id} executed successfully. "
-                                 f"Output: {result.get('summary', 'Complete')}",
+                f"Output: {result.get('summary', 'Complete')}",
                 resultType="success",
                 sessionLog=f"Executed overlay: {params.overlay_id}",
             )
@@ -516,6 +480,7 @@ class ForgeToolRegistry:
 
 # These can be used with the Copilot SDK's @define_tool decorator
 # when you want simpler function-based tools
+
 
 async def knowledge_query_tool(params: KnowledgeQueryParams) -> str:
     """

@@ -41,6 +41,7 @@ logger = structlog.get_logger(__name__)
 
 class IssueSeverity(str, Enum):
     """Severity levels for system issues."""
+
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
@@ -49,6 +50,7 @@ class IssueSeverity(str, Enum):
 
 class IssueCategory(str, Enum):
     """Categories of serious issues."""
+
     SECURITY = "security"
     GOVERNANCE = "governance"
     TRUST = "trust"
@@ -60,6 +62,7 @@ class IssueCategory(str, Enum):
 @dataclass
 class SeriousIssue:
     """A serious issue requiring Ghost Council attention."""
+
     id: str
     category: IssueCategory
     severity: IssueSeverity
@@ -77,6 +80,7 @@ class SeriousIssue:
 @dataclass
 class GhostCouncilConfig:
     """Configuration for Ghost Council."""
+
     # Deliberation settings
     require_unanimous_for_critical: bool = True
     min_confidence_threshold: float = 0.6
@@ -251,7 +255,6 @@ to governance capture, mission creep, and the erosion of participatory norms thr
 technical complexity. I advocate for sunset clauses on expanded powers.""",
         weight=1.2,
     ),
-
     # ─────────────────────────────────────────────────────────────
     # TECHNICAL SPECIALISTS (Standard Weight)
     # ─────────────────────────────────────────────────────────────
@@ -389,7 +392,6 @@ for small experiments over big bets, and validated learning over untested intuit
 "Move fast and learn things" over "move fast and break things." """,
         weight=0.9,
     ),
-
     # ─────────────────────────────────────────────────────────────
     # COMMUNITY & HUMAN FACTORS (Standard Weight)
     # ─────────────────────────────────────────────────────────────
@@ -535,7 +537,6 @@ cascading failure paths. I advocate for contingency planning, graceful degradati
 and maintaining optionality. The goal isn't to eliminate risk but to take informed risks.""",
         weight=1.1,
     ),
-
     # ─────────────────────────────────────────────────────────────
     # WISDOM & CONTEXT (Higher Weight for Experience)
     # ─────────────────────────────────────────────────────────────
@@ -784,6 +785,7 @@ class GhostCouncilService:
 
         # Get LLM service
         from forge.services.llm import get_llm_service
+
         llm = get_llm_service()
 
         member_votes: list[GhostCouncilVote] = []
@@ -831,7 +833,9 @@ class GhostCouncilService:
         logger.info(
             "ghost_council_deliberation_complete",
             proposal_id=proposal.id,
-            consensus_vote=consensus["vote"].value if hasattr(consensus["vote"], "value") else str(consensus["vote"]),
+            consensus_vote=consensus["vote"].value
+            if hasattr(consensus["vote"], "value")
+            else str(consensus["vote"]),
             consensus_strength=consensus["strength"],
             votes={
                 "approve": sum(1 for v in member_votes if v.vote == VoteChoice.APPROVE),
@@ -931,17 +935,21 @@ Respond in JSON format:
         )
 
         # SECURITY FIX (Audit 4): Sanitize all user-provided content
-        safe_title = sanitize_for_prompt(proposal.title, field_name="proposal_title", max_length=500)
-        safe_description = sanitize_for_prompt(proposal.description, field_name="proposal_description", max_length=10000)
+        safe_title = sanitize_for_prompt(
+            proposal.title, field_name="proposal_title", max_length=500
+        )
+        safe_description = sanitize_for_prompt(
+            proposal.description, field_name="proposal_description", max_length=10000
+        )
         safe_type = sanitize_for_prompt(
-            proposal.type.value if hasattr(proposal.type, 'value') else str(proposal.type),
+            proposal.type.value if hasattr(proposal.type, "value") else str(proposal.type),
             field_name="proposal_type",
-            max_length=100
+            max_length=100,
         )
         safe_status = sanitize_for_prompt(
-            proposal.status.value if hasattr(proposal.status, 'value') else str(proposal.status),
+            proposal.status.value if hasattr(proposal.status, "value") else str(proposal.status),
             field_name="proposal_status",
-            max_length=100
+            max_length=100,
         )
 
         # Build user prompt with sanitized proposal details
@@ -1002,12 +1010,14 @@ Constitutional AI Review:
                     "critical": PerspectiveType.CRITICAL,
                 }[ptype]
 
-                perspectives.append(PerspectiveAnalysis(
-                    perspective_type=perspective_type,
-                    assessment=p_data.get("assessment", f"No {ptype} analysis provided"),
-                    key_points=p_data.get("key_points", [])[:5],
-                    confidence=min(1.0, max(0.0, float(p_data.get("confidence", 0.5)))),
-                ))
+                perspectives.append(
+                    PerspectiveAnalysis(
+                        perspective_type=perspective_type,
+                        assessment=p_data.get("assessment", f"No {ptype} analysis provided"),
+                        key_points=p_data.get("key_points", [])[:5],
+                        confidence=min(1.0, max(0.0, float(p_data.get("confidence", 0.5)))),
+                    )
+                )
 
             # Parse synthesis
             synthesis = result.get("synthesis", {})
@@ -1156,9 +1166,21 @@ Constitutional AI Review:
                     critical_points.append(f"**{vote.member_name}**: {perspective.assessment}")
 
         # Create summaries (limit to top 5 for readability)
-        optimistic_summary = "\n".join(optimistic_points[:5]) if optimistic_points else "No optimistic perspectives provided."
-        balanced_summary = "\n".join(balanced_points[:5]) if balanced_points else "No balanced perspectives provided."
-        critical_summary = "\n".join(critical_points[:5]) if critical_points else "No critical perspectives provided."
+        optimistic_summary = (
+            "\n".join(optimistic_points[:5])
+            if optimistic_points
+            else "No optimistic perspectives provided."
+        )
+        balanced_summary = (
+            "\n".join(balanced_points[:5])
+            if balanced_points
+            else "No balanced perspectives provided."
+        )
+        critical_summary = (
+            "\n".join(critical_points[:5])
+            if critical_points
+            else "No critical perspectives provided."
+        )
 
         # Build recommendation with perspective context
         if consensus_vote == VoteChoice.APPROVE:
@@ -1233,6 +1255,7 @@ Constitutional AI Review:
 
         # Get LLM service
         from forge.services.llm import get_llm_service
+
         llm = get_llm_service()
 
         member_votes: list[GhostCouncilVote] = []
@@ -1363,10 +1386,10 @@ Detected: {issue.detected_at.isoformat()}
 Description:
 {issue.description}
 
-Affected Entities: {', '.join(issue.affected_entities) if issue.affected_entities else 'None specified'}
+Affected Entities: {", ".join(issue.affected_entities) if issue.affected_entities else "None specified"}
 
 Context:
-{json.dumps(issue.context, indent=2) if issue.context else 'No additional context'}
+{json.dumps(issue.context, indent=2) if issue.context else "No additional context"}
 
 Provide your Ghost Council tri-perspective assessment as JSON:"""
 
@@ -1397,12 +1420,14 @@ Provide your Ghost Council tri-perspective assessment as JSON:"""
                     "critical": PerspectiveType.CRITICAL,
                 }[ptype]
 
-                perspectives.append(PerspectiveAnalysis(
-                    perspective_type=perspective_type,
-                    assessment=p_data.get("assessment", f"No {ptype} analysis provided"),
-                    key_points=p_data.get("key_points", [])[:5],
-                    confidence=min(1.0, max(0.0, float(p_data.get("confidence", 0.5)))),
-                ))
+                perspectives.append(
+                    PerspectiveAnalysis(
+                        perspective_type=perspective_type,
+                        assessment=p_data.get("assessment", f"No {ptype} analysis provided"),
+                        key_points=p_data.get("key_points", [])[:5],
+                        confidence=min(1.0, max(0.0, float(p_data.get("confidence", 0.5)))),
+                    )
+                )
 
             # Parse synthesis
             synthesis = result.get("synthesis", {})
@@ -1512,7 +1537,9 @@ Provide your Ghost Council tri-perspective assessment as JSON:"""
                 issue = SeriousIssue(
                     id=str(uuid4()),
                     category=IssueCategory.SECURITY,
-                    severity=IssueSeverity.CRITICAL if threat_level == "critical" else IssueSeverity.HIGH,
+                    severity=IssueSeverity.CRITICAL
+                    if threat_level == "critical"
+                    else IssueSeverity.HIGH,
                     title=f"Security Threat Detected: {payload.get('threat_type', 'Unknown')}",
                     description=payload.get("description", "A security threat has been detected"),
                     affected_entities=payload.get("affected_entities", []),
@@ -1581,7 +1608,9 @@ Provide your Ghost Council tri-perspective assessment as JSON:"""
                     category=IssueCategory.SYSTEM,
                     severity=IssueSeverity.HIGH,
                     title=f"Immune System Alert: {alert_type.replace('_', ' ').title()}",
-                    description=payload.get("description", f"Immune system triggered: {alert_type}"),
+                    description=payload.get(
+                        "description", f"Immune system triggered: {alert_type}"
+                    ),
                     affected_entities=payload.get("affected_entities", []),
                     detected_at=datetime.now(UTC),
                     source=source,
@@ -1601,10 +1630,7 @@ Provide your Ghost Council tri-perspective assessment as JSON:"""
 
     def get_active_issues(self) -> list[SeriousIssue]:
         """Get all active (unresolved) issues."""
-        return [
-            issue for issue in self._active_issues.values()
-            if not issue.resolved
-        ]
+        return [issue for issue in self._active_issues.values() if not issue.resolved]
 
     def resolve_issue(
         self,

@@ -39,29 +39,27 @@ router = APIRouter()
 # Request/Response Models - Diagnosis
 # =============================================================================
 
+
 class DifferentialDiagnosisRequest(BaseModel):
     """Request for differential diagnosis generation."""
+
     phenotypes: list[str] = Field(
-        ...,
-        min_length=1,
-        max_length=50,
-        description="List of HPO term IDs (e.g., HP:0001250)"
+        ..., min_length=1, max_length=50, description="List of HPO term IDs (e.g., HP:0001250)"
     )
     genes: list[str] = Field(
-        default=[],
-        max_length=20,
-        description="Optional list of gene symbols or Entrez IDs"
+        default=[], max_length=20, description="Optional list of gene symbols or Entrez IDs"
     )
     medications: list[str] = Field(
         default=[],
         max_length=30,
-        description="Optional list of current medications (DrugBank IDs or names)"
+        description="Optional list of current medications (DrugBank IDs or names)",
     )
     limit: int = Field(default=10, ge=1, le=50, description="Max diagnoses to return")
 
 
 class DiagnosisCandidate(BaseModel):
     """A candidate diagnosis with supporting evidence."""
+
     disease_id: str
     disease_name: str
     mondo_id: str | None
@@ -77,6 +75,7 @@ class DiagnosisCandidate(BaseModel):
 
 class DifferentialDiagnosisResponse(BaseModel):
     """Differential diagnosis response."""
+
     input_phenotypes: list[str]
     input_genes: list[str]
     input_medications: list[str]
@@ -89,19 +88,19 @@ class DifferentialDiagnosisResponse(BaseModel):
 # Request/Response Models - Phenotype Search
 # =============================================================================
 
+
 class PhenotypeSearchRequest(BaseModel):
     """Request for phenotype-to-disease mapping."""
+
     phenotypes: list[str] = Field(
-        ...,
-        min_length=1,
-        max_length=50,
-        description="List of HPO term IDs"
+        ..., min_length=1, max_length=50, description="List of HPO term IDs"
     )
     limit: int = Field(default=20, ge=1, le=100)
 
 
 class PhenotypeSearchResponse(BaseModel):
     """Phenotype search response."""
+
     input_phenotypes: list[str]
     results: list[DiagnosisCandidate]
     execution_time_ms: float
@@ -111,13 +110,16 @@ class PhenotypeSearchResponse(BaseModel):
 # Request/Response Models - Drug Information
 # =============================================================================
 
+
 class DrugDiseaseRequest(BaseModel):
     """Request for drug-disease relationship lookup."""
+
     disease_id: str = Field(..., description="MONDO ID or PrimeKG node ID")
 
 
 class DrugInfo(BaseModel):
     """Drug information."""
+
     drug_id: str
     name: str
     relation: str
@@ -125,6 +127,7 @@ class DrugInfo(BaseModel):
 
 class DrugDiseaseResponse(BaseModel):
     """Drug-disease relationship response."""
+
     disease_id: str
     disease_name: str | None
     indications: list[DrugInfo]
@@ -136,8 +139,10 @@ class DrugDiseaseResponse(BaseModel):
 # Request/Response Models - Gene Association
 # =============================================================================
 
+
 class GeneAssociationRequest(BaseModel):
     """Request for gene-disease association lookup."""
+
     gene_id: str | None = Field(default=None, description="Entrez ID or gene symbol")
     disease_id: str | None = Field(default=None, description="MONDO ID")
     limit: int = Field(default=50, ge=1, le=200)
@@ -145,6 +150,7 @@ class GeneAssociationRequest(BaseModel):
 
 class GeneAssociation(BaseModel):
     """Gene-disease association."""
+
     gene_symbol: str
     gene_id: str
     disease_name: str
@@ -154,6 +160,7 @@ class GeneAssociation(BaseModel):
 
 class GeneAssociationResponse(BaseModel):
     """Gene association response."""
+
     query: dict[str, str | None]
     associations: list[GeneAssociation]
 
@@ -162,12 +169,14 @@ class GeneAssociationResponse(BaseModel):
 # Request/Response Models - Semantic Search
 # =============================================================================
 
+
 class SemanticSearchRequest(BaseModel):
     """Request for semantic search on clinical descriptions."""
+
     query: str = Field(..., min_length=3, max_length=500, description="Search query text")
     node_type: str | None = Field(
         default=None,
-        description="Filter by node type: disease, gene/protein, drug, effect/phenotype"
+        description="Filter by node type: disease, gene/protein, drug, effect/phenotype",
     )
     limit: int = Field(default=10, ge=1, le=50)
     min_score: float = Field(default=0.7, ge=0.0, le=1.0)
@@ -175,6 +184,7 @@ class SemanticSearchRequest(BaseModel):
 
 class SemanticSearchResult(BaseModel):
     """Semantic search result."""
+
     node_id: str
     name: str
     type: str
@@ -184,6 +194,7 @@ class SemanticSearchResult(BaseModel):
 
 class SemanticSearchResponse(BaseModel):
     """Semantic search response."""
+
     query: str
     results: list[SemanticSearchResult]
     execution_time_ms: float
@@ -193,18 +204,20 @@ class SemanticSearchResponse(BaseModel):
 # Request/Response Models - Discriminating Phenotypes
 # =============================================================================
 
+
 class DiscriminatingPhenotypesRequest(BaseModel):
     """Request for phenotypes that distinguish between diseases."""
+
     disease_a: str = Field(..., description="First disease MONDO ID")
     disease_b: str = Field(..., description="Second disease MONDO ID")
     already_present: list[str] = Field(
-        default=[],
-        description="HPO IDs of phenotypes already known to be present"
+        default=[], description="HPO IDs of phenotypes already known to be present"
     )
 
 
 class DiscriminatingPhenotype(BaseModel):
     """A phenotype that discriminates between diseases."""
+
     hpo_id: str
     name: str
     discriminates: str  # 'supports_a' or 'supports_b'
@@ -213,6 +226,7 @@ class DiscriminatingPhenotype(BaseModel):
 
 class DiscriminatingPhenotypesResponse(BaseModel):
     """Discriminating phenotypes response."""
+
     disease_a: str
     disease_b: str
     phenotypes: list[DiscriminatingPhenotype]
@@ -222,8 +236,10 @@ class DiscriminatingPhenotypesResponse(BaseModel):
 # Request/Response Models - Disease Details
 # =============================================================================
 
+
 class DiseaseDetailsResponse(BaseModel):
     """Complete disease information."""
+
     node_id: str
     mondo_id: str | None
     name: str
@@ -237,22 +253,19 @@ class DiseaseDetailsResponse(BaseModel):
 # Request/Response Models - Drug Interactions
 # =============================================================================
 
+
 class DrugInteractionRequest(BaseModel):
     """Request to check drug-disease interactions."""
+
     drugs: list[str] = Field(
-        ...,
-        min_length=1,
-        max_length=20,
-        description="List of DrugBank IDs or drug names"
+        ..., min_length=1, max_length=20, description="List of DrugBank IDs or drug names"
     )
-    diseases: list[str] = Field(
-        default=[],
-        description="List of MONDO IDs to check against"
-    )
+    diseases: list[str] = Field(default=[], description="List of MONDO IDs to check against")
 
 
 class DrugInteraction(BaseModel):
     """Drug interaction information."""
+
     drug_name: str
     drug_id: str
     contraindications: list[dict[str, str]]
@@ -260,6 +273,7 @@ class DrugInteraction(BaseModel):
 
 class DrugInteractionResponse(BaseModel):
     """Drug interaction check response."""
+
     drugs: list[str]
     diseases: list[str]
     interactions: list[DrugInteraction]
@@ -270,8 +284,10 @@ class DrugInteractionResponse(BaseModel):
 # Request/Response Models - PrimeKG Stats
 # =============================================================================
 
+
 class PrimeKGStatsResponse(BaseModel):
     """PrimeKG data statistics."""
+
     disease_count: int
     gene_count: int
     drug_count: int
@@ -285,6 +301,7 @@ class PrimeKGStatsResponse(BaseModel):
 # =============================================================================
 # Diagnosis Endpoints
 # =============================================================================
+
 
 @router.post("/diagnosis/differential", response_model=DifferentialDiagnosisResponse)
 async def generate_differential_diagnosis(
@@ -317,15 +334,16 @@ async def generate_differential_diagnosis(
             "medications": request.medications,
         },
         user_id=user.id,
-        trust_flame=user.trust_level.value if hasattr(user.trust_level, 'value') else int(user.trust_level),
+        trust_flame=user.trust_level.value
+        if hasattr(user.trust_level, "value")
+        else int(user.trust_level),
         correlation_id=correlation_id,
     )
     result = await overlay_manager.execute(exec_request)
 
     if not result.success and result.error and "not found" in result.error.lower():
         raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="PrimeKG overlay not available"
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="PrimeKG overlay not available"
         )
 
     if not result.success:
@@ -333,7 +351,7 @@ async def generate_differential_diagnosis(
         logger.error("Diagnosis overlay failed: %s", result.error)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Diagnosis processing failed. Please try again or contact support."
+            detail="Diagnosis processing failed. Please try again or contact support.",
         )
 
     execution_time = (time.time() - start) * 1000
@@ -356,10 +374,7 @@ async def generate_differential_diagnosis(
         input_phenotypes=request.phenotypes,
         input_genes=request.genes,
         input_medications=request.medications,
-        differential=[
-            DiagnosisCandidate(**d)
-            for d in data.get("differential", [])
-        ],
+        differential=[DiagnosisCandidate(**d) for d in data.get("differential", [])],
         total_candidates=data.get("total_candidates", 0),
         execution_time_ms=execution_time,
     )
@@ -387,15 +402,16 @@ async def search_by_phenotypes(
             "limit": request.limit,
         },
         user_id=user.id,
-        trust_flame=user.trust_level.value if hasattr(user.trust_level, 'value') else int(user.trust_level),
+        trust_flame=user.trust_level.value
+        if hasattr(user.trust_level, "value")
+        else int(user.trust_level),
         correlation_id=f"phenotype_search_{int(time.time())}",
     )
     result = await overlay_manager.execute(exec_request)
 
     if not result.success and result.error and "not found" in result.error.lower():
         raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="PrimeKG overlay not available"
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="PrimeKG overlay not available"
         )
 
     if not result.success:
@@ -403,7 +419,7 @@ async def search_by_phenotypes(
         logger.error("Phenotype search failed: %s", result.error)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Phenotype search failed. Please try again or contact support."
+            detail="Phenotype search failed. Please try again or contact support.",
         )
 
     execution_time = (time.time() - start) * 1000
@@ -411,10 +427,7 @@ async def search_by_phenotypes(
 
     return PhenotypeSearchResponse(
         input_phenotypes=request.phenotypes,
-        results=[
-            DiagnosisCandidate(**r)
-            for r in data.get("results", [])
-        ],
+        results=[DiagnosisCandidate(**r) for r in data.get("results", [])],
         execution_time_ms=execution_time,
     )
 
@@ -422,6 +435,7 @@ async def search_by_phenotypes(
 # =============================================================================
 # Drug Endpoints
 # =============================================================================
+
 
 @router.post("/drugs/by-disease", response_model=DrugDiseaseResponse)
 async def get_drugs_for_disease(
@@ -444,15 +458,16 @@ async def get_drugs_for_disease(
             "disease_id": request.disease_id,
         },
         user_id=user.id,
-        trust_flame=user.trust_level.value if hasattr(user.trust_level, 'value') else int(user.trust_level),
+        trust_flame=user.trust_level.value
+        if hasattr(user.trust_level, "value")
+        else int(user.trust_level),
         correlation_id=f"drug_disease_{int(time.time())}",
     )
     result = await overlay_manager.execute(exec_request)
 
     if not result.success and result.error and "not found" in result.error.lower():
         raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="PrimeKG overlay not available"
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="PrimeKG overlay not available"
         )
 
     if not result.success:
@@ -460,7 +475,7 @@ async def get_drugs_for_disease(
         logger.error("Drug-disease query failed: %s", result.error)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Drug-disease query failed. Please try again or contact support."
+            detail="Drug-disease query failed. Please try again or contact support.",
         )
 
     data = result.data or {}
@@ -492,15 +507,16 @@ async def check_drug_interactions(
             "diseases": request.diseases,
         },
         user_id=user.id,
-        trust_flame=user.trust_level.value if hasattr(user.trust_level, 'value') else int(user.trust_level),
+        trust_flame=user.trust_level.value
+        if hasattr(user.trust_level, "value")
+        else int(user.trust_level),
         correlation_id=f"drug_interaction_{int(time.time())}",
     )
     result = await overlay_manager.execute(exec_request)
 
     if not result.success and result.error and "not found" in result.error.lower():
         raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="PrimeKG overlay not available"
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="PrimeKG overlay not available"
         )
 
     if not result.success:
@@ -508,17 +524,14 @@ async def check_drug_interactions(
         logger.error("Drug interaction query failed: %s", result.error)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Drug interaction query failed. Please try again or contact support."
+            detail="Drug interaction query failed. Please try again or contact support.",
         )
 
     data = result.data or {}
     return DrugInteractionResponse(
         drugs=data.get("drugs", request.drugs),
         diseases=data.get("diseases", request.diseases),
-        interactions=[
-            DrugInteraction(**i)
-            for i in data.get("interactions", [])
-        ],
+        interactions=[DrugInteraction(**i) for i in data.get("interactions", [])],
         has_contraindications=data.get("has_contraindications", False),
     )
 
@@ -526,6 +539,7 @@ async def check_drug_interactions(
 # =============================================================================
 # Gene Endpoints
 # =============================================================================
+
 
 @router.post("/genes/associations", response_model=GeneAssociationResponse)
 async def get_gene_disease_associations(
@@ -542,7 +556,7 @@ async def get_gene_disease_associations(
     if not request.gene_id and not request.disease_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Either gene_id or disease_id must be provided"
+            detail="Either gene_id or disease_id must be provided",
         )
 
     exec_request = OverlayExecutionRequest(
@@ -554,15 +568,16 @@ async def get_gene_disease_associations(
             "limit": request.limit,
         },
         user_id=user.id,
-        trust_flame=user.trust_level.value if hasattr(user.trust_level, 'value') else int(user.trust_level),
+        trust_flame=user.trust_level.value
+        if hasattr(user.trust_level, "value")
+        else int(user.trust_level),
         correlation_id=f"gene_assoc_{int(time.time())}",
     )
     result = await overlay_manager.execute(exec_request)
 
     if not result.success and result.error and "not found" in result.error.lower():
         raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="PrimeKG overlay not available"
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="PrimeKG overlay not available"
         )
 
     if not result.success:
@@ -570,22 +585,20 @@ async def get_gene_disease_associations(
         logger.error("Gene association query failed: %s", result.error)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Gene association query failed. Please try again or contact support."
+            detail="Gene association query failed. Please try again or contact support.",
         )
 
     data = result.data or {}
     return GeneAssociationResponse(
         query=data.get("query", {"gene_id": request.gene_id, "disease_id": request.disease_id}),
-        associations=[
-            GeneAssociation(**a)
-            for a in data.get("associations", [])
-        ],
+        associations=[GeneAssociation(**a) for a in data.get("associations", [])],
     )
 
 
 # =============================================================================
 # Search Endpoints
 # =============================================================================
+
 
 @router.post("/search/semantic", response_model=SemanticSearchResponse)
 async def semantic_search(
@@ -611,15 +624,16 @@ async def semantic_search(
             "min_score": request.min_score,
         },
         user_id=user.id,
-        trust_flame=user.trust_level.value if hasattr(user.trust_level, 'value') else int(user.trust_level),
+        trust_flame=user.trust_level.value
+        if hasattr(user.trust_level, "value")
+        else int(user.trust_level),
         correlation_id=f"semantic_search_{int(time.time())}",
     )
     result = await overlay_manager.execute(exec_request)
 
     if not result.success and result.error and "not found" in result.error.lower():
         raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="PrimeKG overlay not available"
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="PrimeKG overlay not available"
         )
 
     if not result.success:
@@ -627,7 +641,7 @@ async def semantic_search(
         logger.error("Semantic search failed: %s", result.error)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Semantic search failed. Please try again or contact support."
+            detail="Semantic search failed. Please try again or contact support.",
         )
 
     execution_time = (time.time() - start) * 1000
@@ -635,10 +649,7 @@ async def semantic_search(
     data = result.data or {}
     return SemanticSearchResponse(
         query=request.query,
-        results=[
-            SemanticSearchResult(**r)
-            for r in data.get("results", [])
-        ],
+        results=[SemanticSearchResult(**r) for r in data.get("results", [])],
         execution_time_ms=execution_time,
     )
 
@@ -647,7 +658,10 @@ async def semantic_search(
 # Discriminating Phenotypes Endpoints
 # =============================================================================
 
-@router.post("/diagnosis/discriminating-phenotypes", response_model=DiscriminatingPhenotypesResponse)
+
+@router.post(
+    "/diagnosis/discriminating-phenotypes", response_model=DiscriminatingPhenotypesResponse
+)
 async def get_discriminating_phenotypes(
     request: DiscriminatingPhenotypesRequest,
     user: ActiveUserDep,
@@ -668,15 +682,16 @@ async def get_discriminating_phenotypes(
             "already_present": request.already_present,
         },
         user_id=user.id,
-        trust_flame=user.trust_level.value if hasattr(user.trust_level, 'value') else int(user.trust_level),
+        trust_flame=user.trust_level.value
+        if hasattr(user.trust_level, "value")
+        else int(user.trust_level),
         correlation_id=f"discrim_pheno_{int(time.time())}",
     )
     result = await overlay_manager.execute(exec_request)
 
     if not result.success and result.error and "not found" in result.error.lower():
         raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="PrimeKG overlay not available"
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="PrimeKG overlay not available"
         )
 
     if not result.success:
@@ -684,7 +699,7 @@ async def get_discriminating_phenotypes(
         logger.error("Discriminating phenotypes query failed: %s", result.error)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Discriminating phenotypes query failed. Please try again or contact support."
+            detail="Discriminating phenotypes query failed. Please try again or contact support.",
         )
 
     data = result.data or {}
@@ -707,6 +722,7 @@ async def get_discriminating_phenotypes(
 # Disease Details Endpoints
 # =============================================================================
 
+
 @router.get("/diseases/{disease_id}", response_model=DiseaseDetailsResponse)
 async def get_disease_details(
     disease_id: str,
@@ -725,15 +741,16 @@ async def get_disease_details(
             "disease_id": disease_id,
         },
         user_id=user.id,
-        trust_flame=user.trust_level.value if hasattr(user.trust_level, 'value') else int(user.trust_level),
+        trust_flame=user.trust_level.value
+        if hasattr(user.trust_level, "value")
+        else int(user.trust_level),
         correlation_id=f"disease_details_{int(time.time())}",
     )
     result = await overlay_manager.execute(exec_request)
 
     if not result.success and result.error and "not found" in result.error.lower():
         raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="PrimeKG overlay not available"
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="PrimeKG overlay not available"
         )
 
     if not result.success:
@@ -741,16 +758,13 @@ async def get_disease_details(
         logger.error("Disease details query failed: %s", result.error)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Disease details query failed. Please try again or contact support."
+            detail="Disease details query failed. Please try again or contact support.",
         )
 
     data = result.data or {}
     if data.get("error"):
         # SECURITY FIX (Audit 7 - Session 3): Do not leak internal error details
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Disease not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Disease not found")
 
     disease = data.get("disease", {})
     return DiseaseDetailsResponse(
@@ -767,6 +781,7 @@ async def get_disease_details(
 # =============================================================================
 # Stats & Admin Endpoints
 # =============================================================================
+
 
 @router.get("/stats", response_model=PrimeKGStatsResponse)
 async def get_primekg_stats(

@@ -30,7 +30,7 @@ security = HTTPBearer(auto_error=False)
 
 
 async def get_token(
-    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(security)]
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(security)],
 ) -> str | None:
     """Extract bearer token from request."""
     if credentials is None:
@@ -40,7 +40,7 @@ async def get_token(
 
 
 async def get_optional_auth_context(
-    token: Annotated[str | None, Depends(get_token)]
+    token: Annotated[str | None, Depends(get_token)],
 ) -> AuthorizationContext | None:
     """
     Get authorization context if token is present.
@@ -61,22 +61,21 @@ async def get_optional_auth_context(
         # Do NOT use default values - this prevents privilege escalation
         if payload.trust_flame is None or payload.role is None:
             import logging
+
             logging.getLogger(__name__).warning(
                 "token_missing_claims: trust_flame or role claim missing"
             )
             return None
 
         return create_auth_context(
-            user_id=payload.sub,
-            trust_flame=payload.trust_flame,
-            role=payload.role
+            user_id=payload.sub, trust_flame=payload.trust_flame, role=payload.role
         )
     except TokenError:
         return None
 
 
 async def get_auth_context(
-    token: Annotated[str | None, Depends(get_token)]
+    token: Annotated[str | None, Depends(get_token)],
 ) -> AuthorizationContext:
     """
     Get authorization context from token (required).
@@ -91,7 +90,7 @@ async def get_auth_context(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication required",
-            headers={"WWW-Authenticate": "Bearer"}
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
     try:
@@ -105,29 +104,28 @@ async def get_auth_context(
             raise TokenInvalidError("Token missing required role claim")
 
         return create_auth_context(
-            user_id=payload.sub,
-            trust_flame=payload.trust_flame,
-            role=payload.role
+            user_id=payload.sub, trust_flame=payload.trust_flame, role=payload.role
         )
     except TokenExpiredError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token has expired",
-            headers={"WWW-Authenticate": "Bearer"}
+            headers={"WWW-Authenticate": "Bearer"},
         )
     except TokenInvalidError as e:
         # SECURITY FIX (Audit 3): Generic message to prevent token format leakage
         import logging
+
         logging.getLogger(__name__).warning(f"token_validation_failed: {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid authentication token",
-            headers={"WWW-Authenticate": "Bearer"}
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
 
 async def get_current_user_id(
-    auth: Annotated[AuthorizationContext, Depends(get_auth_context)]
+    auth: Annotated[AuthorizationContext, Depends(get_auth_context)],
 ) -> str:
     """Get current authenticated user's ID."""
     return auth.user_id
@@ -143,6 +141,7 @@ CurrentUserId = Annotated[str, Depends(get_current_user_id)]
 # Trust Level Dependencies
 # =============================================================================
 
+
 def require_trust(required_level: TrustLevel) -> Callable[..., Any]:
     """
     Create dependency that requires minimum trust level.
@@ -155,13 +154,14 @@ def require_trust(required_level: TrustLevel) -> Callable[..., Any]:
         ):
             ...
     """
+
     async def dependency(
-        auth: Annotated[AuthorizationContext, Depends(get_auth_context)]
+        auth: Annotated[AuthorizationContext, Depends(get_auth_context)],
     ) -> AuthorizationContext:
         if not auth.has_trust(required_level):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Requires {required_level.name} trust level"
+                detail=f"Requires {required_level.name} trust level",
             )
         return auth
 
@@ -179,6 +179,7 @@ RequireCoreTrust = Annotated[AuthorizationContext, Depends(require_trust(TrustLe
 # Role Dependencies
 # =============================================================================
 
+
 def require_role_dep(required_role: UserRole) -> Callable[..., Any]:
     """
     Create dependency that requires minimum role.
@@ -191,13 +192,13 @@ def require_role_dep(required_role: UserRole) -> Callable[..., Any]:
         ):
             ...
     """
+
     async def dependency(
-        auth: Annotated[AuthorizationContext, Depends(get_auth_context)]
+        auth: Annotated[AuthorizationContext, Depends(get_auth_context)],
     ) -> AuthorizationContext:
         if not auth.has_role(required_role):
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Requires {required_role.value} role"
+                status_code=status.HTTP_403_FORBIDDEN, detail=f"Requires {required_role.value} role"
             )
         return auth
 
@@ -214,6 +215,7 @@ RequireSystem = Annotated[AuthorizationContext, Depends(require_role_dep(UserRol
 # Capability Dependencies
 # =============================================================================
 
+
 def require_capability_dep(required_capability: Capability) -> Callable[..., Any]:
     """
     Create dependency that requires a specific capability.
@@ -226,13 +228,14 @@ def require_capability_dep(required_capability: Capability) -> Callable[..., Any
         ):
             ...
     """
+
     async def dependency(
-        auth: Annotated[AuthorizationContext, Depends(get_auth_context)]
+        auth: Annotated[AuthorizationContext, Depends(get_auth_context)],
     ) -> AuthorizationContext:
         if not auth.has_capability(required_capability):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Requires {required_capability.value} capability"
+                detail=f"Requires {required_capability.value} capability",
             )
         return auth
 
@@ -243,13 +246,14 @@ def require_any_capability_dep(*capabilities: Capability) -> Callable[..., Any]:
     """
     Create dependency that requires ANY of the specified capabilities.
     """
+
     async def dependency(
-        auth: Annotated[AuthorizationContext, Depends(get_auth_context)]
+        auth: Annotated[AuthorizationContext, Depends(get_auth_context)],
     ) -> AuthorizationContext:
         if not auth.has_any_capability(set(capabilities)):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Requires one of: {[c.value for c in capabilities]}"
+                detail=f"Requires one of: {[c.value for c in capabilities]}",
             )
         return auth
 
@@ -260,14 +264,15 @@ def require_all_capabilities_dep(*capabilities: Capability) -> Callable[..., Any
     """
     Create dependency that requires ALL of the specified capabilities.
     """
+
     async def dependency(
-        auth: Annotated[AuthorizationContext, Depends(get_auth_context)]
+        auth: Annotated[AuthorizationContext, Depends(get_auth_context)],
     ) -> AuthorizationContext:
         if not auth.has_all_capabilities(set(capabilities)):
             missing = set(capabilities) - auth.capabilities
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Missing capabilities: {[c.value for c in missing]}"
+                detail=f"Missing capabilities: {[c.value for c in missing]}",
             )
         return auth
 
@@ -277,6 +282,7 @@ def require_all_capabilities_dep(*capabilities: Capability) -> Callable[..., Any
 # =============================================================================
 # Resource Access Dependencies
 # =============================================================================
+
 
 class ResourceAccessChecker:
     """
@@ -302,16 +308,14 @@ class ResourceAccessChecker:
         self,
         get_owner_id: Callable[..., Any],
         get_trust_level: Callable[..., Any] | None = None,
-        require_ownership: bool = False
+        require_ownership: bool = False,
     ):
         self.get_owner_id = get_owner_id
         self.get_trust_level = get_trust_level
         self.require_ownership = require_ownership
 
     async def __call__(
-        self,
-        resource: Any,
-        auth: Annotated[AuthorizationContext, Depends(get_auth_context)]
+        self, resource: Any, auth: Annotated[AuthorizationContext, Depends(get_auth_context)]
     ) -> bool:
         owner_id = self.get_owner_id(resource)
 
@@ -319,8 +323,7 @@ class ResourceAccessChecker:
         if self.require_ownership:
             if auth.user_id != owner_id and not auth.has_role(UserRole.ADMIN):
                 raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="You don't own this resource"
+                    status_code=status.HTTP_403_FORBIDDEN, detail="You don't own this resource"
                 )
             return True
 
@@ -331,8 +334,7 @@ class ResourceAccessChecker:
 
         if not auth.can_access_resource(trust_level, owner_id):
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Insufficient access rights"
+                status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient access rights"
             )
 
         return True
@@ -347,12 +349,12 @@ class ResourceAccessChecker:
 import ipaddress
 
 TRUSTED_PROXY_RANGES = [
-    "10.0.0.0/8",      # Private class A
-    "172.16.0.0/12",   # Private class B
+    "10.0.0.0/8",  # Private class A
+    "172.16.0.0/12",  # Private class B
     "192.168.0.0/16",  # Private class C
-    "127.0.0.0/8",     # Loopback
-    "::1/128",         # IPv6 loopback
-    "fd00::/8",        # IPv6 private
+    "127.0.0.0/8",  # Loopback
+    "::1/128",  # IPv6 loopback
+    "fd00::/8",  # IPv6 private
 ]
 
 
@@ -434,6 +436,7 @@ UserAgent = Annotated[str | None, Depends(get_user_agent)]
 # Composite Dependencies
 # =============================================================================
 
+
 class AuthenticatedRequest:
     """
     Composite dependency that provides full request context.
@@ -451,7 +454,7 @@ class AuthenticatedRequest:
         self,
         auth: Annotated[AuthorizationContext, Depends(get_auth_context)],
         ip_address: Annotated[str | None, Depends(get_client_ip)],
-        user_agent: Annotated[str | None, Depends(get_user_agent)]
+        user_agent: Annotated[str | None, Depends(get_user_agent)],
     ):
         self.auth = auth
         self.user_id = auth.user_id
@@ -472,15 +475,11 @@ class AuthenticatedRequest:
         return self.auth.has_capability(required)
 
     def can_access_resource(
-        self,
-        resource_trust_level: TrustLevel,
-        resource_owner_id: str | None = None
+        self, resource_trust_level: TrustLevel, resource_owner_id: str | None = None
     ) -> bool:
         return self.auth.can_access_resource(resource_trust_level, resource_owner_id)
 
     def can_modify_resource(
-        self,
-        resource_owner_id: str,
-        resource_trust_level: TrustLevel = TrustLevel.STANDARD
+        self, resource_owner_id: str, resource_trust_level: TrustLevel = TrustLevel.STANDARD
     ) -> bool:
         return self.auth.can_modify_resource(resource_owner_id, resource_trust_level)

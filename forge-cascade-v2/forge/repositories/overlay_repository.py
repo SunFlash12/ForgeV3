@@ -27,6 +27,7 @@ logger = structlog.get_logger(__name__)
 
 class OverlayCreate(OverlayManifest):
     """Schema for registering an overlay."""
+
     pass
 
 
@@ -75,6 +76,7 @@ class OverlayRepository(BaseRepository[Overlay, OverlayCreate, OverlayUpdate]):
             Hex string of SHA-256 hash
         """
         import hashlib
+
         return hashlib.sha256(content).hexdigest()
 
     async def create(  # type: ignore[override]
@@ -119,9 +121,7 @@ class OverlayRepository(BaseRepository[Overlay, OverlayCreate, OverlayUpdate]):
                 )
             verified_hash = computed_hash
             self.logger.info(
-                "wasm_hash_verified",
-                overlay_id=overlay_id,
-                hash=computed_hash[:16] + "..."
+                "wasm_hash_verified", overlay_id=overlay_id, hash=computed_hash[:16] + "..."
             )
 
         # Convert capabilities to list of strings for Neo4j
@@ -233,7 +233,7 @@ class OverlayRepository(BaseRepository[Overlay, OverlayCreate, OverlayUpdate]):
 
         query = f"""
         MATCH (o:Overlay {{id: $id}})
-        SET {', '.join(set_parts)}
+        SET {", ".join(set_parts)}
         RETURN o {{.*}} AS entity
         """
 

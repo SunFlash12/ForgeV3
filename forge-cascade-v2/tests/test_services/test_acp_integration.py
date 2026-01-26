@@ -70,10 +70,7 @@ class MockOfferingRepository:
         return self._offerings.get(offering_id)
 
     async def get_by_provider(self, provider_address: str) -> list[JobOffering]:
-        return [
-            o for o in self._offerings.values()
-            if o.provider_address == provider_address
-        ]
+        return [o for o in self._offerings.values() if o.provider_address == provider_address]
 
     async def search(self, **kwargs) -> list[JobOffering]:
         return list(self._offerings.values())
@@ -207,7 +204,9 @@ class TestOfferingRegistration:
     async def test_register_multiple_offerings(self, acp_service):
         """Provider can register multiple offerings."""
         offerings = []
-        for i, service_type in enumerate(["knowledge_query", "semantic_search", "capsule_generation"]):
+        for i, service_type in enumerate(
+            ["knowledge_query", "semantic_search", "capsule_generation"]
+        ):
             offering = JobOffering(
                 id=str(uuid4()),
                 provider_address="0xProvider123",
@@ -258,7 +257,9 @@ class TestJobCreation:
         assert job.buyer_address == "0xBuyer123"
 
     @pytest.mark.asyncio
-    async def test_create_job_stores_requirements(self, acp_service, sample_offering, sample_job_create):
+    async def test_create_job_stores_requirements(
+        self, acp_service, sample_offering, sample_job_create
+    ):
         """Job should store the buyer's requirements."""
         await acp_service.register_offering(
             agent_id="agent_provider_456",
@@ -280,7 +281,9 @@ class TestNegotiationPhase:
     """Tests for the negotiation phase."""
 
     @pytest.mark.asyncio
-    async def test_provider_responds_with_terms(self, acp_service, sample_offering, sample_job_create):
+    async def test_provider_responds_with_terms(
+        self, acp_service, sample_offering, sample_job_create
+    ):
         """Provider should be able to respond with terms."""
         # Setup
         await acp_service.register_offering(
@@ -409,10 +412,18 @@ class TestEvaluationPhase:
         await acp_service.register_offering("agent_provider_456", "0xProvider123", sample_offering)
         sample_job_create.offering_id = sample_offering.id
         job = await acp_service.create_job(sample_job_create, "0xBuyer123")
-        terms = ACPNegotiationTerms(proposed_price=Decimal("50.0"), proposed_deadline=datetime.now(UTC) + timedelta(hours=24))
+        terms = ACPNegotiationTerms(
+            proposed_price=Decimal("50.0"),
+            proposed_deadline=datetime.now(UTC) + timedelta(hours=24),
+        )
         await acp_service.respond_with_terms(job.id, terms, "0xProvider123")
         await acp_service.accept_terms(job.id, "0xBuyer123")
-        deliverable = ACPDeliverable(job_id=job.id, content={"result": "success"}, content_hash="abc123", mime_type="application/json")
+        deliverable = ACPDeliverable(
+            job_id=job.id,
+            content={"result": "success"},
+            content_hash="abc123",
+            mime_type="application/json",
+        )
         await acp_service.submit_deliverable(job.id, deliverable, "0xProvider123")
 
         # Evaluate
@@ -434,16 +445,26 @@ class TestEvaluationPhase:
         assert completed_job.status == ACPJobStatus.COMPLETED
 
     @pytest.mark.asyncio
-    async def test_failed_evaluation_triggers_dispute(self, acp_service, sample_offering, sample_job_create):
+    async def test_failed_evaluation_triggers_dispute(
+        self, acp_service, sample_offering, sample_job_create
+    ):
         """Failed evaluation with dispute should move to dispute phase."""
         # Full setup through delivery
         await acp_service.register_offering("agent_provider_456", "0xProvider123", sample_offering)
         sample_job_create.offering_id = sample_offering.id
         job = await acp_service.create_job(sample_job_create, "0xBuyer123")
-        terms = ACPNegotiationTerms(proposed_price=Decimal("50.0"), proposed_deadline=datetime.now(UTC) + timedelta(hours=24))
+        terms = ACPNegotiationTerms(
+            proposed_price=Decimal("50.0"),
+            proposed_deadline=datetime.now(UTC) + timedelta(hours=24),
+        )
         await acp_service.respond_with_terms(job.id, terms, "0xProvider123")
         await acp_service.accept_terms(job.id, "0xBuyer123")
-        deliverable = ACPDeliverable(job_id=job.id, content={"result": "failure"}, content_hash="def456", mime_type="application/json")
+        deliverable = ACPDeliverable(
+            job_id=job.id,
+            content={"result": "failure"},
+            content_hash="def456",
+            mime_type="application/json",
+        )
         await acp_service.submit_deliverable(job.id, deliverable, "0xProvider123")
 
         # Negative evaluation
@@ -462,7 +483,9 @@ class TestEvaluationPhase:
         )
 
         # Job should be completed but marked as failed
-        assert evaluated_job.status == ACPJobStatus.FAILED or evaluated_job.phase == ACPPhase.DISPUTE
+        assert (
+            evaluated_job.status == ACPJobStatus.FAILED or evaluated_job.phase == ACPPhase.DISPUTE
+        )
 
 
 class TestDisputeResolution:
@@ -475,10 +498,18 @@ class TestDisputeResolution:
         await acp_service.register_offering("agent_provider_456", "0xProvider123", sample_offering)
         sample_job_create.offering_id = sample_offering.id
         job = await acp_service.create_job(sample_job_create, "0xBuyer123")
-        terms = ACPNegotiationTerms(proposed_price=Decimal("50.0"), proposed_deadline=datetime.now(UTC) + timedelta(hours=24))
+        terms = ACPNegotiationTerms(
+            proposed_price=Decimal("50.0"),
+            proposed_deadline=datetime.now(UTC) + timedelta(hours=24),
+        )
         await acp_service.respond_with_terms(job.id, terms, "0xProvider123")
         await acp_service.accept_terms(job.id, "0xBuyer123")
-        deliverable = ACPDeliverable(job_id=job.id, content={"result": "disputed"}, content_hash="ghi789", mime_type="application/json")
+        deliverable = ACPDeliverable(
+            job_id=job.id,
+            content={"result": "disputed"},
+            content_hash="ghi789",
+            mime_type="application/json",
+        )
         await acp_service.submit_deliverable(job.id, deliverable, "0xProvider123")
 
         # File dispute
@@ -625,10 +656,7 @@ class TestEndToEndJobLifecycle:
 
         # 4. Deliver
         result_content = {
-            "documents": [
-                {"id": f"doc_{i}", "title": f"Climate Document {i}"}
-                for i in range(15)
-            ],
+            "documents": [{"id": f"doc_{i}", "title": f"Climate Document {i}"} for i in range(15)],
             "total_found": 15,
         }
         deliverable = ACPDeliverable(

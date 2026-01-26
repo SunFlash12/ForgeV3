@@ -24,11 +24,12 @@ from forge.resilience.config import CacheConfig, get_resilience_config
 
 logger: structlog.stdlib.BoundLogger = structlog.get_logger(__name__)
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 # Try to import redis, but allow graceful degradation
 try:
     import redis.asyncio as aioredis
+
     REDIS_AVAILABLE = True
 except ImportError:
     aioredis = None  # type: ignore[assignment]
@@ -105,21 +106,16 @@ class QueryCache:
                 self._redis = aioredis.from_url(  # type: ignore[no-untyped-call]
                     self._config.redis_url,
                     encoding="utf-8",
-                    decode_responses=False  # We handle encoding ourselves
+                    decode_responses=False,  # We handle encoding ourselves
                 )
                 # Test connection
                 await self._redis.ping()
                 self._use_redis = True
                 logger.info(
-                    "query_cache_redis_connected",
-                    redis_url=self._config.redis_url[:20] + "..."
+                    "query_cache_redis_connected", redis_url=self._config.redis_url[:20] + "..."
                 )
             except (ConnectionError, TimeoutError, OSError, ValueError) as e:
-                logger.warning(
-                    "query_cache_redis_failed",
-                    error=str(e),
-                    fallback="memory"
-                )
+                logger.warning("query_cache_redis_failed", error=str(e), fallback="memory")
                 self._use_redis = False
         else:
             logger.info("query_cache_using_memory")
@@ -148,7 +144,7 @@ class QueryCache:
                 if data:
                     self._stats.hits += 1
                     # SECURITY FIX (Audit 4): Replace pickle with JSON to prevent RCE
-                    return json.loads(data.decode('utf-8'))
+                    return json.loads(data.decode("utf-8"))
                 self._stats.misses += 1
                 return None
             else:
@@ -173,7 +169,7 @@ class QueryCache:
         value: Any,
         ttl: int | None = None,
         query_type: str = "general",
-        related_capsule_ids: list[str] | None = None
+        related_capsule_ids: list[str] | None = None,
     ) -> bool:
         """
         Set a value in cache.
@@ -196,13 +192,13 @@ class QueryCache:
         try:
             # Check size limit
             # SECURITY FIX (Audit 4): Replace pickle with JSON to prevent RCE
-            serialized = json.dumps(value, default=str).encode('utf-8')
+            serialized = json.dumps(value, default=str).encode("utf-8")
             if len(serialized) > self._config.max_cached_result_bytes:
                 logger.warning(
                     "cache_value_too_large",
                     key=key,
                     size=len(serialized),
-                    max_size=self._config.max_cached_result_bytes
+                    max_size=self._config.max_cached_result_bytes,
                 )
                 return False
 
@@ -214,7 +210,7 @@ class QueryCache:
                     value=value,
                     created_at=datetime.now(UTC),
                     expires_at=datetime.now(UTC) + timedelta(seconds=ttl),
-                    query_type=query_type
+                    query_type=query_type,
                 )
 
             # Register invalidation triggers
@@ -252,7 +248,7 @@ class QueryCache:
         compute_func: Callable[[], Any],
         ttl: int | None = None,
         query_type: str = "general",
-        related_capsule_ids: list[str] | None = None
+        related_capsule_ids: list[str] | None = None,
     ) -> Any:
         """
         Get value from cache or compute and cache it.
@@ -275,6 +271,7 @@ class QueryCache:
         # Compute value
         if callable(compute_func):
             import asyncio
+
             if asyncio.iscoroutinefunction(compute_func):
                 value = await compute_func()
             else:
@@ -284,11 +281,7 @@ class QueryCache:
 
         # Cache result
         await self.set(
-            key,
-            value,
-            ttl=ttl,
-            query_type=query_type,
-            related_capsule_ids=related_capsule_ids
+            key, value, ttl=ttl, query_type=query_type, related_capsule_ids=related_capsule_ids
         )
 
         return value
@@ -315,25 +308,23 @@ class QueryCache:
         component_str = str(component)
 
         # Validate format - only allow alphanumeric, hyphens, underscores
-        if not re.match(r'^[a-zA-Z0-9_-]{1,128}$', component_str):
+        if not re.match(r"^[a-zA-Z0-9_-]{1,128}$", component_str):
             # Log the issue and sanitize
             import hashlib
+
             # Hash the invalid component to create a safe key
             safe_key = hashlib.sha256(component_str.encode()).hexdigest()[:32]
             logger.warning(
                 "cache_key_sanitized",
                 original_length=len(component_str),
-                reason="Invalid characters or length"
+                reason="Invalid characters or length",
             )
             return f"sanitized_{safe_key}"
 
         return component_str
 
     async def get_or_compute_lineage(
-        self,
-        capsule_id: str,
-        depth: int,
-        compute_func: Callable[[], Any]
+        self, capsule_id: str, depth: int, compute_func: Callable[[], Any]
     ) -> Any:
         """
         Get or compute lineage query result with appropriate TTL.
@@ -347,10 +338,7 @@ class QueryCache:
         safe_capsule_id = self._sanitize_cache_key_component(capsule_id)
         safe_depth = max(1, min(int(depth), 100))  # Clamp depth to reasonable range
 
-        key = self._config.lineage_key_pattern.format(
-            capsule_id=safe_capsule_id,
-            depth=safe_depth
-        )
+        key = self._config.lineage_key_pattern.format(capsule_id=safe_capsule_id, depth=safe_depth)
 
         # Try cache first
         cached = await self.get(key)
@@ -359,6 +347,7 @@ class QueryCache:
 
         # Compute value
         import asyncio
+
         if asyncio.iscoroutinefunction(compute_func):
             result = await compute_func()
         else:
@@ -370,21 +359,12 @@ class QueryCache:
         # Get all capsule IDs in lineage for invalidation
         capsule_ids = self._extract_capsule_ids(result)
 
-        await self.set(
-            key,
-            result,
-            ttl=ttl,
-            query_type="lineage",
-            related_capsule_ids=capsule_ids
-        )
+        await self.set(key, result, ttl=ttl, query_type="lineage", related_capsule_ids=capsule_ids)
 
         return result
 
     async def get_or_compute_search(
-        self,
-        query: str,
-        filters: dict[str, Any],
-        compute_func: Callable[[], Any]
+        self, query: str, filters: dict[str, Any], compute_func: Callable[[], Any]
     ) -> Any:
         """
         Get or compute search query result.
@@ -395,10 +375,7 @@ class QueryCache:
         key = self._config.search_key_pattern.format(query_hash=query_hash)
 
         return await self.get_or_compute(
-            key,
-            compute_func,
-            ttl=self._config.search_ttl_seconds,
-            query_type="search"
+            key, compute_func, ttl=self._config.search_ttl_seconds, query_type="search"
         )
 
     async def invalidate_for_capsule(self, capsule_id: str) -> int:
@@ -426,11 +403,7 @@ class QueryCache:
 
         self._stats.invalidations += count
 
-        logger.debug(
-            "cache_invalidated",
-            capsule_id=capsule_id,
-            count=count
-        )
+        logger.debug("cache_invalidated", capsule_id=capsule_id, count=count)
 
         return count
 
@@ -455,11 +428,7 @@ class QueryCache:
         """Get cache statistics."""
         return self._stats
 
-    async def _register_invalidation_triggers(
-        self,
-        cache_key: str,
-        capsule_ids: list[str]
-    ) -> None:
+    async def _register_invalidation_triggers(self, cache_key: str, capsule_ids: list[str]) -> None:
         """Register cache key for invalidation when capsules change."""
         for capsule_id in capsule_ids:
             self._invalidation_subscriptions[capsule_id].add(cache_key)
@@ -473,12 +442,12 @@ class QueryCache:
         """
         # Try to extract modification timestamps
         try:
-            if hasattr(lineage_result, 'all_capsules'):
+            if hasattr(lineage_result, "all_capsules"):
                 capsules = lineage_result.all_capsules()
             elif isinstance(lineage_result, list):
                 capsules = lineage_result
-            elif isinstance(lineage_result, dict) and 'capsules' in lineage_result:
-                capsules = lineage_result['capsules']
+            elif isinstance(lineage_result, dict) and "capsules" in lineage_result:
+                capsules = lineage_result["capsules"]
             else:
                 return self._config.default_ttl_seconds
 
@@ -488,13 +457,13 @@ class QueryCache:
             # Find most recent modification
             most_recent = datetime.min
             for capsule in capsules:
-                if hasattr(capsule, 'updated_at') and capsule.updated_at:
+                if hasattr(capsule, "updated_at") and capsule.updated_at:
                     if capsule.updated_at > most_recent:
                         most_recent = capsule.updated_at
-                elif isinstance(capsule, dict) and 'updated_at' in capsule:
-                    ts = capsule['updated_at']
+                elif isinstance(capsule, dict) and "updated_at" in capsule:
+                    ts = capsule["updated_at"]
                     if isinstance(ts, str):
-                        ts = datetime.fromisoformat(ts.replace('Z', '+00:00'))
+                        ts = datetime.fromisoformat(ts.replace("Z", "+00:00"))
                     if ts > most_recent:
                         most_recent = ts
 
@@ -504,13 +473,13 @@ class QueryCache:
             age_hours = (datetime.now(UTC) - most_recent).total_seconds() / 3600
 
             if age_hours < 1:
-                return 60           # 1 minute for very recent changes
+                return 60  # 1 minute for very recent changes
             elif age_hours < 24:
-                return 300          # 5 minutes for changes within a day
-            elif age_hours < 168:   # 1 week
-                return 1800         # 30 minutes
+                return 300  # 5 minutes for changes within a day
+            elif age_hours < 168:  # 1 week
+                return 1800  # 30 minutes
             else:
-                return 3600         # 1 hour for stable lineage
+                return 3600  # 1 hour for stable lineage
 
         except (ValueError, TypeError, KeyError, AttributeError, OSError):
             return self._config.default_ttl_seconds
@@ -520,21 +489,21 @@ class QueryCache:
         ids = []
 
         try:
-            if hasattr(result, 'all_capsule_ids'):
+            if hasattr(result, "all_capsule_ids"):
                 ids = result.all_capsule_ids()
-            elif hasattr(result, 'all_capsules'):
-                ids = [c.id for c in result.all_capsules() if hasattr(c, 'id')]
+            elif hasattr(result, "all_capsules"):
+                ids = [c.id for c in result.all_capsules() if hasattr(c, "id")]
             elif isinstance(result, list):
                 for item in result:
-                    if hasattr(item, 'id'):
+                    if hasattr(item, "id"):
                         ids.append(item.id)
-                    elif isinstance(item, dict) and 'id' in item:
-                        ids.append(item['id'])
+                    elif isinstance(item, dict) and "id" in item:
+                        ids.append(item["id"])
             elif isinstance(result, dict):
-                if 'id' in result:
-                    ids.append(result['id'])
-                if 'capsules' in result:
-                    ids.extend(self._extract_capsule_ids(result['capsules']))
+                if "id" in result:
+                    ids.append(result["id"])
+                if "capsules" in result:
+                    ids.extend(self._extract_capsule_ids(result["capsules"]))
         except (ValueError, TypeError, KeyError, AttributeError):
             pass
 

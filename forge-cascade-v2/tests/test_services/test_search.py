@@ -88,11 +88,13 @@ class TestSearchService:
     @pytest.fixture
     def mock_embedding_service(self):
         service = AsyncMock()
-        service.embed = AsyncMock(return_value=MagicMock(
-            embedding=[0.1] * 1536,
-            model="mock",
-            dimensions=1536,
-        ))
+        service.embed = AsyncMock(
+            return_value=MagicMock(
+                embedding=[0.1] * 1536,
+                model="mock",
+                dimensions=1536,
+            )
+        )
         service.dimensions = 1536
         return service
 
@@ -124,27 +126,29 @@ class TestSearchService:
     @pytest.mark.asyncio
     async def test_search_with_results(self, search_service, mock_db_client):
         # Mock database to return results
-        mock_db_client.execute = AsyncMock(return_value=[
-            {
-                "capsule": {
-                    "id": "cap-1",
-                    "title": "Test Capsule",
-                    "content": "Test content about Python",
-                    "type": "knowledge",
-                    "owner_id": "user-1",
-                    "trust_level": 60,
-                    "version": "1.0.0",
-                    "tags": ["python"],
-                    "metadata": {},
-                    "view_count": 100,
-                    "fork_count": 5,
-                    "is_archived": False,
-                    "created_at": datetime.now(UTC).isoformat(),
-                    "updated_at": datetime.now(UTC).isoformat(),
+        mock_db_client.execute = AsyncMock(
+            return_value=[
+                {
+                    "capsule": {
+                        "id": "cap-1",
+                        "title": "Test Capsule",
+                        "content": "Test content about Python",
+                        "type": "knowledge",
+                        "owner_id": "user-1",
+                        "trust_level": 60,
+                        "version": "1.0.0",
+                        "tags": ["python"],
+                        "metadata": {},
+                        "view_count": 100,
+                        "fork_count": 5,
+                        "is_archived": False,
+                        "created_at": datetime.now(UTC).isoformat(),
+                        "updated_at": datetime.now(UTC).isoformat(),
+                    },
+                    "score": 0.95,
                 },
-                "score": 0.95,
-            },
-        ])
+            ]
+        )
 
         request = SearchRequest(query="Python programming")
 

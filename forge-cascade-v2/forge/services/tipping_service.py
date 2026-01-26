@@ -232,9 +232,7 @@ class TippingService:
             record = await result.single()
 
             # Get recent tips
-            recent = await self.get_tips_for_target(
-                target_type, target_id, limit=5
-            )
+            recent = await self.get_tips_for_target(target_type, target_id, limit=5)
 
             return TipSummary(
                 target_type=target_type,
@@ -314,7 +312,9 @@ class TippingService:
             message=record.get("message"),
             tx_signature=record.get("tx_signature"),
             confirmed=record.get("confirmed", False),
-            created_at=record["created_at"] if isinstance(record["created_at"], datetime) else datetime.fromisoformat(str(record["created_at"])),
+            created_at=record["created_at"]
+            if isinstance(record["created_at"], datetime)
+            else datetime.fromisoformat(str(record["created_at"])),
             confirmed_at=record.get("confirmed_at"),
         )
 

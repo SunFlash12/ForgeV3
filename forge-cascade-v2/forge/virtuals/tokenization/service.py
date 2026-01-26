@@ -60,30 +60,34 @@ logger = logging.getLogger(__name__)
 
 # Graduation thresholds for different launch types
 GRADUATION_THRESHOLDS = {
-    "standard": 42000,      # 42K VIRTUAL for standard launch
-    "genesis_tier_1": 21000,   # 21K VIRTUAL for Genesis Tier 1
-    "genesis_tier_2": 42000,   # 42K VIRTUAL for Genesis Tier 2
+    "standard": 42000,  # 42K VIRTUAL for standard launch
+    "genesis_tier_1": 21000,  # 21K VIRTUAL for Genesis Tier 1
+    "genesis_tier_2": 42000,  # 42K VIRTUAL for Genesis Tier 2
     "genesis_tier_3": 100000,  # 100K VIRTUAL for Genesis Tier 3
 }
 
 
 class TokenizationServiceError(Exception):
     """Base exception for tokenization service errors."""
+
     pass
 
 
 class InsufficientStakeError(TokenizationServiceError):
     """Raised when initial stake is below minimum."""
+
     pass
 
 
 class AlreadyTokenizedError(TokenizationServiceError):
     """Raised when entity is already tokenized."""
+
     pass
 
 
 class BlockchainConfigurationError(TokenizationServiceError):
     """Raised when blockchain infrastructure is not properly configured."""
+
     pass
 
 
@@ -107,8 +111,8 @@ class TokenizationService:
     def __init__(
         self,
         tokenized_entity_repository: Any,  # Forge's TokenizedEntityRepository
-        contribution_repository: Any,      # Forge's ContributionRepository
-        proposal_repository: Any,          # Forge's ProposalRepository
+        contribution_repository: Any,  # Forge's ContributionRepository
+        proposal_repository: Any,  # Forge's ProposalRepository
     ):
         """
         Initialize the tokenization service.
@@ -132,9 +136,7 @@ class TokenizationService:
     def _get_chain_manager(self) -> MultiChainManager:
         """Get the chain manager, raising if not initialized."""
         if self._chain_manager is None:
-            raise RuntimeError(
-                "TokenizationService not initialized. Call initialize() first."
-            )
+            raise RuntimeError("TokenizationService not initialized. Call initialize() first.")
         return self._chain_manager
 
     # ==================== Tokenization Lifecycle ====================
@@ -167,7 +169,10 @@ class TokenizationService:
             request.entity_type,
             request.entity_id,
         )
-        if existing and existing.status not in [TokenizationStatus.FAILED, TokenizationStatus.REVOKED]:
+        if existing and existing.status not in [
+            TokenizationStatus.FAILED,
+            TokenizationStatus.REVOKED,
+        ]:
             raise AlreadyTokenizedError(
                 f"Entity {request.entity_type}:{request.entity_id} is already tokenized"
             )
@@ -330,8 +335,7 @@ class TokenizationService:
         entity.bonding_curve_virtual_accumulated = new_supply
         entity.bonding_curve_contributors += 1
         entity.token_info.bonding_curve_progress = min(
-            1.0,
-            new_supply / GRADUATION_THRESHOLDS.get(entity.launch_type, 42000)
+            1.0, new_supply / GRADUATION_THRESHOLDS.get(entity.launch_type, 42000)
         )
 
         # Check if graduation threshold reached
@@ -425,7 +429,9 @@ class TokenizationService:
 
         # Calculate shares
         creator_amount = revenue_amount_virtual * (revenue_share.creator_share_percent / 100)
-        contributor_amount = revenue_amount_virtual * (revenue_share.contributor_share_percent / 100)
+        contributor_amount = revenue_amount_virtual * (
+            revenue_share.contributor_share_percent / 100
+        )
         treasury_amount = revenue_amount_virtual * (revenue_share.treasury_share_percent / 100)
 
         # Creator distribution (would need to look up creator wallet)
@@ -464,7 +470,7 @@ class TokenizationService:
         # Update entity metrics
         entity.total_revenue_generated += revenue_amount_virtual
         entity.total_buyback_burned += buyback_amount
-        entity.total_distributed_to_holders += (creator_amount + contributor_amount)
+        entity.total_distributed_to_holders += creator_amount + contributor_amount
 
         await self._entity_repo.update(entity)
 
@@ -722,10 +728,10 @@ class TokenizationService:
 
         # Check if we can make real blockchain calls
         can_deploy = (
-            hasattr(client, 'web3') and
-            factory_address is not None and
-            is_abi_complete("agent_factory") and
-            self.config.operator_private_key is not None
+            hasattr(client, "web3")
+            and factory_address is not None
+            and is_abi_complete("agent_factory")
+            and self.config.operator_private_key is not None
         )
 
         if can_deploy:
@@ -734,33 +740,31 @@ class TokenizationService:
 
                 # Build the contract instance
                 contract = web3.eth.contract(
-                    address=web3.to_checksum_address(factory_address),
-                    abi=AGENT_FACTORY_ABI
+                    address=web3.to_checksum_address(factory_address), abi=AGENT_FACTORY_ABI
                 )
 
                 # Get operator account for signing
                 from eth_account import Account
+
                 assert self.config.operator_private_key is not None
                 operator = Account.from_key(self.config.operator_private_key)
 
                 # Build transaction
-                stake_wei = web3.to_wei(initial_stake, 'ether')
-                nonce = await asyncio.to_thread(
-                    web3.eth.get_transaction_count, operator.address
-                )
+                stake_wei = web3.to_wei(initial_stake, "ether")
+                nonce = await asyncio.to_thread(web3.eth.get_transaction_count, operator.address)
                 gas_price = await asyncio.to_thread(web3.eth.gas_price)
 
                 tx = contract.functions.createAgent(
-                    entity.token_info.name,
-                    entity.token_info.symbol,
-                    stake_wei
-                ).build_transaction({
-                    'from': operator.address,
-                    'nonce': nonce,
-                    'gas': 500000,
-                    'gasPrice': gas_price,
-                    'chainId': await asyncio.to_thread(lambda: web3.eth.chain_id),
-                })
+                    entity.token_info.name, entity.token_info.symbol, stake_wei
+                ).build_transaction(
+                    {
+                        "from": operator.address,
+                        "nonce": nonce,
+                        "gas": 500000,
+                        "gasPrice": gas_price,
+                        "chainId": await asyncio.to_thread(lambda: web3.eth.chain_id),
+                    }
+                )
 
                 # Sign and send transaction
                 signed_tx = web3.eth.account.sign_transaction(tx, self.config.operator_private_key)
@@ -813,7 +817,7 @@ class TokenizationService:
 
         # No simulation mode - require real blockchain configuration
         missing_reqs = []
-        if not hasattr(client, 'web3'):
+        if not hasattr(client, "web3"):
             missing_reqs.append("web3_client")
         if factory_address is None:
             missing_reqs.append("factory_address")
@@ -854,10 +858,10 @@ class TokenizationService:
 
         # Check if we can make real blockchain calls
         can_contribute = (
-            hasattr(client, 'web3') and
-            token_address is not None and
-            is_abi_complete("bonding_curve") and
-            self.config.operator_private_key is not None
+            hasattr(client, "web3")
+            and token_address is not None
+            and is_abi_complete("bonding_curve")
+            and self.config.operator_private_key is not None
         )
 
         if can_contribute:
@@ -867,40 +871,40 @@ class TokenizationService:
 
                 # Get operator account
                 from eth_account import Account
+
                 assert self.config.operator_private_key is not None
                 operator = Account.from_key(self.config.operator_private_key)
 
-                amount_wei = web3.to_wei(amount_virtual, 'ether')
+                amount_wei = web3.to_wei(amount_virtual, "ether")
 
                 # Step 1: Approve VIRTUAL spend (if needed)
                 if virtual_token_address:
                     virtual_contract = web3.eth.contract(
-                        address=web3.to_checksum_address(virtual_token_address),
-                        abi=ERC20_ABI
+                        address=web3.to_checksum_address(virtual_token_address), abi=ERC20_ABI
                     )
 
                     # Check current allowance
                     allowance = await asyncio.to_thread(
                         virtual_contract.functions.allowance(
-                            operator.address,
-                            web3.to_checksum_address(token_address)
+                            operator.address, web3.to_checksum_address(token_address)
                         ).call
                     )
 
                     if allowance < amount_wei:
                         # Approve spending
                         approve_tx = virtual_contract.functions.approve(
-                            web3.to_checksum_address(token_address),
-                            amount_wei
-                        ).build_transaction({
-                            'from': operator.address,
-                            'nonce': await asyncio.to_thread(
-                                web3.eth.get_transaction_count, operator.address
-                            ),
-                            'gas': 100000,
-                            'gasPrice': await asyncio.to_thread(web3.eth.gas_price),
-                            'chainId': await asyncio.to_thread(lambda: web3.eth.chain_id),
-                        })
+                            web3.to_checksum_address(token_address), amount_wei
+                        ).build_transaction(
+                            {
+                                "from": operator.address,
+                                "nonce": await asyncio.to_thread(
+                                    web3.eth.get_transaction_count, operator.address
+                                ),
+                                "gas": 100000,
+                                "gasPrice": await asyncio.to_thread(web3.eth.gas_price),
+                                "chainId": await asyncio.to_thread(lambda: web3.eth.chain_id),
+                            }
+                        )
 
                         signed_approve = web3.eth.account.sign_transaction(
                             approve_tx, self.config.operator_private_key
@@ -911,27 +915,26 @@ class TokenizationService:
                         await asyncio.to_thread(
                             web3.eth.wait_for_transaction_receipt, approve_hash, timeout=60
                         )
-                        logger.info(f"[BLOCKCHAIN] VIRTUAL approval confirmed: {approve_hash.hex()}")
+                        logger.info(
+                            f"[BLOCKCHAIN] VIRTUAL approval confirmed: {approve_hash.hex()}"
+                        )
 
                 # Step 2: Execute contribution
                 bonding_contract = web3.eth.contract(
-                    address=web3.to_checksum_address(token_address),
-                    abi=BONDING_CURVE_ABI
+                    address=web3.to_checksum_address(token_address), abi=BONDING_CURVE_ABI
                 )
 
-                nonce = await asyncio.to_thread(
-                    web3.eth.get_transaction_count, operator.address
-                )
+                nonce = await asyncio.to_thread(web3.eth.get_transaction_count, operator.address)
 
-                contribute_tx = bonding_contract.functions.contribute(
-                    amount_wei
-                ).build_transaction({
-                    'from': operator.address,
-                    'nonce': nonce,
-                    'gas': 200000,
-                    'gasPrice': await asyncio.to_thread(web3.eth.gas_price),
-                    'chainId': await asyncio.to_thread(lambda: web3.eth.chain_id),
-                })
+                contribute_tx = bonding_contract.functions.contribute(amount_wei).build_transaction(
+                    {
+                        "from": operator.address,
+                        "nonce": nonce,
+                        "gas": 200000,
+                        "gasPrice": await asyncio.to_thread(web3.eth.gas_price),
+                        "chainId": await asyncio.to_thread(lambda: web3.eth.chain_id),
+                    }
+                )
 
                 signed_tx = web3.eth.account.sign_transaction(
                     contribute_tx, self.config.operator_private_key
@@ -969,7 +972,7 @@ class TokenizationService:
 
         # No simulation mode - require real blockchain configuration
         missing_reqs = []
-        if not hasattr(client, 'web3'):
+        if not hasattr(client, "web3"):
             missing_reqs.append("web3_client")
         if token_address is None:
             missing_reqs.append("token_address")
@@ -1004,7 +1007,7 @@ class TokenizationService:
         """
         client = self._get_chain_manager().primary_client
 
-        if not hasattr(client, 'web3'):
+        if not hasattr(client, "web3"):
             raise BlockchainConfigurationError(
                 "Token graduation requires web3 client configuration."
             )
@@ -1061,11 +1064,11 @@ class TokenizationService:
             accounts_to_unwrap = [creator_addr] if creator_addr else []
 
             unwrap_data = bonding_contract.encodeABI(
-                fn_name='unwrapToken',
+                fn_name="unwrapToken",
                 args=[
                     web3.to_checksum_address(token_address),
                     [web3.to_checksum_address(a) for a in accounts_to_unwrap],
-                ]
+                ],
             )
 
             tx_record = await client.send_transaction(
@@ -1116,13 +1119,14 @@ class TokenizationService:
         """
         client = self._get_chain_manager().primary_client
 
-        if hasattr(client, 'web3'):
+        if hasattr(client, "web3"):
             try:
                 total_amount = sum(distributions.values())
 
                 # Filter out special keys (creator, treasury, buyback_burn)
                 recipient_distributions = {
-                    k: v for k, v in distributions.items()
+                    k: v
+                    for k, v in distributions.items()
                     if k not in ("creator", "treasury", "buyback_burn") and v > 0
                 }
 
@@ -1154,22 +1158,32 @@ class TokenizationService:
                                 f"[BLOCKCHAIN] Transferred {amount} VIRTUAL to {recipient} "
                                 f"(tx: {tx_record.tx_hash})"
                             )
-                        except (ValueError, ConnectionError, TimeoutError, OSError, RuntimeError) as e:
+                        except (
+                            ValueError,
+                            ConnectionError,
+                            TimeoutError,
+                            OSError,
+                            RuntimeError,
+                        ) as e:
                             logger.error(f"Transfer to {recipient} failed: {e}")
                             # Continue with other transfers, but record failure
-                            tx_records.append(TransactionRecord(
-                                tx_hash="",
-                                chain="base",
-                                block_number=0,
-                                timestamp=datetime.now(UTC),
-                                from_address=client._operator_account.address if getattr(client, '_operator_account', None) else "",  # type: ignore[attr-defined]
-                                to_address=recipient,
-                                value=amount,
-                                gas_used=0,
-                                status="failed",
-                                transaction_type="distribution",
-                                error_message=str(e),
-                            ))
+                            tx_records.append(
+                                TransactionRecord(
+                                    tx_hash="",
+                                    chain="base",
+                                    block_number=0,
+                                    timestamp=datetime.now(UTC),
+                                    from_address=client._operator_account.address  # type: ignore[attr-defined]
+                                    if getattr(client, "_operator_account", None)
+                                    else "",
+                                    to_address=recipient,
+                                    value=amount,
+                                    gas_used=0,
+                                    status="failed",
+                                    transaction_type="distribution",
+                                    error_message=str(e),
+                                )
+                            )
                 else:
                     # Batch transfer via MultiSend for gas efficiency
                     multisend_address = ContractAddresses.get_address("base", "multisend")
@@ -1190,7 +1204,13 @@ class TokenizationService:
                                     timeout_seconds=60,
                                 )
                                 tx_records.append(tx_record)
-                            except (ValueError, ConnectionError, TimeoutError, OSError, RuntimeError) as e:
+                            except (
+                                ValueError,
+                                ConnectionError,
+                                TimeoutError,
+                                OSError,
+                                RuntimeError,
+                            ) as e:
                                 logger.error(f"Transfer to {recipient} failed: {e}")
                     else:
                         # Use MultiSend contract for batch efficiency
@@ -1203,20 +1223,20 @@ class TokenizationService:
 
                         # Build encoded transfer calls for MultiSend
                         # Each transfer is: operation(0) + to(20 bytes) + value(32) + data_length(32) + data
-                        encoded_txs = b''
+                        encoded_txs = b""
                         for recipient, amount in recipient_distributions.items():
                             amount_wei = int(amount * 10**18)
                             transfer_data = virtual_contract.encodeABI(
-                                fn_name='transfer',
-                                args=[web3.to_checksum_address(recipient), amount_wei]
+                                fn_name="transfer",
+                                args=[web3.to_checksum_address(recipient), amount_wei],
                             )
                             # Pack for MultiSend: operation(1) + to + value + dataLength + data
                             encoded_txs += (
-                                bytes([0]) +  # operation: 0 = call
-                                bytes.fromhex(virtual_address[2:].zfill(40)) +  # to address
-                                (0).to_bytes(32, 'big') +  # value (0 for token transfer)
-                                len(bytes.fromhex(transfer_data[2:])).to_bytes(32, 'big') +
-                                bytes.fromhex(transfer_data[2:])
+                                bytes([0])  # operation: 0 = call
+                                + bytes.fromhex(virtual_address[2:].zfill(40))  # to address
+                                + (0).to_bytes(32, "big")  # value (0 for token transfer)
+                                + len(bytes.fromhex(transfer_data[2:])).to_bytes(32, "big")
+                                + bytes.fromhex(transfer_data[2:])
                             )
 
                         multisend_contract = web3.eth.contract(
@@ -1224,8 +1244,7 @@ class TokenizationService:
                             abi=MULTISEND_ABI,
                         )
                         multisend_data = multisend_contract.encodeABI(
-                            fn_name='multiSend',
-                            args=[encoded_txs]
+                            fn_name="multiSend", args=[encoded_txs]
                         )
 
                         tx_record = await client.send_transaction(
@@ -1280,10 +1299,8 @@ class TokenizationService:
                 "missing token address or liquidity pool"
             )
 
-        if not hasattr(client, 'web3'):
-            raise BlockchainConfigurationError(
-                "Buyback-burn requires web3 client configuration."
-            )
+        if not hasattr(client, "web3"):
+            raise BlockchainConfigurationError("Buyback-burn requires web3 client configuration.")
 
         pool_address = entity.liquidity_pool_address
 
@@ -1324,7 +1341,7 @@ class TokenizationService:
 
         client = self._get_chain_manager().primary_client
 
-        if not hasattr(client, 'web3'):
+        if not hasattr(client, "web3"):
             raise BlockchainConfigurationError(
                 "Token balance query requires web3 client configuration."
             )
@@ -1356,10 +1373,11 @@ async def get_tokenization_service(
     """Get the global tokenization service instance."""
     global _tokenization_service
     if _tokenization_service is None:
-        if any(r is None for r in [tokenized_entity_repository, contribution_repository, proposal_repository]):
-            raise TokenizationServiceError(
-                "Repositories required for first initialization"
-            )
+        if any(
+            r is None
+            for r in [tokenized_entity_repository, contribution_repository, proposal_repository]
+        ):
+            raise TokenizationServiceError("Repositories required for first initialization")
         _tokenization_service = TokenizationService(
             tokenized_entity_repository,
             contribution_repository,

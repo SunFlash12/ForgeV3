@@ -18,18 +18,20 @@ logger = structlog.get_logger(__name__)
 
 # SECURITY: Allowed RPC URL patterns for SSRF protection
 # Only allow known blockchain RPC endpoints
-ALLOWED_RPC_HOSTS = frozenset({
-    "mainnet.base.org",
-    "base-mainnet.g.alchemy.com",
-    "base.llamarpc.com",
-    "base-mainnet.infura.io",
-    "rpc.ankr.com",
-    "base.blockpi.network",
-    "base.drpc.org",
-    "base.meowrpc.com",
-    "base.publicnode.com",
-    "1rpc.io",
-})
+ALLOWED_RPC_HOSTS = frozenset(
+    {
+        "mainnet.base.org",
+        "base-mainnet.g.alchemy.com",
+        "base.llamarpc.com",
+        "base-mainnet.infura.io",
+        "rpc.ankr.com",
+        "base.blockpi.network",
+        "base.drpc.org",
+        "base.meowrpc.com",
+        "base.publicnode.com",
+        "1rpc.io",
+    }
+)
 
 
 def _validate_rpc_url(rpc_url: str) -> None:
@@ -205,7 +207,8 @@ async def verify_purchase_transaction(
             virtual_token_lower = virtual_token_address.lower()
 
             virtual_transfers = [
-                log for log in logs
+                log
+                for log in logs
                 if log.get("address", "").lower() == virtual_token_lower
                 and len(log.get("topics", [])) >= 1
                 and log["topics"][0] == transfer_topic

@@ -139,9 +139,9 @@ async def initialize_virtuals() -> dict[str, Any]:
     game_client = await get_game_client()
 
     return {
-        'config': config,
-        'chains': chain_manager,
-        'game': game_client,
+        "config": config,
+        "chains": chain_manager,
+        "game": game_client,
         # ACP, tokenization, and revenue require repositories
         # which are provided by the Forge application
     }

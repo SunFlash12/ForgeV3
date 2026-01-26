@@ -21,6 +21,7 @@ from forge.security.password import (
 # Password Hashing Tests
 # =============================================================================
 
+
 class TestPasswordHashing:
     """Tests for password hashing functionality."""
 
@@ -76,6 +77,7 @@ class TestPasswordHashing:
 # Password Verification Tests
 # =============================================================================
 
+
 class TestPasswordVerification:
     """Tests for password verification functionality."""
 
@@ -123,6 +125,7 @@ class TestPasswordVerification:
 # =============================================================================
 # Password Strength Validation Tests
 # =============================================================================
+
 
 class TestPasswordStrength:
     """Tests for password strength validation."""
@@ -198,6 +201,7 @@ class TestPasswordStrength:
 # =============================================================================
 # Edge Cases and Security Tests
 # =============================================================================
+
 
 class TestPasswordEdgeCases:
     """Tests for edge cases and security considerations."""

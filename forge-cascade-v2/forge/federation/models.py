@@ -15,33 +15,37 @@ from forge.models.base import ForgeModel, generate_id
 
 class PeerStatus(str, Enum):
     """Status of a federated peer."""
-    PENDING = "pending"          # Awaiting trust establishment
-    ACTIVE = "active"            # Fully connected and syncing
-    DEGRADED = "degraded"        # Connectivity issues
-    SUSPENDED = "suspended"      # Manually suspended
-    OFFLINE = "offline"          # Unreachable
-    REVOKED = "revoked"          # Trust revoked
+
+    PENDING = "pending"  # Awaiting trust establishment
+    ACTIVE = "active"  # Fully connected and syncing
+    DEGRADED = "degraded"  # Connectivity issues
+    SUSPENDED = "suspended"  # Manually suspended
+    OFFLINE = "offline"  # Unreachable
+    REVOKED = "revoked"  # Trust revoked
 
 
 class SyncDirection(str, Enum):
     """Direction of sync operations."""
-    PUSH = "push"                # Send to peer
-    PULL = "pull"                # Receive from peer
+
+    PUSH = "push"  # Send to peer
+    PULL = "pull"  # Receive from peer
     BIDIRECTIONAL = "bidirectional"
 
 
 class ConflictResolution(str, Enum):
     """How to resolve sync conflicts."""
-    HIGHER_TRUST = "higher_trust"      # Higher trust capsule wins
+
+    HIGHER_TRUST = "higher_trust"  # Higher trust capsule wins
     NEWER_TIMESTAMP = "newer_timestamp"  # More recent wins
-    MANUAL_REVIEW = "manual_review"      # Flag for human review
-    MERGE = "merge"                      # Attempt to merge
-    LOCAL_WINS = "local_wins"            # Always prefer local
-    REMOTE_WINS = "remote_wins"          # Always prefer remote
+    MANUAL_REVIEW = "manual_review"  # Flag for human review
+    MERGE = "merge"  # Attempt to merge
+    LOCAL_WINS = "local_wins"  # Always prefer local
+    REMOTE_WINS = "remote_wins"  # Always prefer remote
 
 
 class FederatedSyncStatus(str, Enum):
     """Status of a federated item sync."""
+
     PENDING = "pending"
     SYNCED = "synced"
     CONFLICT = "conflict"
@@ -51,6 +55,7 @@ class FederatedSyncStatus(str, Enum):
 
 class SyncOperationStatus(str, Enum):
     """Status of a sync operation."""
+
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
@@ -59,6 +64,7 @@ class SyncOperationStatus(str, Enum):
 
 class SyncPhase(str, Enum):
     """Current phase of a sync operation."""
+
     INIT = "init"
     FETCHING = "fetching"
     PROCESSING = "processing"
@@ -83,8 +89,7 @@ class FederatedPeer(ForgeModel):
     # Cryptographic identity
     public_key: str = Field(description="Peer's Ed25519 public key (base64)")
     our_public_key: str | None = Field(
-        default=None,
-        description="Our public key as registered with this peer"
+        default=None, description="Our public key as registered with this peer"
     )
 
     # Trust & Status
@@ -95,7 +100,7 @@ class FederatedPeer(ForgeModel):
         default=0.3,
         ge=0.0,
         le=1.0,
-        description="Peer trust: 0.0=untrusted, 1.0=fully trusted (0.0-1.0 scale)"
+        description="Peer trust: 0.0=untrusted, 1.0=fully trusted (0.0-1.0 scale)",
     )
     status: PeerStatus = Field(default=PeerStatus.PENDING)
 
@@ -107,20 +112,14 @@ class FederatedPeer(ForgeModel):
     # Sync configuration
     sync_direction: SyncDirection = Field(default=SyncDirection.BIDIRECTIONAL)
     sync_interval_minutes: int = Field(default=60, ge=5)
-    conflict_resolution: ConflictResolution = Field(
-        default=ConflictResolution.HIGHER_TRUST
-    )
+    conflict_resolution: ConflictResolution = Field(default=ConflictResolution.HIGHER_TRUST)
 
     # Filtering
     sync_capsule_types: list[str] = Field(
-        default_factory=list,
-        description="Empty = all types, otherwise filter to these"
+        default_factory=list, description="Empty = all types, otherwise filter to these"
     )
     min_trust_to_sync: int = Field(
-        default=50,
-        ge=0,
-        le=100,
-        description="Minimum capsule trust level to sync"
+        default=50, ge=0, le=100, description="Minimum capsule trust level to sync"
     )
 
     # Metadata
@@ -155,15 +154,13 @@ class FederatedCapsule(ForgeModel):
 
     # Local copy (if synced)
     local_capsule_id: str | None = Field(
-        default=None,
-        description="ID of local copy if we've synced it"
+        default=None, description="ID of local copy if we've synced it"
     )
     local_content_hash: str | None = None
 
     # Sync state
     sync_status: FederatedSyncStatus = Field(
-        default=FederatedSyncStatus.PENDING,
-        description="Current sync status"
+        default=FederatedSyncStatus.PENDING, description="Current sync status"
     )
     conflict_reason: str | None = None
 
@@ -231,7 +228,7 @@ class SyncState(ForgeModel):
 
     # Sync window
     sync_from: datetime | None = None  # Changes since this time
-    sync_to: datetime | None = None    # Up to this time
+    sync_to: datetime | None = None  # Up to this time
 
     # Counts
     capsules_fetched: int = 0
@@ -279,8 +276,7 @@ class PeerHandshake(ForgeModel):
     # SECURITY FIX (Audit 2): Nonce for replay attack prevention
     # Optional for backward compatibility with older peers
     nonce: str | None = Field(
-        default=None,
-        description="Cryptographic nonce to prevent replay attacks (32 hex chars)"
+        default=None, description="Cryptographic nonce to prevent replay attacks (32 hex chars)"
     )
 
 
@@ -309,8 +305,7 @@ class SyncPayload(ForgeModel):
     # SECURITY FIX (Audit 2): Nonce for replay attack prevention
     # Optional for backward compatibility with older peers
     nonce: str | None = Field(
-        default=None,
-        description="Cryptographic nonce to prevent replay attacks (32 hex chars)"
+        default=None, description="Cryptographic nonce to prevent replay attacks (32 hex chars)"
     )
 
 

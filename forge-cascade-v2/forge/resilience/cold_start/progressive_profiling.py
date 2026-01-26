@@ -72,7 +72,7 @@ class UserProfile:
     # Behavioral patterns
     preferred_capsule_types: dict[str, int] = field(default_factory=dict)
     active_hours: dict[int, int] = field(default_factory=dict)  # hour -> count
-    active_days: dict[int, int] = field(default_factory=dict)    # weekday -> count
+    active_days: dict[int, int] = field(default_factory=dict)  # weekday -> count
 
     # Interaction history
     total_interactions: int = 0
@@ -99,20 +99,15 @@ class UserProfile:
             "engagement": {
                 "capsules_created": self.capsules_created,
                 "searches": self.searches_performed,
-            }
+            },
         }
 
     def get_top_topics(self, n: int = 5) -> list[dict[str, Any]]:
         """Get top N topics by affinity."""
         sorted_topics = sorted(
-            self.topic_affinities.items(),
-            key=lambda x: x[1].score,
-            reverse=True
+            self.topic_affinities.items(), key=lambda x: x[1].score, reverse=True
         )
-        return [
-            {"topic": topic, "score": affinity.score}
-            for topic, affinity in sorted_topics[:n]
-        ]
+        return [{"topic": topic, "score": affinity.score} for topic, affinity in sorted_topics[:n]]
 
 
 class ProgressiveProfiler:
@@ -126,11 +121,7 @@ class ProgressiveProfiler:
     - Time-based score decay
     """
 
-    def __init__(
-        self,
-        decay_rate: float = 0.05,
-        min_interactions_for_recommendations: int = 10
-    ):
+    def __init__(self, decay_rate: float = 0.05, min_interactions_for_recommendations: int = 10):
         self._decay_rate = decay_rate
         self._min_interactions = min_interactions_for_recommendations
         self._profiles: dict[str, UserProfile] = {}
@@ -138,10 +129,37 @@ class ProgressiveProfiler:
 
         # Topic extraction patterns
         self._stop_words = {
-            "the", "a", "an", "is", "are", "was", "were", "be", "been",
-            "being", "have", "has", "had", "do", "does", "did", "will",
-            "would", "could", "should", "may", "might", "must", "shall",
-            "can", "this", "that", "these", "those", "it", "its",
+            "the",
+            "a",
+            "an",
+            "is",
+            "are",
+            "was",
+            "were",
+            "be",
+            "been",
+            "being",
+            "have",
+            "has",
+            "had",
+            "do",
+            "does",
+            "did",
+            "will",
+            "would",
+            "could",
+            "should",
+            "may",
+            "might",
+            "must",
+            "shall",
+            "can",
+            "this",
+            "that",
+            "these",
+            "those",
+            "it",
+            "its",
         }
 
     def get_or_create_profile(self, user_id: str) -> UserProfile:
@@ -155,7 +173,7 @@ class ProgressiveProfiler:
         user_id: str,
         interaction_type: InteractionType,
         target_id: str | None = None,
-        context: dict[str, Any] | None = None
+        context: dict[str, Any] | None = None,
     ) -> None:
         """
         Record a user interaction.
@@ -171,7 +189,7 @@ class ProgressiveProfiler:
             user_id=user_id,
             interaction_type=interaction_type,
             target_id=target_id,
-            context=context or {}
+            context=context or {},
         )
 
         self._interactions[user_id].append(interaction)
@@ -180,17 +198,9 @@ class ProgressiveProfiler:
         profile = self.get_or_create_profile(user_id)
         self._update_profile(profile, interaction)
 
-        logger.debug(
-            "interaction_recorded",
-            user_id=user_id,
-            type=interaction_type.value
-        )
+        logger.debug("interaction_recorded", user_id=user_id, type=interaction_type.value)
 
-    def _update_profile(
-        self,
-        profile: UserProfile,
-        interaction: UserInteraction
-    ) -> None:
+    def _update_profile(self, profile: UserProfile, interaction: UserInteraction) -> None:
         """Update profile based on interaction."""
         profile.total_interactions += 1
         profile.last_updated = datetime.now(UTC)
@@ -211,7 +221,9 @@ class ProgressiveProfiler:
         if interaction.interaction_type == InteractionType.CREATE_CAPSULE:
             profile.capsules_created += 1
             capsule_type = interaction.context.get("capsule_type", "UNKNOWN")
-            profile.preferred_capsule_types[capsule_type] = profile.preferred_capsule_types.get(capsule_type, 0) + 1
+            profile.preferred_capsule_types[capsule_type] = (
+                profile.preferred_capsule_types.get(capsule_type, 0) + 1
+            )
 
         elif interaction.interaction_type == InteractionType.SEARCH:
             profile.searches_performed += 1
@@ -238,7 +250,7 @@ class ProgressiveProfiler:
             words = content.lower().split()
             # Extract significant words (basic approach)
             for word in words:
-                word = ''.join(c for c in word if c.isalnum())
+                word = "".join(c for c in word if c.isalnum())
                 if word and len(word) > 3 and word not in self._stop_words:
                     topics.add(word)
 
@@ -256,17 +268,11 @@ class ProgressiveProfiler:
         return topics
 
     def _update_topic_affinity(
-        self,
-        profile: UserProfile,
-        topic: str,
-        interaction: UserInteraction
+        self, profile: UserProfile, topic: str, interaction: UserInteraction
     ) -> None:
         """Update affinity for a topic."""
         if topic not in profile.topic_affinities:
-            profile.topic_affinities[topic] = TopicAffinity(
-                topic=topic,
-                score=0.0
-            )
+            profile.topic_affinities[topic] = TopicAffinity(topic=topic, score=0.0)
 
         affinity = profile.topic_affinities[topic]
 
@@ -343,11 +349,7 @@ class ProgressiveProfiler:
             return False
         return profile.total_interactions >= self._min_interactions
 
-    def get_topic_recommendations(
-        self,
-        user_id: str,
-        n: int = 5
-    ) -> list[str]:
+    def get_topic_recommendations(self, user_id: str, n: int = 5) -> list[str]:
         """Get recommended topics for a user."""
         profile = self._profiles.get(user_id)
         if not profile:
@@ -358,11 +360,7 @@ class ProgressiveProfiler:
 
         return [t["topic"] for t in top_topics[:n]]
 
-    def get_similar_users(
-        self,
-        user_id: str,
-        n: int = 5
-    ) -> list[tuple[str, float]]:
+    def get_similar_users(self, user_id: str, n: int = 5) -> list[tuple[str, float]]:
         """Find users with similar profiles."""
         profile = self._profiles.get(user_id)
         if not profile:
@@ -381,11 +379,7 @@ class ProgressiveProfiler:
         similarities.sort(key=lambda x: x[1], reverse=True)
         return similarities[:n]
 
-    def _calculate_similarity(
-        self,
-        profile1: UserProfile,
-        profile2: UserProfile
-    ) -> float:
+    def _calculate_similarity(self, profile1: UserProfile, profile2: UserProfile) -> float:
         """Calculate similarity between two profiles."""
         # Topic similarity
         topics1 = set(profile1.topic_affinities.keys())
@@ -420,9 +414,7 @@ class ProgressiveProfiler:
             "ready_for_recommendations": self.get_recommendations_ready(user_id),
             "top_topics": profile.get_top_topics(5),
             "favorite_capsule_types": sorted(
-                profile.preferred_capsule_types.items(),
-                key=lambda x: x[1],
-                reverse=True
+                profile.preferred_capsule_types.items(), key=lambda x: x[1], reverse=True
             )[:3],
             "total_interactions": profile.total_interactions,
             "member_since": profile.created_at.isoformat(),

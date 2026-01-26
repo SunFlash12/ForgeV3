@@ -50,6 +50,7 @@ class TestForgeToolRegistry:
     def tool_registry(self):
         """Create a tool registry instance."""
         from forge.copilot.tools import ForgeToolRegistry
+
         return ForgeToolRegistry()
 
     @pytest.mark.asyncio
@@ -77,9 +78,9 @@ class TestForgeToolRegistry:
     @pytest.mark.asyncio
     async def test_handle_knowledge_query_no_client(self, tool_registry):
         """Test knowledge query without initialized client."""
-        result = await tool_registry._handle_knowledge_query({
-            "arguments": {"query": "test", "limit": 10}
-        })
+        result = await tool_registry._handle_knowledge_query(
+            {"arguments": {"query": "test", "limit": 10}}
+        )
 
         assert result["resultType"] == "error"
         assert "not initialized" in result["textResultForLlm"]
@@ -87,9 +88,9 @@ class TestForgeToolRegistry:
     @pytest.mark.asyncio
     async def test_handle_semantic_search_no_service(self, tool_registry):
         """Test semantic search without initialized service."""
-        result = await tool_registry._handle_semantic_search({
-            "arguments": {"query": "test", "top_k": 5, "threshold": 0.7}
-        })
+        result = await tool_registry._handle_semantic_search(
+            {"arguments": {"query": "test", "top_k": 5, "threshold": 0.7}}
+        )
 
         assert result["resultType"] == "error"
         assert "not initialized" in result["textResultForLlm"]
@@ -97,9 +98,9 @@ class TestForgeToolRegistry:
     @pytest.mark.asyncio
     async def test_handle_governance_query(self, tool_registry):
         """Test governance query (doesn't require services)."""
-        result = await tool_registry._handle_governance_query({
-            "arguments": {"query_type": "proposals", "status": None}
-        })
+        result = await tool_registry._handle_governance_query(
+            {"arguments": {"query_type": "proposals", "status": None}}
+        )
 
         assert result["resultType"] == "success"
         assert "governance" in result["sessionLog"].lower()
@@ -332,6 +333,7 @@ class TestFormattingHelpers:
     def tool_registry(self):
         """Create a tool registry instance."""
         from forge.copilot.tools import ForgeToolRegistry
+
         return ForgeToolRegistry()
 
     def test_format_capsule_results_empty(self, tool_registry):
@@ -468,9 +470,9 @@ class TestIntegrationWorkflow:
         # Create mock tool registry
         registry = ForgeToolRegistry()
         mock_db = MagicMock()
-        mock_db.search_capsules = AsyncMock(return_value=[
-            {"id": "cap-1", "title": "AI Basics", "type": "note", "content": "..."}
-        ])
+        mock_db.search_capsules = AsyncMock(
+            return_value=[{"id": "cap-1", "title": "AI Basics", "type": "note", "content": "..."}]
+        )
 
         await registry.initialize(db_client=mock_db)
 

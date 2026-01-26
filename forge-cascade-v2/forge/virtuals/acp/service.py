@@ -48,16 +48,19 @@ logger = logging.getLogger(__name__)
 
 class ACPServiceError(Exception):
     """Base exception for ACP service errors."""
+
     pass
 
 
 class InvalidPhaseTransitionError(ACPServiceError):
     """Raised when attempting an invalid phase transition."""
+
     pass
 
 
 class EscrowError(ACPServiceError):
     """Raised when escrow operations fail."""
+
     pass
 
 
@@ -110,6 +113,7 @@ class ACPService:
             redis_password = None
             try:
                 from forge.config import get_settings
+
                 settings = get_settings()
                 redis_url = settings.redis_url
                 redis_password = settings.redis_password
@@ -287,7 +291,9 @@ class ACPService:
             content={
                 "requirements": create_request.requirements,
                 "max_fee_virtual": create_request.max_fee_virtual,
-                "preferred_deadline": create_request.preferred_deadline.isoformat() if create_request.preferred_deadline else None,
+                "preferred_deadline": create_request.preferred_deadline.isoformat()
+                if create_request.preferred_deadline
+                else None,
                 "additional_context": create_request.additional_context,
             },
             sender_address=buyer_wallet,
@@ -326,9 +332,7 @@ class ACPService:
             raise ACPServiceError(f"Job {job_id} not found")
 
         if job.current_phase != ACPPhase.REQUEST:
-            raise InvalidPhaseTransitionError(
-                f"Cannot respond to job in {job.current_phase} phase"
-            )
+            raise InvalidPhaseTransitionError(f"Cannot respond to job in {job.current_phase} phase")
 
         if job.provider_wallet != provider_wallet:
             raise ACPServiceError("Only the designated provider can respond")
@@ -381,9 +385,7 @@ class ACPService:
             raise ACPServiceError(f"Job {job_id} not found")
 
         if job.current_phase != ACPPhase.NEGOTIATION:
-            raise InvalidPhaseTransitionError(
-                f"Cannot accept terms in {job.current_phase} phase"
-            )
+            raise InvalidPhaseTransitionError(f"Cannot accept terms in {job.current_phase} phase")
 
         if job.buyer_wallet != buyer_wallet:
             raise ACPServiceError("Only the buyer can accept terms")
@@ -515,9 +517,7 @@ class ACPService:
             raise ACPServiceError(f"Job {job_id} not found")
 
         if job.current_phase != ACPPhase.EVALUATION:
-            raise InvalidPhaseTransitionError(
-                f"Cannot evaluate in {job.current_phase} phase"
-            )
+            raise InvalidPhaseTransitionError(f"Cannot evaluate in {job.current_phase} phase")
 
         # Verify evaluator authorization (buyer or designated evaluator)
         if evaluator_wallet not in [job.buyer_wallet, job.evaluator_agent_id]:
@@ -635,9 +635,7 @@ class ACPService:
         if self._nonce_store is None:
             raise ACPServiceError("Nonce store not initialized - call initialize() first")
 
-        is_valid, error = await self._nonce_store.verify_and_consume_nonce(
-            sender_address, nonce
-        )
+        is_valid, error = await self._nonce_store.verify_and_consume_nonce(sender_address, nonce)
         if not is_valid:
             logger.warning(
                 "nonce_replay_detected",
@@ -761,7 +759,7 @@ class ACPService:
             signature = keypair.sign_message(message_bytes)
 
             # Return signature as base58
-            result: str = base58.b58encode(bytes(signature)).decode('ascii')
+            result: str = base58.b58encode(bytes(signature)).decode("ascii")
             return result
 
         except (ValueError, TypeError, RuntimeError, ImportError) as e:
@@ -812,8 +810,7 @@ class ACPService:
 
             signable = encode_defunct(primitive=message_bytes)
             recovered_address: str = Account.recover_message(
-                signable,
-                signature=bytes.fromhex(signature_hex.removeprefix("0x"))
+                signable, signature=bytes.fromhex(signature_hex.removeprefix("0x"))
             )
 
             return recovered_address.lower() == expected_address.lower()
@@ -857,6 +854,7 @@ class ACPService:
         # This would interact with the ACP escrow contract
         # For now, return a mock transaction
         from ..models import TransactionRecord
+
         return TransactionRecord(
             tx_hash=f"0x{'0' * 64}",
             chain=self.config.primary_chain.value,
@@ -881,6 +879,7 @@ class ACPService:
 
         # This would interact with the ACP escrow contract
         from ..models import TransactionRecord
+
         return TransactionRecord(
             tx_hash=f"0x{'1' * 64}",
             chain=self.config.primary_chain.value,
@@ -918,6 +917,7 @@ class ACPService:
 
         # Experience factor (logarithmic scale)
         import math
+
         experience_factor = min(1.0, math.log(total_jobs + 1) / math.log(100))
 
         # Combined reputation
@@ -965,9 +965,7 @@ async def get_acp_service(
             return _acp_service
 
         if job_repository is None or offering_repository is None:
-            raise ACPServiceError(
-                "Repositories required for first initialization"
-            )
+            raise ACPServiceError("Repositories required for first initialization")
         _acp_service = ACPService(job_repository, offering_repository)
         await _acp_service.initialize()
 

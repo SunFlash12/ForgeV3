@@ -36,8 +36,9 @@ def _sanitized_error(context: str, e: Exception) -> HTTPException:
     logger.error(f"virtuals_api_error: {context}", exc_info=True)
     return HTTPException(
         status_code=500,
-        detail=f"Internal error during {context}. Please try again or contact support."
+        detail=f"Internal error during {context}. Please try again or contact support.",
     )
+
 
 # Import models (these would be the actual Forge/Virtuals models)
 from ..models import (
@@ -52,8 +53,10 @@ from ..models import (
 
 # ==================== Response Models ====================
 
+
 class APIResponse(BaseModel):
     """Standard API response wrapper."""
+
     success: bool = True
     data: Any | None = None
     error: str | None = None
@@ -62,6 +65,7 @@ class APIResponse(BaseModel):
 
 class PaginatedResponse(APIResponse):
     """Response with pagination metadata."""
+
     total: int = 0
     page: int = 1
     per_page: int = 20
@@ -96,6 +100,7 @@ async def get_current_user_wallet(
     env = os.environ.get("FORGE_ENV", "development")
     if env in ("development", "test") and not credentials:
         import structlog
+
         structlog.get_logger().warning(
             "virtuals_api_unauthenticated",
             warning="Using placeholder wallet - DEVELOPMENT ONLY",
@@ -123,13 +128,12 @@ async def get_current_user_wallet(
         wallet: str | None = getattr(token_data, "wallet_address", None)
         if not wallet:
             # Fall back to user lookup if wallet not in token
-            user_id: str | None = getattr(token_data, "sub", None) or getattr(token_data, "user_id", None)
+            user_id: str | None = getattr(token_data, "sub", None) or getattr(
+                token_data, "user_id", None
+            )
             if user_id:
                 # This would need db injection in real implementation
-                raise HTTPException(
-                    status_code=400,
-                    detail="User has no linked wallet address"
-                )
+                raise HTTPException(status_code=400, detail="User has no linked wallet address")
             raise HTTPException(status_code=401, detail="Invalid token: no user identity")
 
         return wallet
@@ -138,6 +142,7 @@ async def get_current_user_wallet(
         raise
     except (ValueError, TypeError, KeyError, RuntimeError, ImportError) as e:
         import structlog
+
         structlog.get_logger().error("virtuals_auth_error", error=str(e))
         raise HTTPException(status_code=401, detail="Authentication failed")
 
@@ -350,10 +355,12 @@ async def contribute_to_bonding_curve(
             amount_virtual=amount_virtual,
         )
 
-        return APIResponse(data={
-            "entity": entity.model_dump(),
-            "contribution": contribution.model_dump(),
-        })
+        return APIResponse(
+            data={
+                "entity": entity.model_dump(),
+                "contribution": contribution.model_dump(),
+            }
+        )
 
     except (ConnectionError, TimeoutError, OSError, ValueError, RuntimeError, ImportError) as e:
         raise _sanitized_error("bonding curve contribution", e)
@@ -739,6 +746,7 @@ async def get_entity_valuation(
 
 
 # ==================== Router Aggregation ====================
+
 
 def create_virtuals_router() -> APIRouter:
     """

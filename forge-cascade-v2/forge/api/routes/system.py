@@ -81,7 +81,9 @@ def get_maintenance_message() -> str:
         return str(message) if message else "System is under maintenance. Please try again later."
 
 
-def set_maintenance_mode(enabled: bool, user_id: str | None = None, message: str | None = None) -> None:
+def set_maintenance_mode(
+    enabled: bool, user_id: str | None = None, message: str | None = None
+) -> None:
     """Set maintenance mode state."""
     with _maintenance_lock:
         _maintenance_state["enabled"] = enabled
@@ -110,13 +112,9 @@ class HealthStatus(BaseModel):
     version: str = Field(default="0.1.0")
 
     components: dict[str, dict[str, Any]] = Field(
-        default_factory=dict,
-        description="Individual component health status"
+        default_factory=dict, description="Individual component health status"
     )
-    checks: dict[str, bool] = Field(
-        default_factory=dict,
-        description="Quick health check results"
-    )
+    checks: dict[str, bool] = Field(default_factory=dict, description="Quick health check results")
 
 
 class CircuitBreakerStatus(BaseModel):
@@ -258,7 +256,7 @@ class CanaryListResponse(BaseModel):
     "/health",
     response_model=HealthStatus,
     summary="Comprehensive health check",
-    description="Returns detailed health status of all system components"
+    description="Returns detailed health status of all system components",
 )
 async def get_health(
     db_client: DbClientDep,
@@ -286,12 +284,13 @@ async def get_health(
         db_healthy = await db_client.verify_connection()
         components["database"] = {
             "status": "healthy" if db_healthy else "unhealthy",
-            "type": "neo4j"
+            "type": "neo4j",
         }
         checks["database"] = db_healthy
     except (OSError, ConnectionError, TimeoutError, RuntimeError) as e:
         # SECURITY FIX (Audit 3): Don't expose internal error details
         import structlog
+
         structlog.get_logger(__name__).error("database_health_check_failed", error=str(e))
         components["database"] = {"status": "unhealthy", "error": "Database connection failed"}
         checks["database"] = False
@@ -302,7 +301,7 @@ async def get_health(
     queue_size = event_queue.qsize() if event_queue else 0
     components["event_system"] = {
         "status": "healthy" if event_healthy else "degraded",
-        "queue_size": str(queue_size)
+        "queue_size": str(queue_size),
     }
     checks["event_system"] = event_healthy
 
@@ -313,31 +312,31 @@ async def get_health(
     components["overlay_manager"] = {
         "status": "healthy",
         "total_overlays": str(overlay_count),
-        "active_overlays": str(active_count)
+        "active_overlays": str(active_count),
     }
     checks["overlay_manager"] = True
 
     # Circuit breakers health
     breakers_dict = getattr(circuit_registry, "_breakers", {})
-    open_breakers = sum(
-        1 for cb in breakers_dict.values()
-        if cb.state.name == "OPEN"
-    )
+    open_breakers = sum(1 for cb in breakers_dict.values() if cb.state.name == "OPEN")
 
     total_breakers = len(breakers_dict)
     components["circuit_breakers"] = {
         "status": "degraded" if open_breakers > 0 else "healthy",
         "total": str(total_breakers),
-        "open": str(open_breakers)
+        "open": str(open_breakers),
     }
     checks["circuit_breakers"] = open_breakers == 0
 
     # Anomaly system health
     unresolved = len(anomaly_system.get_unresolved_anomalies())
-    critical_anomalies = len([
-        a for a in anomaly_system.get_unresolved_anomalies()
-        if a.severity == AnomalySeverity.CRITICAL
-    ])
+    critical_anomalies = len(
+        [
+            a
+            for a in anomaly_system.get_unresolved_anomalies()
+            if a.severity == AnomalySeverity.CRITICAL
+        ]
+    )
 
     anomaly_status = "healthy"
     if critical_anomalies > 0:
@@ -348,16 +347,13 @@ async def get_health(
     components["anomaly_detection"] = {
         "status": anomaly_status,
         "unresolved": str(unresolved),
-        "critical": str(critical_anomalies)
+        "critical": str(critical_anomalies),
     }
     checks["anomaly_detection"] = critical_anomalies == 0
 
     # Determine overall status
     all_healthy = all(checks.values())
-    any_unhealthy = any(
-        c.get("status") == "unhealthy"
-        for c in components.values()
-    )
+    any_unhealthy = any(c.get("status") == "unhealthy" for c in components.values())
 
     if any_unhealthy:
         overall_status = "unhealthy"
@@ -367,17 +363,14 @@ async def get_health(
         overall_status = "healthy"
 
     return HealthStatus(
-        status=overall_status,
-        uptime_seconds=uptime,
-        components=components,
-        checks=checks
+        status=overall_status, uptime_seconds=uptime, components=components, checks=checks
     )
 
 
 @router.get(
     "/health/live",
     summary="Liveness probe",
-    description="Simple liveness check for Kubernetes/container orchestration"
+    description="Simple liveness check for Kubernetes/container orchestration",
 )
 async def liveness_probe() -> dict[str, str]:
     """Simple liveness check - always returns OK if the process is running."""
@@ -387,7 +380,7 @@ async def liveness_probe() -> dict[str, str]:
 @router.get(
     "/health/ready",
     summary="Readiness probe",
-    description="Readiness check verifying critical dependencies"
+    description="Readiness check verifying critical dependencies",
 )
 async def readiness_probe(
     db_client: DbClientDep,
@@ -406,6 +399,7 @@ async def readiness_probe(
     except (OSError, ConnectionError, TimeoutError, RuntimeError) as e:
         # SECURITY FIX (Audit 3): Don't expose internal error details
         import structlog
+
         structlog.get_logger(__name__).error("readiness_check_failed", error=str(e))
         details["database"] = "error: connection failed"
         ready = False
@@ -413,7 +407,7 @@ async def readiness_probe(
     if not ready:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail={"status": "not_ready", "details": details}
+            detail={"status": "not_ready", "details": details},
         )
 
     return {"status": "ready", "details": details}
@@ -428,7 +422,7 @@ async def readiness_probe(
     "/circuit-breakers",
     response_model=CircuitBreakerListResponse,
     summary="List all circuit breakers",
-    description="Returns status of all registered circuit breakers"
+    description="Returns status of all registered circuit breakers",
 )
 async def list_circuit_breakers(
     _user: CurrentUserDep,
@@ -451,30 +445,36 @@ async def list_circuit_breakers(
         # Access circuit breaker stats and config for status
         stats = cb.stats
         config = cb.config
-        breakers.append(CircuitBreakerStatus(
-            name=name,
-            state=state_name,
-            failure_count=stats.failed_calls,
-            success_count=stats.successful_calls,
-            last_failure_time=datetime.fromtimestamp(stats.last_failure_time, tz=UTC) if stats.last_failure_time else None,
-            last_success_time=datetime.fromtimestamp(stats.last_success_time, tz=UTC) if stats.last_success_time else None,
-            reset_timeout=config.recovery_timeout,
-            failure_threshold=config.failure_threshold,
-            success_threshold=config.success_threshold
-        ))
+        breakers.append(
+            CircuitBreakerStatus(
+                name=name,
+                state=state_name,
+                failure_count=stats.failed_calls,
+                success_count=stats.successful_calls,
+                last_failure_time=datetime.fromtimestamp(stats.last_failure_time, tz=UTC)
+                if stats.last_failure_time
+                else None,
+                last_success_time=datetime.fromtimestamp(stats.last_success_time, tz=UTC)
+                if stats.last_success_time
+                else None,
+                reset_timeout=config.recovery_timeout,
+                failure_threshold=config.failure_threshold,
+                success_threshold=config.success_threshold,
+            )
+        )
 
     return CircuitBreakerListResponse(
         circuit_breakers=breakers,
         total=len(breakers),
         open_count=open_count,
-        half_open_count=half_open_count
+        half_open_count=half_open_count,
     )
 
 
 @router.post(
     "/circuit-breakers/{name}/reset",
     summary="Reset a circuit breaker",
-    description="Manually reset a circuit breaker to closed state"
+    description="Manually reset a circuit breaker to closed state",
 )
 async def reset_circuit_breaker(
     name: str,
@@ -487,8 +487,7 @@ async def reset_circuit_breaker(
     breakers_dict = getattr(circuit_registry, "_breakers", {})
     if name not in breakers_dict:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Circuit breaker '{name}' not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"Circuit breaker '{name}' not found"
         )
 
     cb = breakers_dict[name]
@@ -504,8 +503,8 @@ async def reset_circuit_breaker(
             "event_name": "CIRCUIT_BREAKER_RESET",
             "circuit_name": name,
             "reset_by": str(user.id),
-            "previous_state": cb.state.name
-        }
+            "previous_state": cb.state.name,
+        },
     )
 
     return {"status": "reset", "circuit_breaker": name}
@@ -520,7 +519,7 @@ async def reset_circuit_breaker(
     "/anomalies",
     response_model=AnomalyListResponse,
     summary="List anomalies",
-    description="Returns detected anomalies with filtering options"
+    description="Returns detected anomalies with filtering options",
 )
 async def list_anomalies(
     _user: CurrentUserDep,
@@ -539,8 +538,7 @@ async def list_anomalies(
             severity_filter = AnomalySeverity[severity.upper()]
         except KeyError:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid severity: {severity}"
+                status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid severity: {severity}"
             )
 
     # Parse anomaly type filter
@@ -551,7 +549,7 @@ async def list_anomalies(
         except KeyError:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid anomaly type: {anomaly_type}"
+                detail=f"Invalid anomaly type: {anomaly_type}",
             )
 
     # Get anomalies
@@ -563,9 +561,7 @@ async def list_anomalies(
         anomalies = [a for a in anomalies if a.detected_at >= since]
     else:
         anomalies = anomaly_system.get_recent_anomalies(
-            since=since,
-            severity=severity_filter,
-            type_filter=type_filter
+            since=since, severity=severity_filter, type_filter=type_filter
         )
 
     # Apply additional filters
@@ -591,7 +587,7 @@ async def list_anomalies(
             resolved=a.resolved,
             resolved_at=a.resolved_at,
             resolved_by=a.resolved_by,
-            context=a.context
+            context=a.context,
         )
         for a in anomalies
     ]
@@ -599,9 +595,7 @@ async def list_anomalies(
     unresolved = len([a for a in anomalies if not a.resolved])
 
     return AnomalyListResponse(
-        anomalies=response_anomalies,
-        total=len(response_anomalies),
-        unresolved_count=unresolved
+        anomalies=response_anomalies, total=len(response_anomalies), unresolved_count=unresolved
     )
 
 
@@ -609,7 +603,7 @@ async def list_anomalies(
     "/anomalies/{anomaly_id}/acknowledge",
     response_model=AnomalyResponse,
     summary="Acknowledge an anomaly",
-    description="Mark an anomaly as acknowledged"
+    description="Mark an anomaly as acknowledged",
 )
 async def acknowledge_anomaly(
     anomaly_id: str,
@@ -624,8 +618,7 @@ async def acknowledge_anomaly(
 
     if not success:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Anomaly '{anomaly_id}' not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"Anomaly '{anomaly_id}' not found"
         )
 
     # Get the updated anomaly to return
@@ -634,7 +627,7 @@ async def acknowledge_anomaly(
     if anomaly is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Anomaly '{anomaly_id}' not found after acknowledgment"
+            detail=f"Anomaly '{anomaly_id}' not found after acknowledgment",
         )
 
     # Resilience: Record anomaly acknowledgment metric
@@ -646,8 +639,8 @@ async def acknowledge_anomaly(
             "event_name": "ANOMALY_ACKNOWLEDGED",
             "anomaly_id": anomaly_id,
             "acknowledged_by": str(user.id),
-            "notes": request.notes
-        }
+            "notes": request.notes,
+        },
     )
     return AnomalyResponse(
         id=anomaly.id,
@@ -664,7 +657,7 @@ async def acknowledge_anomaly(
         resolved=anomaly.resolved,
         resolved_at=anomaly.resolved_at,
         resolved_by=anomaly.resolved_by,
-        context=anomaly.context
+        context=anomaly.context,
     )
 
 
@@ -672,7 +665,7 @@ async def acknowledge_anomaly(
     "/anomalies/{anomaly_id}/resolve",
     response_model=AnomalyResponse,
     summary="Resolve an anomaly",
-    description="Mark an anomaly as resolved"
+    description="Mark an anomaly as resolved",
 )
 async def resolve_anomaly(
     anomaly_id: str,
@@ -686,8 +679,7 @@ async def resolve_anomaly(
 
     if not success:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Anomaly '{anomaly_id}' not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"Anomaly '{anomaly_id}' not found"
         )
 
     # Get the updated anomaly to return
@@ -696,7 +688,7 @@ async def resolve_anomaly(
     if anomaly is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Anomaly '{anomaly_id}' not found after resolution"
+            detail=f"Anomaly '{anomaly_id}' not found after resolution",
         )
 
     # Resilience: Record anomaly resolution metric
@@ -704,11 +696,7 @@ async def resolve_anomaly(
 
     await event_system.emit(
         EventType.ANOMALY_DETECTED,
-        {
-            "event_name": "ANOMALY_RESOLVED",
-            "anomaly_id": anomaly_id,
-            "resolved_by": str(user.id)
-        }
+        {"event_name": "ANOMALY_RESOLVED", "anomaly_id": anomaly_id, "resolved_by": str(user.id)},
     )
     return AnomalyResponse(
         id=anomaly.id,
@@ -725,14 +713,14 @@ async def resolve_anomaly(
         resolved=anomaly.resolved,
         resolved_at=anomaly.resolved_at,
         resolved_by=anomaly.resolved_by,
-        context=anomaly.context
+        context=anomaly.context,
     )
 
 
 @router.post(
     "/metrics/record",
     summary="Record a metric value",
-    description="Record a metric value for anomaly detection"
+    description="Record a metric value for anomaly detection",
 )
 async def record_metric(
     request: RecordMetricRequest,
@@ -742,9 +730,7 @@ async def record_metric(
     """Record a metric value for anomaly detection."""
 
     anomaly = await anomaly_system.record_metric(
-        metric_name=request.metric_name,
-        value=request.value,
-        context=request.context
+        metric_name=request.metric_name, value=request.value, context=request.context
     )
 
     response: dict[str, Any] = {"recorded": True, "metric_name": request.metric_name}
@@ -762,7 +748,7 @@ async def record_metric(
             detected_at=anomaly.detected_at,
             acknowledged=anomaly.acknowledged,
             resolved=anomaly.resolved,
-            context=anomaly.context
+            context=anomaly.context,
         ).model_dump()
 
     return response
@@ -777,7 +763,7 @@ async def record_metric(
     "/canaries",
     response_model=CanaryListResponse,
     summary="List active canary deployments",
-    description="Returns all active canary deployments"
+    description="Returns all active canary deployments",
 )
 async def list_canary_deployments(
     _user: CurrentUserDep,
@@ -791,35 +777,44 @@ async def list_canary_deployments(
     for overlay_id, deployment in deployments_dict.items():
         # Map CanaryDeployment attributes to response model
         started = deployment.started_at or deployment.created_at
-        step_started = datetime.fromtimestamp(deployment.step_started_at, tz=UTC) if deployment.step_started_at else started
+        step_started = (
+            datetime.fromtimestamp(deployment.step_started_at, tz=UTC)
+            if deployment.step_started_at
+            else started
+        )
 
         # Calculate total stages based on config (linear strategy increments)
         config = deployment.config
-        total_stages = int((config.max_percentage - config.initial_percentage) / config.increment_percentage) + 1
+        total_stages = (
+            int((config.max_percentage - config.initial_percentage) / config.increment_percentage)
+            + 1
+        )
 
         # Check if complete and can advance
         is_complete = deployment.state.name in ("SUCCEEDED", "FAILED")
-        can_advance = deployment.state.name == "RUNNING" and deployment.current_percentage < config.max_percentage
+        can_advance = (
+            deployment.state.name == "RUNNING"
+            and deployment.current_percentage < config.max_percentage
+        )
 
-        deployments.append(CanaryDeploymentResponse(
-            overlay_id=overlay_id,
-            current_stage=deployment.current_step,
-            total_stages=total_stages,
-            traffic_percentage=deployment.current_percentage,
-            started_at=started,
-            current_stage_started_at=step_started,
-            last_advanced_at=step_started if deployment.current_step > 0 else None,
-            success_count=deployment.metrics.canary_requests - deployment.metrics.canary_errors,
-            failure_count=deployment.metrics.canary_errors,
-            rollback_on_failure=config.auto_rollback,
-            is_complete=is_complete,
-            can_advance=can_advance
-        ))
+        deployments.append(
+            CanaryDeploymentResponse(
+                overlay_id=overlay_id,
+                current_stage=deployment.current_step,
+                total_stages=total_stages,
+                traffic_percentage=deployment.current_percentage,
+                started_at=started,
+                current_stage_started_at=step_started,
+                last_advanced_at=step_started if deployment.current_step > 0 else None,
+                success_count=deployment.metrics.canary_requests - deployment.metrics.canary_errors,
+                failure_count=deployment.metrics.canary_errors,
+                rollback_on_failure=config.auto_rollback,
+                is_complete=is_complete,
+                can_advance=can_advance,
+            )
+        )
 
-    return CanaryListResponse(
-        deployments=deployments,
-        total=len(deployments)
-    )
+    return CanaryListResponse(deployments=deployments, total=len(deployments))
 
 
 # ============================================================================
@@ -831,7 +826,7 @@ async def list_canary_deployments(
     "/metrics",
     response_model=SystemMetricsResponse,
     summary="Get system metrics",
-    description="Returns comprehensive system metrics"
+    description="Returns comprehensive system metrics",
 )
 async def get_system_metrics(
     _user: CurrentUserDep,
@@ -851,25 +846,16 @@ async def get_system_metrics(
 
     # Overlay metrics
     overlays_dict_metrics = getattr(overlay_manager, "_overlays", {})
-    active_overlays = len([
-        o for o in overlays_dict_metrics.values()
-        if o.enabled
-    ])
+    active_overlays = len([o for o in overlays_dict_metrics.values() if o.enabled])
 
     # Pipeline metrics
     pipeline_executions = getattr(pipeline, "_execution_count", 0)
     total_duration = getattr(pipeline, "_total_duration_ms", 0)
-    avg_duration = (
-        total_duration / pipeline_executions
-        if pipeline_executions > 0 else 0.0
-    )
+    avg_duration = total_duration / pipeline_executions if pipeline_executions > 0 else 0.0
 
     # Circuit breaker metrics
     breakers_dict_metrics = getattr(circuit_registry, "_breakers", {})
-    open_breakers = sum(
-        1 for cb in breakers_dict_metrics.values()
-        if cb.state.name == "OPEN"
-    )
+    open_breakers = sum(1 for cb in breakers_dict_metrics.values() if cb.state.name == "OPEN")
 
     # Anomaly metrics
     active_anomalies = len(anomaly_system.get_unresolved_anomalies())
@@ -888,6 +874,7 @@ async def get_system_metrics(
     memory_mb = None
     try:
         import psutil
+
         process = psutil.Process()
         memory_mb = process.memory_info().rss / 1024 / 1024
     except ImportError:
@@ -904,7 +891,7 @@ async def get_system_metrics(
         active_anomalies=active_anomalies,
         canary_deployments=canary_count,
         db_connected=db_connected,
-        memory_usage_mb=memory_mb
+        memory_usage_mb=memory_mb,
     )
 
 
@@ -917,7 +904,7 @@ async def get_system_metrics(
     "/events/recent",
     response_model=EventListResponse,
     summary="Get recent events",
-    description="Returns recently emitted events"
+    description="Returns recently emitted events",
 )
 async def get_recent_events(
     _user: TrustedUserDep,
@@ -942,15 +929,12 @@ async def get_recent_events(
             event_type=e.get("event_type", "UNKNOWN"),
             timestamp=e.get("timestamp", datetime.now(UTC)),
             data=e.get("data", {}),
-            correlation_id=e.get("correlation_id")
+            correlation_id=e.get("correlation_id"),
         )
         for e in history
     ]
 
-    return EventListResponse(
-        events=events,
-        total=len(events)
-    )
+    return EventListResponse(events=events, total=len(events))
 
 
 # ============================================================================
@@ -960,15 +944,15 @@ async def get_recent_events(
 
 class MaintenanceModeRequest(BaseModel):
     """Request to enable/disable maintenance mode."""
+
     message: str | None = Field(
-        default=None,
-        max_length=500,
-        description="Custom maintenance message to display"
+        default=None, max_length=500, description="Custom maintenance message to display"
     )
 
 
 class MaintenanceModeResponse(BaseModel):
     """Maintenance mode status response."""
+
     enabled: bool
     enabled_at: datetime | None = None
     enabled_by: str | None = None
@@ -979,7 +963,7 @@ class MaintenanceModeResponse(BaseModel):
     "/maintenance/enable",
     response_model=MaintenanceModeResponse,
     summary="Enable maintenance mode",
-    description="Put the system into maintenance mode (ADMIN only)"
+    description="Put the system into maintenance mode (ADMIN only)",
 )
 async def enable_maintenance_mode(
     user: AdminUserDep,
@@ -997,11 +981,7 @@ async def enable_maintenance_mode(
     custom_message = request.message if request else None
 
     # Set the maintenance mode state
-    set_maintenance_mode(
-        enabled=True,
-        user_id=str(user.id),
-        message=custom_message
-    )
+    set_maintenance_mode(enabled=True, user_id=str(user.id), message=custom_message)
 
     # Resilience: Record maintenance mode change metric
     record_maintenance_mode_changed(enabled=True)
@@ -1011,8 +991,8 @@ async def enable_maintenance_mode(
         {
             "event_name": "MAINTENANCE_MODE_ENABLED",
             "enabled_by": str(user.id),
-            "message": custom_message or get_maintenance_message()
-        }
+            "message": custom_message or get_maintenance_message(),
+        },
     )
 
     with _maintenance_lock:
@@ -1021,7 +1001,7 @@ async def enable_maintenance_mode(
         enabled=True,
         enabled_at=enabled_at_val if isinstance(enabled_at_val, datetime) else None,
         enabled_by=str(user.id),
-        message=get_maintenance_message()
+        message=get_maintenance_message(),
     )
 
 
@@ -1029,7 +1009,7 @@ async def enable_maintenance_mode(
     "/maintenance/disable",
     response_model=MaintenanceModeResponse,
     summary="Disable maintenance mode",
-    description="Take the system out of maintenance mode (ADMIN only)"
+    description="Take the system out of maintenance mode (ADMIN only)",
 )
 async def disable_maintenance_mode(
     user: AdminUserDep,
@@ -1045,17 +1025,11 @@ async def disable_maintenance_mode(
 
     await event_system.emit(
         EventType.SYSTEM_EVENT,
-        {
-            "event_name": "MAINTENANCE_MODE_DISABLED",
-            "disabled_by": str(user.id)
-        }
+        {"event_name": "MAINTENANCE_MODE_DISABLED", "disabled_by": str(user.id)},
     )
 
     return MaintenanceModeResponse(
-        enabled=False,
-        enabled_at=None,
-        enabled_by=None,
-        message="System is operational"
+        enabled=False, enabled_at=None, enabled_by=None, message="System is operational"
     )
 
 
@@ -1063,7 +1037,7 @@ async def disable_maintenance_mode(
     "/maintenance/status",
     response_model=MaintenanceModeResponse,
     summary="Get maintenance mode status",
-    description="Check if maintenance mode is enabled"
+    description="Check if maintenance mode is enabled",
 )
 async def get_maintenance_status() -> MaintenanceModeResponse:
     """Get current maintenance mode status."""
@@ -1075,20 +1049,21 @@ async def get_maintenance_status() -> MaintenanceModeResponse:
         enabled=enabled_val,
         enabled_at=enabled_at_val if isinstance(enabled_at_val, datetime) else None,
         enabled_by=str(enabled_by_val) if enabled_by_val else None,
-        message=get_maintenance_message() if enabled_val else "System is operational"
+        message=get_maintenance_message() if enabled_val else "System is operational",
     )
 
 
 class CacheClearRequest(BaseModel):
     """Request to clear specific caches."""
+
     caches: list[str] | None = Field(
-        default=None,
-        description="Specific caches to clear. If empty/null, clears all caches."
+        default=None, description="Specific caches to clear. If empty/null, clears all caches."
     )
 
 
 class CacheClearResponse(BaseModel):
     """Cache clear operation response."""
+
     status: str
     caches_cleared: list[str]
     errors: list[str] = Field(default_factory=list)
@@ -1098,7 +1073,7 @@ class CacheClearResponse(BaseModel):
     "/cache/clear",
     response_model=CacheClearResponse,
     summary="Clear system caches",
-    description="Clear various system caches (CORE+ only)"
+    description="Clear various system caches (CORE+ only)",
 )
 async def clear_caches(
     user: CoreUserDep,
@@ -1128,6 +1103,7 @@ async def clear_caches(
     if clear_all or "token_blacklist" in (requested_caches or []):
         try:
             from forge.security.tokens import TokenBlacklist
+
             blacklist_lock = getattr(TokenBlacklist, "_lock", None)
             if blacklist_lock:
                 with blacklist_lock:
@@ -1144,13 +1120,17 @@ async def clear_caches(
         except (RuntimeError, AttributeError, OSError) as e:
             # SECURITY FIX (Audit 7 - Session 3): Don't leak internal error details
             import structlog
-            structlog.get_logger(__name__).warning("cache_clear_failed", cache="token_blacklist", error=str(e))
+
+            structlog.get_logger(__name__).warning(
+                "cache_clear_failed", cache="token_blacklist", error=str(e)
+            )
             errors.append("token_blacklist: clear failed")
 
     # Clear query cache (from resilience integration)
     if clear_all or "query_cache" in (requested_caches or []):
         try:
             import forge.resilience.integration as resilience_module
+
             clear_query_cache_fn = getattr(resilience_module, "clear_query_cache", None)
             if clear_query_cache_fn:
                 count = clear_query_cache_fn()
@@ -1161,7 +1141,10 @@ async def clear_caches(
         except (RuntimeError, AttributeError, OSError) as e:
             # SECURITY FIX (Audit 7 - Session 3): Don't leak internal error details
             import structlog
-            structlog.get_logger(__name__).warning("cache_clear_failed", cache="query_cache", error=str(e))
+
+            structlog.get_logger(__name__).warning(
+                "cache_clear_failed", cache="query_cache", error=str(e)
+            )
             errors.append("query_cache: clear failed")
 
     # Clear health status cache
@@ -1169,6 +1152,7 @@ async def clear_caches(
         try:
             # Clear the cached health status
             import forge.resilience.integration as resilience_module
+
             health_cache = getattr(resilience_module, "_health_cache", None)
             if health_cache and hasattr(health_cache, "clear"):
                 health_cache.clear()
@@ -1178,13 +1162,17 @@ async def clear_caches(
         except (RuntimeError, AttributeError, OSError) as e:
             # SECURITY FIX (Audit 7 - Session 3): Don't leak internal error details
             import structlog
-            structlog.get_logger(__name__).warning("cache_clear_failed", cache="health_cache", error=str(e))
+
+            structlog.get_logger(__name__).warning(
+                "cache_clear_failed", cache="health_cache", error=str(e)
+            )
             errors.append("health_cache: clear failed")
 
     # Clear metrics cache
     if clear_all or "metrics_cache" in (requested_caches or []):
         try:
             import forge.resilience.integration as resilience_module
+
             metrics_cache = getattr(resilience_module, "_metrics_cache", None)
             if metrics_cache and hasattr(metrics_cache, "clear"):
                 metrics_cache.clear()
@@ -1194,25 +1182,34 @@ async def clear_caches(
         except (RuntimeError, AttributeError, OSError) as e:
             # SECURITY FIX (Audit 7 - Session 3): Don't leak internal error details
             import structlog
-            structlog.get_logger(__name__).warning("cache_clear_failed", cache="metrics_cache", error=str(e))
+
+            structlog.get_logger(__name__).warning(
+                "cache_clear_failed", cache="metrics_cache", error=str(e)
+            )
             errors.append("metrics_cache: clear failed")
 
     # Clear embedding service cache if available
     if clear_all or "embedding_cache" in (requested_caches or []):
         try:
             from forge.services.embedding import get_embedding_service
+
             svc = get_embedding_service()
             cache = getattr(svc, "_cache", None)
             if cache is not None:
                 count = len(cache) if hasattr(cache, "__len__") else 0
                 clear_method = getattr(cache, "clear", None)
                 if clear_method:
-                    await clear_method() if asyncio.iscoroutinefunction(clear_method) else clear_method()
+                    await clear_method() if asyncio.iscoroutinefunction(
+                        clear_method
+                    ) else clear_method()
                 cleared.append(f"embedding_cache ({count} entries)")
         except (RuntimeError, AttributeError, ImportError, OSError) as e:
             # SECURITY FIX (Audit 7 - Session 3): Don't leak internal error details
             import structlog
-            structlog.get_logger(__name__).warning("cache_clear_failed", cache="embedding_cache", error=str(e))
+
+            structlog.get_logger(__name__).warning(
+                "cache_clear_failed", cache="embedding_cache", error=str(e)
+            )
             errors.append("embedding_cache: clear failed")
 
     # Resilience: Record cache clear metric
@@ -1224,21 +1221,17 @@ async def clear_caches(
             "event_name": "caches_cleared",
             "cleared_by": str(user.id),
             "caches": cleared,
-            "errors": errors
-        }
+            "errors": errors,
+        },
     )
 
     return CacheClearResponse(
-        status="completed" if not errors else "partial",
-        caches_cleared=cleared,
-        errors=errors
+        status="completed" if not errors else "partial", caches_cleared=cleared, errors=errors
     )
 
 
 @router.get(
-    "/info",
-    summary="Get system information",
-    description="Returns basic system information"
+    "/info", summary="Get system information", description="Returns basic system information"
 )
 async def get_system_info() -> dict[str, Any]:
     """Get basic system information."""
@@ -1250,7 +1243,7 @@ async def get_system_info() -> dict[str, Any]:
         "version": "0.1.0",
         "python_version": sys.version,
         "api_version": "v1",
-        "timestamp": datetime.now(UTC).isoformat()
+        "timestamp": datetime.now(UTC).isoformat(),
     }
 
 
@@ -1267,8 +1260,7 @@ class SystemStatusResponse(BaseModel):
     uptime_seconds: float
     timestamp: datetime
     services: dict[str, str] = Field(
-        default_factory=dict,
-        description="Status of each service: operational, degraded, down"
+        default_factory=dict, description="Status of each service: operational, degraded, down"
     )
 
 
@@ -1276,7 +1268,7 @@ class SystemStatusResponse(BaseModel):
     "/status",
     response_model=SystemStatusResponse,
     summary="Get system status",
-    description="Returns simplified system status for monitoring"
+    description="Returns simplified system status for monitoring",
 )
 async def get_system_status(
     db_client: DbClientDep,
@@ -1304,10 +1296,7 @@ async def get_system_status(
 
     # Circuit breakers status
     breakers_dict_status = getattr(circuit_registry, "_breakers", {})
-    open_breakers = sum(
-        1 for cb in breakers_dict_status.values()
-        if cb.state.name == "OPEN"
-    )
+    open_breakers = sum(1 for cb in breakers_dict_status.values() if cb.state.name == "OPEN")
     services["circuit_breakers"] = "degraded" if open_breakers > 0 else "operational"
 
     # API is operational if we got here
@@ -1333,8 +1322,10 @@ async def get_system_status(
 # Audit Log Endpoints
 # ============================================================================
 
+
 class AuditLogEntry(BaseModel):
     """Audit log entry response."""
+
     id: str
     action: str  # Maps from AuditEvent.operation
     entity_type: str
@@ -1347,6 +1338,7 @@ class AuditLogEntry(BaseModel):
 
 class AuditLogResponse(BaseModel):
     """Paginated audit log response."""
+
     items: list[AuditLogEntry]
     total: int
     page: int
@@ -1357,7 +1349,7 @@ class AuditLogResponse(BaseModel):
     "/audit-log",
     response_model=AuditLogResponse,
     summary="Get audit log",
-    description="Retrieve audit log entries with optional filtering (ADMIN only)"
+    description="Retrieve audit log entries with optional filtering (ADMIN only)",
 )
 async def get_audit_log(
     user: AdminUserDep,
@@ -1417,7 +1409,7 @@ async def get_audit_log(
 @router.get(
     "/audit-log/{correlation_id}",
     summary="Get audit trail by correlation ID",
-    description="Get all audit entries for a specific operation"
+    description="Get all audit entries for a specific operation",
 )
 async def get_audit_trail(
     correlation_id: str,
@@ -1458,7 +1450,7 @@ async def get_audit_trail(
     "/audit",
     response_model=AuditLogResponse,
     summary="Get audit log (alias)",
-    description="Alias for /audit-log endpoint"
+    description="Alias for /audit-log endpoint",
 )
 async def get_audit_alias(
     user: AdminUserDep,
@@ -1486,7 +1478,7 @@ async def get_audit_alias(
     "/events",
     response_model=EventListResponse,
     summary="Get recent events (alias)",
-    description="Alias for /events/recent endpoint"
+    description="Alias for /events/recent endpoint",
 )
 async def get_events_alias(
     _user: TrustedUserDep,
@@ -1510,6 +1502,7 @@ async def get_events_alias(
 
 class ActivityDataPoint(BaseModel):
     """Single activity data point for timeline charts."""
+
     time: str = Field(description="Time label (e.g., '08:00')")
     capsules: int = Field(description="Capsule count in this period")
     votes: int = Field(description="Vote count in this period")
@@ -1518,6 +1511,7 @@ class ActivityDataPoint(BaseModel):
 
 class ActivityTimelineResponse(BaseModel):
     """Activity timeline data for dashboard charts."""
+
     data: list[ActivityDataPoint]
     total_capsules: int
     total_votes: int
@@ -1529,7 +1523,7 @@ class ActivityTimelineResponse(BaseModel):
     "/metrics/activity-timeline",
     response_model=ActivityTimelineResponse,
     summary="Get activity timeline",
-    description="Returns time-series activity data for dashboard charts"
+    description="Returns time-series activity data for dashboard charts",
 )
 async def get_activity_timeline(
     _user: CurrentUserDep,
@@ -1566,10 +1560,9 @@ async def get_activity_timeline(
         WHERE c.created_at >= $start AND c.created_at < $end
         RETURN count(c) as count
         """
-        capsule_result = await db_client.execute_single(capsule_query, {
-            "start": bucket_start.isoformat(),
-            "end": bucket_end.isoformat()
-        })
+        capsule_result = await db_client.execute_single(
+            capsule_query, {"start": bucket_start.isoformat(), "end": bucket_end.isoformat()}
+        )
         capsule_count = capsule_result.get("count", 0) if capsule_result else 0
 
         # Query votes cast in this period
@@ -1578,24 +1571,21 @@ async def get_activity_timeline(
         WHERE v.created_at >= $start AND v.created_at < $end
         RETURN count(v) as count
         """
-        vote_result = await db_client.execute_single(vote_query, {
-            "start": bucket_start.isoformat(),
-            "end": bucket_end.isoformat()
-        })
+        vote_result = await db_client.execute_single(
+            vote_query, {"start": bucket_start.isoformat(), "end": bucket_end.isoformat()}
+        )
         vote_count = vote_result.get("count", 0) if vote_result else 0
 
         # Count events from history
-        event_count = len([
-            e for e in event_history
-            if bucket_start <= e.get("timestamp", now) < bucket_end
-        ])
+        event_count = len(
+            [e for e in event_history if bucket_start <= e.get("timestamp", now) < bucket_end]
+        )
 
-        data_points.append(ActivityDataPoint(
-            time=time_label,
-            capsules=capsule_count,
-            votes=vote_count,
-            events=event_count
-        ))
+        data_points.append(
+            ActivityDataPoint(
+                time=time_label, capsules=capsule_count, votes=vote_count, events=event_count
+            )
+        )
 
         total_capsules += capsule_count
         total_votes += vote_count
@@ -1609,12 +1599,13 @@ async def get_activity_timeline(
         total_capsules=total_capsules,
         total_votes=total_votes,
         total_events=total_events,
-        period_hours=hours
+        period_hours=hours,
     )
 
 
 class TrustDistributionEntry(BaseModel):
     """Trust level distribution entry."""
+
     name: str = Field(description="Trust level name")
     value: int = Field(description="Number of users at this level")
     color: str = Field(description="Suggested color for charting")
@@ -1622,6 +1613,7 @@ class TrustDistributionEntry(BaseModel):
 
 class TrustDistributionResponse(BaseModel):
     """Trust distribution data for dashboard charts."""
+
     distribution: list[TrustDistributionEntry]
     total_users: int
 
@@ -1630,7 +1622,7 @@ class TrustDistributionResponse(BaseModel):
     "/metrics/trust-distribution",
     response_model=TrustDistributionResponse,
     summary="Get trust distribution",
-    description="Returns user distribution by trust level for dashboard charts"
+    description="Returns user distribution by trust level for dashboard charts",
 )
 async def get_trust_distribution(
     _user: CurrentUserDep,
@@ -1643,11 +1635,11 @@ async def get_trust_distribution(
     """
     # Trust level colors (consistent with frontend)
     trust_colors = {
-        "Core": "#8b5cf6",      # Purple
-        "Trusted": "#22c55e",   # Green
+        "Core": "#8b5cf6",  # Purple
+        "Trusted": "#22c55e",  # Green
         "Standard": "#3b82f6",  # Blue
-        "Sandbox": "#f59e0b",   # Amber
-        "Untrusted": "#ef4444", # Red
+        "Sandbox": "#f59e0b",  # Amber
+        "Untrusted": "#ef4444",  # Red
     }
 
     # Trust level boundaries (based on TrustLevel enum values)
@@ -1672,21 +1664,17 @@ async def get_trust_distribution(
         result = await db_client.execute_single(query, {"min": min_val, "max": max_val})
         count = result.get("count", 0) if result else 0
 
-        distribution.append(TrustDistributionEntry(
-            name=name,
-            value=count,
-            color=trust_colors.get(name, "#94a3b8")
-        ))
+        distribution.append(
+            TrustDistributionEntry(name=name, value=count, color=trust_colors.get(name, "#94a3b8"))
+        )
         total += count
 
-    return TrustDistributionResponse(
-        distribution=distribution,
-        total_users=total
-    )
+    return TrustDistributionResponse(distribution=distribution, total_users=total)
 
 
 class PipelinePhaseMetric(BaseModel):
     """Pipeline phase performance metric."""
+
     phase: str = Field(description="Pipeline phase name")
     duration: float = Field(description="Average duration in milliseconds")
     execution_count: int = Field(description="Number of executions")
@@ -1694,6 +1682,7 @@ class PipelinePhaseMetric(BaseModel):
 
 class PipelinePerformanceResponse(BaseModel):
     """Pipeline performance data for dashboard charts."""
+
     phases: list[PipelinePhaseMetric]
     total_executions: int
     average_total_duration_ms: float
@@ -1703,7 +1692,7 @@ class PipelinePerformanceResponse(BaseModel):
     "/metrics/pipeline-performance",
     response_model=PipelinePerformanceResponse,
     summary="Get pipeline performance",
-    description="Returns pipeline phase performance data for dashboard charts"
+    description="Returns pipeline phase performance data for dashboard charts",
 )
 async def get_pipeline_performance(
     _user: CurrentUserDep,
@@ -1722,7 +1711,7 @@ async def get_pipeline_performance(
         "Governance",
         "Lineage",
         "Consensus",
-        "Commit"
+        "Commit",
     ]
 
     phases = []
@@ -1736,25 +1725,27 @@ async def get_pipeline_performance(
         if phase_name in phase_metrics:
             # Real metrics available
             metrics = phase_metrics[phase_name]
-            phases.append(PipelinePhaseMetric(
-                phase=phase_name,
-                duration=metrics.get("avg_duration_ms", 0),
-                execution_count=metrics.get("count", 0)
-            ))
+            phases.append(
+                PipelinePhaseMetric(
+                    phase=phase_name,
+                    duration=metrics.get("avg_duration_ms", 0),
+                    execution_count=metrics.get("count", 0),
+                )
+            )
         else:
             # Estimate based on typical distribution
             # Each phase typically takes ~14% of total time
-            estimated_duration = (total_duration / total_executions / 7) if total_executions > 0 else 0
-            phases.append(PipelinePhaseMetric(
-                phase=phase_name,
-                duration=estimated_duration,
-                execution_count=total_executions
-            ))
+            estimated_duration = (
+                (total_duration / total_executions / 7) if total_executions > 0 else 0
+            )
+            phases.append(
+                PipelinePhaseMetric(
+                    phase=phase_name, duration=estimated_duration, execution_count=total_executions
+                )
+            )
 
     avg_total = total_duration / total_executions if total_executions > 0 else 0
 
     return PipelinePerformanceResponse(
-        phases=phases,
-        total_executions=total_executions,
-        average_total_duration_ms=avg_total
+        phases=phases, total_executions=total_executions, average_total_duration_ms=avg_total
     )

@@ -28,8 +28,10 @@ router = APIRouter(prefix="/game", tags=["GAME SDK"])
 # Request/Response Models
 # ============================================================================
 
+
 class AgentPersonalityRequest(BaseModel):
     """Agent personality configuration."""
+
     name: str = Field(max_length=100)
     bio: str = Field(max_length=1000)
     traits: list[str] = Field(default_factory=list, max_length=10)
@@ -39,6 +41,7 @@ class AgentPersonalityRequest(BaseModel):
 
 class AgentGoalsRequest(BaseModel):
     """Agent goals configuration."""
+
     primary_goal: str = Field(max_length=500)
     secondary_goals: list[str] = Field(default_factory=list)
     constraints: list[str] = Field(default_factory=list)
@@ -47,6 +50,7 @@ class AgentGoalsRequest(BaseModel):
 
 class WorkerConfig(BaseModel):
     """Worker configuration."""
+
     worker_id: str
     description: str
     function_names: list[str]
@@ -54,6 +58,7 @@ class WorkerConfig(BaseModel):
 
 class CreateAgentRequest(BaseModel):
     """Request to create a GAME agent."""
+
     name: str = Field(max_length=100)
     personality: AgentPersonalityRequest
     goals: AgentGoalsRequest
@@ -66,6 +71,7 @@ class CreateAgentRequest(BaseModel):
 
 class AgentResponse(BaseModel):
     """Agent information response."""
+
     id: str
     name: str
     status: str
@@ -82,6 +88,7 @@ class AgentResponse(BaseModel):
 
 class RunAgentRequest(BaseModel):
     """Request to run an agent loop."""
+
     context: str | None = Field(None, max_length=5000, description="Initial context or query")
     max_iterations: int = Field(default=10, ge=1, le=100)
     stop_on_done: bool = True
@@ -89,6 +96,7 @@ class RunAgentRequest(BaseModel):
 
 class AgentRunResponse(BaseModel):
     """Response from agent run."""
+
     agent_id: str
     run_id: str
     status: str
@@ -99,6 +107,7 @@ class AgentRunResponse(BaseModel):
 
 class AgentActionResponse(BaseModel):
     """Single action result."""
+
     iteration: int
     worker_id: str
     function_name: str
@@ -110,6 +119,7 @@ class AgentActionResponse(BaseModel):
 
 class StoreMemoryRequest(BaseModel):
     """Request to store agent memory."""
+
     memory_type: str = Field(description="Type: conversation, fact, preference, insight")
     content: dict[str, Any]
     ttl_days: int | None = None
@@ -117,6 +127,7 @@ class StoreMemoryRequest(BaseModel):
 
 class SearchMemoryRequest(BaseModel):
     """Request to search agent memories."""
+
     query: str = Field(max_length=500)
     memory_type: str | None = None
     limit: int = Field(default=10, ge=1, le=100)
@@ -125,6 +136,7 @@ class SearchMemoryRequest(BaseModel):
 # ============================================================================
 # Agent Management Endpoints
 # ============================================================================
+
 
 @router.post("/agents", response_model=AgentResponse)
 async def create_agent(
@@ -195,11 +207,13 @@ async def create_agent(
         else:
             # Use specified worker configs
             for wc in request.workers:
-                workers.append(GAMEWorker(
-                    worker_id=wc.worker_id,
-                    description=wc.description,
-                    functions=[],  # Functions would be registered separately
-                ))
+                workers.append(
+                    GAMEWorker(
+                        worker_id=wc.worker_id,
+                        description=wc.description,
+                        functions=[],  # Functions would be registered separately
+                    )
+                )
 
         # Create agent via GAME SDK
         agent = await game_client.create_agent(create_request, workers)
@@ -211,7 +225,9 @@ async def create_agent(
             game_agent_id=agent.game_agent_id,
             personality=personality.model_dump(),
             goals=goals.model_dump(),
-            workers=[{"id": w.id, "name": w.name, "description": w.description} for w in agent.workers],
+            workers=[
+                {"id": w.id, "name": w.name, "description": w.description} for w in agent.workers
+            ],
             forge_overlay_id=agent.forge_overlay_id,
             forge_capsule_ids=agent.forge_capsule_ids,
             primary_chain=agent.primary_chain,
@@ -222,7 +238,9 @@ async def create_agent(
     except ImportError as e:
         logger.error(f"GAME SDK import failed: {e}")
         # SECURITY FIX (Audit 7 - Session 3): Do not leak internal error details
-        raise HTTPException(status_code=503, detail="GAME SDK not available. Please check installation.")
+        raise HTTPException(
+            status_code=503, detail="GAME SDK not available. Please check installation."
+        )
     except (ValueError, TypeError, KeyError, ConnectionError, OSError) as e:
         logger.error(f"Failed to create agent: {e}")
         raise HTTPException(status_code=500, detail="Failed to create agent")
@@ -247,7 +265,9 @@ async def get_agent(agent_id: str) -> AgentResponse:
             game_agent_id=agent.game_agent_id,
             personality=agent.personality.model_dump() if agent.personality else {},
             goals=agent.goals.model_dump() if agent.goals else {},
-            workers=[{"id": w.id, "name": w.name, "description": w.description} for w in agent.workers],
+            workers=[
+                {"id": w.id, "name": w.name, "description": w.description} for w in agent.workers
+            ],
             forge_overlay_id=agent.forge_overlay_id,
             forge_capsule_ids=agent.forge_capsule_ids,
             primary_chain=agent.primary_chain,
@@ -289,6 +309,7 @@ async def delete_agent(
 # ============================================================================
 # Agent Execution Endpoints
 # ============================================================================
+
 
 @router.post("/agents/{agent_id}/run", response_model=AgentRunResponse)
 async def run_agent(
@@ -358,7 +379,9 @@ async def run_agent(
     except (ValueError, TypeError, KeyError, ConnectionError, OSError) as e:
         logger.error(f"Failed to run agent: {e}")
         # SECURITY FIX (Audit 7 - Session 3): Do not leak internal error details
-        raise HTTPException(status_code=500, detail="Failed to run agent. Please try again or contact support.")
+        raise HTTPException(
+            status_code=500, detail="Failed to run agent. Please try again or contact support."
+        )
 
 
 @router.post("/agents/{agent_id}/action", response_model=AgentActionResponse)
@@ -412,6 +435,7 @@ async def get_next_action(
 # ============================================================================
 # Memory Endpoints
 # ============================================================================
+
 
 @router.post("/agents/{agent_id}/memories")
 async def store_memory(
@@ -487,6 +511,7 @@ async def search_memories(
 # ============================================================================
 # Worker Function Endpoints
 # ============================================================================
+
 
 @router.get("/functions")
 async def list_available_functions() -> dict[str, Any]:

@@ -65,8 +65,10 @@ def _sanitize_validation_error(e: Exception, context: str) -> str:
 # Request/Response Models
 # ============================================================================
 
+
 class CreateListingRequest(BaseModel):
     """Request to create a listing."""
+
     capsule_id: str
     price: Decimal = Field(ge=0)
     currency: Currency = Currency.FORGE
@@ -79,6 +81,7 @@ class CreateListingRequest(BaseModel):
 
 class UpdateListingRequest(BaseModel):
     """Request to update a listing."""
+
     price: Decimal | None = Field(default=None, ge=0)
     description: str | None = None
     tags: list[str] | None = None
@@ -88,6 +91,7 @@ class UpdateListingRequest(BaseModel):
 
 class ListingResponse(BaseModel):
     """Listing information response."""
+
     id: str
     capsule_id: str
     seller_id: str
@@ -108,12 +112,14 @@ class ListingResponse(BaseModel):
 
 class ListingListResponse(BaseModel):
     """List of listings."""
+
     listings: list[ListingResponse]
     total: int
 
 
 class CartResponse(BaseModel):
     """Cart information response."""
+
     items: list[dict[str, Any]]
     total: float
     item_count: int
@@ -121,6 +127,7 @@ class CartResponse(BaseModel):
 
 class PurchaseResponse(BaseModel):
     """Purchase information response."""
+
     id: str
     listing_id: str
     capsule_id: str
@@ -133,6 +140,7 @@ class PurchaseResponse(BaseModel):
 
 class PriceSuggestionResponse(BaseModel):
     """Price suggestion response."""
+
     capsule_id: str
     suggested_price: float
     min_price: float
@@ -142,6 +150,7 @@ class PriceSuggestionResponse(BaseModel):
 
 class StatsResponse(BaseModel):
     """Marketplace statistics response."""
+
     total_listings: int
     active_listings: int
     total_sales: int
@@ -157,6 +166,7 @@ class StatsResponse(BaseModel):
 # Dependencies
 # ============================================================================
 
+
 async def get_marketplace() -> MarketplaceService:
     """Get marketplace service dependency."""
     return await get_marketplace_service()
@@ -168,6 +178,7 @@ MarketplaceDep = Depends(get_marketplace)
 # ============================================================================
 # Listing Endpoints
 # ============================================================================
+
 
 @router.post("/listings", response_model=ListingResponse)
 async def create_listing(
@@ -311,7 +322,9 @@ async def publish_listing(
         listing = await svc.publish_listing(listing_id, user.id)
     except ValueError as e:
         # SECURITY FIX (Audit 3): Sanitize error message
-        raise HTTPException(status_code=400, detail=_sanitize_validation_error(e, "publish_listing"))
+        raise HTTPException(
+            status_code=400, detail=_sanitize_validation_error(e, "publish_listing")
+        )
 
     return ListingResponse(
         id=listing.id,
@@ -387,6 +400,7 @@ async def cancel_listing(
 # ============================================================================
 # Cart Endpoints
 # ============================================================================
+
 
 @router.get("/cart", response_model=CartResponse)
 async def get_cart(
@@ -473,6 +487,7 @@ async def remove_from_cart(
 # Purchase Endpoints
 # ============================================================================
 
+
 @router.post("/checkout", response_model=list[PurchaseResponse])
 async def checkout(
     user: ActiveUserDep,
@@ -511,7 +526,9 @@ async def purchase_single(
         purchase = await svc.purchase_single(user.id, listing_id)
     except ValueError as e:
         # SECURITY FIX (Audit 3): Sanitize error message
-        raise HTTPException(status_code=400, detail=_sanitize_validation_error(e, "purchase_single"))
+        raise HTTPException(
+            status_code=400, detail=_sanitize_validation_error(e, "purchase_single")
+        )
 
     return PurchaseResponse(
         id=purchase.id,
@@ -579,6 +596,7 @@ async def get_sales(
 # Pricing Endpoints
 # ============================================================================
 
+
 @router.get("/pricing/{capsule_id}", response_model=PriceSuggestionResponse)
 async def get_suggested_price(
     capsule_id: str,
@@ -604,6 +622,7 @@ async def get_suggested_price(
 # Statistics Endpoints
 # ============================================================================
 
+
 @router.get("/stats", response_model=StatsResponse)
 async def get_marketplace_stats(
     svc: MarketplaceService = MarketplaceDep,
@@ -627,6 +646,7 @@ async def get_marketplace_stats(
 # ============================================================================
 # License Check Endpoint
 # ============================================================================
+
 
 @router.get("/license/{capsule_id}")
 async def check_license(
@@ -660,8 +680,10 @@ async def check_license(
 # Advanced Pricing Engine Endpoints
 # ============================================================================
 
+
 class DetailedPricingRequest(BaseModel):
     """Request for detailed pricing analysis."""
+
     capsule_id: str
     include_recommendations: bool = True
     include_market_comparison: bool = True
@@ -669,6 +691,7 @@ class DetailedPricingRequest(BaseModel):
 
 class DetailedPricingResponse(BaseModel):
     """Detailed pricing analysis response."""
+
     capsule_id: str
     suggested_price: float
     minimum_price: float
@@ -685,6 +708,7 @@ class DetailedPricingResponse(BaseModel):
 
 class LineageDistributionResponse(BaseModel):
     """Lineage revenue distribution response."""
+
     capsule_id: str
     total_lineage_share: float
     distributions: list[dict[str, Any]]
@@ -727,7 +751,9 @@ async def analyze_pricing(
 @router.get("/pricing/{capsule_id}/lineage-distribution")
 async def get_lineage_distribution(
     capsule_id: str,
-    sale_price: float = Query(..., gt=0, description="The sale price to calculate distribution from"),
+    sale_price: float = Query(
+        ..., gt=0, description="The sale price to calculate distribution from"
+    ),
     user: User | None = None,
 ) -> LineageDistributionResponse:
     """
@@ -779,13 +805,9 @@ async def get_pricing_tiers() -> dict[str, Any]:
             }
             for tier in PricingTier
         ],
-        "base_prices": {
-            k: float(v)
-            for k, v in TrustBasedPricingEngine.BASE_PRICES.items()
-        },
+        "base_prices": {k: float(v) for k, v in TrustBasedPricingEngine.BASE_PRICES.items()},
         "trust_curve": [
-            {"trust_level": t, "multiplier": m}
-            for t, m in TrustBasedPricingEngine.TRUST_CURVE
+            {"trust_level": t, "multiplier": m} for t, m in TrustBasedPricingEngine.TRUST_CURVE
         ],
         "revenue_distribution": {
             "seller": 0.70,
@@ -814,8 +836,10 @@ def _get_tier_description(tier: Any) -> str:
 # Web3 / Virtuals Protocol Purchase Endpoints
 # ============================================================================
 
+
 class Web3PurchaseItem(BaseModel):
     """Item in a Web3 purchase."""
+
     listing_id: str
     capsule_id: str
     title: str
@@ -825,6 +849,7 @@ class Web3PurchaseItem(BaseModel):
 
 class Web3PurchaseRequest(BaseModel):
     """Request to submit a Web3 purchase."""
+
     items: list[Web3PurchaseItem]
     wallet_address: str = Field(pattern=r"^0x[a-fA-F0-9]{40}$")
     transaction_hash: str = Field(pattern=r"^0x[a-fA-F0-9]{64}$")
@@ -832,6 +857,7 @@ class Web3PurchaseRequest(BaseModel):
 
 class Web3PurchaseResponse(BaseModel):
     """Response for a Web3 purchase submission."""
+
     purchase_id: str
     status: str  # pending, confirmed, failed
     transaction_hash: str | None
@@ -842,6 +868,7 @@ class Web3PurchaseResponse(BaseModel):
 
 class TransactionStatusResponse(BaseModel):
     """Response for transaction status check."""
+
     transaction_hash: str
     status: str  # pending, confirmed, failed
     block_number: int | None
@@ -852,6 +879,7 @@ class TransactionStatusResponse(BaseModel):
 
 class VirtualPriceResponse(BaseModel):
     """Response for $VIRTUAL token price."""
+
     price_usd: float
     updated_at: datetime
 
@@ -885,7 +913,11 @@ async def submit_web3_purchase(
 
         if not verification.is_valid:
             # SECURITY FIX (Audit 7 - Session 3): Don't leak verification internals
-            logger.warning("web3_tx_verification_failed: tx=%s, error=%s", request.transaction_hash, verification.error)
+            logger.warning(
+                "web3_tx_verification_failed: tx=%s, error=%s",
+                request.transaction_hash,
+                verification.error,
+            )
             raise HTTPException(
                 status_code=400,
                 detail="Transaction verification failed. Please check your transaction and try again.",

@@ -18,6 +18,7 @@ logger = structlog.get_logger(__name__)
 
 class AgentRole(str, Enum):
     """Roles for diagnostic agents."""
+
     PHENOTYPE_EXPERT = "phenotype_expert"
     GENETIC_EXPERT = "genetic_expert"
     DIFFERENTIAL_EXPERT = "differential_expert"
@@ -27,6 +28,7 @@ class AgentRole(str, Enum):
 
 class MessageType(str, Enum):
     """Types of inter-agent messages."""
+
     REQUEST = "request"
     RESPONSE = "response"
     ANALYSIS = "analysis"
@@ -49,6 +51,7 @@ class AgentMessage:
 
     Enables structured communication for collaborative diagnosis.
     """
+
     id: str = field(default_factory=lambda: str(uuid4()))
     sender: AgentRole = AgentRole.COORDINATOR
     recipient: AgentRole | None = None  # None = broadcast
@@ -82,6 +85,7 @@ class AgentMessage:
 @dataclass
 class AgentConfig:
     """Base configuration for diagnostic agents."""
+
     # Processing limits
     max_hypotheses: int = 20
     confidence_threshold: float = 0.5

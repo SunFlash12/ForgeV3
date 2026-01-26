@@ -22,8 +22,10 @@ from forge.database.client import Neo4jClient
 # CYPHER SECURITY VALIDATION
 # =============================================================================
 
+
 class CypherSecurityError(Exception):
     """Raised when Cypher query fails security validation."""
+
     pass
 
 
@@ -41,30 +43,44 @@ class CypherValidator:
     """
 
     # Dangerous keywords that are NEVER allowed
-    FORBIDDEN_KEYWORDS = frozenset({
-        # Destructive operations
-        "DELETE", "DETACH DELETE", "REMOVE", "DROP",
-        # Schema modifications
-        "CREATE INDEX", "DROP INDEX", "CREATE CONSTRAINT", "DROP CONSTRAINT",
-        # Dangerous procedures
-        "CALL apoc", "CALL db.", "CALL dbms.",
-        # Shell/file operations
-        "apoc.load.json", "apoc.import", "apoc.export",
-        "apoc.do.when", "apoc.cypher.run", "apoc.cypher.doIt",
-    })
+    FORBIDDEN_KEYWORDS = frozenset(
+        {
+            # Destructive operations
+            "DELETE",
+            "DETACH DELETE",
+            "REMOVE",
+            "DROP",
+            # Schema modifications
+            "CREATE INDEX",
+            "DROP INDEX",
+            "CREATE CONSTRAINT",
+            "DROP CONSTRAINT",
+            # Dangerous procedures
+            "CALL apoc",
+            "CALL db.",
+            "CALL dbms.",
+            # Shell/file operations
+            "apoc.load.json",
+            "apoc.import",
+            "apoc.export",
+            "apoc.do.when",
+            "apoc.cypher.run",
+            "apoc.cypher.doIt",
+        }
+    )
 
     # Patterns that indicate injection attempts
     INJECTION_PATTERNS = [
         # Comment injection to bypass validation
-        r'//.*DELETE',
-        r'/\*.*DELETE.*\*/',
-        r'//.*REMOVE',
-        r'/\*.*REMOVE.*\*/',
+        r"//.*DELETE",
+        r"/\*.*DELETE.*\*/",
+        r"//.*REMOVE",
+        r"/\*.*REMOVE.*\*/",
         # String escape attempts
         r"\\x[0-9a-fA-F]{2}",  # Hex escapes
         r"\\u[0-9a-fA-F]{4}",  # Unicode escapes
         # Multiple statement injection
-        r';\s*(CREATE|DELETE|DROP|REMOVE|MERGE|SET)\b',
+        r";\s*(CREATE|DELETE|DROP|REMOVE|MERGE|SET)\b",
         # Property injection via string concatenation
         r'\+\s*[\'"].*[\'"]',
     ]
@@ -74,10 +90,7 @@ class CypherValidator:
 
     @classmethod
     def validate(
-        cls,
-        cypher: str,
-        allow_writes: bool = False,
-        allowed_labels: frozenset[str] | None = None
+        cls, cypher: str, allow_writes: bool = False, allowed_labels: frozenset[str] | None = None
     ) -> None:
         """
         Validate a Cypher query for security issues.
@@ -99,16 +112,12 @@ class CypherValidator:
         # Check for forbidden keywords
         for keyword in cls.FORBIDDEN_KEYWORDS:
             if keyword.upper() in normalized:
-                raise CypherSecurityError(
-                    f"Forbidden Cypher keyword detected: {keyword}"
-                )
+                raise CypherSecurityError(f"Forbidden Cypher keyword detected: {keyword}")
 
         # Check for injection patterns
         for pattern in cls.INJECTION_PATTERNS:
             if re.search(pattern, cypher, re.IGNORECASE | re.DOTALL):
-                raise CypherSecurityError(
-                    "Potential Cypher injection detected"
-                )
+                raise CypherSecurityError("Potential Cypher injection detected")
 
         # Check for write operations
         write_keywords = {"CREATE", "MERGE", "SET"}
@@ -125,45 +134,35 @@ class CypherValidator:
             cls._validate_write_labels(cypher, allowed_labels)
 
         # Check for multiple statements (;)
-        if ';' in cypher:
+        if ";" in cypher:
             # Allow semicolon in strings but not as statement separator
             # Simple check: no semicolon outside of quotes
             in_string = False
             string_char = None
             for i, char in enumerate(cypher):
-                if char in ('"', "'") and (i == 0 or cypher[i-1] != '\\'):
+                if char in ('"', "'") and (i == 0 or cypher[i - 1] != "\\"):
                     if not in_string:
                         in_string = True
                         string_char = char
                     elif char == string_char:
                         in_string = False
-                elif char == ';' and not in_string:
-                    raise CypherSecurityError(
-                        "Multiple statements not allowed"
-                    )
+                elif char == ";" and not in_string:
+                    raise CypherSecurityError("Multiple statements not allowed")
 
         # Check for unbalanced quotes (potential injection)
         if cypher.count("'") % 2 != 0 or cypher.count('"') % 2 != 0:
-            raise CypherSecurityError(
-                "Unbalanced quotes detected - potential injection"
-            )
+            raise CypherSecurityError("Unbalanced quotes detected - potential injection")
 
     @classmethod
-    def _validate_write_labels(
-        cls,
-        cypher: str,
-        allowed_labels: frozenset[str]
-    ) -> None:
+    def _validate_write_labels(cls, cypher: str, allowed_labels: frozenset[str]) -> None:
         """Validate that writes only target allowed labels."""
         # Extract labels from CREATE/MERGE patterns
-        label_pattern = r'(?:CREATE|MERGE)\s*\(\s*\w*\s*:\s*(\w+)'
+        label_pattern = r"(?:CREATE|MERGE)\s*\(\s*\w*\s*:\s*(\w+)"
         matches = re.findall(label_pattern, cypher, re.IGNORECASE)
 
         for label in matches:
             if label not in allowed_labels:
-                raise CypherSecurityError(
-                    f"Write to label '{label}' not allowed"
-                )
+                raise CypherSecurityError(f"Write to label '{label}' not allowed")
 
     @classmethod
     def validate_parameters(cls, params: dict[str, Any]) -> None:
@@ -178,24 +177,20 @@ class CypherValidator:
         """
         for key, value in params.items():
             # Check key is a valid identifier
-            if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', key):
-                raise CypherSecurityError(
-                    f"Invalid parameter name: {key}"
-                )
+            if not re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", key):
+                raise CypherSecurityError(f"Invalid parameter name: {key}")
 
             # Check string values for injection
             if isinstance(value, str):
                 # Look for Cypher injection in strings
                 dangerous_patterns = [
-                    r'\}\s*\)\s*(DELETE|REMOVE|DROP)',  # Closing pattern + destructive
-                    r'CALL\s+\w+\.',  # Procedure calls
-                    r'//.*$',  # Line comments that could hide code
+                    r"\}\s*\)\s*(DELETE|REMOVE|DROP)",  # Closing pattern + destructive
+                    r"CALL\s+\w+\.",  # Procedure calls
+                    r"//.*$",  # Line comments that could hide code
                 ]
                 for pattern in dangerous_patterns:
                     if re.search(pattern, value, re.IGNORECASE):
-                        raise CypherSecurityError(
-                            f"Suspicious content in parameter '{key}'"
-                        )
+                        raise CypherSecurityError(f"Suspicious content in parameter '{key}'")
 
     @classmethod
     def is_read_only(cls, cypher: str) -> bool:
@@ -360,9 +355,7 @@ class QueryCompiler:
         )
 
         try:
-            response = await self.llm.complete([
-                LLMMessage(role="user", content=prompt)
-            ])
+            response = await self.llm.complete([LLMMessage(role="user", content=prompt)])
 
             # Parse JSON from response
             intent_data = self._parse_json_response(response.content)
@@ -389,7 +382,7 @@ class QueryCompiler:
             return result
         except json.JSONDecodeError:
             # Try to extract JSON from the response
-            match = re.search(r'\{[\s\S]*\}', content)
+            match = re.search(r"\{[\s\S]*\}", content)
             if match:
                 result = json.loads(match.group())
                 return result
@@ -399,12 +392,14 @@ class QueryCompiler:
         """Convert parsed JSON to QueryIntent model."""
         entities = []
         for e in data.get("entities", []):
-            entities.append(EntityRef(
-                alias=e.get("alias", "n"),
-                label=e.get("label", "Capsule"),
-                properties=e.get("properties", {}),
-                is_optional=e.get("is_optional", False),
-            ))
+            entities.append(
+                EntityRef(
+                    alias=e.get("alias", "n"),
+                    label=e.get("label", "Capsule"),
+                    properties=e.get("properties", {}),
+                    is_optional=e.get("is_optional", False),
+                )
+            )
 
         paths = []
         for p in data.get("paths", []):
@@ -412,25 +407,27 @@ class QueryCompiler:
             target_data = p.get("target", {})
             rel_data = p.get("relationship", {})
 
-            paths.append(PathPattern(
-                source=EntityRef(
-                    alias=source_data.get("alias", "s"),
-                    label=source_data.get("label", "Capsule"),
-                    properties=source_data.get("properties", {}),
-                ),
-                relationship=RelationshipRef(
-                    type=rel_data.get("type"),
-                    types=rel_data.get("types"),
-                    direction=rel_data.get("direction", "out"),
-                    min_hops=rel_data.get("min_hops", 1),
-                    max_hops=rel_data.get("max_hops", 1),
-                ),
-                target=EntityRef(
-                    alias=target_data.get("alias", "t"),
-                    label=target_data.get("label", "Capsule"),
-                    properties=target_data.get("properties", {}),
-                ),
-            ))
+            paths.append(
+                PathPattern(
+                    source=EntityRef(
+                        alias=source_data.get("alias", "s"),
+                        label=source_data.get("label", "Capsule"),
+                        properties=source_data.get("properties", {}),
+                    ),
+                    relationship=RelationshipRef(
+                        type=rel_data.get("type"),
+                        types=rel_data.get("types"),
+                        direction=rel_data.get("direction", "out"),
+                        min_hops=rel_data.get("min_hops", 1),
+                        max_hops=rel_data.get("max_hops", 1),
+                    ),
+                    target=EntityRef(
+                        alias=target_data.get("alias", "t"),
+                        label=target_data.get("label", "Capsule"),
+                        properties=target_data.get("properties", {}),
+                    ),
+                )
+            )
 
         constraints = []
         for c in data.get("constraints", []):
@@ -450,11 +447,13 @@ class QueryCompiler:
                 "IN": QueryOperator.IN,
                 "REGEX": QueryOperator.REGEX,
             }
-            constraints.append(Constraint(
-                field=c.get("field", ""),
-                operator=op_map.get(op_str, QueryOperator.EQUALS),
-                value=c.get("value"),
-            ))
+            constraints.append(
+                Constraint(
+                    field=c.get("field", ""),
+                    operator=op_map.get(op_str, QueryOperator.EQUALS),
+                    value=c.get("value"),
+                )
+            )
 
         aggregations = []
         for a in data.get("aggregations", []):
@@ -467,19 +466,27 @@ class QueryCompiler:
                 "max": AggregationType.MAX,
                 "collect": AggregationType.COLLECT,
             }
-            aggregations.append(Aggregation(
-                function=func_map.get(func_str, AggregationType.COUNT),
-                field=a.get("field", "*"),
-                alias=a.get("alias", "result"),
-            ))
+            aggregations.append(
+                Aggregation(
+                    function=func_map.get(func_str, AggregationType.COUNT),
+                    field=a.get("field", "*"),
+                    alias=a.get("alias", "result"),
+                )
+            )
 
         order_by = []
         for o in data.get("order_by", []):
-            direction = SortDirection.DESC if o.get("direction", "DESC").upper() == "DESC" else SortDirection.ASC
-            order_by.append(OrderBy(
-                field=o.get("field", "created_at"),
-                direction=direction,
-            ))
+            direction = (
+                SortDirection.DESC
+                if o.get("direction", "DESC").upper() == "DESC"
+                else SortDirection.ASC
+            )
+            order_by.append(
+                OrderBy(
+                    field=o.get("field", "created_at"),
+                    direction=direction,
+                )
+            )
 
         return QueryIntent(
             entities=entities,
@@ -505,11 +512,13 @@ class QueryCompiler:
         if "who" in question_lower and "created" in question_lower:
             return QueryIntent(
                 entities=[entity],
-                constraints=[Constraint(
-                    field="c.content",
-                    operator=QueryOperator.CONTAINS,
-                    value=self._extract_topic(question),
-                )],
+                constraints=[
+                    Constraint(
+                        field="c.content",
+                        operator=QueryOperator.CONTAINS,
+                        value=self._extract_topic(question),
+                    )
+                ],
                 return_fields=["c.owner_id", "c.title", "c.id"],
                 limit=10,
             )
@@ -517,22 +526,26 @@ class QueryCompiler:
         if "count" in question_lower or "how many" in question_lower:
             return QueryIntent(
                 entities=[entity],
-                aggregations=[Aggregation(
-                    function=AggregationType.COUNT,
-                    field="c",
-                    alias="count",
-                )],
+                aggregations=[
+                    Aggregation(
+                        function=AggregationType.COUNT,
+                        field="c",
+                        alias="count",
+                    )
+                ],
                 is_count_query=True,
             )
 
         # Default: search capsules
         return QueryIntent(
             entities=[entity],
-            constraints=[Constraint(
-                field="c.content",
-                operator=QueryOperator.CONTAINS,
-                value=self._extract_topic(question),
-            )],
+            constraints=[
+                Constraint(
+                    field="c.content",
+                    operator=QueryOperator.CONTAINS,
+                    value=self._extract_topic(question),
+                )
+            ],
             return_fields=["c.id", "c.title", "c.content", "c.type"],
             limit=10,
         )
@@ -540,7 +553,24 @@ class QueryCompiler:
     def _extract_topic(self, question: str) -> str:
         """Extract the main topic from a question."""
         # Remove common question words
-        stopwords = {"what", "who", "where", "when", "why", "how", "is", "are", "the", "a", "an", "about", "for", "in", "on", "with"}
+        stopwords = {
+            "what",
+            "who",
+            "where",
+            "when",
+            "why",
+            "how",
+            "is",
+            "are",
+            "the",
+            "a",
+            "an",
+            "about",
+            "for",
+            "in",
+            "on",
+            "with",
+        }
         words = question.lower().replace("?", "").split()
         topic_words = [w for w in words if w not in stopwords]
         return " ".join(topic_words[:5])
@@ -664,9 +694,7 @@ class QueryCompiler:
             return QueryComplexity.SIMPLE
 
         if intent.paths:
-            max_hops = max(
-                (p.relationship.max_hops or 1) for p in intent.paths
-            )
+            max_hops = max((p.relationship.max_hops or 1) for p in intent.paths)
             if max_hops > 3:
                 return QueryComplexity.EXPENSIVE
             elif max_hops > 1:
@@ -764,9 +792,7 @@ class KnowledgeQueryService:
             CypherValidator.validate_parameters(compiled.parameters)
         except CypherSecurityError as e:
             self.logger.error(
-                "Query failed security validation",
-                question=question[:50],
-                error=str(e)
+                "Query failed security validation", question=question[:50], error=str(e)
             )
             return QueryResult(
                 id="",
@@ -844,9 +870,7 @@ class KnowledgeQueryService:
         )
 
         try:
-            response = await self.llm.complete([
-                LLMMessage(role="user", content=prompt)
-            ])
+            response = await self.llm.complete([LLMMessage(role="user", content=prompt)])
             return response.content
         except (ConnectionError, TimeoutError, ValueError, RuntimeError, OSError) as e:
             self.logger.error("Answer synthesis failed", error=str(e))

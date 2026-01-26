@@ -50,7 +50,7 @@ class Settings(BaseSettings):
     )
 
     # API Server
-    api_host: str = Field(default="0.0.0.0", description="API host")
+    api_host: str = Field(default="0.0.0.0", description="API host")  # nosec B104 - intentional bind-all for container deployment
     api_port: int = Field(default=8000, ge=1, le=65535, description="API port")
     api_workers: int = Field(default=4, ge=1, description="Number of workers")
 
@@ -107,12 +107,8 @@ class Settings(BaseSettings):
     jwt_secret_key: str = Field(description="JWT secret key")
     jwt_algorithm: str = Field(default="HS256", description="JWT algorithm")
     # SECURITY FIX (Audit 6): Added JWT issuer and audience for token validation
-    jwt_issuer: str = Field(
-        default="forge-cascade", description="JWT issuer (iss claim)"
-    )
-    jwt_audience: str = Field(
-        default="forge-api", description="JWT audience (aud claim)"
-    )
+    jwt_issuer: str = Field(default="forge-cascade", description="JWT issuer (iss claim)")
+    jwt_audience: str = Field(default="forge-api", description="JWT audience (aud claim)")
     jwt_clock_skew_seconds: int = Field(
         default=30, ge=0, le=300, description="Allowed clock skew for nbf/exp validation"
     )
@@ -123,9 +119,7 @@ class Settings(BaseSettings):
     jwt_refresh_token_expire_days: int = Field(
         default=7, ge=1, le=30, description="Refresh token expiry (max 30 days)"
     )
-    password_bcrypt_rounds: int = Field(
-        default=12, ge=4, le=31, description="Bcrypt rounds"
-    )
+    password_bcrypt_rounds: int = Field(default=12, ge=4, le=31, description="Bcrypt rounds")
     # SECURITY FIX (Audit 6): Password history to prevent password reuse
     password_history_count: int = Field(
         default=5, ge=1, le=24, description="Number of previous passwords to remember"
@@ -145,13 +139,16 @@ class Settings(BaseSettings):
     # SECURITY FIX (Audit 6): WebSocket authentication settings
     websocket_allow_query_param_auth: bool = Field(
         default=True,
-        description="Allow WebSocket token in query params (DEPRECATED - disable in production)"
+        description="Allow WebSocket token in query params (DEPRECATED - disable in production)",
     )
     websocket_max_connections_per_user: int = Field(
         default=10, ge=1, le=50, description="Max concurrent WebSocket connections per user"
     )
     websocket_token_check_interval_seconds: int = Field(
-        default=60, ge=10, le=300, description="How often to check token validity in WebSocket sessions"
+        default=60,
+        ge=10,
+        le=300,
+        description="How often to check token validity in WebSocket sessions",
     )
 
     # SECURITY FIX (Audit 6): Token version settings for privilege change invalidation
@@ -161,60 +158,57 @@ class Settings(BaseSettings):
 
     # SECURITY FIX (Audit 6 - Session 2): Session binding settings for IP/User-Agent tracking
     session_ip_binding_mode: Literal["disabled", "log_only", "warn", "flexible", "strict"] = Field(
-        default="warn",
-        description="IP binding mode: warn=log suspicious changes but allow access"
+        default="warn", description="IP binding mode: warn=log suspicious changes but allow access"
     )
     session_ip_change_threshold: int = Field(
-        default=3, ge=1, le=10,
-        description="Number of IP changes before flagging as suspicious"
+        default=3, ge=1, le=10, description="Number of IP changes before flagging as suspicious"
     )
-    session_user_agent_binding_mode: Literal["disabled", "log_only", "warn", "flexible", "strict"] = Field(
-        default="log_only",
-        description="User-Agent binding mode: log_only=audit trail only"
-    )
+    session_user_agent_binding_mode: Literal[
+        "disabled", "log_only", "warn", "flexible", "strict"
+    ] = Field(default="log_only", description="User-Agent binding mode: log_only=audit trail only")
     session_cache_ttl_seconds: int = Field(
-        default=300, ge=60, le=3600,
-        description="Redis cache TTL for session data"
+        default=300, ge=60, le=3600, description="Redis cache TTL for session data"
     )
     session_cache_enabled: bool = Field(
-        default=True,
-        description="Enable Redis caching for session lookups"
+        default=True, description="Enable Redis caching for session lookups"
     )
     max_ip_history_per_session: int = Field(
-        default=10, ge=1, le=50,
-        description="Maximum number of IPs to track per session for forensics"
+        default=10,
+        ge=1,
+        le=50,
+        description="Maximum number of IPs to track per session for forensics",
     )
 
     # SECURITY FIX (Audit 6 - Session 3): MFA login flow settings
     mfa_pending_token_expire_seconds: int = Field(
-        default=300, ge=60, le=600,
-        description="MFA pending token expiry in seconds (5 minutes default)"
+        default=300,
+        ge=60,
+        le=600,
+        description="MFA pending token expiry in seconds (5 minutes default)",
     )
 
     # SECURITY FIX (Audit 6 - Session 4): Chat room access control settings
     chat_max_room_members: int = Field(
-        default=100, ge=2, le=1000,
-        description="Maximum number of members per chat room"
+        default=100, ge=2, le=1000, description="Maximum number of members per chat room"
     )
     chat_message_max_length: int = Field(
-        default=4096, ge=1, le=65536,
-        description="Maximum chat message length in characters"
+        default=4096, ge=1, le=65536, description="Maximum chat message length in characters"
     )
     chat_history_default_limit: int = Field(
-        default=50, ge=1, le=500,
-        description="Default number of messages to return in history"
+        default=50, ge=1, le=500, description="Default number of messages to return in history"
     )
     chat_invite_code_length: int = Field(
-        default=12, ge=8, le=32,
-        description="Length of generated invite codes"
+        default=12, ge=8, le=32, description="Length of generated invite codes"
     )
     chat_invite_expiry_hours: int = Field(
-        default=168, ge=1, le=720,
-        description="Default invite code expiry in hours (1 week default)"
+        default=168,
+        ge=1,
+        le=720,
+        description="Default invite code expiry in hours (1 week default)",
     )
     chat_on_demand_room_visibility: Literal["public", "private", "invite_only"] = Field(
         default="public",
-        description="Visibility for rooms created on-demand (first user becomes owner)"
+        description="Visibility for rooms created on-demand (first user becomes owner)",
     )
 
     @field_validator("jwt_secret_key")
@@ -225,7 +219,9 @@ class Settings(BaseSettings):
         # Check for sufficient entropy (not just repeated characters)
         unique_chars = len(set(v))
         if unique_chars < 10:
-            raise ValueError("JWT secret key must have at least 10 unique characters for sufficient entropy")
+            raise ValueError(
+                "JWT secret key must have at least 10 unique characters for sufficient entropy"
+            )
         # Check it's not a simple pattern
         if v == v[0] * len(v):
             raise ValueError("JWT secret key cannot be a repeated character")
@@ -260,9 +256,7 @@ class Settings(BaseSettings):
         default="openai", description="LLM provider (auto-detects from API keys if not set)"
     )
     llm_api_key: str | None = Field(default=None, description="LLM API key")
-    llm_model: str = Field(
-        default="gpt-4-turbo-preview", description="LLM model name"
-    )
+    llm_model: str = Field(default="gpt-4-turbo-preview", description="LLM model name")
     # Cost optimization: Reduced from 4096 - Ghost Council responses typically 500-800 tokens
     llm_max_tokens: int = Field(default=2000, ge=1, description="Max LLM output tokens")
     # Cost optimization: Lower temperature for more consistent, cacheable responses
@@ -272,17 +266,17 @@ class Settings(BaseSettings):
     embedding_provider: Literal["openai", "sentence_transformers", "mock"] = Field(
         default="openai", description="Embedding provider (auto-detects from API keys if not set)"
     )
-    embedding_api_key: str | None = Field(default=None, description="Embedding API key (for OpenAI)")
-    embedding_model: str = Field(
-        default="text-embedding-3-small", description="Embedding model"
+    embedding_api_key: str | None = Field(
+        default=None, description="Embedding API key (for OpenAI)"
     )
-    embedding_dimensions: int = Field(
-        default=1536, ge=1, description="Embedding dimensions"
-    )
+    embedding_model: str = Field(default="text-embedding-3-small", description="Embedding model")
+    embedding_dimensions: int = Field(default=1536, ge=1, description="Embedding dimensions")
     embedding_cache_enabled: bool = Field(default=True, description="Cache embeddings")
     embedding_batch_size: int = Field(default=100, ge=1, description="Batch size for embedding")
     # Cost optimization: Increased from 10000 for better cache hit rates
-    embedding_cache_size: int = Field(default=50000, ge=1000, description="Max embedding cache entries")
+    embedding_cache_size: int = Field(
+        default=50000, ge=1000, description="Max embedding cache entries"
+    )
 
     @field_validator("llm_api_key")
     @classmethod
@@ -295,9 +289,7 @@ class Settings(BaseSettings):
         provider = info.data.get("llm_provider", "openai") if info.data else "openai"
 
         if provider == "openai" and not v.startswith(("sk-", "org-")):
-            logger.warning(
-                "llm_api_key_format_warning: OpenAI API keys typically start with 'sk-'"
-            )
+            logger.warning("llm_api_key_format_warning: OpenAI API keys typically start with 'sk-'")
 
         if provider == "anthropic" and not v.startswith("sk-ant-"):
             logger.warning(
@@ -373,9 +365,7 @@ class Settings(BaseSettings):
         """SECURITY FIX (Audit 7 - Session 5): Enforce HTTPS for OAuth redirect URIs in production."""
         environment = os.environ.get("APP_ENV", "development")
         if environment == "production" and not v.startswith("https://"):
-            raise ValueError(
-                f"SECURITY: OAuth redirect URI must use HTTPS in production: {v}"
-            )
+            raise ValueError(f"SECURITY: OAuth redirect URI must use HTTPS in production: {v}")
         return v
 
     @field_validator("cors_origins")
@@ -406,7 +396,9 @@ class Settings(BaseSettings):
     )
     # Cache Ghost Council opinions to avoid re-deliberation on identical proposals
     ghost_council_cache_enabled: bool = Field(default=True, description="Cache council opinions")
-    ghost_council_cache_ttl_days: int = Field(default=30, ge=1, description="Opinion cache TTL in days")
+    ghost_council_cache_ttl_days: int = Field(
+        default=30, ge=1, description="Opinion cache TTL in days"
+    )
 
     # ═══════════════════════════════════════════════════════════════
     # IMMUNE SYSTEM
@@ -426,15 +418,9 @@ class Settings(BaseSettings):
     canary_initial_traffic_percent: float = Field(
         default=0.05, ge=0.0, le=1.0, description="Initial canary traffic"
     )
-    canary_min_requests: int = Field(
-        default=100, ge=1, description="Min requests before decision"
-    )
-    canary_max_error_rate: float = Field(
-        default=0.01, ge=0.0, le=1.0, description="Max error rate"
-    )
-    canary_max_latency_ratio: float = Field(
-        default=2.0, ge=1.0, description="Max latency ratio"
-    )
+    canary_min_requests: int = Field(default=100, ge=1, description="Min requests before decision")
+    canary_max_error_rate: float = Field(default=0.01, ge=0.0, le=1.0, description="Max error rate")
+    canary_max_latency_ratio: float = Field(default=2.0, ge=1.0, description="Max latency ratio")
 
     # Health Checks
     health_check_interval_seconds: int = Field(
@@ -447,15 +433,9 @@ class Settings(BaseSettings):
     # ═══════════════════════════════════════════════════════════════
     # PIPELINE
     # ═══════════════════════════════════════════════════════════════
-    pipeline_timeout_seconds: int = Field(
-        default=30, ge=1, description="Pipeline timeout"
-    )
-    pipeline_max_concurrent: int = Field(
-        default=10, ge=1, description="Max concurrent pipelines"
-    )
-    pipeline_cache_enabled: bool = Field(
-        default=True, description="Enable pipeline caching"
-    )
+    pipeline_timeout_seconds: int = Field(default=30, ge=1, description="Pipeline timeout")
+    pipeline_max_concurrent: int = Field(default=10, ge=1, description="Max concurrent pipelines")
+    pipeline_cache_enabled: bool = Field(default=True, description="Enable pipeline caching")
 
     # ═══════════════════════════════════════════════════════════════
     # MONITORING
@@ -472,27 +452,21 @@ class Settings(BaseSettings):
     # ═══════════════════════════════════════════════════════════════
     # GOOGLE OAUTH
     # ═══════════════════════════════════════════════════════════════
-    google_client_id: str | None = Field(
-        default=None, description="Google OAuth Client ID"
-    )
-    google_client_secret: str | None = Field(
-        default=None, description="Google OAuth Client Secret"
-    )
+    google_client_id: str | None = Field(default=None, description="Google OAuth Client ID")
+    google_client_secret: str | None = Field(default=None, description="Google OAuth Client Secret")
     google_redirect_uri_cascade: str = Field(
         default="http://localhost:3000/auth/google/callback",
-        description="OAuth callback URI for Forge Cascade"
+        description="OAuth callback URI for Forge Cascade",
     )
     google_redirect_uri_shop: str = Field(
         default="http://localhost:3001/auth/google/callback",
-        description="OAuth callback URI for Forge Shop"
+        description="OAuth callback URI for Forge Shop",
     )
 
     # ═══════════════════════════════════════════════════════════════
     # SCHEDULER
     # ═══════════════════════════════════════════════════════════════
-    scheduler_enabled: bool = Field(
-        default=True, description="Enable background scheduler"
-    )
+    scheduler_enabled: bool = Field(default=True, description="Enable background scheduler")
     graph_snapshot_interval_minutes: int = Field(
         default=60, ge=5, description="Interval for automatic graph snapshots"
     )
@@ -518,9 +492,7 @@ class Settings(BaseSettings):
     query_cache_ttl_seconds: int = Field(
         default=3600, ge=60, description="TTL for cached query results"
     )
-    query_cache_max_size: int = Field(
-        default=10000, ge=100, description="Max cached query entries"
-    )
+    query_cache_max_size: int = Field(default=10000, ge=100, description="Max cached query entries")
 
     # ═══════════════════════════════════════════════════════════════
     # VIRTUALS PROTOCOL (ACP & GAME SDK)
@@ -529,9 +501,7 @@ class Settings(BaseSettings):
     acp_enabled: bool = Field(
         default=False, description="Enable Agent Commerce Protocol integration"
     )
-    virtuals_api_key: str | None = Field(
-        default=None, description="Virtuals Protocol API key"
-    )
+    virtuals_api_key: str | None = Field(default=None, description="Virtuals Protocol API key")
     virtuals_api_base_url: str = Field(
         default="https://api.virtuals.io", description="Virtuals Protocol API base URL"
     )
@@ -557,35 +527,27 @@ class Settings(BaseSettings):
     )
     virtual_token_address: str = Field(
         default="0x0b3e328455c4059EEb9e3f84b5543F74E24e7E1b",
-        description="VIRTUAL token contract address on Base"
+        description="VIRTUAL token contract address on Base",
     )
 
     # Solana Configuration
     solana_rpc_url: str = Field(
-        default="https://api.mainnet-beta.solana.com",
-        description="Solana RPC endpoint"
+        default="https://api.mainnet-beta.solana.com", description="Solana RPC endpoint"
     )
     solana_private_key: str | None = Field(
         default=None, description="Solana wallet private key (base58)"
     )
-    solana_acp_program_id: str | None = Field(
-        default=None, description="ACP program ID on Solana"
-    )
+    solana_acp_program_id: str | None = Field(default=None, description="ACP program ID on Solana")
     frowg_token_address: str | None = Field(
         default="uogFxqx5SPdL7CMWTTttz4KZ2WctR4RjgZwmGcwpump",
-        description="$FROWG token mint address on Solana (Rise of Frowg)"
+        description="$FROWG token mint address on Solana (Rise of Frowg)",
     )
 
     # GAME SDK Configuration
-    game_enabled: bool = Field(
-        default=False, description="Enable GAME SDK for autonomous agents"
-    )
-    game_api_key: str | None = Field(
-        default=None, description="GAME SDK API key"
-    )
+    game_enabled: bool = Field(default=False, description="Enable GAME SDK for autonomous agents")
+    game_api_key: str | None = Field(default=None, description="GAME SDK API key")
     game_api_base_url: str = Field(
-        default="https://game.virtuals.io/api/v1",
-        description="GAME SDK API base URL"
+        default="https://game.virtuals.io/api/v1", description="GAME SDK API base URL"
     )
     game_api_rate_limit: int = Field(
         default=60, ge=1, description="GAME API rate limit (requests per minute)"

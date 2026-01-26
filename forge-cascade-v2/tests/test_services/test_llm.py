@@ -9,7 +9,6 @@ Tests cover:
 - Error handling
 """
 
-
 import pytest
 
 from forge.services.llm import (

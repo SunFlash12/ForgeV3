@@ -80,6 +80,7 @@ logger = structlog.get_logger(__name__)
 # Background Tasks
 # =============================================================================
 
+
 async def run_semantic_edge_detection(capsule_id: str, user_id: str) -> None:
     """
     Background task to analyze a capsule for semantic relationships.
@@ -99,8 +100,12 @@ async def run_semantic_edge_detection(capsule_id: str, user_id: str) -> None:
         settings = get_settings()
 
         # Only run in production or if explicitly enabled
-        if settings.app_env == "development" and not getattr(settings, 'enable_dev_semantic_detection', False):
-            logger.debug("semantic_detection_skipped", reason="development mode", capsule_id=capsule_id)
+        if settings.app_env == "development" and not getattr(
+            settings, "enable_dev_semantic_detection", False
+        ):
+            logger.debug(
+                "semantic_detection_skipped", reason="development mode", capsule_id=capsule_id
+            )
             return
 
         # LIMITATION (Audit 7 - Session 3): This background task creates its own Neo4jClient
@@ -123,8 +128,8 @@ async def run_semantic_edge_detection(capsule_id: str, user_id: str) -> None:
             # Configure detector with conservative settings
             config = DetectionConfig(
                 similarity_threshold=0.75,  # Higher threshold for auto-detection
-                confidence_threshold=0.8,   # Require high confidence
-                max_candidates=10,          # Limit candidates for performance
+                confidence_threshold=0.8,  # Require high confidence
+                max_candidates=10,  # Limit candidates for performance
                 enabled=True,
             )
 
@@ -154,8 +159,10 @@ async def run_semantic_edge_detection(capsule_id: str, user_id: str) -> None:
 # Request/Response Models
 # =============================================================================
 
+
 class CreateCapsuleRequest(BaseModel):
     """Request to create a new capsule."""
+
     title: str | None = Field(default=None, max_length=500)
     content: str = Field(..., min_length=1, max_length=1_000_000)  # 1MB max
     type: CapsuleType = CapsuleType.KNOWLEDGE
@@ -181,6 +188,7 @@ class CreateCapsuleRequest(BaseModel):
         if len(v) > 20:
             raise ValueError("Maximum 20 metadata keys allowed")
         import json
+
         total_size = len(json.dumps(v))
         if total_size > 65536:  # 64KB
             raise ValueError("Metadata too large (max 64KB)")
@@ -189,6 +197,7 @@ class CreateCapsuleRequest(BaseModel):
 
 class UpdateCapsuleRequest(BaseModel):
     """Request to update a capsule."""
+
     title: str | None = Field(default=None, max_length=500)
     content: str | None = Field(default=None, max_length=1_000_000)  # 1MB max
     tags: list[str] | None = None
@@ -216,6 +225,7 @@ class UpdateCapsuleRequest(BaseModel):
         if len(v) > 20:
             raise ValueError("Maximum 20 metadata keys allowed")
         import json
+
         total_size = len(json.dumps(v))
         if total_size > 65536:  # 64KB
             raise ValueError("Metadata too large (max 64KB)")
@@ -224,6 +234,7 @@ class UpdateCapsuleRequest(BaseModel):
 
 class CapsuleResponse(BaseModel):
     """Capsule response model."""
+
     id: str
     title: str | None
     content: str
@@ -246,9 +257,11 @@ class CapsuleResponse(BaseModel):
             id=capsule.id,
             title=capsule.title,
             content=capsule.content,
-            type=capsule.type.value if hasattr(capsule.type, 'value') else str(capsule.type),
+            type=capsule.type.value if hasattr(capsule.type, "value") else str(capsule.type),
             owner_id=capsule.owner_id,
-            trust_level=str(capsule.trust_level.value) if hasattr(capsule.trust_level, 'value') else str(capsule.trust_level),
+            trust_level=str(capsule.trust_level.value)
+            if hasattr(capsule.trust_level, "value")
+            else str(capsule.trust_level),
             version=capsule.version,
             parent_id=capsule.parent_id,
             tags=capsule.tags,
@@ -263,6 +276,7 @@ class CapsuleResponse(BaseModel):
 
 class CapsuleListResponse(BaseModel):
     """Paginated list of capsules."""
+
     items: list[CapsuleResponse]
     total: int
     page: int
@@ -272,6 +286,7 @@ class CapsuleListResponse(BaseModel):
 
 class LineageResponse(BaseModel):
     """Capsule lineage (Isnad) response."""
+
     capsule: CapsuleResponse
     ancestors: list[CapsuleResponse]
     descendants: list[CapsuleResponse]
@@ -281,12 +296,21 @@ class LineageResponse(BaseModel):
 
 class SearchRequest(BaseModel):
     """Semantic search request."""
+
     query: str = Field(..., min_length=1, max_length=2000)  # Prevent DoS via huge queries
     limit: int = Field(default=10, ge=1, le=100)
     filters: dict[str, Any] = Field(default_factory=dict)
 
     # SECURITY FIX: Whitelist allowed filter keys to prevent injection
-    ALLOWED_FILTER_KEYS: ClassVar[set[str]] = {"owner_id", "type", "tag", "min_trust", "max_trust", "created_after", "created_before"}
+    ALLOWED_FILTER_KEYS: ClassVar[set[str]] = {
+        "owner_id",
+        "type",
+        "tag",
+        "min_trust",
+        "max_trust",
+        "created_after",
+        "created_before",
+    }
 
     @field_validator("filters")
     @classmethod
@@ -296,7 +320,9 @@ class SearchRequest(BaseModel):
             return v
         invalid_keys = set(v.keys()) - cls.ALLOWED_FILTER_KEYS
         if invalid_keys:
-            raise ValueError(f"Invalid filter keys: {invalid_keys}. Allowed: {cls.ALLOWED_FILTER_KEYS}")
+            raise ValueError(
+                f"Invalid filter keys: {invalid_keys}. Allowed: {cls.ALLOWED_FILTER_KEYS}"
+            )
         return v
 
     @field_validator("query")
@@ -304,10 +330,11 @@ class SearchRequest(BaseModel):
     def sanitize_query(cls, v: str) -> str:
         """Sanitize search query to prevent injection and control character issues."""
         import re
+
         # Remove control characters (except standard whitespace)
-        v = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', v)
+        v = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", "", v)
         # Normalize whitespace (collapse multiple spaces, strip)
-        v = ' '.join(v.split())
+        v = " ".join(v.split())
         if not v:
             raise ValueError("Search query cannot be empty after sanitization")
         return v
@@ -315,6 +342,7 @@ class SearchRequest(BaseModel):
 
 class SearchResponse(BaseModel):
     """Search results."""
+
     query: str
     results: list[CapsuleResponse]
     scores: list[float]
@@ -324,6 +352,7 @@ class SearchResponse(BaseModel):
 # =============================================================================
 # CRUD Endpoints
 # =============================================================================
+
 
 @router.post("/", response_model=CapsuleResponse, status_code=status.HTTP_201_CREATED)
 async def create_capsule(
@@ -367,7 +396,9 @@ async def create_capsule(
     )
 
     if not result.success:
-        error_detail = result.errors[0] if result.errors else "Capsule creation failed pipeline validation"
+        error_detail = (
+            result.errors[0] if result.errors else "Capsule creation failed pipeline validation"
+        )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=error_detail,
@@ -377,7 +408,7 @@ async def create_capsule(
     capsule = await capsule_repo.create(capsule_data, owner_id=user.id)
 
     # Get type value safely (could be enum or string)
-    type_value = capsule.type.value if hasattr(capsule.type, 'value') else str(capsule.type)
+    type_value = capsule.type.value if hasattr(capsule.type, "value") else str(capsule.type)
 
     # Resilience: Record metrics
     record_capsule_created(type_value)
@@ -450,6 +481,7 @@ async def list_capsules(
 # Search Endpoints (must be before /{capsule_id} routes)
 # =============================================================================
 
+
 @router.post("/search", response_model=SearchResponse)
 async def search_capsules(
     request: SearchRequest,
@@ -464,11 +496,15 @@ async def search_capsules(
 
     # Resilience: Create cache key from query hash
     import json
-    cache_key_data = json.dumps({
-        "query": request.query,
-        "limit": request.limit,
-        "filters": request.filters,
-    }, sort_keys=True)
+
+    cache_key_data = json.dumps(
+        {
+            "query": request.query,
+            "limit": request.limit,
+            "filters": request.filters,
+        },
+        sort_keys=True,
+    )
     query_hash = hashlib.sha256(cache_key_data.encode()).hexdigest()[:16]
 
     # Try cache first
@@ -477,7 +513,9 @@ async def search_capsules(
         record_cache_hit("search")
         latency = time.perf_counter() - start_time
         record_search(latency, len(cached))
-        cached_results: list[dict[str, Any]] = cached.get("results", []) if isinstance(cached, dict) else []
+        cached_results: list[dict[str, Any]] = (
+            cached.get("results", []) if isinstance(cached, dict) else []
+        )
         cached_scores: list[float] = cached.get("scores", []) if isinstance(cached, dict) else []
         cached_total: int = cached.get("total", 0) if isinstance(cached, dict) else 0
         return SearchResponse(
@@ -518,11 +556,15 @@ async def search_capsules(
     # Note: cache_search_results type annotation expects list, but actually stores any value
     # We pass the dict as-is since the cache implementation handles it correctly
     from typing import cast
-    search_cache_data = cast(list[Any], {
-        "results": [r.model_dump() for r in response_data],
-        "scores": scores,
-        "total": len(capsules),
-    })
+
+    search_cache_data = cast(
+        list[Any],
+        {
+            "results": [r.model_dump() for r in response_data],
+            "scores": scores,
+            "total": len(capsules),
+        },
+    )
     await cache_search_results(
         query_hash,
         search_cache_data,
@@ -593,6 +635,7 @@ async def get_capsules_by_owner(
 # =============================================================================
 # Capsule by ID Endpoints
 # =============================================================================
+
 
 @router.get("/{capsule_id}", response_model=CapsuleResponse)
 async def get_capsule(
@@ -691,12 +734,14 @@ async def update_capsule(
         update_metadata = {**capsule.metadata, **request.metadata}
 
     # Check if there are any updates
-    has_updates = any([
-        update_title is not None,
-        update_content is not None,
-        update_tags is not None,
-        update_metadata is not None,
-    ])
+    has_updates = any(
+        [
+            update_title is not None,
+            update_content is not None,
+            update_tags is not None,
+            update_metadata is not None,
+        ]
+    )
 
     if not has_updates:
         return CapsuleResponse.from_capsule(capsule)
@@ -743,7 +788,7 @@ async def update_capsule(
         )
 
     # Get type value safely
-    type_value = updated.type.value if hasattr(updated.type, 'value') else str(updated.type)
+    type_value = updated.type.value if hasattr(updated.type, "value") else str(updated.type)
 
     # Resilience: Invalidate cache and record metrics
     await invalidate_capsule_cache(capsule_id)
@@ -799,7 +844,7 @@ async def delete_capsule(
         )
 
     # Get type value for metrics before deletion
-    type_value = capsule.type.value if hasattr(capsule.type, 'value') else str(capsule.type)
+    type_value = capsule.type.value if hasattr(capsule.type, "value") else str(capsule.type)
 
     # SECURITY FIX: Only owner OR admin can delete
     is_owner = capsule.owner_id == user.id
@@ -837,6 +882,7 @@ async def delete_capsule(
 # =============================================================================
 # Lineage Endpoints
 # =============================================================================
+
 
 @router.get("/{capsule_id}/lineage", response_model=LineageResponse)
 async def get_lineage(
@@ -885,17 +931,25 @@ async def get_lineage(
     all_trust_levels: list[tuple[datetime, float]] = []
 
     # Add main capsule
-    capsule_trust = float(capsule.trust_level.value) if hasattr(capsule.trust_level, 'value') else float(capsule.trust_level)
+    capsule_trust = (
+        float(capsule.trust_level.value)
+        if hasattr(capsule.trust_level, "value")
+        else float(capsule.trust_level)
+    )
     all_trust_levels.append((capsule.created_at or datetime.min, capsule_trust))
 
     # Add ancestors (Capsule objects)
     for a in ancestors:
-        trust_val = float(a.trust_level.value) if hasattr(a.trust_level, 'value') else float(a.trust_level)
+        trust_val = (
+            float(a.trust_level.value) if hasattr(a.trust_level, "value") else float(a.trust_level)
+        )
         all_trust_levels.append((a.created_at or datetime.min, trust_val))
 
     # Add descendants (LineageNode objects)
     for d in descendants:
-        trust_val = float(d.trust_level.value) if hasattr(d.trust_level, 'value') else float(d.trust_level)
+        trust_val = (
+            float(d.trust_level.value) if hasattr(d.trust_level, "value") else float(d.trust_level)
+        )
         all_trust_levels.append((d.created_at or datetime.min, trust_val))
 
     # Sort by created_at and extract trust values
@@ -910,23 +964,29 @@ async def get_lineage(
     # LineageNode doesn't have all fields, so we create minimal responses
     descendant_responses: list[CapsuleResponse] = []
     for d in descendants:
-        descendant_responses.append(CapsuleResponse(
-            id=d.id,
-            title=d.title,
-            content="",  # Not available in LineageNode
-            type=d.type.value if hasattr(d.type, 'value') else str(d.type),
-            owner_id="",  # Not available in LineageNode
-            trust_level=str(d.trust_level.value) if hasattr(d.trust_level, 'value') else str(d.trust_level),
-            version=d.version,
-            parent_id=None,  # Not available in LineageNode
-            tags=[],  # Not available in LineageNode
-            metadata={},  # Not available in LineageNode
-            view_count=0,  # Not available in LineageNode
-            fork_count=0,  # Not available in LineageNode
-            is_archived=False,  # Not available in LineageNode
-            created_at=d.created_at.isoformat() if d.created_at else "",
-            updated_at=d.created_at.isoformat() if d.created_at else "",  # Use created_at as fallback
-        ))
+        descendant_responses.append(
+            CapsuleResponse(
+                id=d.id,
+                title=d.title,
+                content="",  # Not available in LineageNode
+                type=d.type.value if hasattr(d.type, "value") else str(d.type),
+                owner_id="",  # Not available in LineageNode
+                trust_level=str(d.trust_level.value)
+                if hasattr(d.trust_level, "value")
+                else str(d.trust_level),
+                version=d.version,
+                parent_id=None,  # Not available in LineageNode
+                tags=[],  # Not available in LineageNode
+                metadata={},  # Not available in LineageNode
+                view_count=0,  # Not available in LineageNode
+                fork_count=0,  # Not available in LineageNode
+                is_archived=False,  # Not available in LineageNode
+                created_at=d.created_at.isoformat() if d.created_at else "",
+                updated_at=d.created_at.isoformat()
+                if d.created_at
+                else "",  # Use created_at as fallback
+            )
+        )
 
     # Resilience: Cache lineage and record metrics
     await cache_lineage(
@@ -1019,14 +1079,18 @@ async def link_capsule(
 # Fork Endpoint - Create child capsule (Symbolic Inheritance)
 # =============================================================================
 
+
 class ForkCapsuleRequest(BaseModel):
     """Request to fork (derive from) a capsule."""
+
     title: str | None = None
     content: str | None = None
     evolution_reason: str = Field(..., min_length=1, description="Why this fork was created")
 
 
-@router.post("/{capsule_id}/fork", response_model=CapsuleResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{capsule_id}/fork", response_model=CapsuleResponse, status_code=status.HTTP_201_CREATED
+)
 async def fork_capsule(
     capsule_id: str,
     request: ForkCapsuleRequest,
@@ -1119,6 +1183,7 @@ async def archive_capsule(
 
     # Check ownership - use consistent is_admin() check
     from forge.security.authorization import is_admin
+
     if capsule.owner_id != user.id and not is_admin(user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -1342,9 +1407,7 @@ async def sign_capsule(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="No encrypted key found for user",
                 )
-            private_key = KeyManagementService.decrypt_private_key(
-                encrypted_key, request.password
-            )
+            private_key = KeyManagementService.decrypt_private_key(encrypted_key, request.password)
 
         elif key_strategy == KeyStorageStrategy.CLIENT_ONLY:
             if not request.private_key_b64:
@@ -1353,6 +1416,7 @@ async def sign_capsule(
                     detail="Private key required for CLIENT_ONLY strategy",
                 )
             import base64
+
             private_key = base64.b64decode(request.private_key_b64)
 
         elif key_strategy == KeyStorageStrategy.PASSWORD_DERIVED:
@@ -1499,9 +1563,7 @@ async def verify_capsule_signature(
         MATCH (u:User {id: $id})
         RETURN u.signing_public_key AS public_key
         """
-        signer_result = await capsule_repo.client.execute_single(
-            signer_query, {"id": signed_by}
-        )
+        signer_result = await capsule_repo.client.execute_single(signer_query, {"id": signed_by})
         if signer_result:
             signer_public_key = signer_result.get("public_key")
 

@@ -23,6 +23,7 @@ logger = structlog.get_logger(__name__)
 @dataclass
 class AnnotationConfig:
     """Configuration for variant annotation."""
+
     use_clinvar: bool = True
     use_gnomad: bool = True
     use_ensembl_vep: bool = False
@@ -188,10 +189,15 @@ class VariantAnnotator:
                     record = results.get(uid, {})
                     if record:
                         return {
-                            "clinical_significance": record.get("clinical_significance", {}).get("description"),
-                            "review_status": record.get("clinical_significance", {}).get("review_status"),
+                            "clinical_significance": record.get("clinical_significance", {}).get(
+                                "description"
+                            ),
+                            "review_status": record.get("clinical_significance", {}).get(
+                                "review_status"
+                            ),
                             "conditions": [
-                                t.get("trait_name") for t in record.get("trait_set", [])
+                                t.get("trait_name")
+                                for t in record.get("trait_set", [])
                                 if t.get("trait_name")
                             ],
                             "pubmed_ids": record.get("supporting_submissions", {}).get("pmids", []),
@@ -403,6 +409,7 @@ class VariantAnnotator:
 # =============================================================================
 # Factory Function
 # =============================================================================
+
 
 def create_variant_annotator(
     config: AnnotationConfig | None = None,

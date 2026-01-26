@@ -38,6 +38,7 @@ logger = structlog.get_logger(__name__)
 @dataclass
 class ParseProgress:
     """Progress information for parsing operations."""
+
     file_name: str
     total_lines: int = 0
     processed_lines: int = 0
@@ -123,10 +124,7 @@ class PrimeKGParser:
         self.max_errors = max_errors
         self._progress_callbacks: list[Callable[[ParseProgress], None]] = []
 
-    def add_progress_callback(
-        self,
-        callback: Callable[[ParseProgress], None]
-    ) -> None:
+    def add_progress_callback(self, callback: Callable[[ParseProgress], None]) -> None:
         """Add a callback to receive progress updates."""
         self._progress_callbacks.append(callback)
 
@@ -217,7 +215,7 @@ class PrimeKGParser:
             "primekg_nodes_parsed",
             valid=progress.valid_records,
             invalid=progress.invalid_records,
-            duration_seconds=duration.total_seconds()
+            duration_seconds=duration.total_seconds(),
         )
 
     def _parse_node_row(self, row: dict[str, Any]) -> PrimeKGNode:
@@ -342,7 +340,7 @@ class PrimeKGParser:
             "primekg_edges_parsed",
             valid=progress.valid_records,
             invalid=progress.invalid_records,
-            duration_seconds=duration.total_seconds()
+            duration_seconds=duration.total_seconds(),
         )
 
     def _parse_edge_row(self, row: dict[str, Any]) -> PrimeKGEdge:
@@ -504,7 +502,7 @@ class PrimeKGParser:
             total_nodes=stats.total_nodes,
             total_edges=stats.total_edges,
             node_types=len(node_type_counts),
-            edge_types=len(edge_type_counts)
+            edge_types=len(edge_type_counts),
         )
 
         return stats
@@ -539,16 +537,20 @@ class PrimeKGParser:
             total_edges += 1
 
             if edge.x_index not in valid_indices:
-                invalid_edges.append({
-                    "edge": f"{edge.x_index} -> {edge.y_index}",
-                    "error": f"Invalid x_index: {edge.x_index}"
-                })
+                invalid_edges.append(
+                    {
+                        "edge": f"{edge.x_index} -> {edge.y_index}",
+                        "error": f"Invalid x_index: {edge.x_index}",
+                    }
+                )
 
             if edge.y_index not in valid_indices:
-                invalid_edges.append({
-                    "edge": f"{edge.x_index} -> {edge.y_index}",
-                    "error": f"Invalid y_index: {edge.y_index}"
-                })
+                invalid_edges.append(
+                    {
+                        "edge": f"{edge.x_index} -> {edge.y_index}",
+                        "error": f"Invalid y_index: {edge.y_index}",
+                    }
+                )
 
             if len(invalid_edges) >= 100:
                 break  # Limit error collection
@@ -574,6 +576,7 @@ class PrimeKGParser:
 # =============================================================================
 # Specialized Node Parsers
 # =============================================================================
+
 
 class SpecializedNodeParser:
     """

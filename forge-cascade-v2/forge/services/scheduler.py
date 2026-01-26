@@ -330,10 +330,7 @@ class BackgroundScheduler:
 
     def get_auto_disabled_tasks(self) -> list[str]:
         """Get list of tasks that were auto-disabled due to failures."""
-        return [
-            name for name, task in self._tasks.items()
-            if task.auto_disabled
-        ]
+        return [name for name, task in self._tasks.items() if task.auto_disabled]
 
 
 # Global scheduler instance
@@ -422,7 +419,7 @@ def _create_graph_snapshot_task() -> Callable[[], Coroutine[Any, Any, None]]:
                         "total_nodes": metrics.total_nodes,
                         "total_edges": metrics.total_edges,
                         "density": metrics.density,
-                        "avg_degree": getattr(metrics, 'avg_degree', 0.0),
+                        "avg_degree": getattr(metrics, "avg_degree", 0.0),
                         "connected_components": metrics.connected_components,
                         "nodes_by_type": metrics.nodes_by_type,
                         "edges_by_type": metrics.edges_by_type,

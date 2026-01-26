@@ -23,16 +23,16 @@ class SemanticRelationType(str, Enum):
     """
 
     # Bidirectional relationships
-    RELATED_TO = "RELATED_TO"          # Generic semantic association
-    CONTRADICTS = "CONTRADICTS"        # Conflicting information
+    RELATED_TO = "RELATED_TO"  # Generic semantic association
+    CONTRADICTS = "CONTRADICTS"  # Conflicting information
 
     # Directed relationships (source -> target)
-    SUPPORTS = "SUPPORTS"              # Source supports target's claims
-    ELABORATES = "ELABORATES"          # Source provides detail on target
-    SUPERSEDES = "SUPERSEDES"          # Source replaces target
-    REFERENCES = "REFERENCES"          # Source cites target
-    IMPLEMENTS = "IMPLEMENTS"          # Source implements target's concept
-    EXTENDS = "EXTENDS"                # Source extends target's idea
+    SUPPORTS = "SUPPORTS"  # Source supports target's claims
+    ELABORATES = "ELABORATES"  # Source provides detail on target
+    SUPERSEDES = "SUPERSEDES"  # Source replaces target
+    REFERENCES = "REFERENCES"  # Source cites target
+    IMPLEMENTS = "IMPLEMENTS"  # Source implements target's concept
+    EXTENDS = "EXTENDS"  # Source extends target's idea
 
     @property
     def is_bidirectional(self) -> bool:
@@ -60,9 +60,9 @@ class SemanticRelationType(str, Enum):
 class ContradictionSeverity(str, Enum):
     """Severity levels for contradictions."""
 
-    LOW = "low"            # Minor discrepancy
-    MEDIUM = "medium"      # Significant disagreement
-    HIGH = "high"          # Direct contradiction
+    LOW = "low"  # Minor discrepancy
+    MEDIUM = "medium"  # Significant disagreement
+    HIGH = "high"  # Direct contradiction
     CRITICAL = "critical"  # Fundamental conflict
 
 
@@ -78,11 +78,11 @@ class ContradictionStatus(str, Enum):
 class EvidenceType(str, Enum):
     """Types of evidence for SUPPORTS relationships."""
 
-    EMPIRICAL = "empirical"        # Data-backed
-    THEORETICAL = "theoretical"    # Logical/theoretical
-    CITATION = "citation"          # Referenced source
-    EXAMPLE = "example"            # Concrete example
-    CONSENSUS = "consensus"        # Community agreement
+    EMPIRICAL = "empirical"  # Data-backed
+    THEORETICAL = "theoretical"  # Logical/theoretical
+    CITATION = "citation"  # Referenced source
+    EXAMPLE = "example"  # Concrete example
+    CONSENSUS = "consensus"  # Community agreement
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -125,9 +125,7 @@ class SemanticEdgeCreate(SemanticEdgeBase):
 
     @field_validator("properties")
     @classmethod
-    def validate_properties(
-        cls, v: dict[str, Any], info: ValidationInfo
-    ) -> dict[str, Any]:
+    def validate_properties(cls, v: dict[str, Any], info: ValidationInfo) -> dict[str, Any]:
         """Validate properties based on relationship type."""
         rel_type = info.data.get("relationship_type")
         if rel_type == SemanticRelationType.CONTRADICTS:
@@ -197,9 +195,7 @@ class SupportEdge(SemanticEdge):
 
     @property
     def evidence_type(self) -> EvidenceType:
-        return EvidenceType(
-            self.properties.get("evidence_type", EvidenceType.THEORETICAL.value)
-        )
+        return EvidenceType(self.properties.get("evidence_type", EvidenceType.THEORETICAL.value))
 
     @property
     def evidence_reference(self) -> str | None:

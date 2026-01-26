@@ -15,40 +15,44 @@ from forge.models.base import ForgeModel, generate_id, validate_dict_security
 
 class AgentCapability(str, Enum):
     """Capabilities an agent can request."""
-    READ_CAPSULES = "read_capsules"           # Read capsule content
-    QUERY_GRAPH = "query_graph"               # Execute graph queries
-    SEMANTIC_SEARCH = "semantic_search"       # Vector similarity search
-    CREATE_CAPSULES = "create_capsules"       # Create new capsules
-    UPDATE_CAPSULES = "update_capsules"       # Update owned capsules
-    EXECUTE_CASCADE = "execute_cascade"       # Trigger cascade effects
-    ACCESS_LINEAGE = "access_lineage"         # View capsule lineage
-    VIEW_GOVERNANCE = "view_governance"       # View governance state
+
+    READ_CAPSULES = "read_capsules"  # Read capsule content
+    QUERY_GRAPH = "query_graph"  # Execute graph queries
+    SEMANTIC_SEARCH = "semantic_search"  # Vector similarity search
+    CREATE_CAPSULES = "create_capsules"  # Create new capsules
+    UPDATE_CAPSULES = "update_capsules"  # Update owned capsules
+    EXECUTE_CASCADE = "execute_cascade"  # Trigger cascade effects
+    ACCESS_LINEAGE = "access_lineage"  # View capsule lineage
+    VIEW_GOVERNANCE = "view_governance"  # View governance state
 
 
 class AgentTrustLevel(str, Enum):
     """Trust levels for agent access."""
-    UNTRUSTED = "untrusted"         # Read-only, rate limited
-    BASIC = "basic"                 # Standard read access
-    VERIFIED = "verified"           # Extended access, can create
-    TRUSTED = "trusted"             # Full access, higher limits
-    SYSTEM = "system"               # Internal system agents
+
+    UNTRUSTED = "untrusted"  # Read-only, rate limited
+    BASIC = "basic"  # Standard read access
+    VERIFIED = "verified"  # Extended access, can create
+    TRUSTED = "trusted"  # Full access, higher limits
+    SYSTEM = "system"  # Internal system agents
 
 
 class QueryType(str, Enum):
     """Types of agent queries."""
-    NATURAL_LANGUAGE = "natural_language"     # NL to Cypher
-    SEMANTIC_SEARCH = "semantic_search"       # Vector similarity
-    GRAPH_TRAVERSE = "graph_traverse"         # Path/neighbor queries
-    DIRECT_CYPHER = "direct_cypher"           # Raw Cypher (trusted only)
-    AGGREGATION = "aggregation"               # Stats and metrics
+
+    NATURAL_LANGUAGE = "natural_language"  # NL to Cypher
+    SEMANTIC_SEARCH = "semantic_search"  # Vector similarity
+    GRAPH_TRAVERSE = "graph_traverse"  # Path/neighbor queries
+    DIRECT_CYPHER = "direct_cypher"  # Raw Cypher (trusted only)
+    AGGREGATION = "aggregation"  # Stats and metrics
 
 
 class ResponseFormat(str, Enum):
     """Response format options."""
-    JSON = "json"                   # Structured JSON
-    MARKDOWN = "markdown"           # Formatted markdown
-    PLAIN = "plain"                 # Plain text
-    STREAMING = "streaming"         # Server-sent events
+
+    JSON = "json"  # Structured JSON
+    MARKDOWN = "markdown"  # Formatted markdown
+    PLAIN = "plain"  # Plain text
+    STREAMING = "streaming"  # Server-sent events
 
 
 class AgentSession(ForgeModel):
@@ -68,8 +72,7 @@ class AgentSession(ForgeModel):
     trust_level: AgentTrustLevel = Field(default=AgentTrustLevel.BASIC)
     capabilities: list[AgentCapability] = Field(default_factory=list)
     allowed_capsule_types: list[str] = Field(
-        default_factory=list,
-        description="Empty = all types allowed"
+        default_factory=list, description="Empty = all types allowed"
     )
 
     # Rate limiting
@@ -106,12 +109,10 @@ class AgentQuery(ForgeModel):
 
     # Optional parameters
     context: dict[str, Any] = Field(
-        default_factory=dict,
-        description="Additional context for query processing"
+        default_factory=dict, description="Additional context for query processing"
     )
     filters: dict[str, Any] = Field(
-        default_factory=dict,
-        description="Filters to apply (trust_level, type, date, etc.)"
+        default_factory=dict, description="Filters to apply (trust_level, type, date, etc.)"
     )
 
     # Response preferences
@@ -153,14 +154,12 @@ class QueryResult(ForgeModel):
 
     # Synthesized answer (for NL queries)
     answer: str | None = Field(
-        default=None,
-        description="Natural language answer synthesized from results"
+        default=None, description="Natural language answer synthesized from results"
     )
 
     # Citations and sources
     sources: list[dict[str, Any]] = Field(
-        default_factory=list,
-        description="Capsule sources cited in the answer"
+        default_factory=list, description="Capsule sources cited in the answer"
     )
 
     # Metrics
@@ -177,6 +176,7 @@ class QueryResult(ForgeModel):
 
 class AccessType(str, Enum):
     """Types of capsule access."""
+
     READ = "read"
     WRITE = "write"
     DERIVE = "derive"
@@ -220,12 +220,10 @@ class AgentCapsuleCreation(ForgeModel):
 
     # Provenance
     source_capsule_ids: list[str] = Field(
-        default_factory=list,
-        description="Capsules this was derived from"
+        default_factory=list, description="Capsules this was derived from"
     )
     reasoning: str | None = Field(
-        default=None,
-        description="Agent's reasoning for creating this capsule"
+        default=None, description="Agent's reasoning for creating this capsule"
     )
 
     # Metadata
@@ -234,8 +232,7 @@ class AgentCapsuleCreation(ForgeModel):
 
     # Governance
     requires_approval: bool = Field(
-        default=True,
-        description="Whether capsule needs human approval"
+        default=True, description="Whether capsule needs human approval"
     )
 
     # SECURITY FIX (Audit 6): Validate metadata dict for security concerns

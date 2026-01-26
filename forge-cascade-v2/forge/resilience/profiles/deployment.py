@@ -67,7 +67,7 @@ class ProfileCapabilities:
 class ProfileLimits:
     """Resource limits for a deployment profile."""
 
-    max_capsules: int = -1           # -1 = unlimited
+    max_capsules: int = -1  # -1 = unlimited
     max_users: int = -1
     max_storage_gb: int = -1
     max_api_calls_per_day: int = -1
@@ -119,7 +119,7 @@ LITE_PROFILE = DeploymentProfileSpec(
         "memory": "4 GB",
         "storage": "20 GB SSD",
         "neo4j": "Community Edition",
-    }
+    },
 )
 
 STANDARD_PROFILE = DeploymentProfileSpec(
@@ -153,7 +153,7 @@ STANDARD_PROFILE = DeploymentProfileSpec(
         "storage": "500 GB SSD",
         "neo4j": "Enterprise Edition",
         "redis": "6 GB",
-    }
+    },
 )
 
 ENTERPRISE_PROFILE = DeploymentProfileSpec(
@@ -188,7 +188,7 @@ ENTERPRISE_PROFILE = DeploymentProfileSpec(
         "neo4j": "Enterprise Edition (cluster)",
         "redis": "32+ GB (cluster)",
         "s3": "For cold storage",
-    }
+    },
 )
 
 
@@ -212,10 +212,7 @@ class DeploymentProfileManager:
         self._current_profile: DeploymentProfile | None = None
         self._current_config: ForgeResilienceConfig | None = None
 
-    def get_profile_spec(
-        self,
-        profile: DeploymentProfile
-    ) -> DeploymentProfileSpec:
+    def get_profile_spec(self, profile: DeploymentProfile) -> DeploymentProfileSpec:
         """Get specification for a profile."""
         return self._profiles[profile]
 
@@ -224,9 +221,7 @@ class DeploymentProfileManager:
         return list(self._profiles.values())
 
     def apply_profile(
-        self,
-        profile: DeploymentProfile,
-        custom_overrides: dict[str, Any] | None = None
+        self, profile: DeploymentProfile, custom_overrides: dict[str, Any] | None = None
     ) -> ForgeResilienceConfig:
         """
         Apply a deployment profile.
@@ -261,18 +256,12 @@ class DeploymentProfileManager:
         self._current_profile = profile
         self._current_config = config
 
-        logger.info(
-            "deployment_profile_applied",
-            profile=profile.value,
-            name=spec.name
-        )
+        logger.info("deployment_profile_applied", profile=profile.value, name=spec.name)
 
         return config
 
     def _apply_cache_config(
-        self,
-        config: ForgeResilienceConfig,
-        spec: DeploymentProfileSpec
+        self, config: ForgeResilienceConfig, spec: DeploymentProfileSpec
     ) -> None:
         """Apply cache configuration for profile."""
         config.cache = CacheConfig(
@@ -281,9 +270,7 @@ class DeploymentProfileManager:
         )
 
     def _apply_observability_config(
-        self,
-        config: ForgeResilienceConfig,
-        spec: DeploymentProfileSpec
+        self, config: ForgeResilienceConfig, spec: DeploymentProfileSpec
     ) -> None:
         """Apply observability configuration for profile."""
         config.observability = ObservabilityConfig(
@@ -294,9 +281,7 @@ class DeploymentProfileManager:
         )
 
     def _apply_validation_config(
-        self,
-        config: ForgeResilienceConfig,
-        spec: DeploymentProfileSpec
+        self, config: ForgeResilienceConfig, spec: DeploymentProfileSpec
     ) -> None:
         """Apply content validation configuration for profile."""
         config.content_validation = ContentValidationConfig(
@@ -306,9 +291,7 @@ class DeploymentProfileManager:
         )
 
     def _apply_lineage_config(
-        self,
-        config: ForgeResilienceConfig,
-        spec: DeploymentProfileSpec
+        self, config: ForgeResilienceConfig, spec: DeploymentProfileSpec
     ) -> None:
         """Apply lineage configuration for profile."""
         config.lineage = LineageTierConfig(
@@ -318,21 +301,19 @@ class DeploymentProfileManager:
         )
 
     def _apply_partition_config(
-        self,
-        config: ForgeResilienceConfig,
-        spec: DeploymentProfileSpec
+        self, config: ForgeResilienceConfig, spec: DeploymentProfileSpec
     ) -> None:
         """Apply partitioning configuration for profile."""
         config.partitioning = PartitionConfig(
             enabled=spec.capabilities.partitioning,
-            max_capsules_per_partition=50000 if spec.profile == DeploymentProfile.ENTERPRISE else 10000,
+            max_capsules_per_partition=50000
+            if spec.profile == DeploymentProfile.ENTERPRISE
+            else 10000,
             auto_rebalance=spec.profile == DeploymentProfile.ENTERPRISE,
         )
 
     def _apply_tenant_config(
-        self,
-        config: ForgeResilienceConfig,
-        spec: DeploymentProfileSpec
+        self, config: ForgeResilienceConfig, spec: DeploymentProfileSpec
     ) -> None:
         """Apply tenant isolation configuration for profile."""
         config.tenant_isolation = TenantIsolationConfig(
@@ -342,9 +323,7 @@ class DeploymentProfileManager:
         )
 
     def _apply_privacy_config(
-        self,
-        config: ForgeResilienceConfig,
-        spec: DeploymentProfileSpec
+        self, config: ForgeResilienceConfig, spec: DeploymentProfileSpec
     ) -> None:
         """Apply privacy configuration for profile."""
         config.privacy = PrivacyConfig(
@@ -354,9 +333,7 @@ class DeploymentProfileManager:
         )
 
     def _apply_starter_pack_config(
-        self,
-        config: ForgeResilienceConfig,
-        spec: DeploymentProfileSpec
+        self, config: ForgeResilienceConfig, spec: DeploymentProfileSpec
     ) -> None:
         """Apply starter pack configuration for profile."""
         config.starter_packs = StarterPackConfig(
@@ -365,9 +342,7 @@ class DeploymentProfileManager:
         )
 
     def _apply_runbook_config(
-        self,
-        config: ForgeResilienceConfig,
-        spec: DeploymentProfileSpec
+        self, config: ForgeResilienceConfig, spec: DeploymentProfileSpec
     ) -> None:
         """Apply runbook configuration for profile."""
         config.runbooks = RunbookConfig(
@@ -375,16 +350,12 @@ class DeploymentProfileManager:
             auto_execute_safe_steps=spec.capabilities.auto_remediation,
         )
 
-    def _apply_overrides(
-        self,
-        config: ForgeResilienceConfig,
-        overrides: dict[str, Any]
-    ) -> None:
+    def _apply_overrides(self, config: ForgeResilienceConfig, overrides: dict[str, Any]) -> None:
         """Apply custom overrides to configuration."""
         for key, value in overrides.items():
-            if '.' in key:
+            if "." in key:
                 # Nested key like "cache.enabled"
-                parts = key.split('.')
+                parts = key.split(".")
                 obj: Any = config
                 for part in parts[:-1]:
                     obj = getattr(obj, part, None)
@@ -397,9 +368,7 @@ class DeploymentProfileManager:
                     setattr(config, key, value)
 
     def validate_profile_requirements(
-        self,
-        profile: DeploymentProfile,
-        system_resources: dict[str, Any]
+        self, profile: DeploymentProfile, system_resources: dict[str, Any]
     ) -> dict[str, Any]:
         """
         Validate system resources against profile requirements.
@@ -482,8 +451,7 @@ def get_profile_manager() -> DeploymentProfileManager:
 
 
 def apply_profile(
-    profile: DeploymentProfile,
-    overrides: dict[str, Any] | None = None
+    profile: DeploymentProfile, overrides: dict[str, Any] | None = None
 ) -> ForgeResilienceConfig:
     """Convenience function to apply a deployment profile."""
     manager = get_profile_manager()

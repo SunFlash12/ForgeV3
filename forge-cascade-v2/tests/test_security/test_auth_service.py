@@ -32,6 +32,7 @@ from forge.security.auth_service import (
 # IP Rate Limiter Tests
 # =============================================================================
 
+
 class TestIPRateLimiter:
     """Tests for IP-based rate limiting."""
 
@@ -114,6 +115,7 @@ class TestIPRateLimiter:
 # =============================================================================
 # AuthService Registration Tests
 # =============================================================================
+
 
 class TestAuthServiceRegistration:
     """Tests for user registration."""
@@ -201,6 +203,7 @@ class TestAuthServiceRegistration:
 # AuthService Login Tests
 # =============================================================================
 
+
 class TestAuthServiceLogin:
     """Tests for user login."""
 
@@ -280,7 +283,9 @@ class TestAuthServiceLogin:
             )
 
     @pytest.mark.asyncio
-    async def test_login_wrong_password(self, auth_service, mock_user_repo, mock_audit_repo, valid_user):
+    async def test_login_wrong_password(
+        self, auth_service, mock_user_repo, mock_audit_repo, valid_user
+    ):
         """Login fails with wrong password."""
         mock_user_repo.get_by_username_or_email.return_value = valid_user
 
@@ -293,7 +298,9 @@ class TestAuthServiceLogin:
         mock_user_repo.record_failed_login.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_login_locked_account(self, auth_service, mock_user_repo, mock_audit_repo, valid_user):
+    async def test_login_locked_account(
+        self, auth_service, mock_user_repo, mock_audit_repo, valid_user
+    ):
         """Login fails when account is locked."""
         valid_user.lockout_until = datetime.now(UTC) + timedelta(minutes=30)
         mock_user_repo.get_by_username_or_email.return_value = valid_user
@@ -305,7 +312,9 @@ class TestAuthServiceLogin:
             )
 
     @pytest.mark.asyncio
-    async def test_login_deactivated_account(self, auth_service, mock_user_repo, mock_audit_repo, valid_user):
+    async def test_login_deactivated_account(
+        self, auth_service, mock_user_repo, mock_audit_repo, valid_user
+    ):
         """Login fails when account is deactivated."""
         valid_user.is_active = False
         mock_user_repo.get_by_username_or_email.return_value = valid_user
@@ -340,6 +349,7 @@ class TestAuthServiceLogin:
 # =============================================================================
 # AuthService Token Tests
 # =============================================================================
+
 
 class TestAuthServiceTokens:
     """Tests for token operations."""
@@ -445,12 +455,13 @@ class TestAuthServiceTokens:
         from forge.security.tokens import TokenExpiredError
 
         # Create expired token by manipulating settings temporarily
-        with patch('forge.security.tokens.settings') as mock_settings:
+        with patch("forge.security.tokens.settings") as mock_settings:
             mock_settings.jwt_access_token_expire_minutes = -1
             mock_settings.jwt_algorithm = "HS256"
             mock_settings.jwt_secret_key = "test-secret-key-at-least-32-characters-long-for-testing"
 
             from forge.security.tokens import create_access_token
+
             expired_token = create_access_token(
                 user_id="user123",
                 username="testuser",
@@ -465,6 +476,7 @@ class TestAuthServiceTokens:
 # =============================================================================
 # AuthService Password Management Tests
 # =============================================================================
+
 
 class TestAuthServicePasswordManagement:
     """Tests for password operations."""
@@ -518,7 +530,9 @@ class TestAuthServicePasswordManagement:
         )
 
     @pytest.mark.asyncio
-    async def test_change_password_success(self, auth_service, mock_user_repo, mock_audit_repo, valid_user):
+    async def test_change_password_success(
+        self, auth_service, mock_user_repo, mock_audit_repo, valid_user
+    ):
         """Password change succeeds with correct current password."""
         mock_user_repo.get_by_id.return_value = valid_user
 
@@ -545,7 +559,9 @@ class TestAuthServicePasswordManagement:
             )
 
     @pytest.mark.asyncio
-    async def test_request_password_reset_existing_user(self, auth_service, mock_user_repo, valid_user):
+    async def test_request_password_reset_existing_user(
+        self, auth_service, mock_user_repo, valid_user
+    ):
         """Password reset request returns token for existing user."""
         mock_user_repo.get_by_email.return_value = valid_user
 
@@ -596,6 +612,7 @@ class TestAuthServicePasswordManagement:
 # =============================================================================
 # AuthService Account Management Tests
 # =============================================================================
+
 
 class TestAuthServiceAccountManagement:
     """Tests for account management operations."""
@@ -699,7 +716,9 @@ class TestAuthServiceAccountManagement:
             )
 
     @pytest.mark.asyncio
-    async def test_adjust_user_trust(self, auth_service, mock_user_repo, mock_audit_repo, valid_user):
+    async def test_adjust_user_trust(
+        self, auth_service, mock_user_repo, mock_audit_repo, valid_user
+    ):
         """Trust adjustment works correctly."""
         mock_user_repo.get_by_id.return_value = valid_user
         mock_user_repo.adjust_trust_flame.return_value = 70

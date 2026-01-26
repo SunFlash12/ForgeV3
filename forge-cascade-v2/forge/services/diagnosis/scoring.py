@@ -26,6 +26,7 @@ logger = structlog.get_logger(__name__)
 @dataclass
 class ScoringConfig:
     """Configuration for Bayesian scoring."""
+
     # Evidence weights
     phenotype_weight: float = 0.4
     genetic_weight: float = 0.35
@@ -33,15 +34,15 @@ class ScoringConfig:
     laboratory_weight: float = 0.1
 
     # Likelihood ratios for different evidence types
-    phenotype_present_lr: float = 5.0    # Phenotype present
-    phenotype_absent_lr: float = 0.3     # Phenotype absent
+    phenotype_present_lr: float = 5.0  # Phenotype present
+    phenotype_absent_lr: float = 0.3  # Phenotype absent
     pathogenic_variant_lr: float = 50.0  # Pathogenic variant found
-    vous_variant_lr: float = 2.0         # VUS found
-    family_history_lr: float = 3.0       # Positive family history
+    vous_variant_lr: float = 2.0  # VUS found
+    family_history_lr: float = 3.0  # Positive family history
 
     # Prior adjustments
     use_prevalence: bool = True
-    default_prevalence: float = 1e-5     # 1 in 100,000
+    default_prevalence: float = 1e-5  # 1 in 100,000
     max_posterior: float = 0.99
     min_posterior: float = 0.001
 
@@ -131,9 +132,9 @@ class BayesianScorer:
 
         # Combine likelihood ratios (weighted geometric mean)
         combined_lr = (
-            (phenotype_lr ** self.config.phenotype_weight) *
-            (genetic_lr ** self.config.genetic_weight) *
-            (history_lr ** self.config.history_weight)
+            (phenotype_lr**self.config.phenotype_weight)
+            * (genetic_lr**self.config.genetic_weight)
+            * (history_lr**self.config.history_weight)
         )
 
         # Apply Bayes' theorem
@@ -147,9 +148,9 @@ class BayesianScorer:
 
         # Calculate combined score (weighted average of component scores)
         hypothesis.combined_score = (
-            hypothesis.phenotype_score * self.config.phenotype_weight +
-            hypothesis.genetic_score * self.config.genetic_weight +
-            hypothesis.history_score * self.config.history_weight
+            hypothesis.phenotype_score * self.config.phenotype_weight
+            + hypothesis.genetic_score * self.config.genetic_weight
+            + hypothesis.history_score * self.config.history_weight
         )
 
         # Classify evidence
@@ -250,7 +251,9 @@ class BayesianScorer:
             # Get gene symbol from code (preferred) or extract from value (fallback)
             gene_symbol = evidence.code
             if not gene_symbol and evidence.value:
-                gene_symbol = evidence.value.split(":")[0] if ":" in evidence.value else evidence.value
+                gene_symbol = (
+                    evidence.value.split(":")[0] if ":" in evidence.value else evidence.value
+                )
 
             if gene_symbol and gene_symbol in disease_genes:
                 # Check pathogenicity
@@ -258,7 +261,10 @@ class BayesianScorer:
                     lr *= self.config.pathogenic_variant_lr
                 elif "likely_pathogenic" in str(evidence.severity).lower():
                     lr *= self.config.pathogenic_variant_lr * 0.5
-                elif "vous" in str(evidence.severity).lower() or "uncertain" in str(evidence.severity).lower():
+                elif (
+                    "vous" in str(evidence.severity).lower()
+                    or "uncertain" in str(evidence.severity).lower()
+                ):
                     lr *= self.config.vous_variant_lr
                 else:
                     lr *= 1.5  # Unknown significance in disease gene
@@ -330,11 +336,11 @@ class BayesianScorer:
                 """
 
                 # Access Neo4j through the overlay's client
-                neo4j = getattr(self._primekg, '_neo4j', None)
+                neo4j = getattr(self._primekg, "_neo4j", None)
                 if neo4j:
                     results = await neo4j.run(query, {"disease_id": disease_id})
 
-                    for r in (results or []):
+                    for r in results or []:
                         hpo_id = r.get("hpo_id")
                         if hpo_id:
                             # Clamp frequency to valid range
@@ -483,6 +489,7 @@ class BayesianScorer:
 # =============================================================================
 # Factory Function
 # =============================================================================
+
 
 def create_bayesian_scorer(
     config: ScoringConfig | None = None,

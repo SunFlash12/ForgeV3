@@ -23,7 +23,7 @@ Neo4jRecord = dict[str, Neo4jValue | dict[str, "Neo4jValue"]]
 logger = structlog.get_logger(__name__)
 
 # Regex for valid Cypher identifiers (property names, etc.)
-VALID_IDENTIFIER_PATTERN = re.compile(r'^[a-zA-Z_][a-zA-Z0-9_]*$')
+VALID_IDENTIFIER_PATTERN = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
 
 
 def validate_identifier(name: str, param_name: str = "identifier") -> str:
@@ -45,10 +45,13 @@ def validate_identifier(name: str, param_name: str = "identifier") -> str:
     if not name:
         raise ValueError(f"{param_name} cannot be empty")
     if not VALID_IDENTIFIER_PATTERN.match(name):
-        raise ValueError(f"Invalid {param_name}: must be alphanumeric with underscores, starting with letter or underscore")
+        raise ValueError(
+            f"Invalid {param_name}: must be alphanumeric with underscores, starting with letter or underscore"
+        )
     if len(name) > 64:
         raise ValueError(f"{param_name} too long (max 64 characters)")
     return name
+
 
 # Type variables for generic repository
 T = TypeVar("T", bound=BaseModel)  # Model type

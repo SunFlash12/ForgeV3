@@ -36,11 +36,27 @@ if TYPE_CHECKING:
 logger = structlog.get_logger(__name__)
 
 # Sensitive query parameter keys that should be redacted in logs
-SENSITIVE_PARAM_KEYS = frozenset({
-    'token', 'access_token', 'refresh_token', 'api_key', 'apikey',
-    'password', 'secret', 'key', 'auth', 'authorization', 'credential',
-    'session', 'jwt', 'bearer', 'private', 'ssn', 'credit_card',
-})
+SENSITIVE_PARAM_KEYS = frozenset(
+    {
+        "token",
+        "access_token",
+        "refresh_token",
+        "api_key",
+        "apikey",
+        "password",
+        "secret",
+        "key",
+        "auth",
+        "authorization",
+        "credential",
+        "session",
+        "jwt",
+        "bearer",
+        "private",
+        "ssn",
+        "credit_card",
+    }
+)
 
 
 def sanitize_query_params(query_params: QueryParams | None) -> str | None:
@@ -73,6 +89,7 @@ def sanitize_query_params(query_params: QueryParams | None) -> str | None:
 redis: ModuleType | None
 try:
     import redis.asyncio as redis
+
     REDIS_AVAILABLE = True
 except ImportError:
     REDIS_AVAILABLE = False
@@ -144,7 +161,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 
         # Get client info
         client_ip = self._get_client_ip(request)
-        correlation_id: str = getattr(request.state, 'correlation_id', 'unknown')
+        correlation_id: str = getattr(request.state, "correlation_id", "unknown")
 
         # Log request with sanitized query params
         logger.info(
@@ -160,7 +177,9 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         try:
             response = await call_next(request)
             status_code = response.status_code
-        except Exception as e:  # Intentional broad catch: API error boundary - returns sanitized 500
+        except (
+            Exception
+        ) as e:  # Intentional broad catch: API error boundary - returns sanitized 500
             # Log exception
             duration_ms = (time.perf_counter() - start_time) * 1000
             logger.exception(
@@ -260,7 +279,7 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
                 payload = verify_token(token, settings.jwt_secret_key)
 
                 # Check if token is blacklisted (revoked) - async for Redis support
-                jti: str | None = payload.jti if hasattr(payload, 'jti') else None
+                jti: str | None = payload.jti if hasattr(payload, "jti") else None
                 if await TokenBlacklist.is_blacklisted_async(jti):
                     logger.warning(
                         "blacklisted_token_used",
@@ -345,7 +364,7 @@ class SessionBindingMiddleware(BaseHTTPMiddleware):
             return response
 
         # Skip if no token payload (unauthenticated request)
-        token_payload: Any = getattr(request.state, 'token_payload', None)
+        token_payload: Any = getattr(request.state, "token_payload", None)
         if not token_payload:
             response = await call_next(request)
             return response
@@ -353,7 +372,7 @@ class SessionBindingMiddleware(BaseHTTPMiddleware):
         # Get session service from request app state if not set
         session_service: Any = self._session_service
         if not session_service:
-            session_service = getattr(request.app.state, 'session_service', None)
+            session_service = getattr(request.app.state, "session_service", None)
 
         # Skip if session service not available
         if not session_service:
@@ -361,7 +380,7 @@ class SessionBindingMiddleware(BaseHTTPMiddleware):
             return response
 
         # Get token JTI
-        jti: str | None = getattr(token_payload, 'jti', None)
+        jti: str | None = getattr(token_payload, "jti", None)
         if not jti:
             response = await call_next(request)
             return response
@@ -424,6 +443,7 @@ class SessionBindingMiddleware(BaseHTTPMiddleware):
 @dataclass
 class RateLimitEntry:
     """Tracks rate limit for a key."""
+
     count: int = 0
     window_start: float = field(default_factory=time.time)
 
@@ -595,7 +615,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
             # SECURITY FIX: Validate pipeline results before indexing
             if not results or len(results) < 4:
-                logger.warning("redis_pipeline_incomplete", results_count=len(results) if results else 0)
+                logger.warning(
+                    "redis_pipeline_incomplete", results_count=len(results) if results else 0
+                )
                 return self._check_memory_rate_limit(key, minute_limit, hour_limit, burst)
 
             minute_count: int = results[0]
@@ -662,16 +684,14 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         # Clean minute buckets (entries older than 2 minutes are stale)
         expired_minute_keys = [
-            key for key, entry in self._minute_buckets.items()
-            if now - entry.window_start > 120
+            key for key, entry in self._minute_buckets.items() if now - entry.window_start > 120
         ]
         for key in expired_minute_keys:
             del self._minute_buckets[key]
 
         # Clean hour buckets (entries older than 2 hours are stale)
         expired_hour_keys = [
-            key for key, entry in self._hour_buckets.items()
-            if now - entry.window_start > 7200
+            key for key, entry in self._hour_buckets.items() if now - entry.window_start > 7200
         ]
         for key in expired_hour_keys:
             del self._hour_buckets[key]
@@ -685,7 +705,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     def _get_rate_limit_key(self, request: Request) -> str:
         """Get key for rate limiting (user ID or IP)."""
-        user_id = getattr(request.state, 'user_id', None)
+        user_id = getattr(request.state, "user_id", None)
         if user_id:
             return f"user:{user_id}"
 
@@ -695,7 +715,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         """Extract client IP, handling proxies."""
         forwarded_for = request.headers.get("X-Forwarded-For")
         if forwarded_for:
-            return forwarded_for.split(',')[0].strip()
+            return forwarded_for.split(",")[0].strip()
         if request.client:
             return request.client.host
         return "unknown"
@@ -751,10 +771,10 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         # Note: Frontend should set its own CSP via meta tag or server config
         response.headers["Content-Security-Policy"] = (
             "default-src 'none'; "  # Deny all by default for API
-            "script-src 'none'; "   # No scripts in API responses
-            "style-src 'none'; "    # No styles in API responses
-            "img-src 'none'; "      # No images in API responses
-            "font-src 'none'; "     # No fonts in API responses
+            "script-src 'none'; "  # No scripts in API responses
+            "style-src 'none'; "  # No styles in API responses
+            "img-src 'none'; "  # No images in API responses
+            "font-src 'none'; "  # No fonts in API responses
             "connect-src 'none'; "  # No XHR/fetch from API responses
             "frame-ancestors 'none'; "
             "base-uri 'none'; "
@@ -764,7 +784,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
         # HSTS (only in production)
         if self.enable_hsts:
-            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload"
+            response.headers["Strict-Transport-Security"] = (
+                "max-age=31536000; includeSubDomains; preload"
+            )
 
         # Permissions Policy (formerly Feature-Policy)
         response.headers["Permissions-Policy"] = (
@@ -991,15 +1013,13 @@ class APILimitsMiddleware(BaseHTTPMiddleware):
 
         # Check JSON depth for POST/PUT/PATCH requests with JSON body
         content_type = request.headers.get("Content-Type", "")
-        if (
-            request.method in {"POST", "PUT", "PATCH"}
-            and "application/json" in content_type
-        ):
+        if request.method in {"POST", "PUT", "PATCH"} and "application/json" in content_type:
             try:
                 # Read body and check depth
                 body = await request.body()
                 if body:
                     import json
+
                     try:
                         json_data = json.loads(body)
                         is_valid, error = self._check_json_depth(json_data)
@@ -1025,6 +1045,7 @@ class APILimitsMiddleware(BaseHTTPMiddleware):
 @dataclass
 class IdempotencyEntry:
     """Cached response for idempotency."""
+
     status_code: int
     body: bytes
     headers: dict[str, str]
@@ -1082,14 +1103,16 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
                 content={"error": "Idempotency key too long (max 64 chars)"},
             )
         # Only allow alphanumeric, dashes, and underscores
-        if not re.match(r'^[a-zA-Z0-9_-]+$', idempotency_key):
+        if not re.match(r"^[a-zA-Z0-9_-]+$", idempotency_key):
             return JSONResponse(
                 status_code=400,
-                content={"error": "Idempotency key must be alphanumeric (with dashes/underscores only)"},
+                content={
+                    "error": "Idempotency key must be alphanumeric (with dashes/underscores only)"
+                },
             )
 
         # Build cache key including user if authenticated
-        user_id: str = getattr(request.state, 'user_id', None) or 'anonymous'
+        user_id: str = getattr(request.state, "user_id", None) or "anonymous"
         cache_key = f"{user_id}:{request.url.path}:{idempotency_key}"
 
         # Check cache
@@ -1115,7 +1138,7 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
         if 200 <= response.status_code < 500:
             # Read response body - body_iterator is available on StreamingResponse
             body = b""
-            if hasattr(response, 'body_iterator'):
+            if hasattr(response, "body_iterator"):
                 streaming_response: StreamingResponse = response  # type: ignore[assignment]
                 async for chunk in streaming_response.body_iterator:
                     if isinstance(chunk, bytes):
@@ -1134,8 +1157,7 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
                         # Evict 10% of oldest entries
                         evict_count = self.MAX_CACHE_SIZE // 10
                         oldest_keys = sorted(
-                            self._cache.keys(),
-                            key=lambda k: self._cache[k].created_at
+                            self._cache.keys(), key=lambda k: self._cache[k].created_at
                         )[:evict_count]
                         for key in oldest_keys:
                             del self._cache[key]
@@ -1165,8 +1187,7 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
 
         self._last_cleanup = now
         expired = [
-            key for key, entry in self._cache.items()
-            if now - entry.created_at > self.ttl_seconds
+            key for key, entry in self._cache.items() if now - entry.created_at > self.ttl_seconds
         ]
         for key in expired:
             del self._cache[key]

@@ -22,16 +22,18 @@ logger = logging.getLogger(__name__)
 
 class PricingTier(str, Enum):
     """Pricing tiers based on capsule characteristics."""
-    COMMODITY = "commodity"           # Low uniqueness, high supply
-    STANDARD = "standard"             # Normal marketplace item
-    PREMIUM = "premium"               # High trust/quality
-    EXCLUSIVE = "exclusive"           # Very rare or authoritative
-    FOUNDATIONAL = "foundational"     # High PageRank, many derivatives
+
+    COMMODITY = "commodity"  # Low uniqueness, high supply
+    STANDARD = "standard"  # Normal marketplace item
+    PREMIUM = "premium"  # High trust/quality
+    EXCLUSIVE = "exclusive"  # Very rare or authoritative
+    FOUNDATIONAL = "foundational"  # High PageRank, many derivatives
 
 
 @dataclass
 class PricingFactors:
     """All factors that influence pricing."""
+
     # Core metrics
     trust_level: int = 50
     pagerank_score: float = 0.0
@@ -73,6 +75,7 @@ class PricingFactors:
 @dataclass
 class PricingResult:
     """Complete pricing recommendation."""
+
     capsule_id: str
 
     # Price recommendations
@@ -118,12 +121,12 @@ class TrustBasedPricingEngine:
 
     # Trust level multiplier curve (0-100 -> multiplier)
     TRUST_CURVE = [
-        (0, 0.25),      # Quarantine
-        (20, 0.50),     # Sandbox
-        (40, 1.00),     # Standard
-        (60, 1.75),     # Trusted
-        (80, 2.50),     # Core
-        (100, 3.50),    # Maximum
+        (0, 0.25),  # Quarantine
+        (20, 0.50),  # Sandbox
+        (40, 1.00),  # Standard
+        (60, 1.75),  # Trusted
+        (80, 2.50),  # Core
+        (100, 3.50),  # Maximum
     ]
 
     # PageRank value thresholds
@@ -162,10 +165,7 @@ class TrustBasedPricingEngine:
         tier, tier_reason = self._determine_tier(factors)
 
         # Get base price for capsule type
-        base_price = self.BASE_PRICES.get(
-            factors.capsule_type.upper(),
-            Decimal("10.00")
-        )
+        base_price = self.BASE_PRICES.get(factors.capsule_type.upper(), Decimal("10.00"))
 
         # Calculate multipliers
         multipliers = {}
@@ -202,13 +202,13 @@ class TrustBasedPricingEngine:
 
         # Calculate combined multiplier (weighted geometric mean)
         weights = {
-            "trust": 0.30,       # 30% weight
-            "pagerank": 0.15,    # 15% weight
+            "trust": 0.30,  # 30% weight
+            "pagerank": 0.15,  # 15% weight
             "influence": 0.15,  # 15% weight
-            "quality": 0.10,    # 10% weight
-            "demand": 0.10,     # 10% weight
-            "rarity": 0.10,     # 10% weight
-            "lineage": 0.05,    # 5% weight
+            "quality": 0.10,  # 10% weight
+            "demand": 0.10,  # 10% weight
+            "rarity": 0.10,  # 10% weight
+            "lineage": 0.05,  # 5% weight
             "freshness": 0.05,  # 5% weight
         }
 
@@ -242,8 +242,7 @@ class TrustBasedPricingEngine:
 
         # Final suggested price
         suggested_price = (raw_price + total_adjustments).quantize(
-            Decimal("0.01"),
-            rounding=ROUND_HALF_UP
+            Decimal("0.01"), rounding=ROUND_HALF_UP
         )
 
         # Ensure minimum floor
@@ -283,8 +282,10 @@ class TrustBasedPricingEngine:
     def _determine_tier(self, factors: PricingFactors) -> tuple[PricingTier, str]:
         """Determine the pricing tier based on capsule characteristics."""
         # Foundational: High PageRank with many derivatives
-        if (factors.pagerank_score > self.PAGERANK_THRESHOLDS["high"]
-            and factors.derivative_count > 10):
+        if (
+            factors.pagerank_score > self.PAGERANK_THRESHOLDS["high"]
+            and factors.derivative_count > 10
+        ):
             return PricingTier.FOUNDATIONAL, "High network centrality with significant derivatives"
 
         # Exclusive: Very high trust + original source
@@ -473,10 +474,7 @@ class TrustBasedPricingEngine:
         """Calculate weighted geometric mean of multipliers."""
         total_weight = sum(weights.values())
 
-        log_sum = sum(
-            weights.get(k, 0) * math.log(max(0.01, v))
-            for k, v in multipliers.items()
-        )
+        log_sum = sum(weights.get(k, 0) * math.log(max(0.01, v)) for k, v in multipliers.items())
 
         return math.exp(log_sum / total_weight)
 
@@ -532,7 +530,9 @@ class TrustBasedPricingEngine:
             "price_range": {
                 "min": float(factors.avg_similar_price * Decimal("0.5")),
                 "max": float(factors.avg_similar_price * Decimal("2.0")),
-            } if factors.avg_similar_price > 0 else None,
+            }
+            if factors.avg_similar_price > 0
+            else None,
         }
 
     def _calculate_confidence(
@@ -596,8 +596,7 @@ class TrustBasedPricingEngine:
         # Citation recommendations
         if factors.citation_count == 0:
             recommendations.append(
-                "Capsule has no citations - linking to other capsules "
-                "can increase perceived value"
+                "Capsule has no citations - linking to other capsules can increase perceived value"
             )
 
         # Freshness recommendations
@@ -609,9 +608,7 @@ class TrustBasedPricingEngine:
 
         # Lineage recommendations
         if factors.original_source:
-            recommendations.append(
-                "This is an original source - consider EXCLUSIVE pricing tier"
-            )
+            recommendations.append("This is an original source - consider EXCLUSIVE pricing tier")
 
         return recommendations[:5]  # Max 5 recommendations
 
@@ -659,18 +656,22 @@ class TrustBasedPricingEngine:
                 weight = depth_weights.get(depth, remaining_weight / max(1, len(lineage) - 4))
                 total_weight += weight
 
-                distributions.append({
-                    "user_id": ancestor.get("owner_id"),
-                    "capsule_id": ancestor.get("capsule_id"),
-                    "depth": depth,
-                    "weight": float(weight),
-                    "amount": total_lineage_share * weight,
-                })
+                distributions.append(
+                    {
+                        "user_id": ancestor.get("owner_id"),
+                        "capsule_id": ancestor.get("capsule_id"),
+                        "depth": depth,
+                        "weight": float(weight),
+                        "amount": total_lineage_share * weight,
+                    }
+                )
 
             # Normalize to ensure total equals lineage_share
             if total_weight > 0:
                 for d in distributions:
-                    d["amount"] = (Decimal(str(d["weight"])) / total_weight * total_lineage_share).quantize(Decimal("0.01"))
+                    d["amount"] = (
+                        Decimal(str(d["weight"])) / total_weight * total_lineage_share
+                    ).quantize(Decimal("0.01"))
 
         except (RuntimeError, ValueError, TypeError, OSError) as e:
             logger.warning(f"Failed to calculate lineage distribution: {e}")

@@ -73,8 +73,8 @@ async def list_sessions(
     - Whether this is the current session
     """
     # Get current session JTI from request state
-    token_payload = getattr(request.state, 'token_payload', None)
-    current_jti = getattr(token_payload, 'jti', None) if token_payload else None
+    token_payload = getattr(request.state, "token_payload", None)
+    current_jti = getattr(token_payload, "jti", None) if token_payload else None
 
     return await session_service.get_user_sessions(
         user_id=current_user.id,
@@ -120,8 +120,8 @@ async def revoke_session(
     Use the logout endpoint instead.
     """
     # Check if trying to revoke current session
-    token_payload = getattr(request.state, 'token_payload', None)
-    current_jti = getattr(token_payload, 'jti', None) if token_payload else None
+    token_payload = getattr(request.state, "token_payload", None)
+    current_jti = getattr(token_payload, "jti", None) if token_payload else None
 
     if session_id == current_jti:
         raise HTTPException(
@@ -167,8 +167,8 @@ async def revoke_all_sessions(
     Set except_current=false to revoke ALL sessions including current.
     """
     # Get current session JTI
-    token_payload = getattr(request.state, 'token_payload', None)
-    current_jti = getattr(token_payload, 'jti', None) if token_payload else None
+    token_payload = getattr(request.state, "token_payload", None)
+    current_jti = getattr(token_payload, "jti", None) if token_payload else None
 
     # Default to keeping current session
     except_current = body.except_current if body else True

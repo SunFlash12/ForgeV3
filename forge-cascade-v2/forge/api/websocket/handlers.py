@@ -71,6 +71,7 @@ def get_max_connections_per_user() -> int:
 # SECURITY FIX (Audit 6): Origin Validation for WebSocket
 # ============================================================================
 
+
 def validate_websocket_origin(websocket: WebSocket) -> bool:
     """
     SECURITY FIX (Audit 6): Validate WebSocket Origin header to prevent CSWSH attacks.
@@ -172,6 +173,7 @@ async def validate_and_accept_websocket(
 
     await websocket.accept()
     return True
+
 
 websocket_router = APIRouter()
 
@@ -312,9 +314,7 @@ class WebSocketConnection:
             self.message_count += 1
             return True
         except (WebSocketDisconnect, ConnectionError, OSError, RuntimeError) as e:
-            logger.warning("websocket_send_failed",
-                         connection_id=self.connection_id,
-                         error=str(e))
+            logger.warning("websocket_send_failed", connection_id=self.connection_id, error=str(e))
             return False
 
     async def send_text(self, text: str) -> bool:
@@ -456,18 +456,22 @@ class ConnectionManager:
         for topic in connection.subscriptions:
             self._topic_subscribers[topic].add(connection_id)
 
-        logger.info("websocket_event_connected",
-                   connection_id=connection_id,
-                   user_id=user_id,
-                   subscriptions=list(connection.subscriptions))
+        logger.info(
+            "websocket_event_connected",
+            connection_id=connection_id,
+            user_id=user_id,
+            subscriptions=list(connection.subscriptions),
+        )
 
         # Send welcome message
-        await connection.send_json({
-            "type": "connected",
-            "connection_id": connection_id,
-            "subscriptions": list(connection.subscriptions),
-            "timestamp": datetime.now(UTC).isoformat()
-        })
+        await connection.send_json(
+            {
+                "type": "connected",
+                "connection_id": connection_id,
+                "subscriptions": list(connection.subscriptions),
+                "timestamp": datetime.now(UTC).isoformat(),
+            }
+        )
 
         return connection
 
@@ -490,10 +494,7 @@ class ConnectionManager:
         logger.info("websocket_event_disconnected", connection_id=connection_id)
 
     async def broadcast_event(
-        self,
-        event_type: str,
-        data: dict[str, Any],
-        topic: str | None = None
+        self, event_type: str, data: dict[str, Any], topic: str | None = None
     ) -> None:
         """Broadcast an event to subscribed connections."""
 
@@ -501,7 +502,7 @@ class ConnectionManager:
             "type": "event",
             "event_type": event_type,
             "data": data,
-            "timestamp": datetime.now(UTC).isoformat()
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
         # Determine target connections
@@ -567,16 +568,16 @@ class ConnectionManager:
         if user_id:
             self._user_connections[user_id].add(connection_id)
 
-        logger.info("websocket_dashboard_connected",
-                   connection_id=connection_id,
-                   user_id=user_id)
+        logger.info("websocket_dashboard_connected", connection_id=connection_id, user_id=user_id)
 
         # Send welcome message
-        await connection.send_json({
-            "type": "connected",
-            "connection_id": connection_id,
-            "timestamp": datetime.now(UTC).isoformat()
-        })
+        await connection.send_json(
+            {
+                "type": "connected",
+                "connection_id": connection_id,
+                "timestamp": datetime.now(UTC).isoformat(),
+            }
+        )
 
         return connection
 
@@ -599,7 +600,7 @@ class ConnectionManager:
         message = {
             "type": "metrics_update",
             "metrics": metrics,
-            "timestamp": datetime.now(UTC).isoformat()
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
         disconnected = []
@@ -651,28 +652,29 @@ class ConnectionManager:
         self._total_connections += 1
         self._user_connections[user_id].add(connection_id)
 
-        logger.info("websocket_chat_connected",
-                   connection_id=connection_id,
-                   room_id=room_id,
-                   user_id=user_id)
+        logger.info(
+            "websocket_chat_connected",
+            connection_id=connection_id,
+            room_id=room_id,
+            user_id=user_id,
+        )
 
         # Send welcome message
-        await connection.send_json({
-            "type": "connected",
-            "connection_id": connection_id,
-            "room_id": room_id,
-            "timestamp": datetime.now(UTC).isoformat()
-        })
+        await connection.send_json(
+            {
+                "type": "connected",
+                "connection_id": connection_id,
+                "room_id": room_id,
+                "timestamp": datetime.now(UTC).isoformat(),
+            }
+        )
 
         # Notify room of new participant
         await self.broadcast_chat(
             room_id=room_id,
             message_type="user_joined",
-            data={
-                "user_id": user_id,
-                "display_name": display_name or user_id
-            },
-            exclude_connection=connection_id
+            data={"user_id": user_id, "display_name": display_name or user_id},
+            exclude_connection=connection_id,
         )
 
         return connection
@@ -697,21 +699,17 @@ class ConnectionManager:
         # Notify room
         if room_id in self._chat_connections:
             await self.broadcast_chat(
-                room_id=room_id,
-                message_type="user_left",
-                data={"user_id": connection.user_id}
+                room_id=room_id, message_type="user_left", data={"user_id": connection.user_id}
             )
 
-        logger.info("websocket_chat_disconnected",
-                   connection_id=connection_id,
-                   room_id=room_id)
+        logger.info("websocket_chat_disconnected", connection_id=connection_id, room_id=room_id)
 
     async def broadcast_chat(
         self,
         room_id: str,
         message_type: str,
         data: dict[str, Any],
-        exclude_connection: str | None = None
+        exclude_connection: str | None = None,
     ) -> None:
         """Broadcast a message to all connections in a chat room."""
 
@@ -722,7 +720,7 @@ class ConnectionManager:
             "type": message_type,
             "data": data,
             "room_id": room_id,
-            "timestamp": datetime.now(UTC).isoformat()
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
         disconnected = []
@@ -752,9 +750,9 @@ class ConnectionManager:
         for conn_id in self._user_connections.get(user_id, set()).copy():
             # Check all connection types
             connection = (
-                self._event_connections.get(conn_id) or
-                self._dashboard_connections.get(conn_id) or
-                self._find_chat_connection(conn_id)
+                self._event_connections.get(conn_id)
+                or self._dashboard_connections.get(conn_id)
+                or self._find_chat_connection(conn_id)
             )
 
             if connection:
@@ -784,7 +782,7 @@ class ConnectionManager:
             "chat_connections": sum(len(c) for c in self._chat_connections.values()),
             "total_connections_ever": self._total_connections,
             "total_messages_sent": self._total_messages_sent,
-            "active_topics": list(self._topic_subscribers.keys())
+            "active_topics": list(self._topic_subscribers.keys()),
         }
 
     def get_room_participants(self, room_id: str) -> list[str]:
@@ -793,21 +791,16 @@ class ConnectionManager:
         if room_id not in self._chat_connections:
             return []
 
-        return list({
-            conn.user_id
-            for conn in self._chat_connections[room_id].values()
-            if conn.user_id
-        })
+        return list(
+            {conn.user_id for conn in self._chat_connections[room_id].values() if conn.user_id}
+        )
 
     # -------------------------------------------------------------------------
     # SECURITY FIX (Audit 6): Force Disconnect for Privilege Changes
     # -------------------------------------------------------------------------
 
     async def force_disconnect_user(
-        self,
-        user_id: str,
-        reason: str = "privilege_change",
-        close_code: int = 4001
+        self, user_id: str, reason: str = "privilege_change", close_code: int = 4001
     ) -> int:
         """
         SECURITY FIX (Audit 6): Force-disconnect all WebSocket connections for a user.
@@ -836,28 +829,29 @@ class ConnectionManager:
             try:
                 # Find connection in any connection pool
                 connection = (
-                    self._event_connections.get(conn_id) or
-                    self._dashboard_connections.get(conn_id) or
-                    self._find_chat_connection(conn_id)
+                    self._event_connections.get(conn_id)
+                    or self._dashboard_connections.get(conn_id)
+                    or self._find_chat_connection(conn_id)
                 )
 
                 if connection:
                     # Send notification to client before closing
                     try:
-                        await connection.send_json({
-                            "type": "session_terminated",
-                            "reason": reason,
-                            "action_required": "reauthenticate",
-                            "timestamp": datetime.now(UTC).isoformat()
-                        })
+                        await connection.send_json(
+                            {
+                                "type": "session_terminated",
+                                "reason": reason,
+                                "action_required": "reauthenticate",
+                                "timestamp": datetime.now(UTC).isoformat(),
+                            }
+                        )
                     except (WebSocketDisconnect, ConnectionError, OSError, RuntimeError):
                         pass  # Client may already be disconnected
 
                     # Close the WebSocket connection
                     try:
                         await connection.websocket.close(
-                            code=close_code,
-                            reason=f"Session terminated: {reason}"
+                            code=close_code, reason=f"Session terminated: {reason}"
                         )
                     except (WebSocketDisconnect, ConnectionError, OSError, RuntimeError):
                         pass  # Already closed
@@ -894,10 +888,7 @@ class ConnectionManager:
         return closed_count
 
     async def notify_privilege_change(
-        self,
-        user_id: str,
-        change_type: str,
-        message: str | None = None
+        self, user_id: str, change_type: str, message: str | None = None
     ) -> int:
         """
         SECURITY FIX (Audit 6): Notify user of privilege change without disconnecting.
@@ -913,12 +904,16 @@ class ConnectionManager:
         Returns:
             Number of connections notified
         """
-        return await self.send_to_user(user_id, {
-            "type": "privilege_change",
-            "change_type": change_type,
-            "message": message or "Your permissions have changed. Some actions may require re-authentication.",
-            "timestamp": datetime.now(UTC).isoformat()
-        })
+        return await self.send_to_user(
+            user_id,
+            {
+                "type": "privilege_change",
+                "change_type": change_type,
+                "message": message
+                or "Your permissions have changed. Some actions may require re-authentication.",
+                "timestamp": datetime.now(UTC).isoformat(),
+            },
+        )
 
 
 # Global connection manager instance
@@ -931,8 +926,7 @@ connection_manager = ConnectionManager()
 
 
 async def authenticate_websocket(
-    websocket: WebSocket,
-    token: str | None = None
+    websocket: WebSocket, token: str | None = None
 ) -> tuple[str | None, str | None]:
     """
     Authenticate a WebSocket connection.
@@ -1023,7 +1017,7 @@ async def authenticate_websocket(
 async def websocket_events(
     websocket: WebSocket,
     token: str | None = Query(default=None),
-    topics: str | None = Query(default=None, description="Comma-separated topic list")
+    topics: str | None = Query(default=None, description="Comma-separated topic list"),
 ) -> None:
     """
     WebSocket endpoint for real-time event streaming.
@@ -1059,8 +1053,7 @@ async def websocket_events(
     if not connection_manager.can_user_connect(user_id):
         max_conn = get_max_connections_per_user()
         await websocket.close(
-            code=4029,
-            reason=f"Connection limit exceeded. Max {max_conn} connections per user."
+            code=4029, reason=f"Connection limit exceeded. Max {max_conn} connections per user."
         )
         return
 
@@ -1085,11 +1078,13 @@ async def websocket_events(
         while True:
             # SECURITY FIX (Audit 6): Check token expiry periodically
             if not await connection.check_token_expiry():
-                await connection.send_json({
-                    "type": "error",
-                    "code": "TOKEN_EXPIRED",
-                    "message": "Your session has expired. Please reconnect with a new token."
-                })
+                await connection.send_json(
+                    {
+                        "type": "error",
+                        "code": "TOKEN_EXPIRED",
+                        "message": "Your session has expired. Please reconnect with a new token.",
+                    }
+                )
                 await websocket.close(code=4001, reason="Token expired")
                 break
 
@@ -1106,20 +1101,24 @@ async def websocket_events(
 
             # SECURITY FIX (Audit 9): Validate message structure
             if not isinstance(data, dict) or "type" not in data:
-                await connection.send_json({
-                    "type": "error",
-                    "code": "INVALID_MESSAGE",
-                    "message": "Messages must be JSON objects with a 'type' field."
-                })
+                await connection.send_json(
+                    {
+                        "type": "error",
+                        "code": "INVALID_MESSAGE",
+                        "message": "Messages must be JSON objects with a 'type' field.",
+                    }
+                )
                 continue
 
             # Rate limiting check
             if not connection.check_rate_limit():
-                await connection.send_json({
-                    "type": "error",
-                    "code": "RATE_LIMITED",
-                    "message": f"Rate limit exceeded. Max {MAX_MESSAGES_PER_MINUTE} messages per minute."
-                })
+                await connection.send_json(
+                    {
+                        "type": "error",
+                        "code": "RATE_LIMITED",
+                        "message": f"Rate limit exceeded. Max {MAX_MESSAGES_PER_MINUTE} messages per minute.",
+                    }
+                )
                 continue
 
             msg_type = data.get("type")
@@ -1148,11 +1147,13 @@ async def websocket_events(
                 response = {
                     "type": "subscribed",
                     "topics": added_topics,
-                    "all_subscriptions": list(connection.subscriptions)
+                    "all_subscriptions": list(connection.subscriptions),
                 }
                 if skipped_topics:
                     response["skipped"] = skipped_topics
-                    response["reason"] = f"Subscription limit ({MAX_SUBSCRIPTIONS_PER_CONNECTION}) reached"
+                    response["reason"] = (
+                        f"Subscription limit ({MAX_SUBSCRIPTIONS_PER_CONNECTION}) reached"
+                    )
                 await connection.send_json(response)
 
             elif msg_type == "unsubscribe":
@@ -1160,26 +1161,25 @@ async def websocket_events(
                 for topic in remove_topics:
                     connection.subscriptions.discard(topic)
                     connection_manager._topic_subscribers[topic].discard(connection.connection_id)
-                await connection.send_json({
-                    "type": "unsubscribed",
-                    "topics": remove_topics,
-                    "all_subscriptions": list(connection.subscriptions)
-                })
+                await connection.send_json(
+                    {
+                        "type": "unsubscribed",
+                        "topics": remove_topics,
+                        "all_subscriptions": list(connection.subscriptions),
+                    }
+                )
 
     except WebSocketDisconnect:
         pass
     except (ConnectionError, asyncio.CancelledError, OSError, RuntimeError) as e:
-        logger.error("websocket_events_error",
-                    connection_id=connection.connection_id,
-                    error=str(e))
+        logger.error("websocket_events_error", connection_id=connection.connection_id, error=str(e))
     finally:
         await connection_manager.disconnect_events(connection.connection_id)
 
 
 @websocket_router.websocket("/ws/dashboard")
 async def websocket_dashboard(
-    websocket: WebSocket,
-    token: str | None = Query(default=None)
+    websocket: WebSocket, token: str | None = Query(default=None)
 ) -> None:
     """
     WebSocket endpoint for live dashboard metrics.
@@ -1208,8 +1208,7 @@ async def websocket_dashboard(
     if not connection_manager.can_user_connect(user_id):
         max_conn = get_max_connections_per_user()
         await websocket.close(
-            code=4029,
-            reason=f"Connection limit exceeded. Max {max_conn} connections per user."
+            code=4029, reason=f"Connection limit exceeded. Max {max_conn} connections per user."
         )
         return
 
@@ -1228,11 +1227,13 @@ async def websocket_dashboard(
         while True:
             # SECURITY FIX (Audit 6): Check token expiry periodically
             if not await connection.check_token_expiry():
-                await connection.send_json({
-                    "type": "error",
-                    "code": "TOKEN_EXPIRED",
-                    "message": "Your session has expired. Please reconnect with a new token."
-                })
+                await connection.send_json(
+                    {
+                        "type": "error",
+                        "code": "TOKEN_EXPIRED",
+                        "message": "Your session has expired. Please reconnect with a new token.",
+                    }
+                )
                 await websocket.close(code=4001, reason="Token expired")
                 break
 
@@ -1247,11 +1248,13 @@ async def websocket_dashboard(
 
             # SECURITY FIX (Audit 9): Validate message structure
             if not isinstance(data, dict) or "type" not in data:
-                await connection.send_json({
-                    "type": "error",
-                    "code": "INVALID_MESSAGE",
-                    "message": "Messages must be JSON objects with a 'type' field."
-                })
+                await connection.send_json(
+                    {
+                        "type": "error",
+                        "code": "INVALID_MESSAGE",
+                        "message": "Messages must be JSON objects with a 'type' field.",
+                    }
+                )
                 continue
 
             msg_type = data.get("type")
@@ -1263,18 +1266,20 @@ async def websocket_dashboard(
             elif msg_type == "request_metrics":
                 # Client can request immediate metrics update
                 # In a real implementation, gather current metrics
-                await connection.send_json({
-                    "type": "metrics_update",
-                    "metrics": {},  # Would be populated from metrics service
-                    "timestamp": datetime.now(UTC).isoformat()
-                })
+                await connection.send_json(
+                    {
+                        "type": "metrics_update",
+                        "metrics": {},  # Would be populated from metrics service
+                        "timestamp": datetime.now(UTC).isoformat(),
+                    }
+                )
 
     except WebSocketDisconnect:
         pass
     except (ConnectionError, asyncio.CancelledError, OSError, RuntimeError) as e:
-        logger.error("websocket_dashboard_error",
-                    connection_id=connection.connection_id,
-                    error=str(e))
+        logger.error(
+            "websocket_dashboard_error", connection_id=connection.connection_id, error=str(e)
+        )
     finally:
         await connection_manager.disconnect_dashboard(connection.connection_id)
 
@@ -1336,8 +1341,7 @@ async def websocket_chat(
     if not connection_manager.can_user_connect(user_id):
         max_conn = get_max_connections_per_user()
         await websocket.close(
-            code=4029,
-            reason=f"Connection limit exceeded. Max {max_conn} connections per user."
+            code=4029, reason=f"Connection limit exceeded. Max {max_conn} connections per user."
         )
         return
 
@@ -1410,26 +1414,25 @@ async def websocket_chat(
         return
 
     # Send room info to the connected user
-    await connection.send_json({
-        "type": "room_info",
-        "data": {
-            "room_id": room.id,
-            "name": room.name,
-            "description": room.description,
-            "visibility": room.visibility.value,
-            "role": user_role.value if user_role else None,
-            "owner_id": room.owner_id,
-            "member_count": room.member_count,
-            "is_archived": room.is_archived,
+    await connection.send_json(
+        {
+            "type": "room_info",
+            "data": {
+                "room_id": room.id,
+                "name": room.name,
+                "description": room.description,
+                "visibility": room.visibility.value,
+                "role": user_role.value if user_role else None,
+                "owner_id": room.owner_id,
+                "member_count": room.member_count,
+                "is_archived": room.is_archived,
+            },
         }
-    })
+    )
 
     # Send current participants
     participants = connection_manager.get_room_participants(room_id)
-    await connection.send_json({
-        "type": "participants",
-        "data": {"users": participants}
-    })
+    await connection.send_json({"type": "participants", "data": {"users": participants}})
 
     # Notify room of new participant with role
     await connection_manager.broadcast_chat(
@@ -1440,18 +1443,20 @@ async def websocket_chat(
             "display_name": display_name or user_id,
             "role": user_role.value if user_role else "member",
         },
-        exclude_connection=connection.connection_id
+        exclude_connection=connection.connection_id,
     )
 
     try:
         while True:
             # SECURITY FIX (Audit 6): Check token expiry periodically
             if not await connection.check_token_expiry():
-                await connection.send_json({
-                    "type": "error",
-                    "code": "TOKEN_EXPIRED",
-                    "message": "Your session has expired. Please reconnect with a new token."
-                })
+                await connection.send_json(
+                    {
+                        "type": "error",
+                        "code": "TOKEN_EXPIRED",
+                        "message": "Your session has expired. Please reconnect with a new token.",
+                    }
+                )
                 await websocket.close(code=4001, reason="Token expired")
                 break
 
@@ -1466,30 +1471,36 @@ async def websocket_chat(
 
             # SECURITY FIX (Audit 9): Validate message structure
             if not isinstance(data, dict) or "type" not in data:
-                await connection.send_json({
-                    "type": "error",
-                    "code": "INVALID_MESSAGE",
-                    "message": "Messages must be JSON objects with a 'type' field."
-                })
+                await connection.send_json(
+                    {
+                        "type": "error",
+                        "code": "INVALID_MESSAGE",
+                        "message": "Messages must be JSON objects with a 'type' field.",
+                    }
+                )
                 continue
 
             # Rate limiting check
             if not connection.check_rate_limit():
-                await connection.send_json({
-                    "type": "error",
-                    "code": "RATE_LIMITED",
-                    "message": f"Rate limit exceeded. Max {MAX_MESSAGES_PER_MINUTE} messages per minute."
-                })
+                await connection.send_json(
+                    {
+                        "type": "error",
+                        "code": "RATE_LIMITED",
+                        "message": f"Rate limit exceeded. Max {MAX_MESSAGES_PER_MINUTE} messages per minute.",
+                    }
+                )
                 continue
 
             # SECURITY FIX (Audit 6): Message size limit
             raw_data = json.dumps(data)
             if len(raw_data) > MAX_WEBSOCKET_MESSAGE_SIZE:
-                await connection.send_json({
-                    "type": "error",
-                    "code": "MESSAGE_TOO_LARGE",
-                    "message": f"Message exceeds maximum size of {MAX_WEBSOCKET_MESSAGE_SIZE} bytes."
-                })
+                await connection.send_json(
+                    {
+                        "type": "error",
+                        "code": "MESSAGE_TOO_LARGE",
+                        "message": f"Message exceeds maximum size of {MAX_WEBSOCKET_MESSAGE_SIZE} bytes.",
+                    }
+                )
                 continue
 
             msg_type = data.get("type")
@@ -1519,7 +1530,7 @@ async def websocket_chat(
                                 "display_name": display_name or user_id,
                                 "content": content,
                                 "created_at": saved_message.created_at.isoformat(),
-                            }
+                            },
                         )
                     except (RuntimeError, ValueError, OSError) as e:
                         logger.error(
@@ -1528,11 +1539,13 @@ async def websocket_chat(
                             user_id=user_id,
                             error=str(e)[:100],
                         )
-                        await connection.send_json({
-                            "type": "error",
-                            "code": "MESSAGE_FAILED",
-                            "message": "Failed to send message. Please try again."
-                        })
+                        await connection.send_json(
+                            {
+                                "type": "error",
+                                "code": "MESSAGE_FAILED",
+                                "message": "Failed to send message. Please try again.",
+                            }
+                        )
 
             elif msg_type == "delete_message":
                 # SECURITY FIX (Audit 6 - Session 4): Permission-based message deletion
@@ -1548,20 +1561,24 @@ async def websocket_chat(
                                 data={
                                     "message_id": message_id,
                                     "deleted_by": user_id,
-                                }
+                                },
                             )
                         else:
-                            await connection.send_json({
-                                "type": "error",
-                                "code": "DELETE_FAILED",
-                                "message": "Message not found or already deleted."
-                            })
+                            await connection.send_json(
+                                {
+                                    "type": "error",
+                                    "code": "DELETE_FAILED",
+                                    "message": "Message not found or already deleted.",
+                                }
+                            )
                     except ChatPermissionError as e:
-                        await connection.send_json({
-                            "type": "error",
-                            "code": "PERMISSION_DENIED",
-                            "message": f"Cannot delete message: {e.action} requires {e.required_role} role."
-                        })
+                        await connection.send_json(
+                            {
+                                "type": "error",
+                                "code": "PERMISSION_DENIED",
+                                "message": f"Cannot delete message: {e.action} requires {e.required_role} role.",
+                            }
+                        )
                     except (RuntimeError, ValueError, OSError) as e:
                         logger.error(
                             "chat_message_delete_failed",
@@ -1570,31 +1587,32 @@ async def websocket_chat(
                             message_id=message_id,
                             error=str(e)[:100],
                         )
-                        await connection.send_json({
-                            "type": "error",
-                            "code": "DELETE_FAILED",
-                            "message": "Failed to delete message."
-                        })
+                        await connection.send_json(
+                            {
+                                "type": "error",
+                                "code": "DELETE_FAILED",
+                                "message": "Failed to delete message.",
+                            }
+                        )
 
             elif msg_type == "typing":
                 # Broadcast typing indicator (exclude sender)
                 await connection_manager.broadcast_chat(
                     room_id=room_id,
                     message_type="typing",
-                    data={
-                        "user_id": user_id,
-                        "display_name": display_name or user_id
-                    },
-                    exclude_connection=connection.connection_id
+                    data={"user_id": user_id, "display_name": display_name or user_id},
+                    exclude_connection=connection.connection_id,
                 )
 
     except WebSocketDisconnect:
         pass
     except (ConnectionError, asyncio.CancelledError, OSError, RuntimeError) as e:
-        logger.error("websocket_chat_error",
-                    connection_id=connection.connection_id,
-                    room_id=room_id,
-                    error=str(e))
+        logger.error(
+            "websocket_chat_error",
+            connection_id=connection.connection_id,
+            room_id=room_id,
+            error=str(e),
+        )
     finally:
         await connection_manager.disconnect_chat(room_id, connection.connection_id)
 
@@ -1617,7 +1635,6 @@ async def get_websocket_stats(
     # Only allow admins to view connection stats
     if current_user.role not in ("admin", "moderator"):
         raise HTTPException(
-            status_code=403,
-            detail="Insufficient permissions to view WebSocket statistics"
+            status_code=403, detail="Insufficient permissions to view WebSocket statistics"
         )
     return connection_manager.get_stats()

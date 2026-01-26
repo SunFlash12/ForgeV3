@@ -59,6 +59,7 @@ LOCKOUT_DURATION_SECONDS = 300  # 5 minutes
 @dataclass
 class MFAStatus:
     """MFA status for a user."""
+
     enabled: bool = False
     verified: bool = False  # Whether setup is complete
     created_at: datetime | None = None
@@ -69,6 +70,7 @@ class MFAStatus:
 @dataclass
 class MFASetupResult:
     """Result of MFA setup."""
+
     secret: str  # Base32 encoded secret
     provisioning_uri: str  # otpauth:// URI for QR code
     backup_codes: list[str]  # One-time backup codes
@@ -77,6 +79,7 @@ class MFASetupResult:
 @dataclass
 class VerificationAttempt:
     """Tracks verification attempts for rate limiting."""
+
     attempts: int = 0
     locked_until: datetime | None = None
 
@@ -111,6 +114,7 @@ class MFAService:
         # SECURITY FIX (Audit 4): Warn if using memory storage in production
         if use_memory_storage or db_client is None:
             import os
+
             env = os.environ.get("FORGE_ENV", "development")
             if env != "development" and env != "test":
                 logger.error(
@@ -156,9 +160,8 @@ class MFAService:
             import base64
 
             from cryptography.fernet import Fernet
-            key = base64.urlsafe_b64encode(
-                hashlib.sha256(self._encryption_key.encode()).digest()
-            )
+
+            key = base64.urlsafe_b64encode(hashlib.sha256(self._encryption_key.encode()).digest())
             f = Fernet(key)
             encrypted: str = f.encrypt(secret.encode()).decode()
             return encrypted
@@ -174,9 +177,8 @@ class MFAService:
             import base64
 
             from cryptography.fernet import Fernet
-            key = base64.urlsafe_b64encode(
-                hashlib.sha256(self._encryption_key.encode()).digest()
-            )
+
+            key = base64.urlsafe_b64encode(hashlib.sha256(self._encryption_key.encode()).digest())
             f = Fernet(key)
             decrypted: str = f.decrypt(encrypted.encode()).decode()
             return decrypted
@@ -218,7 +220,7 @@ class MFAService:
                     m.created_at = $created_at,
                     m.updated_at = datetime()
                 """,
-                mfa_data
+                mfa_data,
             )
         logger.info("mfa_data_persisted", user_id=user_id)
 
@@ -233,7 +235,7 @@ class MFAService:
                 MATCH (m:MFACredential {user_id: $user_id})
                 RETURN m {.*} AS mfa
                 """,
-                {"user_id": user_id}
+                {"user_id": user_id},
             )
             record = await result.single()
             if record:
@@ -298,9 +300,7 @@ class MFAService:
         backup_codes = self.generate_backup_codes()
 
         # Hash backup codes for storage
-        hashed_codes = {
-            self._hash_backup_code(code) for code in backup_codes
-        }
+        hashed_codes = {self._hash_backup_code(code) for code in backup_codes}
 
         # Store in memory (for immediate use)
         self._secrets[user_id] = secret
@@ -325,11 +325,7 @@ class MFAService:
             persisted=self._use_db,
         )
 
-        return MFASetupResult(
-            secret=secret,
-            provisioning_uri=uri,
-            backup_codes=backup_codes
-        )
+        return MFASetupResult(secret=secret, provisioning_uri=uri, backup_codes=backup_codes)
 
     def _generate_provisioning_uri(self, secret: str, email: str) -> str:
         """
@@ -364,7 +360,9 @@ class MFAService:
             True if code is valid and setup is now complete
         """
         if user_id not in self._secrets:
-            logger.warning("MFA verify_setup called for user without pending setup", user_id=user_id)
+            logger.warning(
+                "MFA verify_setup called for user without pending setup", user_id=user_id
+            )
             return False
 
         if await self.verify_totp(user_id, code, skip_verified_check=True):
@@ -411,11 +409,11 @@ class MFAService:
 
         # Dynamic truncation
         offset = hmac_hash[-1] & 0x0F
-        truncated = struct.unpack(">I", hmac_hash[offset:offset + 4])[0]
+        truncated = struct.unpack(">I", hmac_hash[offset : offset + 4])[0]
         truncated &= 0x7FFFFFFF  # Clear most significant bit
 
         # Generate code
-        code = truncated % (10 ** TOTP_DIGITS)
+        code = truncated % (10**TOTP_DIGITS)
         return str(code).zfill(TOTP_DIGITS)
 
     def _check_rate_limit(self, user_id: str) -> tuple[bool, str | None]:
@@ -497,12 +495,7 @@ class MFAService:
 
         return False
 
-    async def verify_totp(
-        self,
-        user_id: str,
-        code: str,
-        skip_verified_check: bool = False
-    ) -> bool:
+    async def verify_totp(self, user_id: str, code: str, skip_verified_check: bool = False) -> bool:
         """
         Verify a TOTP code.
 
@@ -591,11 +584,7 @@ class MFAService:
             self._record_attempt(user_id, True)
             self._last_used[user_id] = datetime.now(UTC)
 
-            logger.info(
-                "MFA backup code used",
-                user_id=user_id,
-                remaining_codes=len(codes)
-            )
+            logger.info("MFA backup code used", user_id=user_id, remaining_codes=len(codes))
             return True
 
         self._record_attempt(user_id, False)
@@ -615,15 +604,12 @@ class MFAService:
             enabled=True,
             verified=self._verified.get(user_id, False),
             last_used=self._last_used.get(user_id),
-            backup_codes_remaining=len(self._backup_codes.get(user_id, set()))
+            backup_codes_remaining=len(self._backup_codes.get(user_id, set())),
         )
 
     async def is_enabled(self, user_id: str) -> bool:
         """Check if MFA is enabled and verified for a user."""
-        return (
-            user_id in self._secrets and
-            self._verified.get(user_id, False)
-        )
+        return user_id in self._secrets and self._verified.get(user_id, False)
 
     async def disable_mfa(self, user_id: str) -> bool:
         """
@@ -666,7 +652,7 @@ class MFAService:
                     MATCH (m:MFACredential {user_id: $user_id})
                     DELETE m
                     """,
-                    {"user_id": user_id}
+                    {"user_id": user_id},
                 )
             logger.info("mfa_data_deleted_from_db", user_id=user_id)
         except (RuntimeError, OSError, ConnectionError) as e:
@@ -697,19 +683,13 @@ class MFAService:
         backup_codes = self.generate_backup_codes()
 
         # Replace stored codes
-        hashed_codes = {
-            self._hash_backup_code(code) for code in backup_codes
-        }
+        hashed_codes = {self._hash_backup_code(code) for code in backup_codes}
         self._backup_codes[user_id] = hashed_codes
 
         # Persist to database
         await self._update_backup_codes(user_id, hashed_codes)
 
-        logger.info(
-            "MFA backup codes regenerated",
-            user_id=user_id,
-            count=len(backup_codes)
-        )
+        logger.info("MFA backup codes regenerated", user_id=user_id, count=len(backup_codes))
 
         return backup_codes
 
@@ -729,7 +709,7 @@ class MFAService:
                     {
                         "user_id": user_id,
                         "backup_codes_hashed": list(hashed_codes),
-                    }
+                    },
                 )
             logger.info("mfa_backup_codes_updated_in_db", user_id=user_id)
         except (RuntimeError, OSError, ConnectionError) as e:
@@ -763,6 +743,7 @@ def get_mfa_service(db_client: Any = None, encryption_key: str | None = None) ->
             # Try to get from ForgeApp
             try:
                 from forge.api.app import forge_app
+
                 if forge_app and forge_app.db_client:
                     final_db_client = forge_app.db_client
                     logger.info("mfa_service_using_forge_db")
@@ -771,6 +752,7 @@ def get_mfa_service(db_client: Any = None, encryption_key: str | None = None) ->
 
         # Try to get encryption key from environment
         import os
+
         final_encryption_key = encryption_key or os.environ.get("MFA_ENCRYPTION_KEY")
 
         _mfa_db_client = final_db_client

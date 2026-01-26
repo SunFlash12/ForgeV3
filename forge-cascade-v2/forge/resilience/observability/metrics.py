@@ -23,7 +23,7 @@ from forge.resilience.config import get_resilience_config
 logger = structlog.get_logger(__name__)
 
 # Type variable for decorator
-F = TypeVar('F', bound=Callable[..., Any])
+F = TypeVar("F", bound=Callable[..., Any])
 
 # Try to import OpenTelemetry metrics, but allow graceful degradation
 try:
@@ -32,6 +32,7 @@ try:
     from opentelemetry.sdk.metrics import MeterProvider
     from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
     from opentelemetry.sdk.resources import SERVICE_NAME, SERVICE_VERSION, Resource
+
     OTEL_METRICS_AVAILABLE = True
 except ImportError:
     OTEL_METRICS_AVAILABLE = False
@@ -161,36 +162,29 @@ class ForgeMetrics:
             return
 
         if not OTEL_METRICS_AVAILABLE:
-            logger.warning(
-                "opentelemetry_metrics_not_available",
-                fallback="local_metrics"
-            )
+            logger.warning("opentelemetry_metrics_not_available", fallback="local_metrics")
             self._meter = NoOpMeter()
             self._initialized = True
             return
 
         try:
             # Create resource
-            resource = Resource.create({
-                SERVICE_NAME: self._config.service_name,
-                SERVICE_VERSION: self._config.version,
-                "deployment.environment": self._config.environment,
-            })
+            resource = Resource.create(
+                {
+                    SERVICE_NAME: self._config.service_name,
+                    SERVICE_VERSION: self._config.version,
+                    "deployment.environment": self._config.environment,
+                }
+            )
 
             # Create metric exporter
             if self._config.otlp_endpoint:
-                exporter = OTLPMetricExporter(
-                    endpoint=self._config.otlp_endpoint,
-                    insecure=True
-                )
+                exporter = OTLPMetricExporter(endpoint=self._config.otlp_endpoint, insecure=True)
                 reader = PeriodicExportingMetricReader(
                     exporter,
-                    export_interval_millis=60000  # Export every 60 seconds
+                    export_interval_millis=60000,  # Export every 60 seconds
                 )
-                provider = MeterProvider(
-                    resource=resource,
-                    metric_readers=[reader]
-                )
+                provider = MeterProvider(resource=resource, metric_readers=[reader])
             else:
                 provider = MeterProvider(resource=resource)
 
@@ -198,10 +192,7 @@ class ForgeMetrics:
             otel_metrics.set_meter_provider(provider)
 
             # Get meter
-            self._meter = otel_metrics.get_meter(
-                self._config.service_name,
-                self._config.version
-            )
+            self._meter = otel_metrics.get_meter(self._config.service_name, self._config.version)
 
             # Initialize standard metrics
             self._init_standard_metrics()
@@ -210,7 +201,7 @@ class ForgeMetrics:
             logger.info(
                 "metrics_initialized",
                 endpoint=self._config.otlp_endpoint,
-                service=self._config.service_name
+                service=self._config.service_name,
             )
 
         except (RuntimeError, OSError, ConnectionError, ValueError, TypeError) as e:
@@ -223,83 +214,64 @@ class ForgeMetrics:
         assert self._meter is not None
         # Counters
         self._counters["capsules_created"] = self._meter.create_counter(
-            "forge_capsules_created_total",
-            description="Total number of capsules created",
-            unit="1"
+            "forge_capsules_created_total", description="Total number of capsules created", unit="1"
         )
         self._counters["capsules_updated"] = self._meter.create_counter(
-            "forge_capsules_updated_total",
-            description="Total number of capsules updated",
-            unit="1"
+            "forge_capsules_updated_total", description="Total number of capsules updated", unit="1"
         )
         self._counters["capsules_deleted"] = self._meter.create_counter(
-            "forge_capsules_deleted_total",
-            description="Total number of capsules deleted",
-            unit="1"
+            "forge_capsules_deleted_total", description="Total number of capsules deleted", unit="1"
         )
         self._counters["cache_hits"] = self._meter.create_counter(
-            "forge_cache_hits_total",
-            description="Total cache hits",
-            unit="1"
+            "forge_cache_hits_total", description="Total cache hits", unit="1"
         )
         self._counters["cache_misses"] = self._meter.create_counter(
-            "forge_cache_misses_total",
-            description="Total cache misses",
-            unit="1"
+            "forge_cache_misses_total", description="Total cache misses", unit="1"
         )
         self._counters["proposals_created"] = self._meter.create_counter(
             "forge_proposals_created_total",
             description="Total governance proposals created",
-            unit="1"
+            unit="1",
         )
         self._counters["votes_cast"] = self._meter.create_counter(
-            "forge_votes_cast_total",
-            description="Total votes cast",
-            unit="1"
+            "forge_votes_cast_total", description="Total votes cast", unit="1"
         )
         self._counters["logins"] = self._meter.create_counter(
-            "forge_logins_total",
-            description="Total login attempts",
-            unit="1"
+            "forge_logins_total", description="Total login attempts", unit="1"
         )
         self._counters["errors"] = self._meter.create_counter(
-            "forge_errors_total",
-            description="Total errors",
-            unit="1"
+            "forge_errors_total", description="Total errors", unit="1"
         )
 
         # Histograms
         self._histograms["request_latency"] = self._meter.create_histogram(
             "forge_http_request_duration_seconds",
             description="HTTP request latency in seconds",
-            unit="s"
+            unit="s",
         )
         self._histograms["db_query_latency"] = self._meter.create_histogram(
             "forge_db_query_duration_seconds",
             description="Database query latency in seconds",
-            unit="s"
+            unit="s",
         )
         self._histograms["search_latency"] = self._meter.create_histogram(
             "forge_search_duration_seconds",
             description="Search operation latency in seconds",
-            unit="s"
+            unit="s",
         )
         self._histograms["pipeline_latency"] = self._meter.create_histogram(
             "forge_pipeline_duration_seconds",
             description="Pipeline execution latency in seconds",
-            unit="s"
+            unit="s",
         )
         self._histograms["lineage_query_latency"] = self._meter.create_histogram(
             "forge_lineage_query_duration_seconds",
             description="Lineage query latency in seconds",
-            unit="s"
+            unit="s",
         )
 
     def increment(
-        self,
-        metric_name: str,
-        value: int = 1,
-        labels: dict[str, str] | None = None
+        self, metric_name: str, value: int = 1, labels: dict[str, str] | None = None
     ) -> None:
         """Increment a counter metric."""
         if not self._initialized:
@@ -315,10 +287,7 @@ class ForgeMetrics:
             self._local_counters[key] = self._local_counters.get(key, 0) + value
 
     def record_latency(
-        self,
-        metric_name: str,
-        latency_seconds: float,
-        labels: dict[str, str] | None = None
+        self, metric_name: str, latency_seconds: float, labels: dict[str, str] | None = None
     ) -> None:
         """Record a latency measurement."""
         if not self._initialized:
@@ -338,7 +307,7 @@ class ForgeMetrics:
         values.append(latency_seconds)
         # Keep only the most recent values
         if len(values) > self.MAX_HISTOGRAM_VALUES_PER_KEY:
-            self._local_histograms[key] = values[-self.MAX_HISTOGRAM_VALUES_PER_KEY:]
+            self._local_histograms[key] = values[-self.MAX_HISTOGRAM_VALUES_PER_KEY :]
 
     # Convenience methods for common metrics
 
@@ -378,72 +347,35 @@ class ForgeMetrics:
         """Record error."""
         self.increment("errors", labels={"type": error_type, "endpoint": endpoint})
 
-    def request_latency(
-        self,
-        latency: float,
-        method: str,
-        endpoint: str,
-        status: int
-    ) -> None:
+    def request_latency(self, latency: float, method: str, endpoint: str, status: int) -> None:
         """Record HTTP request latency."""
         self.record_latency(
             "request_latency",
             latency,
-            labels={
-                "method": method,
-                "endpoint": endpoint,
-                "status": str(status)
-            }
+            labels={"method": method, "endpoint": endpoint, "status": str(status)},
         )
 
-    def db_query_latency(
-        self,
-        latency: float,
-        operation: str,
-        success: bool = True
-    ) -> None:
+    def db_query_latency(self, latency: float, operation: str, success: bool = True) -> None:
         """Record database query latency."""
         self.record_latency(
             "db_query_latency",
             latency,
-            labels={"operation": operation, "success": str(success).lower()}
+            labels={"operation": operation, "success": str(success).lower()},
         )
 
-    def search_latency(
-        self,
-        latency: float,
-        result_count: int = 0
-    ) -> None:
+    def search_latency(self, latency: float, result_count: int = 0) -> None:
         """Record search operation latency."""
         self.record_latency(
-            "search_latency",
-            latency,
-            labels={"result_count": str(min(result_count, 100))}
+            "search_latency", latency, labels={"result_count": str(min(result_count, 100))}
         )
 
-    def pipeline_latency(
-        self,
-        latency: float,
-        phase: str = "total"
-    ) -> None:
+    def pipeline_latency(self, latency: float, phase: str = "total") -> None:
         """Record pipeline execution latency."""
-        self.record_latency(
-            "pipeline_latency",
-            latency,
-            labels={"phase": phase}
-        )
+        self.record_latency("pipeline_latency", latency, labels={"phase": phase})
 
-    def lineage_query_latency(
-        self,
-        latency: float,
-        depth: int
-    ) -> None:
+    def lineage_query_latency(self, latency: float, depth: int) -> None:
         """Record lineage query latency."""
-        self.record_latency(
-            "lineage_query_latency",
-            latency,
-            labels={"depth": str(min(depth, 10))}
-        )
+        self.record_latency("lineage_query_latency", latency, labels={"depth": str(min(depth, 10))})
 
     def get_local_stats(self) -> dict[str, Any]:
         """Get locally tracked statistics."""
@@ -458,7 +390,7 @@ class ForgeMetrics:
                     "max": max(v) if v else 0,
                 }
                 for k, v in self._local_histograms.items()
-            }
+            },
         }
 
 
@@ -486,6 +418,7 @@ def timed(metric_name: str, labels: dict[str, str] | None = None) -> Callable[[F
     Returns:
         Decorated function
     """
+
     def decorator(func: F) -> F:
         @functools.wraps(func)
         async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
@@ -508,6 +441,7 @@ def timed(metric_name: str, labels: dict[str, str] | None = None) -> Callable[[F
                 metrics_instance.record_latency(metric_name, latency, labels)
 
         import asyncio
+
         if asyncio.iscoroutinefunction(func):
             return async_wrapper  # type: ignore[return-value]
         return sync_wrapper  # type: ignore[return-value]

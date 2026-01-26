@@ -28,9 +28,9 @@ logger = structlog.get_logger(__name__)
 class StorageTier(Enum):
     """Storage tiers for lineage data."""
 
-    HOT = "hot"       # Tier 1: Full detail, fast access
-    WARM = "warm"     # Tier 2: Compressed, moderate access
-    COLD = "cold"     # Tier 3: Archived, slow access
+    HOT = "hot"  # Tier 1: Full detail, fast access
+    WARM = "warm"  # Tier 2: Compressed, moderate access
+    COLD = "cold"  # Tier 3: Archived, slow access
 
 
 @dataclass
@@ -80,8 +80,12 @@ class LineageEntry:
             metadata=data.get("metadata", {}),
             tier=StorageTier(data.get("tier", "hot")),
             compressed=data.get("compressed", False),
-            archived_at=datetime.fromisoformat(data["archived_at"]) if data.get("archived_at") else None,
-            last_accessed=datetime.fromisoformat(data.get("last_accessed", datetime.now(UTC).isoformat())),
+            archived_at=datetime.fromisoformat(data["archived_at"])
+            if data.get("archived_at")
+            else None,
+            last_accessed=datetime.fromisoformat(
+                data.get("last_accessed", datetime.now(UTC).isoformat())
+            ),
         )
 
 
@@ -117,7 +121,7 @@ class TieredLineageStorage:
         # In-memory tier storage (production would use actual storage backends)
         self._tier1_storage: dict[str, LineageEntry] = {}
         self._tier2_storage: dict[str, bytes] = {}  # Compressed
-        self._tier3_storage: dict[str, str] = {}    # S3 keys
+        self._tier3_storage: dict[str, str] = {}  # S3 keys
 
         # Statistics
         self._stats: dict[StorageTier, TierStats] = {
@@ -145,7 +149,7 @@ class TieredLineageStorage:
         logger.info(
             "tiered_lineage_initialized",
             tier1_max_age=self._config.tier1_max_age_days,
-            tier2_max_age=self._config.tier2_max_age_days
+            tier2_max_age=self._config.tier2_max_age_days,
         )
 
     async def close(self) -> None:
@@ -189,20 +193,12 @@ class TieredLineageStorage:
 
             self._update_stats(tier, entry)
 
-            logger.debug(
-                "lineage_entry_stored",
-                entry_id=entry.entry_id,
-                tier=tier.value
-            )
+            logger.debug("lineage_entry_stored", entry_id=entry.entry_id, tier=tier.value)
 
             return True
 
         except (RuntimeError, OSError, ConnectionError, ValueError, TypeError) as e:
-            logger.error(
-                "lineage_store_error",
-                entry_id=entry.entry_id,
-                error=str(e)
-            )
+            logger.error("lineage_store_error", entry_id=entry.entry_id, error=str(e))
             return False
 
     async def get(self, entry_id: str) -> LineageEntry | None:
@@ -240,11 +236,7 @@ class TieredLineageStorage:
 
         return None
 
-    async def get_lineage_chain(
-        self,
-        capsule_id: str,
-        depth: int = 10
-    ) -> list[LineageEntry]:
+    async def get_lineage_chain(self, capsule_id: str, depth: int = 10) -> list[LineageEntry]:
         """
         Get the lineage chain for a capsule.
 
@@ -275,11 +267,7 @@ class TieredLineageStorage:
 
         return chain
 
-    async def migrate_to_tier(
-        self,
-        entry_id: str,
-        target_tier: StorageTier
-    ) -> bool:
+    async def migrate_to_tier(self, entry_id: str, target_tier: StorageTier) -> bool:
         """
         Migrate an entry to a different tier.
 
@@ -326,17 +314,13 @@ class TieredLineageStorage:
                 "lineage_entry_migrated",
                 entry_id=entry_id,
                 from_tier=current_tier.value,
-                to_tier=target_tier.value
+                to_tier=target_tier.value,
             )
 
             return True
 
         except (RuntimeError, OSError, ConnectionError, ValueError, TypeError) as e:
-            logger.error(
-                "lineage_migration_error",
-                entry_id=entry_id,
-                error=str(e)
-            )
+            logger.error("lineage_migration_error", entry_id=entry_id, error=str(e))
             return False
 
     def _determine_initial_tier(self, entry: LineageEntry) -> StorageTier:
@@ -354,7 +338,7 @@ class TieredLineageStorage:
 
     def _compress_entry(self, entry: LineageEntry) -> bytes:
         """Compress an entry for Tier 2 storage."""
-        data = json.dumps(entry.to_dict()).encode('utf-8')
+        data = json.dumps(entry.to_dict()).encode("utf-8")
         return gzip.compress(data)
 
     def _decompress_entry(self, data: bytes) -> LineageEntry:
@@ -369,7 +353,9 @@ class TieredLineageStorage:
         In production, this would upload to actual S3.
         """
         # Generate S3 key
-        s3_key = f"lineage/{entry.created_at.year}/{entry.created_at.month}/{entry.entry_id}.json.gz"
+        s3_key = (
+            f"lineage/{entry.created_at.year}/{entry.created_at.month}/{entry.entry_id}.json.gz"
+        )
 
         # Compress data
         self._compress_entry(entry)
@@ -381,11 +367,7 @@ class TieredLineageStorage:
         #     Body=compressed
         # )
 
-        logger.debug(
-            "lineage_archived",
-            entry_id=entry.entry_id,
-            s3_key=s3_key
-        )
+        logger.debug("lineage_archived", entry_id=entry.entry_id, s3_key=s3_key)
 
         return s3_key
 
@@ -403,10 +385,7 @@ class TieredLineageStorage:
         # data = await response['Body'].read()
         # return self._decompress_entry(data)
 
-        logger.debug(
-            "lineage_cold_retrieval",
-            s3_key=s3_key
-        )
+        logger.debug("lineage_cold_retrieval", s3_key=s3_key)
 
         return None
 
@@ -437,7 +416,9 @@ class TieredLineageStorage:
 
             except asyncio.CancelledError:
                 break
-            except Exception as e:  # Intentional broad catch: background migration loop must not crash
+            except (
+                Exception
+            ) as e:  # Intentional broad catch: background migration loop must not crash
                 logger.error("background_migration_error", error=str(e))
 
     async def _perform_tier_migration(self) -> None:
@@ -448,7 +429,8 @@ class TieredLineageStorage:
 
         # Migrate Tier 1 -> Tier 2
         tier1_candidates = [
-            entry_id for entry_id, entry in self._tier1_storage.items()
+            entry_id
+            for entry_id, entry in self._tier1_storage.items()
             if entry.created_at < tier1_cutoff or entry.trust_level < self._config.tier1_min_trust
         ]
 
@@ -469,7 +451,7 @@ class TieredLineageStorage:
             logger.info(
                 "tier_migration_completed",
                 tier1_to_tier2=len(tier1_candidates),
-                tier2_to_tier3=len(tier2_candidates)
+                tier2_to_tier3=len(tier2_candidates),
             )
 
     def _update_stats(self, tier: StorageTier, entry: LineageEntry) -> None:

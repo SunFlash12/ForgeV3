@@ -44,6 +44,7 @@ class EmbeddingProvider(Protocol):
 @dataclass
 class EmbeddingProgress:
     """Progress tracking for embedding generation."""
+
     total_items: int = 0
     processed_items: int = 0
     cached_items: int = 0
@@ -73,6 +74,7 @@ class OpenAIEmbeddingProvider:
     ):
         try:
             from openai import AsyncOpenAI
+
             self._client = AsyncOpenAI(api_key=api_key)
         except ImportError:
             raise ImportError("openai package required for OpenAI embeddings")
@@ -103,7 +105,7 @@ class OpenAIEmbeddingProvider:
         all_embeddings = []
 
         for i in range(0, len(texts), batch_size):
-            batch = texts[i:i + batch_size]
+            batch = texts[i : i + batch_size]
             response = await self._client.embeddings.create(
                 model=self._model,
                 input=batch,
@@ -127,6 +129,7 @@ class LocalEmbeddingProvider:
     ):
         try:
             from sentence_transformers import SentenceTransformer
+
             self._model: Any = SentenceTransformer(model_name)
             dim = self._model.get_sentence_embedding_dimension()
             self._dimensions: int = int(dim) if dim is not None else 384
@@ -142,8 +145,7 @@ class LocalEmbeddingProvider:
         # Run in executor since sentence-transformers is sync
         loop = asyncio.get_event_loop()
         embedding: list[float] = await loop.run_in_executor(
-            None,
-            lambda: list(self._model.encode(text).tolist())
+            None, lambda: list(self._model.encode(text).tolist())
         )
         return embedding
 
@@ -154,8 +156,7 @@ class LocalEmbeddingProvider:
 
         loop = asyncio.get_event_loop()
         embeddings: list[list[float]] = await loop.run_in_executor(
-            None,
-            lambda: [list(e) for e in self._model.encode(texts).tolist()]
+            None, lambda: [list(e) for e in self._model.encode(texts).tolist()]
         )
         return embeddings
 
@@ -217,10 +218,7 @@ class PrimeKGEmbeddingService:
         minute_ago = now.timestamp() - 60
 
         # Remove old request times
-        self._request_times = [
-            t for t in self._request_times
-            if t.timestamp() > minute_ago
-        ]
+        self._request_times = [t for t in self._request_times if t.timestamp() > minute_ago]
 
         # Wait if at limit
         if len(self._request_times) >= self.rate_limit:
@@ -290,12 +288,12 @@ class PrimeKGEmbeddingService:
             "primekg_embedding_cache_hits",
             total=len(texts),
             cached=progress.cached_items,
-            to_embed=len(texts_to_embed)
+            to_embed=len(texts_to_embed),
         )
 
         # Batch embed remaining texts
         for batch_start in range(0, len(texts_to_embed), self.batch_size):
-            batch = texts_to_embed[batch_start:batch_start + self.batch_size]
+            batch = texts_to_embed[batch_start : batch_start + self.batch_size]
             batch_texts = [text for _, text in batch]
 
             await self._wait_for_rate_limit()
@@ -442,11 +440,7 @@ class PrimeKGEmbeddingService:
             duration = (progress.completed_at - progress.started_at).total_seconds()
         else:
             duration = 0.0
-        logger.info(
-            "primekg_nodes_embedded",
-            count=embedded_count,
-            duration_seconds=duration
-        )
+        logger.info("primekg_nodes_embedded", count=embedded_count, duration_seconds=duration)
 
         return embedded_count
 
@@ -564,8 +558,7 @@ class PrimeKGEmbeddingService:
         """
 
         results = await self.neo4j.run(
-            search_query,
-            {"embedding": source_embedding, "node_index": node_index}
+            search_query, {"embedding": source_embedding, "node_index": node_index}
         )
 
         return [
@@ -583,6 +576,7 @@ class PrimeKGEmbeddingService:
 # =============================================================================
 # Factory Functions
 # =============================================================================
+
 
 def create_openai_embedding_service(
     api_key: str,

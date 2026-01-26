@@ -37,7 +37,8 @@ def _compute_content_hash(content: str | None) -> str | None:
     """
     if content is None:
         return None
-    return hashlib.sha256(content.encode('utf-8')).hexdigest()
+    return hashlib.sha256(content.encode("utf-8")).hexdigest()
+
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from pydantic import BaseModel, Field
@@ -69,6 +70,7 @@ router = APIRouter(prefix="/federation", tags=["Federation"])
 # SECURITY FIX (Audit 2): Rate Limiting for Federation Endpoints
 # ============================================================================
 
+
 class FederationRateLimiter:
     """
     Rate limiter for federation endpoints.
@@ -81,10 +83,10 @@ class FederationRateLimiter:
 
     # Trust-based rate limit multipliers
     TRUST_RATE_MULTIPLIERS = {
-        "core": 3.0,      # 0.8-1.0 trust: 3x normal limits
-        "trusted": 2.0,   # 0.6-0.8 trust: 2x normal limits
+        "core": 3.0,  # 0.8-1.0 trust: 3x normal limits
+        "trusted": 2.0,  # 0.6-0.8 trust: 2x normal limits
         "standard": 1.0,  # 0.4-0.6 trust: normal limits
-        "limited": 0.5,   # 0.2-0.4 trust: 50% limits
+        "limited": 0.5,  # 0.2-0.4 trust: 50% limits
         "quarantine": 0.1,  # 0.0-0.2 trust: 10% limits (nearly blocked)
     }
 
@@ -176,7 +178,9 @@ class FederationRateLimiter:
             window_start, count = self._minute_counts[key]
             if now - window_start < 60:
                 if count >= adjusted_minute_limit:
-                    logger.warning(f"Federation minute rate limit exceeded for {key} (trust: {trust_multiplier}x)")
+                    logger.warning(
+                        f"Federation minute rate limit exceeded for {key} (trust: {trust_multiplier}x)"
+                    )
                     return False, int(60 - (now - window_start))
             else:
                 self._minute_counts[key] = (now, 0)
@@ -186,7 +190,9 @@ class FederationRateLimiter:
             window_start, count = self._hour_counts[key]
             if now - window_start < 3600:
                 if count >= adjusted_hour_limit:
-                    logger.warning(f"Federation hour rate limit exceeded for {key} (trust: {trust_multiplier}x)")
+                    logger.warning(
+                        f"Federation hour rate limit exceeded for {key} (trust: {trust_multiplier}x)"
+                    )
                     return False, int(3600 - (now - window_start))
             else:
                 self._hour_counts[key] = (now, 0)
@@ -208,9 +214,7 @@ class FederationRateLimiter:
                 window_start, count = self._handshake_counts[key]
                 if now - window_start < 3600:
                     if count >= self.handshake_per_hour:
-                        logger.warning(
-                            f"Federation handshake rate limit exceeded for {key}"
-                        )
+                        logger.warning(f"Federation handshake rate limit exceeded for {key}")
                         return False, int(3600 - (now - window_start))
                 else:
                     self._handshake_counts[key] = (now, 0)
@@ -269,8 +273,10 @@ async def check_federation_rate_limit(
 # Request/Response Models
 # ============================================================================
 
+
 class PeerRegistrationRequest(BaseModel):
     """Request to register a new peer."""
+
     name: str = Field(description="Human-readable peer name")
     url: str = Field(description="Base URL of the peer's API")
     description: str | None = None
@@ -284,6 +290,7 @@ class PeerRegistrationRequest(BaseModel):
 
 class PeerUpdateRequest(BaseModel):
     """Request to update peer settings."""
+
     name: str | None = None
     description: str | None = None
     admin_contact: str | None = None
@@ -297,18 +304,21 @@ class PeerUpdateRequest(BaseModel):
 
 class TrustAdjustmentRequest(BaseModel):
     """Request to manually adjust peer trust."""
+
     delta: float = Field(ge=-1.0, le=1.0)
     reason: str
 
 
 class SyncTriggerRequest(BaseModel):
     """Request to trigger a sync."""
+
     direction: SyncDirection | None = None
     force: bool = False
 
 
 class PeerResponse(BaseModel):
     """Response containing peer information."""
+
     id: str
     name: str
     url: str
@@ -335,6 +345,7 @@ class PeerResponse(BaseModel):
 
 class SyncStateResponse(BaseModel):
     """Response containing sync state."""
+
     id: str
     peer_id: str
     peer_name: str
@@ -356,6 +367,7 @@ class SyncStateResponse(BaseModel):
 
 class FederationStatsResponse(BaseModel):
     """Response containing federation statistics."""
+
     total_peers: int
     active_peers: int
     pending_peers: int
@@ -384,8 +396,7 @@ async def get_protocol() -> FederationProtocol:
     global _protocol
     if not _protocol:
         _protocol = FederationProtocol(
-            instance_id=str(uuid.uuid4()),
-            instance_name="Forge Instance"
+            instance_id=str(uuid.uuid4()), instance_name="Forge Instance"
         )
         await _protocol.initialize()
     return _protocol
@@ -437,8 +448,7 @@ def require_admin_role(user: User) -> None:
     """Verify user has admin role. Raises HTTPException if not."""
     if user.role not in ("admin", "system"):
         raise HTTPException(
-            status_code=403,
-            detail="Admin privileges required for federation management"
+            status_code=403, detail="Admin privileges required for federation management"
         )
 
 
@@ -464,10 +474,7 @@ async def register_peer(
     handshake_result = await protocol.initiate_handshake(request.url)
 
     if not handshake_result:
-        raise HTTPException(
-            status_code=400,
-            detail="Failed to establish handshake with peer"
-        )
+        raise HTTPException(status_code=400, detail="Failed to establish handshake with peer")
 
     our_handshake, their_handshake = handshake_result
 
@@ -545,35 +552,37 @@ async def list_peers(
         peers = [p for p in peers if p.status == status]
 
     # SECURITY FIX (Audit 7 - Session 3): Apply pagination bounds
-    peers = peers[offset:offset + limit]
+    peers = peers[offset : offset + limit]
 
     responses = []
     for peer in peers:
         trust_tier = await trust_manager.get_trust_tier(peer)
-        responses.append(PeerResponse(
-            id=peer.id,
-            name=peer.name,
-            url=peer.url,
-            public_key=peer.public_key,
-            trust_score=peer.trust_score,
-            trust_tier=trust_tier,
-            status=peer.status,
-            sync_direction=peer.sync_direction,
-            sync_interval_minutes=peer.sync_interval_minutes,
-            conflict_resolution=peer.conflict_resolution,
-            sync_capsule_types=peer.sync_capsule_types,
-            min_trust_to_sync=peer.min_trust_to_sync,
-            description=peer.description,
-            admin_contact=peer.admin_contact,
-            registered_at=peer.registered_at,
-            last_sync_at=peer.last_sync_at,
-            last_seen_at=peer.last_seen_at,
-            total_syncs=peer.total_syncs,
-            successful_syncs=peer.successful_syncs,
-            failed_syncs=peer.failed_syncs,
-            capsules_received=peer.capsules_received,
-            capsules_sent=peer.capsules_sent,
-        ))
+        responses.append(
+            PeerResponse(
+                id=peer.id,
+                name=peer.name,
+                url=peer.url,
+                public_key=peer.public_key,
+                trust_score=peer.trust_score,
+                trust_tier=trust_tier,
+                status=peer.status,
+                sync_direction=peer.sync_direction,
+                sync_interval_minutes=peer.sync_interval_minutes,
+                conflict_resolution=peer.conflict_resolution,
+                sync_capsule_types=peer.sync_capsule_types,
+                min_trust_to_sync=peer.min_trust_to_sync,
+                description=peer.description,
+                admin_contact=peer.admin_contact,
+                registered_at=peer.registered_at,
+                last_sync_at=peer.last_sync_at,
+                last_seen_at=peer.last_seen_at,
+                total_syncs=peer.total_syncs,
+                successful_syncs=peer.successful_syncs,
+                failed_syncs=peer.failed_syncs,
+                capsules_received=peer.capsules_received,
+                capsules_sent=peer.capsules_sent,
+            )
+        )
 
     return responses
 
@@ -704,6 +713,7 @@ async def remove_peer(
 # Trust Management Routes
 # ============================================================================
 
+
 @router.post("/peers/{peer_id}/trust")
 async def adjust_peer_trust(
     peer_id: str,
@@ -740,7 +750,9 @@ async def adjust_peer_trust(
 async def get_peer_trust_history(
     peer_id: str,
     current_user: AdminUserDep,  # SECURITY FIX: Require authentication
-    limit: int = Query(default=50, ge=1, le=200),  # SECURITY FIX (Audit 7 - Session 3): Added lower bound
+    limit: int = Query(
+        default=50, ge=1, le=200
+    ),  # SECURITY FIX (Audit 7 - Session 3): Added lower bound
     trust_manager: PeerTrustManager = Depends(get_trust_manager),
 ) -> dict[str, Any]:
     """Get trust adjustment history for a peer."""
@@ -756,7 +768,7 @@ async def get_peer_trust_history(
                 "timestamp": e.timestamp.isoformat(),
             }
             for e in history
-        ]
+        ],
     }
 
 
@@ -779,6 +791,7 @@ async def get_peer_permissions(
 # ============================================================================
 # Sync Routes
 # ============================================================================
+
 
 @router.post("/sync/{peer_id}", response_model=SyncStateResponse)
 async def trigger_sync(
@@ -834,7 +847,9 @@ async def trigger_sync_all(
 async def get_sync_status(
     current_user: AdminUserDep,  # SECURITY FIX: Require authentication
     peer_id: str | None = None,
-    limit: int = Query(default=20, ge=1, le=100),  # SECURITY FIX (Audit 7 - Session 3): Added lower bound
+    limit: int = Query(
+        default=20, ge=1, le=100
+    ),  # SECURITY FIX (Audit 7 - Session 3): Added lower bound
     sync_service: SyncService = Depends(get_sync_service),
 ) -> dict[str, Any]:
     """Get recent sync history."""
@@ -845,7 +860,9 @@ async def get_sync_status(
             {
                 "id": s.id,
                 "peer_id": s.peer_id,
-                "direction": s.direction.value if isinstance(s.direction, SyncDirection) else s.direction,
+                "direction": s.direction.value
+                if isinstance(s.direction, SyncDirection)
+                else s.direction,
                 "status": s.status.value if isinstance(s.status, SyncOperationStatus) else s.status,
                 "phase": s.phase.value if isinstance(s.phase, SyncPhase) else s.phase,
                 "started_at": s.started_at.isoformat(),
@@ -897,6 +914,7 @@ async def get_sync_details(
 # Statistics Routes
 # ============================================================================
 
+
 @router.get("/stats", response_model=FederationStatsResponse)
 async def get_federation_stats(
     current_user: AdminUserDep,  # SECURITY FIX: Require authentication
@@ -928,6 +946,7 @@ async def get_federation_stats(
 # Incoming Routes (for other peers to call)
 # ============================================================================
 
+
 @router.post("/handshake", dependencies=[Depends(check_federation_rate_limit)])
 async def handle_handshake(
     handshake: PeerHandshake,
@@ -944,7 +963,7 @@ async def handle_handshake(
     # Create our response
     our_handshake = await protocol.create_handshake()
 
-    return our_handshake.model_dump(mode='json')
+    return our_handshake.model_dump(mode="json")
 
 
 @router.get("/health", dependencies=[Depends(check_federation_rate_limit)])
@@ -974,19 +993,19 @@ async def get_changes(
     """
     if not x_forge_signature or not x_forge_public_key:
         raise HTTPException(
-            status_code=401,
-            detail="Missing X-Forge-Signature or X-Forge-Public-Key header"
+            status_code=401, detail="Missing X-Forge-Signature or X-Forge-Public-Key header"
         )
 
     # Verify the request signature
     import json
+
     params: dict[str, int | str] = {"limit": limit}
     if since:
         params["since"] = since.isoformat()
     if types:
         params["types"] = types
 
-    request_data = json.dumps(params, sort_keys=True).encode('utf-8')
+    request_data = json.dumps(params, sort_keys=True).encode("utf-8")
     if not protocol.verify_signature(request_data, x_forge_signature, x_forge_public_key):
         raise HTTPException(status_code=401, detail="Invalid request signature")
 
@@ -1032,7 +1051,7 @@ async def get_changes(
         {
             "id": c.id,
             "content": c.content,
-            "type": c.type.value if hasattr(c.type, 'value') else c.type,
+            "type": c.type.value if hasattr(c.type, "value") else c.type,
             "title": c.title,
             "summary": c.summary,
             "tags": c.tags,
@@ -1082,9 +1101,7 @@ async def receive_capsules(
     payload_json = payload_copy.model_dump_json()
 
     if not protocol.verify_signature(
-        payload_json.encode('utf-8'),
-        payload.signature,
-        x_forge_public_key
+        payload_json.encode("utf-8"), payload.signature, x_forge_public_key
     ):
         raise HTTPException(status_code=401, detail="Invalid payload signature")
 
@@ -1121,7 +1138,9 @@ async def receive_capsules(
             # Check trust threshold
             remote_trust = remote_capsule.get("trust_level", 0)
             if remote_trust < peer.min_trust_to_sync:
-                logger.debug(f"Skipping capsule {remote_id}: trust {remote_trust} < {peer.min_trust_to_sync}")
+                logger.debug(
+                    f"Skipping capsule {remote_id}: trust {remote_trust} < {peer.min_trust_to_sync}"
+                )
                 rejected += 1
                 continue
 
@@ -1141,6 +1160,7 @@ async def receive_capsules(
                         if peer.conflict_resolution == ConflictResolution.REMOTE_WINS:
                             # Update local capsule
                             from forge.models.capsule import CapsuleUpdate
+
                             update_data = CapsuleUpdate(
                                 content=remote_capsule.get("content"),
                                 title=remote_capsule.get("title"),
@@ -1152,6 +1172,7 @@ async def receive_capsules(
                         elif peer.conflict_resolution == ConflictResolution.HIGHER_TRUST:
                             if remote_trust > (local.trust_level or 0):
                                 from forge.models.capsule import CapsuleUpdate
+
                                 update_data = CapsuleUpdate(
                                     content=remote_capsule.get("content"),
                                     title=remote_capsule.get("title"),

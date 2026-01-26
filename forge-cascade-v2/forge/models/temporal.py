@@ -18,27 +18,27 @@ from forge.models.base import ForgeModel, TimestampMixin, TrustLevel, generate_i
 class ChangeType(str, Enum):
     """Types of changes that create versions."""
 
-    CREATE = "create"          # Initial creation
-    UPDATE = "update"          # Content modification
-    FORK = "fork"              # Derived from another capsule
-    MERGE = "merge"            # Merged from multiple sources
-    RESTORE = "restore"        # Restored from backup/archive
-    MIGRATION = "migration"    # System migration
+    CREATE = "create"  # Initial creation
+    UPDATE = "update"  # Content modification
+    FORK = "fork"  # Derived from another capsule
+    MERGE = "merge"  # Merged from multiple sources
+    RESTORE = "restore"  # Restored from backup/archive
+    MIGRATION = "migration"  # System migration
 
 
 class SnapshotType(str, Enum):
     """Types of version snapshots."""
 
-    FULL = "full"              # Complete content snapshot
-    DIFF = "diff"              # Delta from previous version
-    REFERENCE = "reference"    # Pointer to another snapshot
+    FULL = "full"  # Complete content snapshot
+    DIFF = "diff"  # Delta from previous version
+    REFERENCE = "reference"  # Pointer to another snapshot
 
 
 class TrustChangeType(str, Enum):
     """Classification of trust changes for storage optimization."""
 
-    ESSENTIAL = "essential"    # Must be preserved in full
-    DERIVED = "derived"        # Can be reconstructed from context
+    ESSENTIAL = "essential"  # Must be preserved in full
+    DERIVED = "derived"  # Can be reconstructed from context
 
 
 class TimeGranularity(str, Enum):
@@ -250,18 +250,20 @@ class TrustSnapshotCompressor:
     - Automatic adjustments
     """
 
-    ESSENTIAL_REASONS = frozenset({
-        "manual_adjustment",
-        "admin_adjustment",
-        "role_change",
-        "anomaly_detected",
-        "governance_action",
-        "initial_assignment",
-        "security_incident",
-        "verification_complete",
-        "quarantine",
-        "restore",
-    })
+    ESSENTIAL_REASONS = frozenset(
+        {
+            "manual_adjustment",
+            "admin_adjustment",
+            "role_change",
+            "anomaly_detected",
+            "governance_action",
+            "initial_assignment",
+            "security_incident",
+            "verification_complete",
+            "quarantine",
+            "restore",
+        }
+    )
 
     @classmethod
     def classify(cls, reason: str | None) -> TrustChangeType:
@@ -309,7 +311,9 @@ class TrustSnapshotCompressor:
             "derived_count": derived_count,
             "uncompressed_bytes": uncompressed,
             "compressed_bytes": compressed,
-            "savings_percent": round((1 - compressed / uncompressed) * 100, 1) if uncompressed > 0 else 0.0,
+            "savings_percent": round((1 - compressed / uncompressed) * 100, 1)
+            if uncompressed > 0
+            else 0.0,
         }
 
 
@@ -372,12 +376,12 @@ class VersioningPolicy(ForgeModel):
     ) -> bool:
         """Determine if a full snapshot should be created."""
         return (
-            change_number == 1 or                                    # Initial creation
-            change_number % self.snapshot_every_n_changes == 0 or    # Periodic
-            trust_level >= self.snapshot_for_trust_level or          # High trust
-            is_major_version or                                      # Major version bump
-            diff_chain_length >= self.max_diff_chain_length or       # Chain too long
-            (diff_size is not None and diff_size > self.max_diff_size_bytes)  # Diff too large
+            change_number == 1  # Initial creation
+            or change_number % self.snapshot_every_n_changes == 0  # Periodic
+            or trust_level >= self.snapshot_for_trust_level  # High trust
+            or is_major_version  # Major version bump
+            or diff_chain_length >= self.max_diff_chain_length  # Chain too long
+            or (diff_size is not None and diff_size > self.max_diff_size_bytes)  # Diff too large
         )
 
     def should_compact(self, version: CapsuleVersion) -> bool:

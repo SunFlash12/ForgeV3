@@ -38,21 +38,25 @@ logger = logging.getLogger(__name__)
 
 class GAMEClientError(Exception):
     """Base exception for GAME SDK client errors."""
+
     pass
 
 
 class AuthenticationError(GAMEClientError):
     """Raised when API authentication fails."""
+
     pass
 
 
 class RateLimitError(GAMEClientError):
     """Raised when API rate limit is exceeded."""
+
     pass
 
 
 class AgentNotFoundError(GAMEClientError):
     """Raised when an agent is not found."""
+
     pass
 
 
@@ -75,7 +79,8 @@ class FunctionDefinition:
         name: str,
         description: str,
         arguments: list[dict[str, Any]],
-        executable: Callable[..., tuple[str, Any, dict[str, Any]]] | Callable[..., Coroutine[Any, Any, tuple[str, Any, dict[str, Any]]]],
+        executable: Callable[..., tuple[str, Any, dict[str, Any]]]
+        | Callable[..., Coroutine[Any, Any, tuple[str, Any, dict[str, Any]]]],
         returns_description: str = "",
     ) -> None:
         """
@@ -168,7 +173,9 @@ class GAMEWorker:
         self._get_state_fn = get_state_fn or self._default_get_state
         self._state: dict[str, Any] = {}
 
-    def _default_get_state(self, function_result: Any, current_state: dict[str, Any]) -> dict[str, Any]:
+    def _default_get_state(
+        self, function_result: Any, current_state: dict[str, Any]
+    ) -> dict[str, Any]:
         """Default state function returns current state unchanged."""
         return current_state
 
@@ -185,7 +192,9 @@ class GAMEWorker:
             "action_space": [f.to_game_format() for f in self.functions.values()],
         }
 
-    async def execute_function(self, function_name: str, **kwargs: Any) -> tuple[str, Any, dict[str, Any]]:
+    async def execute_function(
+        self, function_name: str, **kwargs: Any
+    ) -> tuple[str, Any, dict[str, Any]]:
         """Execute a function on this worker."""
         if function_name not in self.functions:
             raise GAMEClientError(f"Function {function_name} not found on worker {self.worker_id}")
@@ -240,8 +249,7 @@ class GAMESDKClient:
             logger.info("GAME SDK client initialized and authenticated")
         else:
             logger.warning(
-                "GAME SDK client initialized without API key. "
-                "Agent features will be limited."
+                "GAME SDK client initialized without API key. Agent features will be limited."
             )
 
     async def close(self) -> None:
@@ -315,9 +323,7 @@ class GAMESDKClient:
         if self._rate_limit_remaining <= 0:
             if self._rate_limit_reset and datetime.now(UTC) < self._rate_limit_reset:
                 wait_time = (self._rate_limit_reset - datetime.now(UTC)).total_seconds()
-                raise RateLimitError(
-                    f"Rate limit exceeded. Retry after {wait_time:.0f} seconds"
-                )
+                raise RateLimitError(f"Rate limit exceeded. Retry after {wait_time:.0f} seconds")
             # Reset rate limit counter
             self._rate_limit_remaining = self.config.game_api_rate_limit
 
@@ -328,12 +334,7 @@ class GAMESDKClient:
             raise GAMEClientError("HTTP client not initialized. Call initialize() first.")
 
         try:
-            response = await self._http_client.request(
-                method,
-                endpoint,
-                headers=headers,
-                **kwargs
-            )
+            response = await self._http_client.request(method, endpoint, headers=headers, **kwargs)
 
             # Update rate limit tracking from response headers
             if "X-RateLimit-Remaining" in response.headers:
@@ -609,8 +610,7 @@ class GAMESDKClient:
 
             try:
                 status, result, state_update = await workers[target_worker_id].execute_function(
-                    function_name,
-                    **arguments
+                    function_name, **arguments
                 )
 
                 action_result = {
@@ -634,15 +634,26 @@ class GAMESDKClient:
                 if stop_condition and stop_condition(action_result):
                     break
 
-            except (GAMEClientError, ConnectionError, TimeoutError, OSError, ValueError, RuntimeError, KeyError, TypeError) as e:
+            except (
+                GAMEClientError,
+                ConnectionError,
+                TimeoutError,
+                OSError,
+                ValueError,
+                RuntimeError,
+                KeyError,
+                TypeError,
+            ) as e:
                 logger.error(f"Action execution failed: {e}")
-                results.append({
-                    "iteration": iteration,
-                    "worker_id": target_worker_id,
-                    "function_name": function_name,
-                    "status": "FAILED",
-                    "error": str(e),
-                })
+                results.append(
+                    {
+                        "iteration": iteration,
+                        "worker_id": target_worker_id,
+                        "function_name": function_name,
+                        "status": "FAILED",
+                        "error": str(e),
+                    }
+                )
 
         return results
 

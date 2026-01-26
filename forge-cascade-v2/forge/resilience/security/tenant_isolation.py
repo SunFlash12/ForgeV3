@@ -22,13 +22,10 @@ from forge.resilience.config import get_resilience_config
 
 logger: structlog.stdlib.BoundLogger = structlog.get_logger(__name__)
 
-F = TypeVar('F', bound=Callable[..., Any])
+F = TypeVar("F", bound=Callable[..., Any])
 
 # Context variable for current tenant
-_current_tenant: ContextVar[TenantContext | None] = ContextVar(
-    'current_tenant',
-    default=None
-)
+_current_tenant: ContextVar[TenantContext | None] = ContextVar("current_tenant", default=None)
 
 
 class TenantTier(Enum):
@@ -126,11 +123,13 @@ class TenantContext:
 
 class TenantIsolationError(Exception):
     """Raised when tenant isolation is violated."""
+
     pass
 
 
 class TenantQuotaExceededError(Exception):
     """Raised when tenant exceeds resource quota."""
+
     pass
 
 
@@ -150,11 +149,7 @@ class TenantIsolator:
     def register_tenant(self, context: TenantContext) -> None:
         """Register a tenant context."""
         self._tenants[context.tenant_id] = context
-        logger.info(
-            "tenant_registered",
-            tenant_id=context.tenant_id,
-            tier=context.tier.value
-        )
+        logger.info("tenant_registered", tenant_id=context.tenant_id, tier=context.tier.value)
 
     def get_tenant(self, tenant_id: str) -> TenantContext | None:
         """Get tenant context by ID."""
@@ -172,11 +167,7 @@ class TenantIsolator:
         """Clear the current tenant context."""
         _current_tenant.set(None)
 
-    def validate_access(
-        self,
-        resource_tenant_id: str,
-        operation: str = "read"
-    ) -> bool:
+    def validate_access(self, resource_tenant_id: str, operation: str = "read") -> bool:
         """
         Validate that current tenant can access a resource.
 
@@ -202,11 +193,7 @@ class TenantIsolator:
         if current.tenant_id != resource_tenant_id:
             # Cross-tenant access attempt
             if self._config.audit_cross_tenant_attempts:
-                self._log_cross_tenant_attempt(
-                    current.tenant_id,
-                    resource_tenant_id,
-                    operation
-                )
+                self._log_cross_tenant_attempt(current.tenant_id, resource_tenant_id, operation)
 
             if self._config.strict_mode:
                 raise TenantIsolationError(
@@ -254,7 +241,10 @@ class TenantIsolator:
 
         elif resource_type == "storage":
             new_storage_total = current.current_storage_mb + amount
-            if current.limits.max_storage_mb >= 0 and new_storage_total > current.limits.max_storage_mb:
+            if (
+                current.limits.max_storage_mb >= 0
+                and new_storage_total > current.limits.max_storage_mb
+            ):
                 raise TenantQuotaExceededError(
                     f"Storage quota exceeded: {new_storage_total}/{current.limits.max_storage_mb} MB"
                 )
@@ -277,7 +267,9 @@ class TenantIsolator:
 
         return {"tenant_id": current.tenant_id}
 
-    def apply_tenant_filter(self, query: str, params: dict[str, Any] | None = None) -> tuple[str, dict[str, Any]]:
+    def apply_tenant_filter(
+        self, query: str, params: dict[str, Any] | None = None
+    ) -> tuple[str, dict[str, Any]]:
         """
         Apply tenant filter to a Cypher query using parameterization.
 
@@ -304,12 +296,10 @@ class TenantIsolator:
         # SECURITY FIX: Validate tenant_id format to prevent injection
         # Tenant IDs should be alphanumeric with limited special chars
         import re
+
         tenant_id = current.tenant_id
-        if not re.match(r'^[a-zA-Z0-9_-]{1,64}$', tenant_id):
-            logger.error(
-                "invalid_tenant_id_format",
-                tenant_id_length=len(tenant_id)
-            )
+        if not re.match(r"^[a-zA-Z0-9_-]{1,64}$", tenant_id):
+            logger.error("invalid_tenant_id_format", tenant_id_length=len(tenant_id))
             raise TenantIsolationError("Invalid tenant ID format")
 
         # SECURITY FIX: Use parameterized query instead of string interpolation
@@ -321,9 +311,9 @@ class TenantIsolator:
             # Add to existing WHERE - find case-insensitive position
             where_pos = query.upper().find("WHERE")
             query = (
-                query[:where_pos + 5] +
-                " n.tenant_id = $__tenant_filter_id AND" +
-                query[where_pos + 5:]
+                query[: where_pos + 5]
+                + " n.tenant_id = $__tenant_filter_id AND"
+                + query[where_pos + 5 :]
             )
         else:
             # Need to add WHERE clause - this is simplified
@@ -333,10 +323,7 @@ class TenantIsolator:
         return query, params
 
     def _log_cross_tenant_attempt(
-        self,
-        source_tenant: str,
-        target_tenant: str,
-        operation: str
+        self, source_tenant: str, target_tenant: str, operation: str
     ) -> None:
         """Log a cross-tenant access attempt."""
         attempt = {
@@ -347,10 +334,7 @@ class TenantIsolator:
         }
         self._cross_tenant_attempts.append(attempt)
 
-        logger.warning(
-            "cross_tenant_access_attempt",
-            **attempt
-        )
+        logger.warning("cross_tenant_access_attempt", **attempt)
 
         # Keep only last 1000 attempts
         if len(self._cross_tenant_attempts) > 1000:
@@ -380,6 +364,7 @@ def require_tenant(func: F) -> F:
     Raises:
         TenantIsolationError: If no tenant context is set
     """
+
     @functools.wraps(func)
     async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
         isolator = get_tenant_isolator()
@@ -399,6 +384,7 @@ def require_tenant(func: F) -> F:
         return func(*args, **kwargs)
 
     import asyncio
+
     if asyncio.iscoroutinefunction(func):
         return cast(F, async_wrapper)
     return cast(F, sync_wrapper)

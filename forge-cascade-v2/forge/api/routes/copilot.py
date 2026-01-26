@@ -32,33 +32,32 @@ router = APIRouter(prefix="/copilot", tags=["copilot"])
 # REQUEST/RESPONSE MODELS
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class ChatRequest(BaseModel):
     """Request for chat endpoint."""
-    message: str = Field(
-        description="User message to send to the Copilot agent"
-    )
+
+    message: str = Field(description="User message to send to the Copilot agent")
     metadata: dict[str, Any] | None = Field(
-        default=None,
-        description="Optional metadata to attach to the message"
+        default=None, description="Optional metadata to attach to the message"
     )
 
 
 class ChatResponse(BaseModel):
     """Response from chat endpoint."""
+
     content: str = Field(description="Assistant's response")
     tool_calls: list[dict[str, Any]] = Field(
-        default_factory=list,
-        description="Tools that were called during response generation"
+        default_factory=list, description="Tools that were called during response generation"
     )
     reasoning: str | None = Field(
-        default=None,
-        description="Optional reasoning trace from the model"
+        default=None, description="Optional reasoning trace from the model"
     )
     latency_ms: float = Field(description="Response latency in milliseconds")
 
 
 class HistoryMessage(BaseModel):
     """A message in the conversation history."""
+
     role: str = Field(description="Message role: 'user', 'assistant', or 'system'")
     content: str = Field(description="Message content")
     timestamp: str = Field(description="ISO timestamp of the message")
@@ -67,12 +66,14 @@ class HistoryMessage(BaseModel):
 
 class HistoryResponse(BaseModel):
     """Response containing conversation history."""
+
     messages: list[HistoryMessage]
     count: int
 
 
 class StatusResponse(BaseModel):
     """Agent status response."""
+
     state: str = Field(description="Current agent state")
     is_running: bool
     model: str | None = Field(default=None)
@@ -127,14 +128,14 @@ async def get_agent():
             raise HTTPException(
                 status_code=503,
                 detail="GitHub Copilot SDK not installed. "
-                       "Install with: pip install github-copilot-sdk"
+                "Install with: pip install github-copilot-sdk",
             )
         except (RuntimeError, ConnectionError, OSError, ValueError) as e:
             logger.error(f"Failed to initialize Copilot agent: {e}")
             # SECURITY FIX (Audit 7 - Session 3): Do not leak internal error details
             raise HTTPException(
                 status_code=503,
-                detail="Failed to initialize Copilot agent. Please try again or contact support."
+                detail="Failed to initialize Copilot agent. Please try again or contact support.",
             )
 
     return _agent
@@ -152,6 +153,7 @@ async def shutdown_agent():
 # ═══════════════════════════════════════════════════════════════════════════════
 # REST ENDPOINTS
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 @router.post("/chat", response_model=ChatResponse)
 async def chat(
@@ -191,8 +193,7 @@ async def chat(
         logger.error(f"Chat request failed: {e}")
         # SECURITY FIX (Audit 7 - Session 3): Do not leak internal error details
         raise HTTPException(
-            status_code=500,
-            detail="Chat request failed. Please try again or contact support."
+            status_code=500, detail="Chat request failed. Please try again or contact support."
         )
 
 
@@ -306,6 +307,7 @@ async def get_status(current_user: ActiveUserDep) -> StatusResponse:
 # WEBSOCKET ENDPOINT
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 @router.websocket("/ws")
 async def websocket_chat(websocket: WebSocket) -> None:
     """
@@ -322,6 +324,7 @@ async def websocket_chat(websocket: WebSocket) -> None:
     """
     # SECURITY FIX (Audit 6): Validate Origin header to prevent CSWSH attacks
     from forge.api.websocket.handlers import validate_websocket_origin
+
     if not validate_websocket_origin(websocket):
         await websocket.close(code=4003, reason="Origin not allowed")
         return
@@ -383,11 +386,16 @@ async def websocket_chat(websocket: WebSocket) -> None:
             if event.type.value == "tool.call":
                 try:
                     import asyncio
-                    asyncio.create_task(websocket.send_json({
-                        "type": "tool_call",
-                        "name": event.data.name,
-                        "arguments": event.data.arguments,
-                    }))
+
+                    asyncio.create_task(
+                        websocket.send_json(
+                            {
+                                "type": "tool_call",
+                                "name": event.data.name,
+                                "arguments": event.data.arguments,
+                            }
+                        )
+                    )
                 except (WebSocketDisconnect, ConnectionError, OSError, RuntimeError):
                     pass
 
@@ -405,30 +413,38 @@ async def websocket_chat(websocket: WebSocket) -> None:
                     full_response = []
                     async for chunk in agent.stream_chat(content):
                         full_response.append(chunk)
-                        await websocket.send_json({
-                            "type": "chunk",
-                            "content": chunk,
-                        })
+                        await websocket.send_json(
+                            {
+                                "type": "chunk",
+                                "content": chunk,
+                            }
+                        )
 
                     # Send complete message
-                    await websocket.send_json({
-                        "type": "complete",
-                        "content": "".join(full_response),
-                    })
+                    await websocket.send_json(
+                        {
+                            "type": "complete",
+                            "content": "".join(full_response),
+                        }
+                    )
                 else:
                     # Non-streaming response
                     response = await agent.chat(content)
-                    await websocket.send_json({
-                        "type": "complete",
-                        "content": response.content,
-                        "tool_calls": response.tool_calls,
-                    })
+                    await websocket.send_json(
+                        {
+                            "type": "complete",
+                            "content": response.content,
+                            "tool_calls": response.tool_calls,
+                        }
+                    )
 
             elif data.get("type") == "clear":
                 agent.clear_history()
-                await websocket.send_json({
-                    "type": "cleared",
-                })
+                await websocket.send_json(
+                    {
+                        "type": "cleared",
+                    }
+                )
 
             elif data.get("type") == "ping":
                 await websocket.send_json({"type": "pong"})
@@ -439,9 +455,11 @@ async def websocket_chat(websocket: WebSocket) -> None:
         logger.error(f"WebSocket error: {e}")
         try:
             # SECURITY FIX (Audit 7 - Session 3): Do not leak internal error details
-            await websocket.send_json({
-                "type": "error",
-                "message": "An internal error occurred. Please reconnect.",
-            })
+            await websocket.send_json(
+                {
+                    "type": "error",
+                    "message": "An internal error occurred. Please reconnect.",
+                }
+            )
         except (WebSocketDisconnect, ConnectionError, OSError, RuntimeError):
             pass

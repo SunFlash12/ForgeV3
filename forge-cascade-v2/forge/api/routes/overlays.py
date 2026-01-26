@@ -48,8 +48,10 @@ router = APIRouter()
 # Request/Response Models
 # =============================================================================
 
+
 class OverlayResponse(BaseModel):
     """Overlay information response - matches frontend Overlay type."""
+
     id: str
     name: str
     version: str
@@ -67,29 +69,44 @@ class OverlayResponse(BaseModel):
         """Create response from BaseOverlay instance."""
         # Map phase enum to integer (1-7 for pipeline phases)
         phase_map = {
-            "intake": 1, "validation": 2, "analysis": 3, "governance": 4,
-            "integration": 5, "distribution": 6, "feedback": 7
+            "intake": 1,
+            "validation": 2,
+            "analysis": 3,
+            "governance": 4,
+            "integration": 5,
+            "distribution": 6,
+            "feedback": 7,
         }
         # Safely get phase - some overlays may not have this attribute
         phase_int = 1  # Default to intake phase
-        if hasattr(overlay, 'phase') and overlay.phase is not None:
-            phase_value = overlay.phase.value if hasattr(overlay.phase, 'value') else str(overlay.phase)
+        if hasattr(overlay, "phase") and overlay.phase is not None:
+            phase_value = (
+                overlay.phase.value if hasattr(overlay.phase, "value") else str(overlay.phase)
+            )
             phase_int = phase_map.get(phase_value.lower(), 1)
 
         # Get last execution time (BaseOverlay uses last_execution, not last_active)
-        last_exec = getattr(overlay, 'last_execution', None) or getattr(overlay, 'last_active', None)
+        last_exec = getattr(overlay, "last_execution", None) or getattr(
+            overlay, "last_active", None
+        )
         last_time = last_exec.isoformat() if last_exec else ""
 
         return cls(
             id=overlay.id,  # BaseOverlay uses .id
-            name=getattr(overlay, 'NAME', getattr(overlay, 'name', 'unknown')),  # Class constant NAME
-            version=getattr(overlay, 'VERSION', getattr(overlay, 'version', '1.0.0')),  # Class constant VERSION
-            description=getattr(overlay, 'DESCRIPTION', getattr(overlay, 'description', '')),  # Class constant
+            name=getattr(
+                overlay, "NAME", getattr(overlay, "name", "unknown")
+            ),  # Class constant NAME
+            version=getattr(
+                overlay, "VERSION", getattr(overlay, "version", "1.0.0")
+            ),  # Class constant VERSION
+            description=getattr(
+                overlay, "DESCRIPTION", getattr(overlay, "description", "")
+            ),  # Class constant
             phase=phase_int,
-            priority=getattr(overlay, 'priority', 100),  # Default priority
+            priority=getattr(overlay, "priority", 100),  # Default priority
             enabled=overlay.state == OverlayState.ACTIVE,
-            critical=getattr(overlay, 'is_critical', False),  # Default to non-critical
-            config=getattr(overlay, 'config', {}),  # Default empty config
+            critical=getattr(overlay, "is_critical", False),  # Default to non-critical
+            config=getattr(overlay, "config", {}),  # Default empty config
             created_at=last_time,
             updated_at=last_time,
         )
@@ -97,11 +114,13 @@ class OverlayResponse(BaseModel):
 
 class UpdateOverlayConfigRequest(BaseModel):
     """Request to update overlay configuration."""
+
     config: dict[str, Any]
 
 
 class OverlayMetricsResponse(BaseModel):
     """Overlay metrics response - matches frontend OverlayMetrics type."""
+
     overlay_id: str
     total_executions: int
     successful_executions: int
@@ -113,6 +132,7 @@ class OverlayMetricsResponse(BaseModel):
 
 class CanaryStatusResponse(BaseModel):
     """Canary deployment status response - matches frontend CanaryDeployment type."""
+
     overlay_id: str
     current_stage: int
     total_stages: int
@@ -130,6 +150,7 @@ class CanaryStatusResponse(BaseModel):
 # =============================================================================
 # Overlay Management Endpoints
 # =============================================================================
+
 
 @router.get("/")
 async def list_overlays(
@@ -166,8 +187,13 @@ async def list_overlays_by_phase(
     """
     # OverlayManager.get_overlays_for_phase expects an int, so convert via phase_map
     phase_map = {
-        "validation": 2, "security": 2, "enrichment": 3, "processing": 3,
-        "governance": 4, "finalization": 5, "notification": 6,
+        "validation": 2,
+        "security": 2,
+        "enrichment": 3,
+        "processing": 3,
+        "governance": 4,
+        "finalization": 5,
+        "notification": 6,
     }
     phase_int = phase_map.get(phase.value, 1)
     overlays = overlay_manager.get_overlays_for_phase(phase_int)
@@ -252,7 +278,7 @@ async def deactivate_overlay(
         raise HTTPException(status_code=404, detail="Overlay not found")
 
     # BaseOverlay may not have is_critical attribute; safely access it
-    if getattr(overlay, 'is_critical', False):
+    if getattr(overlay, "is_critical", False):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot deactivate critical overlay",
@@ -324,6 +350,7 @@ async def update_overlay_config(
 # Overlay Metrics Endpoints
 # =============================================================================
 
+
 @router.get("/{overlay_id}/metrics", response_model=OverlayMetricsResponse)
 async def get_overlay_metrics(
     overlay_id: str,
@@ -339,22 +366,22 @@ async def get_overlay_metrics(
         raise HTTPException(status_code=404, detail="Overlay not found")
 
     # get_stats may not exist on all overlays; safely retrieve and cast to dict
-    stats_raw = overlay.get_stats() if hasattr(overlay, 'get_stats') else {}
+    stats_raw = overlay.get_stats() if hasattr(overlay, "get_stats") else {}
     stats: dict[str, Any] = stats_raw if isinstance(stats_raw, dict) else {}
 
-    total = stats.get('total_executions', 0)
-    successful = stats.get('successful_executions', 0)
+    total = stats.get("total_executions", 0)
+    successful = stats.get("successful_executions", 0)
     failed = total - successful
 
     # Get last execution time (BaseOverlay uses last_execution, not last_active)
-    last_exec = getattr(overlay, 'last_execution', None) or getattr(overlay, 'last_active', None)
+    last_exec = getattr(overlay, "last_execution", None) or getattr(overlay, "last_active", None)
 
     return OverlayMetricsResponse(
         overlay_id=overlay_id,
         total_executions=int(total),
         successful_executions=int(successful),
         failed_executions=int(failed),
-        average_duration_ms=float(stats.get('avg_execution_time_ms', 0)),
+        average_duration_ms=float(stats.get("avg_execution_time_ms", 0)),
         error_rate=failed / total if total > 0 else 0.0,
         last_executed=last_exec.isoformat() if last_exec else None,
     )
@@ -376,11 +403,11 @@ async def get_all_overlay_metrics(
 
     for overlay in overlays:
         # Safely get phase - some overlays may not have this attribute
-        if hasattr(overlay, 'phase') and overlay.phase is not None:
-            phase = overlay.phase.value if hasattr(overlay.phase, 'value') else str(overlay.phase)
+        if hasattr(overlay, "phase") and overlay.phase is not None:
+            phase = overlay.phase.value if hasattr(overlay.phase, "value") else str(overlay.phase)
         else:
             phase = "unknown"
-        state = overlay.state.value if hasattr(overlay.state, 'value') else str(overlay.state)
+        state = overlay.state.value if hasattr(overlay.state, "value") else str(overlay.state)
 
         by_phase[phase] = by_phase.get(phase, 0) + 1
         by_state[state] = by_state.get(state, 0) + 1
@@ -397,6 +424,7 @@ async def get_all_overlay_metrics(
 # Canary Deployment Endpoints
 # =============================================================================
 
+
 def _canary_to_response(overlay_id: str, deployment: Any) -> CanaryStatusResponse:
     """Convert canary deployment to response format matching frontend."""
 
@@ -404,17 +432,27 @@ def _canary_to_response(overlay_id: str, deployment: Any) -> CanaryStatusRespons
 
     return CanaryStatusResponse(
         overlay_id=overlay_id,
-        current_stage=getattr(deployment, 'current_stage', 0),
-        total_stages=len(getattr(deployment, 'stages', [5, 10, 25, 50, 100])),
-        traffic_percentage=getattr(deployment, 'current_percentage', 0),
-        started_at=deployment.started_at.isoformat() if hasattr(deployment, 'started_at') and deployment.started_at else now_iso,
-        current_stage_started_at=deployment.current_stage_started_at.isoformat() if hasattr(deployment, 'current_stage_started_at') and deployment.current_stage_started_at else now_iso,
-        last_advanced_at=deployment.last_advanced_at.isoformat() if hasattr(deployment, 'last_advanced_at') and deployment.last_advanced_at else None,
-        success_count=getattr(deployment.metrics, 'success_count', 0) if hasattr(deployment, 'metrics') else 0,
-        failure_count=getattr(deployment.metrics, 'failure_count', 0) if hasattr(deployment, 'metrics') else 0,
-        rollback_on_failure=getattr(deployment, 'rollback_on_failure', True),
-        is_complete=deployment.is_complete() if hasattr(deployment, 'is_complete') else False,
-        can_advance=deployment.can_advance() if hasattr(deployment, 'can_advance') else False,
+        current_stage=getattr(deployment, "current_stage", 0),
+        total_stages=len(getattr(deployment, "stages", [5, 10, 25, 50, 100])),
+        traffic_percentage=getattr(deployment, "current_percentage", 0),
+        started_at=deployment.started_at.isoformat()
+        if hasattr(deployment, "started_at") and deployment.started_at
+        else now_iso,
+        current_stage_started_at=deployment.current_stage_started_at.isoformat()
+        if hasattr(deployment, "current_stage_started_at") and deployment.current_stage_started_at
+        else now_iso,
+        last_advanced_at=deployment.last_advanced_at.isoformat()
+        if hasattr(deployment, "last_advanced_at") and deployment.last_advanced_at
+        else None,
+        success_count=getattr(deployment.metrics, "success_count", 0)
+        if hasattr(deployment, "metrics")
+        else 0,
+        failure_count=getattr(deployment.metrics, "failure_count", 0)
+        if hasattr(deployment, "metrics")
+        else 0,
+        rollback_on_failure=getattr(deployment, "rollback_on_failure", True),
+        is_complete=deployment.is_complete() if hasattr(deployment, "is_complete") else False,
+        can_advance=deployment.can_advance() if hasattr(deployment, "can_advance") else False,
     )
 
 
@@ -533,14 +571,20 @@ async def advance_canary_deployment(
     updated_deployment = await canary_manager.get_deployment(overlay_id)
 
     # Resilience: Record canary advance metric
-    record_canary_advanced(overlay_id, getattr(updated_deployment, 'current_stage', 0) if updated_deployment else 0)
+    record_canary_advanced(
+        overlay_id, getattr(updated_deployment, "current_stage", 0) if updated_deployment else 0
+    )
 
     await audit_repo.log_action(
         action="canary_advanced",
         entity_type="overlay",
         entity_id=overlay_id,
         user_id=user.id,
-        details={"new_percentage": getattr(updated_deployment, 'current_percentage', 0) if updated_deployment else 0},
+        details={
+            "new_percentage": getattr(updated_deployment, "current_percentage", 0)
+            if updated_deployment
+            else 0
+        },
         correlation_id=correlation_id,
     )
 
@@ -592,6 +636,7 @@ async def rollback_canary_deployment(
 # =============================================================================
 # Admin Endpoints
 # =============================================================================
+
 
 @router.post("/reload-all")
 async def reload_all_overlays(

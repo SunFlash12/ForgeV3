@@ -85,6 +85,7 @@ def init_all_services(
     # Auto-detect if no explicit config or missing API key
     if selected_embedding_provider is None:
         import os
+
         openai_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("EMBEDDING_API_KEY")
 
         if openai_key:
@@ -97,6 +98,7 @@ def init_all_services(
             # Fall back to local sentence-transformers (no API needed)
             try:
                 import sentence_transformers  # noqa: F401
+
                 selected_embedding_provider = EmbeddingProvider.SENTENCE_TRANSFORMERS
                 selected_embedding_model = "all-MiniLM-L6-v2"
                 logger.info(
@@ -114,10 +116,7 @@ def init_all_services(
                     )
 
     # SECURITY FIX (Audit 7 - Session 5): Fail-fast in production with mock embedding
-    if (
-        selected_embedding_provider == EmbeddingProvider.MOCK
-        and settings.app_env == "production"
-    ):
+    if selected_embedding_provider == EmbeddingProvider.MOCK and settings.app_env == "production":
         raise RuntimeError(
             "STARTUP FAILURE: Embedding provider resolved to 'mock' in production. "
             "Configure EMBEDDING_API_KEY or install sentence-transformers. "
@@ -139,7 +138,8 @@ def init_all_services(
         provider=selected_embedding_provider.value,
         model=selected_embedding_model,
         dimensions=settings.embedding_dimensions,
-        auto_detected=selected_embedding_provider != embedding_provider_map.get(settings.embedding_provider),
+        auto_detected=selected_embedding_provider
+        != embedding_provider_map.get(settings.embedding_provider),
     )
 
     # Initialize LLM service with smart provider selection
@@ -173,6 +173,7 @@ def init_all_services(
     # Auto-detect if no explicit config or missing API key
     if selected_provider is None:
         import os
+
         openai_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("LLM_API_KEY")
         anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
 
@@ -231,6 +232,7 @@ def init_all_services(
 
     # Initialize Ghost Council service with config from settings
     from forge.services.ghost_council import GhostCouncilConfig
+
     ghost_council_config = GhostCouncilConfig(
         profile=settings.ghost_council_profile,
         cache_enabled=settings.ghost_council_cache_enabled,
@@ -296,11 +298,7 @@ def _setup_ghost_council_event_handlers(ghost_council: Any, event_bus: Any) -> N
                     try:
                         await gc.respond_to_issue(iss)
                     except (RuntimeError, ValueError, ConnectionError, OSError) as e:
-                        logger.error(
-                            "ghost_council_response_error",
-                            issue_id=iss.id,
-                            error=str(e)
-                        )
+                        logger.error("ghost_council_response_error", issue_id=iss.id, error=str(e))
 
                 # Run deliberation in background to not block event processing
                 task = asyncio.create_task(_safe_respond(ghost_council, issue))
@@ -310,7 +308,9 @@ def _setup_ghost_council_event_handlers(ghost_council: Any, event_bus: Any) -> N
             logger.error(
                 "ghost_council_event_handler_error",
                 error=str(e),
-                event_type=event.event_type.value if hasattr(event.event_type, 'value') else str(event.event_type),
+                event_type=event.event_type.value
+                if hasattr(event.event_type, "value")
+                else str(event.event_type),
             )
 
     # Subscribe to serious event types using correct EventBus API

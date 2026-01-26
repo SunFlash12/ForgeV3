@@ -33,6 +33,7 @@ class ExtractionProvider(Protocol):
 @dataclass
 class ExtractionConfig:
     """Configuration for phenotype extraction."""
+
     min_confidence: float = 0.6
     extract_negations: bool = True
     extract_severity: bool = True
@@ -68,19 +69,16 @@ class PhenotypeExtractor:
 
     # Severity patterns
     SEVERITY_PATTERNS = {
-        PhenotypeSeverity.MILD: [
-            r"\bmild(ly)?\b", r"\bminor\b", r"\bslight(ly)?\b", r"\bsubtle\b"
-        ],
-        PhenotypeSeverity.MODERATE: [
-            r"\bmoderate(ly)?\b", r"\bintermediate\b"
-        ],
+        PhenotypeSeverity.MILD: [r"\bmild(ly)?\b", r"\bminor\b", r"\bslight(ly)?\b", r"\bsubtle\b"],
+        PhenotypeSeverity.MODERATE: [r"\bmoderate(ly)?\b", r"\bintermediate\b"],
         PhenotypeSeverity.SEVERE: [
-            r"\bsevere(ly)?\b", r"\bmarked(ly)?\b", r"\bpronounced\b",
-            r"\bsignificant(ly)?\b", r"\bsubstantial(ly)?\b"
+            r"\bsevere(ly)?\b",
+            r"\bmarked(ly)?\b",
+            r"\bpronounced\b",
+            r"\bsignificant(ly)?\b",
+            r"\bsubstantial(ly)?\b",
         ],
-        PhenotypeSeverity.PROFOUND: [
-            r"\bprofound(ly)?\b", r"\bextreme(ly)?\b", r"\bmassive\b"
-        ],
+        PhenotypeSeverity.PROFOUND: [r"\bprofound(ly)?\b", r"\bextreme(ly)?\b", r"\bmassive\b"],
     }
 
     # Laterality patterns
@@ -118,10 +116,7 @@ class PhenotypeExtractor:
         self.llm_provider = llm_provider
 
         # Compile regex patterns
-        self._negation_regex = re.compile(
-            "|".join(self.NEGATION_PATTERNS),
-            re.IGNORECASE
-        )
+        self._negation_regex = re.compile("|".join(self.NEGATION_PATTERNS), re.IGNORECASE)
         self._severity_regex = {
             severity: re.compile("|".join(patterns), re.IGNORECASE)
             for severity, patterns in self.SEVERITY_PATTERNS.items()
@@ -155,7 +150,7 @@ class PhenotypeExtractor:
 
         # Truncate if too long
         if len(text) > self.config.max_text_length:
-            text = text[:self.config.max_text_length]
+            text = text[: self.config.max_text_length]
 
         logger.debug("phenotype_extraction_starting", text_length=len(text))
 
@@ -172,10 +167,7 @@ class PhenotypeExtractor:
             rule_extractions = self._merge_extractions(rule_extractions, llm_extractions)
 
         # Filter by confidence
-        filtered = [
-            e for e in rule_extractions
-            if e.confidence >= self.config.min_confidence
-        ]
+        filtered = [e for e in rule_extractions if e.confidence >= self.config.min_confidence]
 
         logger.info(
             "phenotype_extraction_complete",
@@ -264,13 +256,13 @@ class PhenotypeExtractor:
         negated = False
         if self.config.extract_negations:
             # Look 30 chars before the match for negation
-            neg_window = text[max(0, start_idx - 30):start_idx]
+            neg_window = text[max(0, start_idx - 30) : start_idx]
             negated = bool(self._negation_regex.search(neg_window))
 
         # Check for severity
         severity = PhenotypeSeverity.UNKNOWN
         if self.config.extract_severity:
-            sev_window = text[max(0, start_idx - 30):min(len(text), end_idx + 30)]
+            sev_window = text[max(0, start_idx - 30) : min(len(text), end_idx + 30)]
             for sev, regex in self._severity_regex.items():
                 if regex.search(sev_window):
                     severity = sev
@@ -279,7 +271,7 @@ class PhenotypeExtractor:
         # Check for laterality
         laterality = None
         if self.config.extract_laterality:
-            lat_window = text[max(0, start_idx - 20):min(len(text), end_idx + 20)]
+            lat_window = text[max(0, start_idx - 20) : min(len(text), end_idx + 20)]
             for lat, regex in self._laterality_regex.items():
                 if regex.search(lat_window):
                     laterality = lat
@@ -336,17 +328,19 @@ class PhenotypeExtractor:
                 if hpo_id:
                     term = self.ontology.get_term(hpo_id)
                     if term:
-                        extractions.append(ExtractedPhenotype(
-                            hpo_id=hpo_id,
-                            hpo_name=term.name,
-                            original_text=result.get("original_text", term.name),
-                            context=result.get("context"),
-                            confidence=result.get("confidence", 0.8),
-                            match_type="llm",
-                            negated=result.get("negated", False),
-                            severity=PhenotypeSeverity(result.get("severity", "unknown")),
-                            laterality=result.get("laterality"),
-                        ))
+                        extractions.append(
+                            ExtractedPhenotype(
+                                hpo_id=hpo_id,
+                                hpo_name=term.name,
+                                original_text=result.get("original_text", term.name),
+                                context=result.get("context"),
+                                confidence=result.get("confidence", 0.8),
+                                match_type="llm",
+                                negated=result.get("negated", False),
+                                severity=PhenotypeSeverity(result.get("severity", "unknown")),
+                                laterality=result.get("laterality"),
+                            )
+                        )
 
             return extractions
 
@@ -368,8 +362,7 @@ class PhenotypeExtractor:
                 # Boost confidence if both methods found it
                 existing = merged[llm_ext.hpo_id]
                 existing.confidence = min(
-                    1.0,
-                    existing.confidence * 0.5 + llm_ext.confidence * 0.5 + 0.1
+                    1.0, existing.confidence * 0.5 + llm_ext.confidence * 0.5 + 0.1
                 )
             else:
                 merged[llm_ext.hpo_id] = llm_ext
@@ -446,13 +439,15 @@ class PhenotypeExtractor:
             for hpo_id in data["hpo_terms"]:
                 term = self.ontology.get_term(hpo_id)
                 if term:
-                    extractions.append(ExtractedPhenotype(
-                        hpo_id=hpo_id,
-                        hpo_name=term.name,
-                        original_text=term.name,
-                        confidence=1.0,
-                        match_type="provided",
-                    ))
+                    extractions.append(
+                        ExtractedPhenotype(
+                            hpo_id=hpo_id,
+                            hpo_name=term.name,
+                            original_text=term.name,
+                            confidence=1.0,
+                            match_type="provided",
+                        )
+                    )
 
         # Deduplicate
         seen: dict[str, ExtractedPhenotype] = {}
@@ -466,6 +461,7 @@ class PhenotypeExtractor:
 # =============================================================================
 # LLM Extraction Provider
 # =============================================================================
+
 
 class OpenAIPhenotypeExtractor:
     """
@@ -506,6 +502,7 @@ JSON Output:"""
         """Initialize with OpenAI API key."""
         try:
             from openai import AsyncOpenAI
+
             self._client = AsyncOpenAI(api_key=api_key)
             self._model = model
         except ImportError:
@@ -542,6 +539,7 @@ JSON Output:"""
 # =============================================================================
 # Factory Function
 # =============================================================================
+
 
 def create_phenotype_extractor(
     ontology: HPOOntologyService,

@@ -90,7 +90,9 @@ class PeerTrustManager:
         self._peer_trust_cache: dict[str, float] = {}
         # SECURITY FIX (Audit 2): Lock to prevent race conditions in trust updates
         self._trust_lock = asyncio.Lock()
-        self._peer_locks: dict[str, asyncio.Lock] = {}  # Per-peer locks for fine-grained concurrency
+        self._peer_locks: dict[
+            str, asyncio.Lock
+        ] = {}  # Per-peer locks for fine-grained concurrency
 
     async def _get_peer_lock(self, peer_id: str) -> asyncio.Lock:
         """Get or create a lock for a specific peer."""
@@ -150,7 +152,7 @@ class PeerTrustManager:
                 peer.id,
                 "initialized",
                 0,
-                f"Peer registered with initial trust {peer.trust_score:.2f}"
+                f"Peer registered with initial trust {peer.trust_score:.2f}",
             )
             logger.info(f"Initialized trust for {peer.name}: {peer.trust_score:.2f}")
 
@@ -169,7 +171,7 @@ class PeerTrustManager:
                 peer.id,
                 "sync_success",
                 self.SYNC_SUCCESS_BONUS,
-                f"Successful sync increased trust from {old_trust:.2f} to {new_trust:.2f}"
+                f"Successful sync increased trust from {old_trust:.2f} to {new_trust:.2f}",
             )
 
             logger.debug(f"Trust increased for {peer.name}: {old_trust:.2f} -> {new_trust:.2f}")
@@ -190,7 +192,7 @@ class PeerTrustManager:
                 peer.id,
                 "sync_failure",
                 -self.SYNC_FAILURE_PENALTY,
-                f"Failed sync decreased trust from {old_trust:.2f} to {new_trust:.2f}"
+                f"Failed sync decreased trust from {old_trust:.2f} to {new_trust:.2f}",
             )
 
             logger.warning(f"Trust decreased for {peer.name}: {old_trust:.2f} -> {new_trust:.2f}")
@@ -221,10 +223,7 @@ class PeerTrustManager:
             self._update_trust_cache(peer.id, new_trust)
 
             self._record_event(
-                peer.id,
-                "conflict",
-                -penalty,
-                f"Conflict ({conflict_type}), resolved={resolved}"
+                peer.id, "conflict", -penalty, f"Conflict ({conflict_type}), resolved={resolved}"
             )
 
             return new_trust
@@ -247,10 +246,7 @@ class PeerTrustManager:
             self._update_trust_cache(peer.id, new_trust)
 
             self._record_event(
-                peer.id,
-                "manual_adjustment",
-                delta,
-                f"Manual adjustment by {adjusted_by}: {reason}"
+                peer.id, "manual_adjustment", delta, f"Manual adjustment by {adjusted_by}: {reason}"
             )
 
             logger.info(
@@ -289,10 +285,7 @@ class PeerTrustManager:
                 self._update_trust_cache(peer.id, new_trust)
 
                 self._record_event(
-                    peer.id,
-                    "inactivity_decay",
-                    -decay,
-                    f"Inactive for {inactive_weeks:.1f} weeks"
+                    peer.id, "inactivity_decay", -decay, f"Inactive for {inactive_weeks:.1f} weeks"
                 )
 
                 logger.info(f"Trust decay for {peer.name}: {old_trust:.2f} -> {new_trust:.2f}")
@@ -422,20 +415,13 @@ class PeerTrustManager:
 
             # Store revocation metadata in description field
             revoked_at = datetime.now(UTC).isoformat()
-            peer.description = (
-                f"REVOKED at {revoked_at} by {revoked_by}: {reason}"
-            )
+            peer.description = f"REVOKED at {revoked_at} by {revoked_by}: {reason}"
 
             self._record_event(
-                peer.id,
-                "trust_revoked",
-                -old_trust,
-                f"Trust revoked by {revoked_by}: {reason}"
+                peer.id, "trust_revoked", -old_trust, f"Trust revoked by {revoked_by}: {reason}"
             )
 
-            logger.warning(
-                f"Trust revoked for {peer.name} by {revoked_by}: {reason}"
-            )
+            logger.warning(f"Trust revoked for {peer.name} by {revoked_by}: {reason}")
 
     async def check_trust_expiration(
         self,
@@ -455,7 +441,7 @@ class PeerTrustManager:
             (is_expired, reason)
         """
         # Check if peer has verification timestamp
-        last_verified = getattr(peer, 'last_verified_at', None)
+        last_verified = getattr(peer, "last_verified_at", None)
         if not last_verified:
             # Use last_seen_at as fallback
             last_verified = peer.last_seen_at
@@ -466,7 +452,7 @@ class PeerTrustManager:
         # Calculate time since last verification
         now = datetime.now(UTC)
         if isinstance(last_verified, str):
-            last_verified = datetime.fromisoformat(last_verified.replace('Z', '+00:00'))
+            last_verified = datetime.fromisoformat(last_verified.replace("Z", "+00:00"))
 
         age = now - last_verified
         if age.days >= max_trust_age_days:
@@ -507,12 +493,7 @@ class PeerTrustManager:
             peer.trust_score = new_trust
             self._update_trust_cache(peer.id, new_trust)
 
-            self._record_event(
-                peer.id,
-                "trust_expired_decay",
-                -decay,
-                reason
-            )
+            self._record_event(peer.id, "trust_expired_decay", -decay, reason)
 
             logger.warning(
                 f"Trust expired for {peer.name}: {old_trust:.2f} -> {new_trust:.2f} ({reason})"
@@ -625,15 +606,15 @@ class PeerTrustManager:
         history = await self.get_trust_history(peer.id, limit=20)
 
         recent_failures = sum(
-            1 for e in history
-            if e.event_type == "sync_failure"
-            and (datetime.now(UTC) - e.timestamp).days < 7
+            1
+            for e in history
+            if e.event_type == "sync_failure" and (datetime.now(UTC) - e.timestamp).days < 7
         )
 
         recent_successes = sum(
-            1 for e in history
-            if e.event_type == "sync_success"
-            and (datetime.now(UTC) - e.timestamp).days < 7
+            1
+            for e in history
+            if e.event_type == "sync_success" and (datetime.now(UTC) - e.timestamp).days < 7
         )
 
         # Check for concerning patterns
@@ -648,7 +629,7 @@ class PeerTrustManager:
                 "evidence": {
                     "recent_failures": recent_failures,
                     "recent_successes": recent_successes,
-                }
+                },
             }
 
         # Check for exceptional performance
@@ -665,7 +646,7 @@ class PeerTrustManager:
                     "evidence": {
                         "recent_failures": recent_failures,
                         "recent_successes": recent_successes,
-                    }
+                    },
                 }
 
         return None

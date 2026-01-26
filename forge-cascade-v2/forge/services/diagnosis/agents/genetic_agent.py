@@ -18,6 +18,7 @@ logger = structlog.get_logger(__name__)
 @dataclass
 class GeneticAgentConfig(AgentConfig):
     """Configuration for genetic agent."""
+
     # Pathogenicity thresholds
     pathogenic_lr: float = 50.0
     likely_pathogenic_lr: float = 10.0
@@ -184,13 +185,19 @@ class GeneticAgent(DiagnosticAgent):
 
         # Get pathogenic/likely pathogenic variants
         significant_variants = [
-            v for v in variants
-            if "pathogenic" in str(v.get("severity", "")).lower()
-            or v.get("is_pathogenic")
+            v
+            for v in variants
+            if "pathogenic" in str(v.get("severity", "")).lower() or v.get("is_pathogenic")
         ]
 
         # Get genes
-        genes = list({v.get("code") or v.get("gene_symbol") for v in significant_variants if v.get("code") or v.get("gene_symbol")})
+        genes = list(
+            {
+                v.get("code") or v.get("gene_symbol")
+                for v in significant_variants
+                if v.get("code") or v.get("gene_symbol")
+            }
+        )
 
         if not genes or not self._neo4j:
             return existing_hypotheses or []
@@ -212,16 +219,20 @@ class GeneticAgent(DiagnosticAgent):
         """
 
         try:
-            results = await self._neo4j.run(query, {
-                "genes": genes,
-                "limit": self.config.max_hypotheses,
-            })
+            results = await self._neo4j.run(
+                query,
+                {
+                    "genes": genes,
+                    "limit": self.config.max_hypotheses,
+                },
+            )
 
-            for r in (results or []):
+            for r in results or []:
                 gene = r["gene_symbol"]
                 # Find variant for this gene
                 gene_variants = [
-                    v for v in significant_variants
+                    v
+                    for v in significant_variants
                     if (v.get("code") or v.get("gene_symbol")) == gene
                 ]
 
@@ -312,8 +323,7 @@ class GeneticAgent(DiagnosticAgent):
         # Build reasoning
         reasoning_parts = []
         pathogenic_count = sum(
-            1 for v in matching_variants
-            if "pathogenic" in str(v.get("severity", "")).lower()
+            1 for v in matching_variants if "pathogenic" in str(v.get("severity", "")).lower()
         )
 
         if pathogenic_count:
@@ -470,19 +480,24 @@ class GeneticAgent(DiagnosticAgent):
                 # Check if gene is associated with recessive disease
                 associations = gene_associations.get(gene, [])
                 recessive_diseases = [
-                    a for a in associations
+                    a
+                    for a in associations
                     if a.get("inheritance") and "recessive" in str(a["inheritance"]).lower()
                 ]
 
                 if recessive_diseases:
-                    compound_het.append({
-                        "gene": gene,
-                        "variant_count": len(gene_variants),
-                        "variants": [
-                            v.get("value") or v.get("notation") for v in gene_variants
-                        ],
-                        "potential_diseases": [d["disease_name"] for d in recessive_diseases[:3]],
-                    })
+                    compound_het.append(
+                        {
+                            "gene": gene,
+                            "variant_count": len(gene_variants),
+                            "variants": [
+                                v.get("value") or v.get("notation") for v in gene_variants
+                            ],
+                            "potential_diseases": [
+                                d["disease_name"] for d in recessive_diseases[:3]
+                            ],
+                        }
+                    )
 
         return compound_het
 
@@ -497,7 +512,9 @@ class GeneticAgent(DiagnosticAgent):
         # Check zygosity
         homozygous = [v for v in variants if v.get("zygosity") == "homozygous"]
         if homozygous:
-            notes.append(f"Found {len(homozygous)} homozygous variant(s) - consider recessive conditions")
+            notes.append(
+                f"Found {len(homozygous)} homozygous variant(s) - consider recessive conditions"
+            )
 
         # Check family history
         if family_history:
@@ -525,13 +542,15 @@ class GeneticAgent(DiagnosticAgent):
 
             associations = gene_associations.get(gene, [])
             if associations and (v.get("is_pathogenic") or v.get("is_vous")):
-                candidates.append({
-                    "gene": gene,
-                    "variant": v.get("value") or v.get("notation"),
-                    "pathogenicity": v.get("pathogenicity_class", "unknown"),
-                    "disease_associations": len(associations),
-                    "top_diseases": [a["disease_name"] for a in associations[:3]],
-                })
+                candidates.append(
+                    {
+                        "gene": gene,
+                        "variant": v.get("value") or v.get("notation"),
+                        "pathogenicity": v.get("pathogenicity_class", "unknown"),
+                        "disease_associations": len(associations),
+                        "top_diseases": [a["disease_name"] for a in associations[:3]],
+                    }
+                )
 
         # Sort by pathogenicity and association count
         candidates.sort(
@@ -571,6 +590,7 @@ class GeneticAgent(DiagnosticAgent):
 # =============================================================================
 # Factory Function
 # =============================================================================
+
 
 def create_genetic_agent(
     config: GeneticAgentConfig | None = None,

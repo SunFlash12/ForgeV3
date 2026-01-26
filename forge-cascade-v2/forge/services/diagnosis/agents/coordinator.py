@@ -29,6 +29,7 @@ logger = structlog.get_logger(__name__)
 @dataclass
 class CoordinatorConfig:
     """Configuration for diagnostic coordinator."""
+
     # Agent enablement
     enable_phenotype_agent: bool = True
     enable_genetic_agent: bool = True
@@ -60,6 +61,7 @@ def _utc_now() -> datetime:
 @dataclass
 class CoordinationSession:
     """A multi-agent diagnosis coordination session."""
+
     id: str = field(default_factory=lambda: str(uuid4()))
     patient_data: dict[str, Any] = field(default_factory=dict)
 
@@ -150,9 +152,12 @@ class DiagnosticCoordinator:
             )
 
         if self.config.enable_differential_agent:
-            self._agents[AgentRole.DIFFERENTIAL_EXPERT] = differential_agent or create_differential_agent(
-                primekg_overlay=primekg_overlay,
-                neo4j_client=neo4j_client,
+            self._agents[AgentRole.DIFFERENTIAL_EXPERT] = (
+                differential_agent
+                or create_differential_agent(
+                    primekg_overlay=primekg_overlay,
+                    neo4j_client=neo4j_client,
+                )
             )
 
         # Active sessions
@@ -195,10 +200,13 @@ class DiagnosticCoordinator:
         )
         self._sessions[session.id] = session
 
-        await self._emit_event("diagnosis_started", {
-            "session_id": session.id,
-            "agents": list(self._agents.keys()),
-        })
+        await self._emit_event(
+            "diagnosis_started",
+            {
+                "session_id": session.id,
+                "agents": list(self._agents.keys()),
+            },
+        )
 
         try:
             # Phase 1: Parallel specialist analysis
@@ -214,10 +222,13 @@ class DiagnosticCoordinator:
             session.is_complete = True
             session.completed_at = _utc_now()
 
-            await self._emit_event("diagnosis_complete", {
-                "session_id": session.id,
-                "result": session.differential_result,
-            })
+            await self._emit_event(
+                "diagnosis_complete",
+                {
+                    "session_id": session.id,
+                    "result": session.differential_result,
+                },
+            )
 
             return self._build_result(session)
 
@@ -243,19 +254,23 @@ class DiagnosticCoordinator:
 
         # Phenotype analysis
         if AgentRole.PHENOTYPE_EXPERT in self._agents:
-            tasks.append(self._run_agent_analysis(
-                session,
-                AgentRole.PHENOTYPE_EXPERT,
-                "phenotype_analysis",
-            ))
+            tasks.append(
+                self._run_agent_analysis(
+                    session,
+                    AgentRole.PHENOTYPE_EXPERT,
+                    "phenotype_analysis",
+                )
+            )
 
         # Genetic analysis
         if AgentRole.GENETIC_EXPERT in self._agents:
-            tasks.append(self._run_agent_analysis(
-                session,
-                AgentRole.GENETIC_EXPERT,
-                "genetic_analysis",
-            ))
+            tasks.append(
+                self._run_agent_analysis(
+                    session,
+                    AgentRole.GENETIC_EXPERT,
+                    "genetic_analysis",
+                )
+            )
 
         # Run in parallel or sequential
         if self.config.parallel_analysis and tasks:
@@ -278,10 +293,13 @@ class DiagnosticCoordinator:
         if not agent:
             return
 
-        await self._emit_event("agent_started", {
-            "session_id": session.id,
-            "agent": role.value,
-        })
+        await self._emit_event(
+            "agent_started",
+            {
+                "session_id": session.id,
+                "agent": role.value,
+            },
+        )
 
         try:
             # Create analysis request
@@ -307,11 +325,14 @@ class DiagnosticCoordinator:
                 session.message_history.append(message)
                 session.message_history.append(response)
 
-                await self._emit_event("agent_complete", {
-                    "session_id": session.id,
-                    "agent": role.value,
-                    "result_summary": self._summarize_analysis(response.content),
-                })
+                await self._emit_event(
+                    "agent_complete",
+                    {
+                        "session_id": session.id,
+                        "agent": role.value,
+                        "result_summary": self._summarize_analysis(response.content),
+                    },
+                )
 
                 # Broadcast to other agents if enabled
                 if self.config.broadcast_analyses:
@@ -342,7 +363,8 @@ class DiagnosticCoordinator:
                 task = asyncio.create_task(agent.receive_message(message))
                 task.add_done_callback(
                     lambda t: logger.error("broadcast_task_failed", error=str(t.exception()))
-                    if t.exception() else None
+                    if t.exception()
+                    else None
                 )
 
     async def _run_differential_synthesis(
@@ -354,9 +376,12 @@ class DiagnosticCoordinator:
         if not agent:
             return
 
-        await self._emit_event("synthesis_started", {
-            "session_id": session.id,
-        })
+        await self._emit_event(
+            "synthesis_started",
+            {
+                "session_id": session.id,
+            },
+        )
 
         # Build context with all analyses
         context = {}
@@ -390,12 +415,13 @@ class DiagnosticCoordinator:
                 session.message_history.append(message)
                 session.message_history.append(response)
 
-                await self._emit_event("synthesis_complete", {
-                    "session_id": session.id,
-                    "differential_count": len(
-                        response.content.get("differential", [])
-                    ),
-                })
+                await self._emit_event(
+                    "synthesis_complete",
+                    {
+                        "session_id": session.id,
+                        "differential_count": len(response.content.get("differential", [])),
+                    },
+                )
 
         except TimeoutError:
             logger.warning("differential_timeout")
@@ -440,19 +466,18 @@ class DiagnosticCoordinator:
                     timeout=self.config.agent_timeout / 2,
                 )
                 if response:
-                    evaluations.append({
-                        "agent": role.value,
-                        "evaluation": response.content,
-                    })
+                    evaluations.append(
+                        {
+                            "agent": role.value,
+                            "evaluation": response.content,
+                        }
+                    )
             except (RuntimeError, ValueError, OSError, ConnectionError, TimeoutError):
                 pass
 
         # Check for consensus
         if evaluations:
-            scores = [
-                e["evaluation"].get("score", 0.5)
-                for e in evaluations
-            ]
+            scores = [e["evaluation"].get("score", 0.5) for e in evaluations]
             avg_score = sum(scores) / len(scores)
             session.consensus_reached = avg_score >= self.config.consensus_threshold
 
@@ -526,7 +551,9 @@ class DiagnosticCoordinator:
         if session.differential_result:
             result["differential_diagnosis"] = session.differential_result.get("differential", [])
             result["primary_diagnosis"] = session.differential_result.get("primary_diagnosis")
-            result["confidence_assessment"] = session.differential_result.get("confidence_assessment")
+            result["confidence_assessment"] = session.differential_result.get(
+                "confidence_assessment"
+            )
             result["explanations"] = session.differential_result.get("explanations")
 
             if session.differential_result.get("consensus"):
@@ -536,9 +563,7 @@ class DiagnosticCoordinator:
         result["created_at"] = session.created_at.isoformat()
         if session.completed_at:
             result["completed_at"] = session.completed_at.isoformat()
-            result["duration_seconds"] = (
-                session.completed_at - session.created_at
-            ).total_seconds()
+            result["duration_seconds"] = (session.completed_at - session.created_at).total_seconds()
 
         return result
 
@@ -550,8 +575,7 @@ class DiagnosticCoordinator:
         return {
             "keys": list(analysis.keys()),
             "items_count": sum(
-                len(v) if isinstance(v, list | dict) else 1
-                for v in analysis.values()
+                len(v) if isinstance(v, list | dict) else 1 for v in analysis.values()
             ),
         }
 
@@ -664,13 +688,16 @@ class DiagnosticCoordinator:
         for callback in self._event_callbacks:
             try:
                 await callback(event_type, data)
-            except Exception as e:  # Intentional broad catch: event callback must not crash coordinator
+            except (
+                Exception
+            ) as e:  # Intentional broad catch: event callback must not crash coordinator
                 logger.error("event_callback_failed", error=str(e))
 
 
 # =============================================================================
 # Factory Function
 # =============================================================================
+
 
 def create_diagnostic_coordinator(
     config: CoordinatorConfig | None = None,

@@ -39,16 +39,18 @@ logger = logging.getLogger(__name__)
 
 class EscrowStatus(str, Enum):
     """Status of an escrow."""
-    PENDING = "pending"       # Created, awaiting funding
-    FUNDED = "funded"         # Funds locked in contract
-    RELEASED = "released"     # Funds released to provider
-    REFUNDED = "refunded"     # Funds returned to buyer
-    DISPUTED = "disputed"     # Under dispute resolution
-    EXPIRED = "expired"       # Deadline passed without resolution
+
+    PENDING = "pending"  # Created, awaiting funding
+    FUNDED = "funded"  # Funds locked in contract
+    RELEASED = "released"  # Funds released to provider
+    REFUNDED = "refunded"  # Funds returned to buyer
+    DISPUTED = "disputed"  # Under dispute resolution
+    EXPIRED = "expired"  # Deadline passed without resolution
 
 
 class EscrowRecord(BaseModel):
     """Record of an escrow transaction."""
+
     id: str = Field(default_factory=lambda: str(uuid4()))
     job_id: str = Field(description="Associated ACP job ID")
     buyer_address: str = Field(description="Buyer's wallet address")
@@ -83,21 +85,21 @@ ESCROW_ABI = [
         "name": "createEscrow",
         "outputs": [{"name": "escrowId", "type": "uint256"}],
         "stateMutability": "nonpayable",
-        "type": "function"
+        "type": "function",
     },
     {
         "inputs": [{"name": "escrowId", "type": "uint256"}],
         "name": "releaseToProvider",
         "outputs": [],
         "stateMutability": "nonpayable",
-        "type": "function"
+        "type": "function",
     },
     {
         "inputs": [{"name": "escrowId", "type": "uint256"}],
         "name": "refundToBuyer",
         "outputs": [],
         "stateMutability": "nonpayable",
-        "type": "function"
+        "type": "function",
     },
     {
         "inputs": [
@@ -107,7 +109,7 @@ ESCROW_ABI = [
         "name": "extendDeadline",
         "outputs": [],
         "stateMutability": "nonpayable",
-        "type": "function"
+        "type": "function",
     },
     {
         "inputs": [{"name": "escrowId", "type": "uint256"}],
@@ -123,18 +125,18 @@ ESCROW_ABI = [
                     {"name": "jobHash", "type": "bytes32"},
                 ],
                 "name": "escrow",
-                "type": "tuple"
+                "type": "tuple",
             }
         ],
         "stateMutability": "view",
-        "type": "function"
+        "type": "function",
     },
     {
         "inputs": [{"name": "escrowId", "type": "uint256"}],
         "name": "initiateDispute",
         "outputs": [],
         "stateMutability": "nonpayable",
-        "type": "function"
+        "type": "function",
     },
     {
         "inputs": [
@@ -144,7 +146,7 @@ ESCROW_ABI = [
         "name": "resolveDispute",
         "outputs": [],
         "stateMutability": "nonpayable",
-        "type": "function"
+        "type": "function",
     },
     # Events
     {
@@ -156,7 +158,7 @@ ESCROW_ABI = [
             {"indexed": False, "name": "amount", "type": "uint256"},
         ],
         "name": "EscrowCreated",
-        "type": "event"
+        "type": "event",
     },
     {
         "anonymous": False,
@@ -165,7 +167,7 @@ ESCROW_ABI = [
             {"indexed": False, "name": "amount", "type": "uint256"},
         ],
         "name": "EscrowReleased",
-        "type": "event"
+        "type": "event",
     },
     {
         "anonymous": False,
@@ -174,7 +176,7 @@ ESCROW_ABI = [
             {"indexed": False, "name": "amount", "type": "uint256"},
         ],
         "name": "EscrowRefunded",
-        "type": "event"
+        "type": "event",
     },
 ]
 
@@ -249,8 +251,7 @@ class EscrowService:
 
         if not self._escrow_contract:
             logger.warning(
-                "No escrow contract address configured. "
-                "Escrow operations will use simulated mode."
+                "No escrow contract address configured. Escrow operations will use simulated mode."
             )
 
         self._initialized = True
@@ -356,9 +357,7 @@ class EscrowService:
         amount_wei = int(escrow.amount * Decimal("1e18"))
 
         # First approve escrow contract to spend VIRTUAL
-        virtual_token = self._config.get_contract_address(
-            ChainNetwork.BASE, "virtual_token"
-        )
+        virtual_token = self._config.get_contract_address(ChainNetwork.BASE, "virtual_token")
         if not self._escrow_contract:
             raise EscrowError("Escrow contract address not configured")
         await client.approve_tokens(
@@ -573,7 +572,7 @@ class EscrowService:
                 }
                 logger.info(
                     f"Dispute resolved for escrow {escrow_id}: "
-                    f"buyer={buyer_share_pct}%, provider={100-buyer_share_pct}%"
+                    f"buyer={buyer_share_pct}%, provider={100 - buyer_share_pct}%"
                 )
 
             except (ValueError, ConnectionError, TimeoutError, OSError) as e:
@@ -593,10 +592,7 @@ class EscrowService:
 
     def get_pending_escrows(self) -> list[EscrowRecord]:
         """Get all funded escrows awaiting resolution."""
-        return [
-            e for e in self._escrows.values()
-            if e.status == EscrowStatus.FUNDED
-        ]
+        return [e for e in self._escrows.values() if e.status == EscrowStatus.FUNDED]
 
     async def check_expired_escrows(self) -> list[EscrowRecord]:
         """
@@ -620,6 +616,7 @@ class EscrowService:
 
 class EscrowError(Exception):
     """Error raised when an escrow operation fails."""
+
     pass
 
 

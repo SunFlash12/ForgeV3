@@ -40,6 +40,7 @@ logger = logging.getLogger(__name__)
 
 class SSRFError(Exception):
     """Raised when a potential SSRF attack is detected."""
+
     pass
 
 
@@ -72,8 +73,14 @@ def validate_webhook_url(url: str) -> str:
 
     # Block dangerous hostnames
     dangerous_hostnames = {
-        "localhost", "127.0.0.1", "0.0.0.0", "::1", "[::1]",
-        "metadata.google.internal", "169.254.169.254", "metadata.aws",
+        "localhost",
+        "127.0.0.1",
+        "0.0.0.0",
+        "::1",
+        "[::1]",  # nosec B104 - SSRF blocklist, not a bind address
+        "metadata.google.internal",
+        "169.254.169.254",
+        "metadata.aws",
     }
 
     if hostname.lower() in dangerous_hostnames:
@@ -131,8 +138,12 @@ class NotificationService:
         self._preferences: dict[str, NotificationPreferences] = {}
 
         # Queues for async processing
-        self._webhook_queue: asyncio.Queue[tuple[WebhookSubscription, Notification]] = asyncio.Queue()
-        self._retry_queue: asyncio.Queue[tuple[WebhookDelivery, WebhookSubscription]] = asyncio.Queue()
+        self._webhook_queue: asyncio.Queue[tuple[WebhookSubscription, Notification]] = (
+            asyncio.Queue()
+        )
+        self._retry_queue: asyncio.Queue[tuple[WebhookDelivery, WebhookSubscription]] = (
+            asyncio.Queue()
+        )
 
         # Background tasks
         self._webhook_worker_task: asyncio.Task[None] | None = None
@@ -234,10 +245,7 @@ class NotificationService:
             return notification
 
         # Get channels for this event type
-        channels = prefs.channel_preferences.get(
-            event_type.value,
-            prefs.default_channels
-        )
+        channels = prefs.channel_preferences.get(event_type.value, prefs.default_channels)
 
         # Deliver to webhooks if enabled
         if DeliveryChannel.WEBHOOK in channels:
@@ -301,9 +309,7 @@ class NotificationService:
                 caller_id,
                 caller_role,
             )
-            raise PermissionError(
-                "Broadcast notifications require admin-level permissions"
-            )
+            raise PermissionError("Broadcast notifications require admin-level permissions")
 
         # Log the broadcast for audit
         self._logger.info(
@@ -347,17 +353,18 @@ class NotificationService:
     ) -> list[Notification]:
         """Get notifications for a user."""
         notifications = [
-            n for n in self._notifications.values()
-            if n.user_id == user_id and not n.dismissed
-            and (not unread_only or not n.read)
+            n
+            for n in self._notifications.values()
+            if n.user_id == user_id and not n.dismissed and (not unread_only or not n.read)
         ]
         notifications.sort(key=lambda n: n.created_at, reverse=True)
-        return notifications[offset:offset + limit]
+        return notifications[offset : offset + limit]
 
     async def get_unread_count(self, user_id: str) -> int:
         """Get count of unread notifications."""
         return sum(
-            1 for n in self._notifications.values()
+            1
+            for n in self._notifications.values()
             if n.user_id == user_id and not n.read and not n.dismissed
         )
 
@@ -500,10 +507,7 @@ class NotificationService:
 
     async def _queue_webhooks(self, user_id: str, notification: Notification) -> None:
         """Queue webhook deliveries for a notification."""
-        webhooks = [
-            w for w in self._webhooks.values()
-            if w.user_id == user_id and w.active
-        ]
+        webhooks = [w for w in self._webhooks.values() if w.user_id == user_id and w.active]
 
         for webhook in webhooks:
             # Check event filter
@@ -581,7 +585,7 @@ class NotificationService:
             start = datetime.now(UTC)
             response = await self._http_client.post(
                 validated_url,
-                json=payload.model_dump(mode='json'),
+                json=payload.model_dump(mode="json"),
                 headers={
                     "Content-Type": "application/json",
                     "X-Forge-Signature": signature,
@@ -611,7 +615,14 @@ class NotificationService:
                 # Schedule retry
                 await self._schedule_retry(delivery, webhook)
 
-        except (ConnectionError, TimeoutError, OSError, httpx.HTTPError, RuntimeError, SSRFError) as e:
+        except (
+            ConnectionError,
+            TimeoutError,
+            OSError,
+            httpx.HTTPError,
+            RuntimeError,
+            SSRFError,
+        ) as e:
             delivery.error = str(e)
             delivery.completed_at = datetime.now(UTC)
             webhook.total_failure += 1
@@ -627,7 +638,9 @@ class NotificationService:
         self._deliveries[delivery.id] = delivery
         return delivery
 
-    async def _schedule_retry(self, delivery: WebhookDelivery, webhook: WebhookSubscription) -> None:
+    async def _schedule_retry(
+        self, delivery: WebhookDelivery, webhook: WebhookSubscription
+    ) -> None:
         """Schedule a retry for a failed delivery."""
         if delivery.retry_count >= self.MAX_RETRIES:
             logger.warning(f"Webhook {webhook.id} max retries exceeded")
@@ -665,7 +678,9 @@ class NotificationService:
             except Exception as e:  # Intentional broad catch: background worker loop must not crash
                 logger.error(f"Retry worker error: {e}")
 
-    async def _retry_delivery(self, delivery: WebhookDelivery, webhook: WebhookSubscription) -> None:
+    async def _retry_delivery(
+        self, delivery: WebhookDelivery, webhook: WebhookSubscription
+    ) -> None:
         """Retry a failed webhook delivery."""
         try:
             if not self._http_client:
@@ -712,9 +727,7 @@ class NotificationService:
         """Create HMAC-SHA256 signature for payload."""
         payload_str = json.dumps(payload, sort_keys=True, default=str)
         signature = hmac.new(
-            secret.encode('utf-8'),
-            payload_str.encode('utf-8'),
-            hashlib.sha256
+            secret.encode("utf-8"), payload_str.encode("utf-8"), hashlib.sha256
         ).hexdigest()
         return f"sha256={signature}"
 
@@ -779,9 +792,11 @@ class NotificationService:
                     "message": notification.message,
                     "priority": notification.priority.value,
                     "is_read": notification.read,
-                    "created_at": notification.created_at.isoformat() if notification.created_at else None,
+                    "created_at": notification.created_at.isoformat()
+                    if notification.created_at
+                    else None,
                     "read_at": notification.read_at.isoformat() if notification.read_at else None,
-                }
+                },
             )
             return True
         except (RuntimeError, OSError, ConnectionError, ValueError) as e:
@@ -796,16 +811,18 @@ class NotificationService:
         but can be verified when webhooks are triggered.
         """
         import bcrypt
+
         # Generate a salt and hash the secret
         salt = bcrypt.gensalt(rounds=12)
-        hashed = bcrypt.hashpw(secret.encode('utf-8'), salt)
-        return hashed.decode('utf-8')
+        hashed = bcrypt.hashpw(secret.encode("utf-8"), salt)
+        return hashed.decode("utf-8")
 
     def _verify_webhook_secret(self, secret: str, hashed_secret: str) -> bool:
         """Verify a webhook secret against its hash."""
         import bcrypt
+
         try:
-            return bcrypt.checkpw(secret.encode('utf-8'), hashed_secret.encode('utf-8'))
+            return bcrypt.checkpw(secret.encode("utf-8"), hashed_secret.encode("utf-8"))
         except (ValueError, TypeError, RuntimeError) as _:
             return False
 
@@ -843,7 +860,7 @@ class NotificationService:
                     "active": webhook.active,
                     "events": [e.value for e in webhook.events] if webhook.events else [],
                     "created_at": webhook.created_at.isoformat() if webhook.created_at else None,
-                }
+                },
             )
             return True
         except (RuntimeError, OSError, ConnectionError, ValueError) as e:

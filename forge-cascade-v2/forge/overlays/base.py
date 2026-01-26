@@ -36,6 +36,7 @@ class OverlayContext:
     Contains everything an overlay needs to do its work without
     direct access to system internals.
     """
+
     # Identity
     overlay_id: str
     overlay_name: str
@@ -76,6 +77,7 @@ class OverlayContext:
 @dataclass
 class OverlayResult:
     """Result returned from overlay execution."""
+
     success: bool
     data: dict[str, Any] | None = None
     error: str | None = None
@@ -96,21 +98,25 @@ class OverlayResult:
 
 class OverlayError(Exception):
     """Base exception for overlay errors."""
+
     pass
 
 
 class CapabilityError(OverlayError):
     """Missing required capability."""
+
     pass
 
 
 class ResourceLimitError(OverlayError):
     """Resource limit exceeded."""
+
     pass
 
 
 class OverlayTimeoutError(OverlayError):
     """Overlay execution timed out."""
+
     pass
 
 
@@ -146,7 +152,7 @@ class BaseOverlay(ABC):
         function_name="overlay_execution",
         max_fuel=1_000_000,
         max_memory_bytes=10 * 1024 * 1024,  # 10 MB
-        timeout_ms=5000  # 5 seconds
+        timeout_ms=5000,  # 5 seconds
     )
 
     # Minimum trust level to use this overlay
@@ -202,7 +208,7 @@ class BaseOverlay(ABC):
         self,
         context: OverlayContext,
         event: Event | None = None,
-        input_data: dict[str, Any] | None = None
+        input_data: dict[str, Any] | None = None,
     ) -> OverlayResult:
         """
         Execute the overlay's main logic.
@@ -225,7 +231,7 @@ class BaseOverlay(ABC):
         self,
         context: OverlayContext,
         event: Event | None = None,
-        input_data: dict[str, Any] | None = None
+        input_data: dict[str, Any] | None = None,
     ) -> OverlayResult:
         """
         Run the overlay with resource tracking and error handling.
@@ -245,9 +251,7 @@ class BaseOverlay(ABC):
         # Check capabilities
         missing = self.REQUIRED_CAPABILITIES - context.capabilities
         if missing:
-            return OverlayResult.fail(
-                f"Missing capabilities: {[c.value for c in missing]}"
-            )
+            return OverlayResult.fail(f"Missing capabilities: {[c.value for c in missing]}")
 
         # Get timeout
         timeout_ms = self.DEFAULT_FUEL_BUDGET.timeout_ms
@@ -259,8 +263,7 @@ class BaseOverlay(ABC):
         try:
             # Execute with timeout
             result = await asyncio.wait_for(
-                self.execute(context, event, input_data),
-                timeout=timeout_ms / 1000.0
+                self.execute(context, event, input_data), timeout=timeout_ms / 1000.0
             )
 
             # Record metrics
@@ -280,7 +283,7 @@ class BaseOverlay(ABC):
                 "overlay_execution_complete",
                 execution_id=context.execution_id,
                 success=result.success,
-                duration_ms=round(duration_ms, 2)
+                duration_ms=round(duration_ms, 2),
             )
 
             return result
@@ -291,9 +294,7 @@ class BaseOverlay(ABC):
             self.error_count += 1
             self.last_error = f"Timeout after {timeout_ms}ms"
             self._logger.error(
-                "overlay_timeout",
-                execution_id=context.execution_id,
-                timeout_ms=timeout_ms
+                "overlay_timeout", execution_id=context.execution_id, timeout_ms=timeout_ms
             )
             return OverlayResult.fail(self.last_error)
 
@@ -302,9 +303,7 @@ class BaseOverlay(ABC):
             self.error_count += 1
             self.last_error = str(e)
             self._logger.error(
-                "overlay_capability_error",
-                execution_id=context.execution_id,
-                error=str(e)
+                "overlay_capability_error", execution_id=context.execution_id, error=str(e)
             )
             return OverlayResult.fail(str(e))
 
@@ -354,7 +353,7 @@ class BaseOverlay(ABC):
                 "error_rate": error_rate,
                 "last_execution": self.last_execution.isoformat() if self.last_execution else None,
             },
-            timestamp=datetime.now(UTC)
+            timestamp=datetime.now(UTC),
         )
 
     def get_manifest(self) -> OverlayManifest:
@@ -389,9 +388,7 @@ class BaseOverlay(ABC):
         return event.type in self.SUBSCRIBED_EVENTS
 
     def create_event_emission(
-        self,
-        event_type: EventType,
-        payload: dict[str, Any]
+        self, event_type: EventType, payload: dict[str, Any]
     ) -> dict[str, Any]:
         """
         Create an event emission for the result.
@@ -401,7 +398,7 @@ class BaseOverlay(ABC):
         return {
             "event_type": event_type.value,
             "payload": payload,
-            "source": f"overlay:{self.NAME}"
+            "source": f"overlay:{self.NAME}",
         }
 
     # =========================================================================
@@ -415,7 +412,7 @@ class BaseOverlay(ABC):
         trust_flame: int = 60,
         capabilities: set[Capability] | None = None,
         fuel_budget: FuelBudget | None = None,
-        **metadata: Any
+        **metadata: Any,
     ) -> OverlayContext:
         """
         Create an execution context.
@@ -432,7 +429,7 @@ class BaseOverlay(ABC):
             trust_flame=trust_flame,
             capabilities=capabilities or self.REQUIRED_CAPABILITIES,
             fuel_budget=fuel_budget or self.DEFAULT_FUEL_BUDGET,
-            metadata=metadata
+            metadata=metadata,
         )
 
 
@@ -452,7 +449,7 @@ class PassthroughOverlay(BaseOverlay):
         self,
         context: OverlayContext,
         event: Event | None = None,
-        input_data: dict[str, Any] | None = None
+        input_data: dict[str, Any] | None = None,
     ) -> OverlayResult:
         """Simply return input as output."""
         data = input_data or {}
@@ -500,7 +497,7 @@ class CompositeOverlay(BaseOverlay):
         self,
         context: OverlayContext,
         event: Event | None = None,
-        input_data: dict[str, Any] | None = None
+        input_data: dict[str, Any] | None = None,
     ) -> OverlayResult:
         """Execute all child overlays in sequence."""
         current_data = input_data or {}
@@ -516,7 +513,7 @@ class CompositeOverlay(BaseOverlay):
                     f"Child overlay '{overlay.NAME}' failed: {result.error}",
                     events_to_emit=all_events,
                     metrics=all_metrics,
-                    duration_ms=total_duration + result.duration_ms
+                    duration_ms=total_duration + result.duration_ms,
                 )
 
             # Chain data forward
@@ -532,5 +529,5 @@ class CompositeOverlay(BaseOverlay):
             data=current_data,
             events_to_emit=all_events,
             metrics=all_metrics,
-            duration_ms=total_duration
+            duration_ms=total_duration,
         )

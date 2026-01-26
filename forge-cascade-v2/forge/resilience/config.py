@@ -15,8 +15,8 @@ from enum import Enum
 class DeploymentProfile(Enum):
     """Predefined deployment configurations for different use cases."""
 
-    LITE = "lite"           # Basic persistence, minimal overhead
-    STANDARD = "standard"   # Full features, single-tenant
+    LITE = "lite"  # Basic persistence, minimal overhead
+    STANDARD = "standard"  # Full features, single-tenant
     ENTERPRISE = "enterprise"  # Multi-tenant, compliance, governance
 
 
@@ -26,9 +26,9 @@ class CacheConfig:
 
     enabled: bool = True
     redis_url: str = field(default_factory=lambda: os.getenv("REDIS_URL", "redis://localhost:6379"))
-    default_ttl_seconds: int = 300          # 5 minutes
-    lineage_ttl_seconds: int = 3600         # 1 hour for stable lineage
-    search_ttl_seconds: int = 600           # 10 minutes for search results
+    default_ttl_seconds: int = 300  # 5 minutes
+    lineage_ttl_seconds: int = 3600  # 1 hour for stable lineage
+    search_ttl_seconds: int = 600  # 10 minutes for search results
     max_cached_result_bytes: int = 1048576  # 1MB max per result
 
     # Cache key patterns
@@ -43,7 +43,9 @@ class ObservabilityConfig:
     """Configuration for observability stack."""
 
     enabled: bool = True
-    otlp_endpoint: str = field(default_factory=lambda: os.getenv("OTLP_ENDPOINT", "http://localhost:4317"))
+    otlp_endpoint: str = field(
+        default_factory=lambda: os.getenv("OTLP_ENDPOINT", "http://localhost:4317")
+    )
     service_name: str = "forge-cascade"
     environment: str = field(default_factory=lambda: os.getenv("FORGE_ENV", "development"))
     version: str = "2.0.0"
@@ -80,10 +82,12 @@ class LineageTierConfig:
     tier2_min_trust: int = 60  # STANDARD
 
     # Storage locations
-    hot_storage: str = "neo4j"           # Tier 1
-    warm_storage: str = "neo4j"          # Tier 2 (compressed)
-    cold_storage: str = "s3"             # Tier 3 archive
-    cold_storage_bucket: str = field(default_factory=lambda: os.getenv("LINEAGE_S3_BUCKET", "forge-lineage-archive"))
+    hot_storage: str = "neo4j"  # Tier 1
+    warm_storage: str = "neo4j"  # Tier 2 (compressed)
+    cold_storage: str = "s3"  # Tier 3 archive
+    cold_storage_bucket: str = field(
+        default_factory=lambda: os.getenv("LINEAGE_S3_BUCKET", "forge-lineage-archive")
+    )
 
 
 @dataclass

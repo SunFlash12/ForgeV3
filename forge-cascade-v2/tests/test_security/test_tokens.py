@@ -44,6 +44,7 @@ from forge.security.tokens import (
 # Token Creation Tests
 # =============================================================================
 
+
 class TestTokenCreation:
     """Tests for token creation functions."""
 
@@ -129,6 +130,7 @@ class TestTokenCreation:
 # =============================================================================
 # Token Validation Tests
 # =============================================================================
+
 
 class TestTokenValidation:
     """Tests for token validation functions."""
@@ -256,6 +258,7 @@ class TestTokenValidation:
 # Token Blacklist Tests
 # =============================================================================
 
+
 class TestTokenBlacklist:
     """Tests for token blacklist functionality."""
 
@@ -341,6 +344,7 @@ class TestTokenBlacklist:
 # Token Utility Tests
 # =============================================================================
 
+
 class TestTokenUtilities:
     """Tests for token utility functions."""
 
@@ -409,6 +413,7 @@ class TestTokenUtilities:
 # Refresh Token Hashing Tests
 # =============================================================================
 
+
 class TestRefreshTokenHashing:
     """Tests for refresh token hash utilities."""
 
@@ -447,6 +452,7 @@ class TestRefreshTokenHashing:
 # =============================================================================
 # Key Rotation Tests
 # =============================================================================
+
 
 class TestKeyRotation:
     """Tests for JWT key rotation functionality."""
@@ -530,6 +536,7 @@ class TestKeyRotation:
 # =============================================================================
 # Token Service Class Tests
 # =============================================================================
+
 
 class TestTokenService:
     """Tests for TokenService class interface."""

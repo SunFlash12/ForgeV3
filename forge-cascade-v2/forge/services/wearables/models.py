@@ -18,6 +18,7 @@ def _utc_now() -> datetime:
 
 class WearableDataType(str, Enum):
     """Types of wearable data."""
+
     HEART_RATE = "heart_rate"
     HRV = "hrv"  # Heart rate variability
     SLEEP = "sleep"
@@ -33,6 +34,7 @@ class WearableDataType(str, Enum):
 
 class SleepStage(str, Enum):
     """Sleep stages."""
+
     AWAKE = "awake"
     LIGHT = "light"
     DEEP = "deep"
@@ -42,6 +44,7 @@ class SleepStage(str, Enum):
 
 class ActivityType(str, Enum):
     """Activity types."""
+
     SEDENTARY = "sedentary"
     LIGHT = "light"
     MODERATE = "moderate"
@@ -59,6 +62,7 @@ class WearableReading:
     """
     Base class for wearable readings.
     """
+
     id: str = field(default_factory=lambda: str(uuid4()))
     data_type: WearableDataType = WearableDataType.HEART_RATE
     timestamp: datetime = field(default_factory=_utc_now)
@@ -89,6 +93,7 @@ class HeartRateData:
     """
     Heart rate and HRV data.
     """
+
     id: str = field(default_factory=lambda: str(uuid4()))
     timestamp: datetime = field(default_factory=_utc_now)
 
@@ -98,7 +103,7 @@ class HeartRateData:
 
     # HRV metrics
     hrv_rmssd: float | None = None  # Root mean square of successive differences
-    hrv_sdnn: float | None = None   # Standard deviation of NN intervals
+    hrv_sdnn: float | None = None  # Standard deviation of NN intervals
     hrv_pnn50: float | None = None  # Percentage of successive differences > 50ms
 
     # Context
@@ -127,6 +132,7 @@ class SleepData:
     """
     Sleep tracking data.
     """
+
     id: str = field(default_factory=lambda: str(uuid4()))
 
     # Timing
@@ -189,6 +195,7 @@ class ActivityData:
     """
     Activity and motion data.
     """
+
     id: str = field(default_factory=lambda: str(uuid4()))
     date: datetime = field(default_factory=_utc_now)
 
@@ -224,7 +231,9 @@ class ActivityData:
             "date": self.date.isoformat(),
             "steps": self.steps,
             "distance_meters": self.distance_meters,
-            "active_minutes": self.light_active_minutes + self.moderate_active_minutes + self.vigorous_active_minutes,
+            "active_minutes": self.light_active_minutes
+            + self.moderate_active_minutes
+            + self.vigorous_active_minutes,
             "calories_burned": self.calories_burned,
             "exercise_minutes": self.exercise_minutes,
         }
@@ -235,6 +244,7 @@ class OxygenData:
     """
     Blood oxygen (SpO2) data.
     """
+
     id: str = field(default_factory=lambda: str(uuid4()))
     timestamp: datetime = field(default_factory=_utc_now)
 
@@ -263,6 +273,7 @@ class ECGData:
     """
     ECG recording data.
     """
+
     id: str = field(default_factory=lambda: str(uuid4()))
     timestamp: datetime = field(default_factory=_utc_now)
 
@@ -303,6 +314,7 @@ class WearableSession:
     """
     A session of wearable data for analysis.
     """
+
     id: str = field(default_factory=lambda: str(uuid4()))
     patient_id: str = ""
 

@@ -50,24 +50,28 @@ from forge.security.authorization import (
 # Trust Level Tests
 # =============================================================================
 
+
 class TestTrustLevelHierarchy:
     """Tests for trust level hierarchy functions."""
 
-    @pytest.mark.parametrize("score,expected_level", [
-        (0, TrustLevel.QUARANTINE),
-        (20, TrustLevel.QUARANTINE),
-        (39, TrustLevel.QUARANTINE),
-        (40, TrustLevel.SANDBOX),
-        (50, TrustLevel.SANDBOX),
-        (59, TrustLevel.SANDBOX),
-        (60, TrustLevel.STANDARD),
-        (70, TrustLevel.STANDARD),
-        (79, TrustLevel.STANDARD),
-        (80, TrustLevel.TRUSTED),
-        (90, TrustLevel.TRUSTED),
-        (99, TrustLevel.TRUSTED),
-        (100, TrustLevel.CORE),
-    ])
+    @pytest.mark.parametrize(
+        "score,expected_level",
+        [
+            (0, TrustLevel.QUARANTINE),
+            (20, TrustLevel.QUARANTINE),
+            (39, TrustLevel.QUARANTINE),
+            (40, TrustLevel.SANDBOX),
+            (50, TrustLevel.SANDBOX),
+            (59, TrustLevel.SANDBOX),
+            (60, TrustLevel.STANDARD),
+            (70, TrustLevel.STANDARD),
+            (79, TrustLevel.STANDARD),
+            (80, TrustLevel.TRUSTED),
+            (90, TrustLevel.TRUSTED),
+            (99, TrustLevel.TRUSTED),
+            (100, TrustLevel.CORE),
+        ],
+    )
     def test_get_trust_level_from_score(self, score, expected_level):
         """Trust score maps to correct level."""
         assert get_trust_level_from_score(score) == expected_level
@@ -80,14 +84,17 @@ class TestTrustLevelHierarchy:
         """Scores over 100 clamp to 100 (CORE)."""
         assert get_trust_level_from_score(150) == TrustLevel.CORE
 
-    @pytest.mark.parametrize("user_score,required_level,expected", [
-        (60, TrustLevel.STANDARD, True),
-        (60, TrustLevel.SANDBOX, True),
-        (60, TrustLevel.TRUSTED, False),
-        (80, TrustLevel.TRUSTED, True),
-        (100, TrustLevel.CORE, True),
-        (40, TrustLevel.STANDARD, False),
-    ])
+    @pytest.mark.parametrize(
+        "user_score,required_level,expected",
+        [
+            (60, TrustLevel.STANDARD, True),
+            (60, TrustLevel.SANDBOX, True),
+            (60, TrustLevel.TRUSTED, False),
+            (80, TrustLevel.TRUSTED, True),
+            (100, TrustLevel.CORE, True),
+            (40, TrustLevel.STANDARD, False),
+        ],
+    )
     def test_check_trust_level(self, user_score, required_level, expected):
         """Trust level check returns correct result."""
         assert check_trust_level(user_score, required_level) == expected
@@ -114,6 +121,7 @@ class TestTrustLevelHierarchy:
 # Role-Based Access Control Tests
 # =============================================================================
 
+
 class TestRoleBasedAccessControl:
     """Tests for role-based access control."""
 
@@ -134,6 +142,7 @@ class TestRoleBasedAccessControl:
 
     def test_is_admin_true(self):
         """is_admin returns True for admin."""
+
         class MockUser:
             role = UserRole.ADMIN
 
@@ -141,6 +150,7 @@ class TestRoleBasedAccessControl:
 
     def test_is_admin_false(self):
         """is_admin returns False for non-admin."""
+
         class MockUser:
             role = UserRole.USER
 
@@ -148,19 +158,23 @@ class TestRoleBasedAccessControl:
 
     def test_is_admin_string_role(self):
         """is_admin handles string role."""
+
         class MockUser:
             role = "admin"
 
         assert is_admin(MockUser()) is True
 
-    @pytest.mark.parametrize("user_role,required_role,expected", [
-        (UserRole.USER, UserRole.USER, True),
-        (UserRole.MODERATOR, UserRole.USER, True),
-        (UserRole.ADMIN, UserRole.MODERATOR, True),
-        (UserRole.USER, UserRole.MODERATOR, False),
-        (UserRole.USER, UserRole.ADMIN, False),
-        (UserRole.SYSTEM, UserRole.ADMIN, True),
-    ])
+    @pytest.mark.parametrize(
+        "user_role,required_role,expected",
+        [
+            (UserRole.USER, UserRole.USER, True),
+            (UserRole.MODERATOR, UserRole.USER, True),
+            (UserRole.ADMIN, UserRole.MODERATOR, True),
+            (UserRole.USER, UserRole.MODERATOR, False),
+            (UserRole.USER, UserRole.ADMIN, False),
+            (UserRole.SYSTEM, UserRole.ADMIN, True),
+        ],
+    )
     def test_check_role(self, user_role, required_role, expected):
         """Role check follows hierarchy."""
         assert check_role(user_role, required_role) == expected
@@ -195,6 +209,7 @@ class TestRoleBasedAccessControl:
 # =============================================================================
 # Capability-Based Access Control Tests
 # =============================================================================
+
 
 class TestCapabilityBasedAccessControl:
     """Tests for capability-based access control."""
@@ -260,6 +275,7 @@ class TestCapabilityBasedAccessControl:
 # =============================================================================
 # Authorization Context Tests
 # =============================================================================
+
 
 class TestAuthorizationContext:
     """Tests for AuthorizationContext class."""
@@ -355,10 +371,7 @@ class TestAuthorizationContext:
         )
 
         # Can access own resource regardless of trust
-        assert context.can_access_resource(
-            TrustLevel.TRUSTED,
-            resource_owner_id="user123"
-        ) is True
+        assert context.can_access_resource(TrustLevel.TRUSTED, resource_owner_id="user123") is True
 
     def test_context_can_access_resource_moderator(self):
         """Moderator can access any resource."""
@@ -368,10 +381,7 @@ class TestAuthorizationContext:
             role=UserRole.MODERATOR,
         )
 
-        assert context.can_access_resource(
-            TrustLevel.CORE,
-            resource_owner_id="user123"
-        ) is True
+        assert context.can_access_resource(TrustLevel.CORE, resource_owner_id="user123") is True
 
     def test_context_can_access_resource_by_trust(self):
         """User can access resource if trust level sufficient."""
@@ -427,6 +437,7 @@ class TestAuthorizationContext:
 # Factory Function Tests
 # =============================================================================
 
+
 class TestCreateAuthContext:
     """Tests for create_auth_context factory function."""
 
@@ -457,6 +468,7 @@ class TestCreateAuthContext:
 # =============================================================================
 # Decorator Tests
 # =============================================================================
+
 
 class TestAuthorizationDecorators:
     """Tests for authorization decorators."""
@@ -542,6 +554,7 @@ class TestAuthorizationDecorators:
 # =============================================================================
 # Authorizer Class Tests
 # =============================================================================
+
 
 class TestAuthorizers:
     """Tests for authorizer classes."""

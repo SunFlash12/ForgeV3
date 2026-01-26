@@ -40,6 +40,7 @@ class HPOServiceProtocol(Protocol):
 @dataclass
 class EngineConfig:
     """Configuration for the diagnosis engine."""
+
     # Hypothesis generation
     max_hypotheses: int = 50
     min_phenotype_overlap: float = 0.2
@@ -198,12 +199,15 @@ class DiagnosisEngine:
                 )
                 session.patient.family_history.append(evidence)
 
-        session.add_event("intake_processed", {
-            "phenotype_count": len(session.patient.phenotypes),
-            "variant_count": len(session.patient.genetic_variants),
-            "history_count": len(session.patient.medical_history),
-            "family_history_count": len(session.patient.family_history),
-        })
+        session.add_event(
+            "intake_processed",
+            {
+                "phenotype_count": len(session.patient.phenotypes),
+                "variant_count": len(session.patient.genetic_variants),
+                "history_count": len(session.patient.medical_history),
+                "family_history_count": len(session.patient.family_history),
+            },
+        )
 
         # Auto-advance to analysis
         if session.auto_advance:
@@ -309,15 +313,18 @@ class DiagnosisEngine:
                 existing_ids.add(candidate.disease_id)
 
         # Limit hypotheses
-        hypotheses = hypotheses[:self.config.max_hypotheses]
+        hypotheses = hypotheses[: self.config.max_hypotheses]
 
         session.hypotheses = hypotheses
 
-        session.add_event("hypotheses_generated", {
-            "total_candidates": len(hypotheses),
-            "from_phenotypes": len(phenotype_candidates),
-            "from_genes": len(gene_candidates),
-        })
+        session.add_event(
+            "hypotheses_generated",
+            {
+                "total_candidates": len(hypotheses),
+                "from_phenotypes": len(phenotype_candidates),
+                "from_genes": len(gene_candidates),
+            },
+        )
 
         logger.info(
             "hypotheses_generated",
@@ -367,13 +374,16 @@ class DiagnosisEngine:
         min_matches = max(1, int(len(phenotype_codes) * self.config.min_phenotype_overlap))
 
         try:
-            results = await self._neo4j.run(query, {
-                "phenotypes": phenotype_codes,
-                "min_matches": min_matches,
-                "limit": self.config.max_hypotheses,
-            })
+            results = await self._neo4j.run(
+                query,
+                {
+                    "phenotypes": phenotype_codes,
+                    "min_matches": min_matches,
+                    "limit": self.config.max_hypotheses,
+                },
+            )
 
-            for r in (results or []):
+            for r in results or []:
                 hypothesis = DiagnosisHypothesis(
                     disease_id=r["disease_id"] or "",
                     disease_name=r["disease_name"] or "Unknown",
@@ -390,7 +400,8 @@ class DiagnosisEngine:
 
                 # Find missing phenotypes
                 hypothesis.missing_phenotypes = [
-                    p for p in hypothesis.expected_phenotypes
+                    p
+                    for p in hypothesis.expected_phenotypes
                     if p not in hypothesis.matched_phenotypes
                 ]
 
@@ -435,12 +446,15 @@ class DiagnosisEngine:
         """
 
         try:
-            results = await self._neo4j.run(query, {
-                "genes": genes,
-                "limit": self.config.max_hypotheses,
-            })
+            results = await self._neo4j.run(
+                query,
+                {
+                    "genes": genes,
+                    "limit": self.config.max_hypotheses,
+                },
+            )
 
-            for r in (results or []):
+            for r in results or []:
                 hypothesis = DiagnosisHypothesis(
                     disease_id=r["disease_id"] or "",
                     disease_name=r["disease_name"] or "Unknown",
@@ -474,10 +488,13 @@ class DiagnosisEngine:
         """
 
         try:
-            results = await self._neo4j.run(query, {
-                "disease_id": disease_id,
-                "limit": limit,
-            })
+            results = await self._neo4j.run(
+                query,
+                {
+                    "disease_id": disease_id,
+                    "limit": limit,
+                },
+            )
             return [r["hpo_id"] for r in (results or []) if r.get("hpo_id")]
         except (RuntimeError, ValueError, TypeError, ConnectionError, OSError) as e:
             logger.debug("phenotype_query_failed", disease_id=disease_id, error=str(e))
@@ -531,15 +548,19 @@ class DiagnosisEngine:
 
         # Update top hypotheses
         session.top_hypotheses = [
-            h for h in scored[:10]
-            if h.combined_score >= self.config.elimination_threshold
+            h for h in scored[:10] if h.combined_score >= self.config.elimination_threshold
         ]
 
-        session.add_event("hypotheses_scored", {
-            "total_scored": len(scored),
-            "top_hypotheses": len(session.top_hypotheses),
-            "top_score": session.top_hypotheses[0].combined_score if session.top_hypotheses else 0,
-        })
+        session.add_event(
+            "hypotheses_scored",
+            {
+                "total_scored": len(scored),
+                "top_hypotheses": len(session.top_hypotheses),
+                "top_score": session.top_hypotheses[0].combined_score
+                if session.top_hypotheses
+                else 0,
+            },
+        )
 
         # Check if confident
         if session.is_confident:
@@ -595,10 +616,8 @@ class DiagnosisEngine:
         phenotype_scores.sort(key=lambda x: x[1], reverse=True)
 
         # Generate questions for top phenotypes
-        for hpo_id, gain in phenotype_scores[:self.config.max_questions_per_iteration]:
-            question = await self._create_phenotype_question(
-                session, hpo_id, gain
-            )
+        for hpo_id, gain in phenotype_scores[: self.config.max_questions_per_iteration]:
+            question = await self._create_phenotype_question(session, hpo_id, gain)
             if question:
                 questions.append(question)
 
@@ -610,10 +629,13 @@ class DiagnosisEngine:
         session.pending_questions = questions
         session.iterations += 1
 
-        session.add_event("questions_generated", {
-            "question_count": len(questions),
-            "iteration": session.iterations,
-        })
+        session.add_event(
+            "questions_generated",
+            {
+                "question_count": len(questions),
+                "iteration": session.iterations,
+            },
+        )
 
         return session
 
@@ -740,6 +762,7 @@ class DiagnosisEngine:
 
         # Record answer
         from datetime import datetime
+
         question.answer = answer
         question.answered_at = datetime.now(UTC)
 
@@ -753,11 +776,14 @@ class DiagnosisEngine:
         elif question.target_evidence == "genetic":
             await self._process_genetic_answer(session, question, answer, additional_info)
 
-        session.add_event("question_answered", {
-            "question_id": question_id,
-            "answer": answer,
-            "target": question.target_phenotype or question.target_evidence,
-        })
+        session.add_event(
+            "question_answered",
+            {
+                "question_id": question_id,
+                "answer": answer,
+                "target": question.target_phenotype or question.target_evidence,
+            },
+        )
 
         # Re-score and continue
         session.state = DiagnosisState.REFINING
@@ -851,11 +877,16 @@ class DiagnosisEngine:
         result.recommended_tests = self._generate_recommended_tests(session)
         result.supporting_evidence_summary = self._generate_evidence_summary(session)
 
-        session.add_event("session_finalized", {
-            "primary_diagnosis": result.primary_diagnosis.disease_name if result.primary_diagnosis else None,
-            "confidence": result.confidence,
-            "differential_count": len(result.differential),
-        })
+        session.add_event(
+            "session_finalized",
+            {
+                "primary_diagnosis": result.primary_diagnosis.disease_name
+                if result.primary_diagnosis
+                else None,
+                "confidence": result.confidence,
+                "differential_count": len(result.differential),
+            },
+        )
 
         return result
 
@@ -869,24 +900,17 @@ class DiagnosisEngine:
         if session.top_diagnosis:
             top = session.top_diagnosis
             findings.append(
-                f"Top diagnosis: {top.disease_name} "
-                f"(confidence: {top.combined_score:.1%})"
+                f"Top diagnosis: {top.disease_name} (confidence: {top.combined_score:.1%})"
             )
 
             if top.matched_phenotypes:
-                findings.append(
-                    f"Matched {len(top.matched_phenotypes)} expected phenotypes"
-                )
+                findings.append(f"Matched {len(top.matched_phenotypes)} expected phenotypes")
 
             if top.supporting_evidence:
-                findings.append(
-                    f"{len(top.supporting_evidence)} pieces of supporting evidence"
-                )
+                findings.append(f"{len(top.supporting_evidence)} pieces of supporting evidence")
 
             if top.refuting_evidence:
-                findings.append(
-                    f"Note: {len(top.refuting_evidence)} potentially refuting findings"
-                )
+                findings.append(f"Note: {len(top.refuting_evidence)} potentially refuting findings")
 
         return findings
 
@@ -905,9 +929,7 @@ class DiagnosisEngine:
         # Recommend genetic testing if genes known but no variants
         if top.associated_genes and not session.patient.genetic_variants:
             genes = ", ".join(top.associated_genes[:3])
-            recommendations.append(
-                f"Consider genetic testing for: {genes}"
-            )
+            recommendations.append(f"Consider genetic testing for: {genes}")
 
         # Recommend checking missing phenotypes
         if top.missing_phenotypes:
@@ -956,6 +978,7 @@ class DiagnosisEngine:
 # =============================================================================
 # Factory Function
 # =============================================================================
+
 
 def create_diagnosis_engine(
     config: EngineConfig | None = None,

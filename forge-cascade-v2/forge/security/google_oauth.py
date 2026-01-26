@@ -32,6 +32,7 @@ class GoogleUserInfo(BaseModel):
 
 class GoogleOAuthError(Exception):
     """Google OAuth error."""
+
     pass
 
 
@@ -183,6 +184,7 @@ class GoogleOAuthService:
         email_prefix = google_user.email.split("@")[0]
         # Clean it up - only alphanumeric, underscore, hyphen
         import re
+
         username = re.sub(r"[^a-zA-Z0-9_-]", "", email_prefix)
 
         # Ensure minimum length
@@ -204,6 +206,7 @@ class GoogleOAuthService:
             counter += 1
             if counter > 1000:  # Prevent infinite loop
                 import secrets
+
                 username = f"{base}_{secrets.token_hex(4)}"
                 break
 

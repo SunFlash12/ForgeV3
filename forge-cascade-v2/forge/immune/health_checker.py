@@ -55,6 +55,7 @@ class CircuitBreakerRegistryProtocol(Protocol):
 
     def get_health_summary(self) -> dict[str, int | float | list[str]]: ...
 
+
 logger = structlog.get_logger(__name__)
 
 # Configurable health check thresholds (via environment variables)
@@ -64,10 +65,11 @@ HEALTH_PENDING_EVENTS_THRESHOLD = int(os.getenv("HEALTH_PENDING_EVENTS_THRESHOLD
 
 class HealthStatus(str, Enum):
     """Health status levels."""
-    HEALTHY = "healthy"       # Fully operational
-    DEGRADED = "degraded"     # Operational but impaired
-    UNHEALTHY = "unhealthy"   # Not operational
-    UNKNOWN = "unknown"       # Cannot determine status
+
+    HEALTHY = "healthy"  # Fully operational
+    DEGRADED = "degraded"  # Operational but impaired
+    UNHEALTHY = "unhealthy"  # Not operational
+    UNKNOWN = "unknown"  # Cannot determine status
 
 
 @dataclass
@@ -122,8 +124,8 @@ class HealthCheckConfig:
     check_interval_seconds: float = 30.0
 
     # Thresholds
-    latency_warning_ms: float = 1000.0   # Degraded if slower
-    latency_critical_ms: float = 5000.0   # Unhealthy if slower
+    latency_warning_ms: float = 1000.0  # Degraded if slower
+    latency_critical_ms: float = 5000.0  # Unhealthy if slower
 
     # Retry
     retry_count: int = 2
@@ -172,7 +174,9 @@ class HealthCheck(ABC):
                 )
                 break
             except TimeoutError:
-                last_error = TimeoutError(f"Health check timed out after {self.config.timeout_seconds}s")
+                last_error = TimeoutError(
+                    f"Health check timed out after {self.config.timeout_seconds}s"
+                )
             except (ConnectionError, OSError, RuntimeError, ValueError) as e:
                 last_error = e
 
@@ -262,11 +266,13 @@ class CompositeHealthCheck(HealthCheck):
 
         for result in child_results:
             if isinstance(result, BaseException):
-                children.append(HealthCheckResult(
-                    name="unknown",
-                    status=HealthStatus.UNHEALTHY,
-                    message=str(result),
-                ))
+                children.append(
+                    HealthCheckResult(
+                        name="unknown",
+                        status=HealthStatus.UNHEALTHY,
+                        message=str(result),
+                    )
+                )
                 statuses.append(HealthStatus.UNHEALTHY)
             elif isinstance(result, HealthCheckResult):
                 children.append(result)
@@ -489,7 +495,9 @@ class CircuitBreakerHealthCheck(HealthCheck):
             total_val = summary.get("total_circuits", 0)
             summary.get("health_score", 1.0)
 
-            open_circuits_count = int(open_circuits_val) if isinstance(open_circuits_val, int | float) else 0
+            open_circuits_count = (
+                int(open_circuits_val) if isinstance(open_circuits_val, int | float) else 0
+            )
             total_count = int(total_val) if isinstance(total_val, int | float) else 0
 
             if open_circuits_count > 0:
@@ -555,8 +563,8 @@ class MemoryHealthCheck(HealthCheck):
                 status=health_status,
                 message=message,
                 details={
-                    "total_gb": memory.total / (1024 ** 3),
-                    "available_gb": memory.available / (1024 ** 3),
+                    "total_gb": memory.total / (1024**3),
+                    "available_gb": memory.available / (1024**3),
                     "used_percent": used_percent,
                 },
             )
@@ -613,8 +621,8 @@ class DiskHealthCheck(HealthCheck):
                 message=message,
                 details={
                     "path": self.path,
-                    "total_gb": disk.total / (1024 ** 3),
-                    "free_gb": disk.free / (1024 ** 3),
+                    "total_gb": disk.total / (1024**3),
+                    "free_gb": disk.free / (1024**3),
                     "used_percent": used_percent,
                 },
             )
@@ -720,7 +728,9 @@ class ForgeHealthChecker:
                     if callback:
                         await callback(result)
 
-                except Exception as e:  # Intentional broad catch: background monitor loop must not crash
+                except (
+                    Exception
+                ) as e:  # Intentional broad catch: background monitor loop must not crash
                     logger.error("health_monitor_error", error=str(e))
 
                 await asyncio.sleep(interval_seconds)

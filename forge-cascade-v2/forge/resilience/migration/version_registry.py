@@ -30,10 +30,10 @@ class ModelProvider(Enum):
 class VersionStatus(Enum):
     """Status of an embedding version."""
 
-    ACTIVE = "active"           # Currently in use
-    DEPRECATED = "deprecated"   # Still supported but not recommended
-    RETIRED = "retired"         # No longer supported
-    TESTING = "testing"         # In testing phase
+    ACTIVE = "active"  # Currently in use
+    DEPRECATED = "deprecated"  # Still supported but not recommended
+    RETIRED = "retired"  # No longer supported
+    TESTING = "testing"  # In testing phase
 
 
 @dataclass
@@ -175,7 +175,7 @@ class EmbeddingVersionRegistry:
         logger.info(
             "embedding_registry_initialized",
             version_count=len(self._versions),
-            active_version=self._active_version
+            active_version=self._active_version,
         )
 
     def register(self, version: EmbeddingVersion) -> None:
@@ -187,9 +187,7 @@ class EmbeddingVersionRegistry:
         """
         self._versions[version.version_id] = version
         logger.debug(
-            "embedding_version_registered",
-            version_id=version.version_id,
-            model=version.model_name
+            "embedding_version_registered", version_id=version.version_id, model=version.model_name
         )
 
     def get(self, version_id: str) -> EmbeddingVersion | None:
@@ -219,25 +217,16 @@ class EmbeddingVersionRegistry:
             True if successfully activated
         """
         if version_id not in self._versions:
-            logger.warning(
-                "unknown_version_activation_attempt",
-                version_id=version_id
-            )
+            logger.warning("unknown_version_activation_attempt", version_id=version_id)
             return False
 
         version = self._versions[version_id]
         if version.status == VersionStatus.RETIRED:
-            logger.warning(
-                "retired_version_activation_attempt",
-                version_id=version_id
-            )
+            logger.warning("retired_version_activation_attempt", version_id=version_id)
             return False
 
         self._active_version = version_id
-        logger.info(
-            "embedding_version_activated",
-            version_id=version_id
-        )
+        logger.info("embedding_version_activated", version_id=version_id)
         return True
 
     def deprecate(self, version_id: str) -> bool:
@@ -246,10 +235,7 @@ class EmbeddingVersionRegistry:
             return False
 
         self._versions[version_id].status = VersionStatus.DEPRECATED
-        logger.info(
-            "embedding_version_deprecated",
-            version_id=version_id
-        )
+        logger.info("embedding_version_deprecated", version_id=version_id)
         return True
 
     def retire(self, version_id: str) -> bool:
@@ -258,17 +244,11 @@ class EmbeddingVersionRegistry:
             return False
 
         if version_id == self._active_version:
-            logger.warning(
-                "cannot_retire_active_version",
-                version_id=version_id
-            )
+            logger.warning("cannot_retire_active_version", version_id=version_id)
             return False
 
         self._versions[version_id].status = VersionStatus.RETIRED
-        logger.info(
-            "embedding_version_retired",
-            version_id=version_id
-        )
+        logger.info("embedding_version_retired", version_id=version_id)
         return True
 
     def list_all(self) -> list[EmbeddingVersion]:
@@ -277,16 +257,9 @@ class EmbeddingVersionRegistry:
 
     def list_active(self) -> list[EmbeddingVersion]:
         """List all active versions."""
-        return [
-            v for v in self._versions.values()
-            if v.status == VersionStatus.ACTIVE
-        ]
+        return [v for v in self._versions.values() if v.status == VersionStatus.ACTIVE]
 
-    def get_migration_path(
-        self,
-        from_version: str,
-        to_version: str
-    ) -> list[str] | None:
+    def get_migration_path(self, from_version: str, to_version: str) -> list[str] | None:
         """
         Get the migration path between two versions.
 

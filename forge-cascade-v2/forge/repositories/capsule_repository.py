@@ -141,9 +141,7 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
                     parent_merkle_root = parent_content_hash
 
         # Compute this capsule's merkle_root
-        merkle_root = CapsuleIntegrityService.compute_merkle_root(
-            content_hash, parent_merkle_root
-        )
+        merkle_root = CapsuleIntegrityService.compute_merkle_root(content_hash, parent_merkle_root)
 
         # Build the query based on whether we have a parent
         if data.parent_id:
@@ -249,10 +247,7 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
         raise RuntimeError("Failed to create capsule")
 
     async def update(
-        self,
-        entity_id: str,
-        data: CapsuleUpdate,
-        caller_id: str | None = None
+        self, entity_id: str, data: CapsuleUpdate, caller_id: str | None = None
     ) -> Capsule | None:
         """
         Update an existing capsule.
@@ -319,7 +314,7 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
         query = f"""
         MATCH (c:Capsule {{id: $id}})
         WHERE c.is_archived = false{owner_check}
-        SET {', '.join(set_clauses)}
+        SET {", ".join(set_clauses)}
         RETURN c {{.*}} AS capsule
         """
 
@@ -341,7 +336,7 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
                     "capsule_update_unauthorized",
                     capsule_id=entity_id,
                     caller_id=caller_id,
-                    owner_id=check_result.get("owner_id")
+                    owner_id=check_result.get("owner_id"),
                 )
 
         return None
@@ -494,11 +489,13 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
                 if r.get("capsule"):
                     capsule = self._to_model(r["capsule"])
                     if capsule is not None:
-                        search_results.append(CapsuleSearchResult(
-                            capsule=capsule,
-                            score=r["score"],
-                            highlights=[],  # Would need text search for highlights
-                        ))
+                        search_results.append(
+                            CapsuleSearchResult(
+                                capsule=capsule,
+                                score=r["score"],
+                                highlights=[],  # Would need text search for highlights
+                            )
+                        )
             return search_results
         except (RuntimeError, OSError, ValueError, KeyError) as e:
             self.logger.error(
@@ -593,7 +590,7 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
                 "max_depth_clamped",
                 requested=max_depth,
                 clamped_to=safe_depth,
-                capsule_id=capsule_id
+                capsule_id=capsule_id,
             )
 
         query = f"""
@@ -616,11 +613,7 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
             {"id": capsule_id},
         )
 
-        return [
-            LineageNode(**r["node"])
-            for r in results
-            if r.get("node") and r["node"].get("id")
-        ]
+        return [LineageNode(**r["node"]) for r in results if r.get("node") and r["node"].get("id")]
 
     async def list_capsules(
         self,
@@ -710,7 +703,7 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
                 "max_depth_clamped",
                 requested=max_depth,
                 clamped_to=safe_depth,
-                capsule_id=capsule_id
+                capsule_id=capsule_id,
             )
 
         query = f"""
@@ -747,11 +740,14 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
         RETURN child {.*} AS capsule
         """
 
-        result = await self.client.execute_single(query, {
-            "capsule_id": capsule_id,
-            "parent_id": parent_id,
-            "now": self._now().isoformat(),
-        })
+        result = await self.client.execute_single(
+            query,
+            {
+                "capsule_id": capsule_id,
+                "parent_id": parent_id,
+                "now": self._now().isoformat(),
+            },
+        )
 
         if result and result.get("capsule"):
             return self._to_model(result["capsule"])
@@ -1017,9 +1013,7 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
             target_id = data.target_id
 
         # Check if edge already exists
-        existing = await self._get_semantic_edge(
-            source_id, target_id, data.relationship_type
-        )
+        existing = await self._get_semantic_edge(source_id, target_id, data.relationship_type)
         if existing:
             self.logger.warning(
                 "Semantic edge already exists",
@@ -1206,9 +1200,7 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
             params["tags"] = tags
 
         if not include_resolved:
-            conditions.append(
-                "(r.properties IS NULL OR NOT r.properties CONTAINS 'resolved')"
-            )
+            conditions.append("(r.properties IS NULL OR NOT r.properties CONTAINS 'resolved')")
 
         where_clause = " AND ".join(conditions)
 
@@ -1234,11 +1226,13 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
                 c1 = self._to_model(r["capsule1"])
                 c2 = self._to_model(r["capsule2"])
                 if c1 is not None and c2 is not None:
-                    contradictions.append((
-                        c1,
-                        c2,
-                        self._to_semantic_edge(r["edge"]),
-                    ))
+                    contradictions.append(
+                        (
+                            c1,
+                            c2,
+                            self._to_semantic_edge(r["edge"]),
+                        )
+                    )
         return contradictions
 
     async def find_contradiction_clusters(
@@ -1352,11 +1346,7 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
 
         results = await self.client.execute(query, params)
 
-        return [
-            self._to_semantic_edge(r["edge"])
-            for r in results
-            if r.get("edge")
-        ]
+        return [self._to_semantic_edge(r["edge"]) for r in results if r.get("edge")]
 
     async def delete_semantic_edge(self, edge_id: str) -> bool:
         """
@@ -1415,7 +1405,7 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
 
         query = f"""
         MATCH (c1)-[r:SEMANTIC_EDGE {{id: $id}}]->(c2)
-        SET {', '.join(set_clauses)}
+        SET {", ".join(set_clauses)}
         RETURN r {{
             .*,
             source_id: c1.id,
@@ -1619,9 +1609,7 @@ class CapsuleRepository(BaseRepository[Capsule, CapsuleCreate, CapsuleUpdate]):
         MATCH (c:Capsule {id: $id})
         RETURN c {.*} AS capsule
         """
-        target_result = await self.client.execute_single(
-            target_query, {"id": capsule_id}
-        )
+        target_result = await self.client.execute_single(target_query, {"id": capsule_id})
 
         if not target_result or not target_result.get("capsule"):
             return {

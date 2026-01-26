@@ -22,11 +22,11 @@ from forge.models.base import (
 class ProposalType(str, Enum):
     """Types of governance proposals."""
 
-    POLICY = "policy"               # Policy changes
-    SYSTEM = "system"               # System configuration
-    OVERLAY = "overlay"             # Overlay management
-    CAPSULE = "capsule"             # Capsule governance
-    TRUST = "trust"                 # Trust level changes
+    POLICY = "policy"  # Policy changes
+    SYSTEM = "system"  # System configuration
+    OVERLAY = "overlay"  # Overlay management
+    CAPSULE = "capsule"  # Capsule governance
+    TRUST = "trust"  # Trust level changes
     CONSTITUTIONAL = "constitutional"  # Constitutional amendments
 
 
@@ -111,7 +111,7 @@ class VoteChoice(str, Enum):
             "FOR": "APPROVE",
             "AGAINST": "REJECT",
             "YES": "APPROVE",  # Common alternative
-            "NO": "REJECT",    # Common alternative
+            "NO": "REJECT",  # Common alternative
         }
 
         # Map alias to canonical value
@@ -145,6 +145,7 @@ class ProposalBase(ForgeModel):
     def parse_action(cls, v: object) -> dict[str, Any]:
         """Handle action being stored as JSON string in database."""
         import json
+
         if isinstance(v, str):
             try:
                 parsed: dict[str, Any] = json.loads(v)
@@ -284,11 +285,7 @@ class Proposal(ProposalBase, TimestampMixin):
             starts = starts.replace(tzinfo=UTC)
         if ends and ends.tzinfo is None:
             ends = ends.replace(tzinfo=UTC)
-        return (
-            starts is not None
-            and ends is not None
-            and starts <= now <= ends
-        )
+        return starts is not None and ends is not None and starts <= now <= ends
 
     @property
     def is_execution_allowed(self) -> bool:
@@ -420,10 +417,7 @@ class ConstitutionalAnalysis(ForgeModel):
     def overall_score(self) -> float:
         """Calculate overall ethical score."""
         return (
-            self.ethical_score
-            + self.fairness_score
-            + self.safety_score
-            + self.transparency_score
+            self.ethical_score + self.fairness_score + self.safety_score + self.transparency_score
         ) / 4.0
 
 
@@ -435,9 +429,9 @@ class ConstitutionalAnalysis(ForgeModel):
 class PerspectiveType(str, Enum):
     """The three perspectives each council member must consider."""
 
-    OPTIMISTIC = "optimistic"   # Best-case scenario, benefits, opportunities
-    BALANCED = "balanced"       # Objective analysis, trade-offs, facts
-    CRITICAL = "critical"       # Risks, concerns, worst-case scenarios
+    OPTIMISTIC = "optimistic"  # Best-case scenario, benefits, opportunities
+    BALANCED = "balanced"  # Objective analysis, trade-offs, facts
+    CRITICAL = "critical"  # Risks, concerns, worst-case scenarios
 
 
 class PerspectiveAnalysis(ForgeModel):

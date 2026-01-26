@@ -241,8 +241,7 @@ class OfferingRepository:
         """
 
         result = await self.client.execute_single(
-            query,
-            {"id": offering_id, "updated_at": datetime.now(UTC).isoformat()}
+            query, {"id": offering_id, "updated_at": datetime.now(UTC).isoformat()}
         )
 
         return result is not None
@@ -369,7 +368,9 @@ class ACPJobRepository:
             "escrow_tx_hash": job.escrow_tx_hash,
             "escrow_amount_virtual": job.escrow_amount_virtual,
             "escrow_released": job.escrow_released,
-            "deliverable_content": json.dumps(job.deliverable_content) if job.deliverable_content else None,
+            "deliverable_content": json.dumps(job.deliverable_content)
+            if job.deliverable_content
+            else None,
             "deliverable_url": job.deliverable_url,
             "delivered_at": job.delivered_at.isoformat() if job.delivered_at else None,
             "evaluation_result": job.evaluation_result,
@@ -383,8 +384,12 @@ class ACPJobRepository:
             "dispute_resolution": job.dispute_resolution,
             "request_timeout": job.request_timeout.isoformat(),
             "negotiation_timeout": job.negotiation_timeout.isoformat(),
-            "execution_timeout": job.execution_timeout.isoformat() if job.execution_timeout else None,
-            "evaluation_timeout": job.evaluation_timeout.isoformat() if job.evaluation_timeout else None,
+            "execution_timeout": job.execution_timeout.isoformat()
+            if job.execution_timeout
+            else None,
+            "evaluation_timeout": job.evaluation_timeout.isoformat()
+            if job.evaluation_timeout
+            else None,
             "created_at": now.isoformat(),
             "updated_at": now.isoformat(),
         }
@@ -478,7 +483,9 @@ class ACPJobRepository:
             "escrow_tx_hash": job.escrow_tx_hash,
             "escrow_amount_virtual": job.escrow_amount_virtual,
             "escrow_released": job.escrow_released,
-            "deliverable_content": json.dumps(job.deliverable_content) if job.deliverable_content else None,
+            "deliverable_content": json.dumps(job.deliverable_content)
+            if job.deliverable_content
+            else None,
             "deliverable_url": job.deliverable_url,
             "delivered_at": job.delivered_at.isoformat() if job.delivered_at else None,
             "evaluation_result": job.evaluation_result,
@@ -490,8 +497,12 @@ class ACPJobRepository:
             "is_disputed": job.is_disputed,
             "dispute_reason": job.dispute_reason,
             "dispute_resolution": job.dispute_resolution,
-            "execution_timeout": job.execution_timeout.isoformat() if job.execution_timeout else None,
-            "evaluation_timeout": job.evaluation_timeout.isoformat() if job.evaluation_timeout else None,
+            "execution_timeout": job.execution_timeout.isoformat()
+            if job.execution_timeout
+            else None,
+            "evaluation_timeout": job.evaluation_timeout.isoformat()
+            if job.evaluation_timeout
+            else None,
             "updated_at": now.isoformat(),
         }
 
@@ -569,9 +580,7 @@ class ACPJobRepository:
         RETURN count(j) AS count
         """
 
-        result = await self.client.execute_single(
-            query, {"provider_agent_id": provider_agent_id}
-        )
+        result = await self.client.execute_single(query, {"provider_agent_id": provider_agent_id})
 
         return result.get("count", 0) if result else 0
 
@@ -583,15 +592,11 @@ class ACPJobRepository:
         RETURN sum(j.agreed_fee_virtual) AS total
         """
 
-        result = await self.client.execute_single(
-            query, {"provider_agent_id": provider_agent_id}
-        )
+        result = await self.client.execute_single(query, {"provider_agent_id": provider_agent_id})
 
         return result.get("total", 0.0) if result else 0.0
 
-    async def average_rating_by_provider(
-        self, provider_agent_id: str
-    ) -> float | None:
+    async def average_rating_by_provider(self, provider_agent_id: str) -> float | None:
         """Get average evaluation score for a provider."""
         query = """
         MATCH (j:ACPJob {provider_agent_id: $provider_agent_id, status: 'completed'})
@@ -599,9 +604,7 @@ class ACPJobRepository:
         RETURN avg(j.evaluation_score) AS avg_score
         """
 
-        result = await self.client.execute_single(
-            query, {"provider_agent_id": provider_agent_id}
-        )
+        result = await self.client.execute_single(query, {"provider_agent_id": provider_agent_id})
 
         if result and result.get("avg_score") is not None:
             return float(result["avg_score"])
@@ -663,8 +666,12 @@ class ACPJobRepository:
 
         # Parse memo fields
         for field in [
-            "request_memo", "requirement_memo", "agreement_memo",
-            "transaction_memo", "deliverable_memo", "evaluation_memo"
+            "request_memo",
+            "requirement_memo",
+            "agreement_memo",
+            "transaction_memo",
+            "deliverable_memo",
+            "evaluation_memo",
         ]:
             if isinstance(record.get(field), str):
                 try:
@@ -675,9 +682,16 @@ class ACPJobRepository:
 
         # Parse datetime fields
         datetime_fields = [
-            "agreed_deadline", "delivered_at", "evaluated_at", "completed_at",
-            "request_timeout", "negotiation_timeout", "execution_timeout",
-            "evaluation_timeout", "created_at", "updated_at"
+            "agreed_deadline",
+            "delivered_at",
+            "evaluated_at",
+            "completed_at",
+            "request_timeout",
+            "negotiation_timeout",
+            "execution_timeout",
+            "evaluation_timeout",
+            "created_at",
+            "updated_at",
         ]
         for field in datetime_fields:
             if isinstance(record.get(field), str):

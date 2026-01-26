@@ -352,24 +352,16 @@ class ChatService:
 
         # Check visibility rules
         if room.visibility == RoomVisibility.PRIVATE:
-            raise ChatAccessDeniedError(
-                room_id, "Private room - must be added by admin"
-            )
+            raise ChatAccessDeniedError(room_id, "Private room - must be added by admin")
 
         if room.visibility == RoomVisibility.INVITE_ONLY:
             if not invite_code:
-                raise ChatAccessDeniedError(
-                    room_id, "Invite code required"
-                )
+                raise ChatAccessDeniedError(room_id, "Invite code required")
             if room.invite_code != invite_code:
-                raise ChatAccessDeniedError(
-                    room_id, "Invalid invite code"
-                )
+                raise ChatAccessDeniedError(room_id, "Invalid invite code")
 
         # Add as member
-        member = await self._chat_repo.add_member(
-            room_id, user_id, RoomRole.MEMBER
-        )
+        member = await self._chat_repo.add_member(room_id, user_id, RoomRole.MEMBER)
 
         if member and self._audit_repo:
             await self._audit_repo.log_user_action(
@@ -430,8 +422,7 @@ class ChatService:
 
         if role == RoomRole.OWNER:
             raise ChatPermissionError(
-                "leave_room",
-                "Owner cannot leave. Transfer ownership or delete the room."
+                "leave_room", "Owner cannot leave. Transfer ownership or delete the room."
             )
 
         removed: bool = await self._chat_repo.remove_member(room_id, user_id)
@@ -482,9 +473,7 @@ class ChatService:
         if role == RoomRole.ADMIN and admin_role != RoomRole.OWNER:
             raise ChatPermissionError("add_admin", "owner")
 
-        member = await self._chat_repo.add_member(
-            room_id, user_id, role, invited_by=admin_id
-        )
+        member = await self._chat_repo.add_member(room_id, user_id, role, invited_by=admin_id)
 
         if member and self._audit_repo:
             await self._audit_repo.log_user_action(
@@ -660,7 +649,9 @@ class ChatService:
         await self.verify_access(room_id, user_id)
 
         limit = min(limit, settings.chat_history_default_limit)
-        messages: tuple[list[ChatMessage], bool] = await self._chat_repo.get_room_messages(room_id, limit, before)
+        messages: tuple[list[ChatMessage], bool] = await self._chat_repo.get_room_messages(
+            room_id, limit, before
+        )
         return messages
 
     async def delete_message(
@@ -694,9 +685,7 @@ class ChatService:
             # Check if user is admin/owner of the room
             role = await self._chat_repo.get_user_role(message.room_id, user_id)
             if not role or not RoomRole.can_moderate(role):
-                raise ChatPermissionError(
-                    "delete_message", "message author, admin, or owner"
-                )
+                raise ChatPermissionError("delete_message", "message author, admin, or owner")
 
         deleted: bool = await self._chat_repo.delete_message(message_id, user_id)
 

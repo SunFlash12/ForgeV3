@@ -26,11 +26,11 @@ logger: structlog.stdlib.BoundLogger = structlog.get_logger(__name__)
 class AnonymizationLevel(Enum):
     """Levels of data anonymization."""
 
-    NONE = "none"                    # No anonymization
-    PSEUDONYMIZE = "pseudonymize"    # Replace with consistent pseudonyms
-    MASK = "mask"                    # Partially mask sensitive data
-    REDACT = "redact"                # Completely remove sensitive data
-    HASH = "hash"                    # One-way hash
+    NONE = "none"  # No anonymization
+    PSEUDONYMIZE = "pseudonymize"  # Replace with consistent pseudonyms
+    MASK = "mask"  # Partially mask sensitive data
+    REDACT = "redact"  # Completely remove sensitive data
+    HASH = "hash"  # One-way hash
 
 
 class PIIType(Enum):
@@ -62,7 +62,7 @@ class PrivacyRequest:
 
     request_id: str
     request_type: str  # erasure, export, access
-    subject_id: str    # User/entity making the request
+    subject_id: str  # User/entity making the request
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     completed_at: datetime | None = None
     status: str = "pending"
@@ -75,7 +75,7 @@ class RetentionPolicy:
 
     default_retention_days: int = 365 * 7  # 7 years
     min_retention_days: int = 30
-    max_retention_days: int = 365 * 10     # 10 years
+    max_retention_days: int = 365 * 10  # 10 years
 
     # Type-specific retention
     capsule_retention_days: int = 365 * 7
@@ -117,33 +117,33 @@ class PrivacyManager:
         patterns = [
             PIIPattern(
                 pii_type=PIIType.EMAIL,
-                pattern=r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b',
+                pattern=r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b",
                 description="Email address",
-                default_action=AnonymizationLevel.MASK
+                default_action=AnonymizationLevel.MASK,
             ),
             PIIPattern(
                 pii_type=PIIType.PHONE,
-                pattern=r'\b(?:\+?1[-.\s]?)?\(?[0-9]{3}\)?[-.\s]?[0-9]{3}[-.\s]?[0-9]{4}\b',
+                pattern=r"\b(?:\+?1[-.\s]?)?\(?[0-9]{3}\)?[-.\s]?[0-9]{3}[-.\s]?[0-9]{4}\b",
                 description="Phone number",
-                default_action=AnonymizationLevel.REDACT
+                default_action=AnonymizationLevel.REDACT,
             ),
             PIIPattern(
                 pii_type=PIIType.SSN,
-                pattern=r'\b\d{3}-\d{2}-\d{4}\b',
+                pattern=r"\b\d{3}-\d{2}-\d{4}\b",
                 description="Social Security Number",
-                default_action=AnonymizationLevel.REDACT
+                default_action=AnonymizationLevel.REDACT,
             ),
             PIIPattern(
                 pii_type=PIIType.CREDIT_CARD,
-                pattern=r'\b(?:\d{4}[-\s]?){3}\d{4}\b',
+                pattern=r"\b(?:\d{4}[-\s]?){3}\d{4}\b",
                 description="Credit card number",
-                default_action=AnonymizationLevel.REDACT
+                default_action=AnonymizationLevel.REDACT,
             ),
             PIIPattern(
                 pii_type=PIIType.IP_ADDRESS,
-                pattern=r'\b(?:\d{1,3}\.){3}\d{1,3}\b',
+                pattern=r"\b(?:\d{1,3}\.){3}\d{1,3}\b",
                 description="IP address",
-                default_action=AnonymizationLevel.HASH
+                default_action=AnonymizationLevel.HASH,
             ),
         ]
 
@@ -174,14 +174,16 @@ class PrivacyManager:
         for pattern in self._patterns:
             matches = list(re.finditer(pattern.pattern, content, re.IGNORECASE))
             for match in matches:
-                findings.append({
-                    "type": pattern.pii_type.value,
-                    "value": match.group(),
-                    "start": match.start(),
-                    "end": match.end(),
-                    "description": pattern.description,
-                    "default_action": pattern.default_action.value,
-                })
+                findings.append(
+                    {
+                        "type": pattern.pii_type.value,
+                        "value": match.group(),
+                        "start": match.start(),
+                        "end": match.end(),
+                        "description": pattern.description,
+                        "default_action": pattern.default_action.value,
+                    }
+                )
 
         return findings
 
@@ -189,7 +191,7 @@ class PrivacyManager:
         self,
         content: str,
         level: AnonymizationLevel = AnonymizationLevel.MASK,
-        pii_types: set[PIIType] | None = None
+        pii_types: set[PIIType] | None = None,
     ) -> str:
         """
         Anonymize PII in content.
@@ -224,16 +226,11 @@ class PrivacyManager:
             for match in reversed(matches):
                 original = match.group()
                 replacement = self._get_replacement(original, level, pattern.pii_type)
-                result = result[:match.start()] + replacement + result[match.end():]
+                result = result[: match.start()] + replacement + result[match.end() :]
 
         return result
 
-    def _get_replacement(
-        self,
-        original: str,
-        level: AnonymizationLevel,
-        pii_type: PIIType
-    ) -> str:
+    def _get_replacement(self, original: str, level: AnonymizationLevel, pii_type: PIIType) -> str:
         """Get replacement value for PII."""
         if level == AnonymizationLevel.REDACT:
             return "[REDACTED]"
@@ -241,23 +238,29 @@ class PrivacyManager:
         elif level == AnonymizationLevel.MASK:
             # Show partial data
             if pii_type == PIIType.EMAIL:
-                parts = original.split('@')
+                parts = original.split("@")
                 if len(parts) == 2:
                     local = parts[0]
-                    masked_local = local[0] + '*' * (len(local) - 2) + local[-1] if len(local) > 2 else '*' * len(local)
+                    masked_local = (
+                        local[0] + "*" * (len(local) - 2) + local[-1]
+                        if len(local) > 2
+                        else "*" * len(local)
+                    )
                     return f"{masked_local}@{parts[1]}"
             elif pii_type == PIIType.PHONE:
-                digits = re.sub(r'\D', '', original)
+                digits = re.sub(r"\D", "", original)
                 return f"***-***-{digits[-4:]}" if len(digits) >= 4 else "***-***-****"
             elif pii_type == PIIType.CREDIT_CARD:
-                digits = re.sub(r'\D', '', original)
-                return f"****-****-****-{digits[-4:]}" if len(digits) >= 4 else "****-****-****-****"
+                digits = re.sub(r"\D", "", original)
+                return (
+                    f"****-****-****-{digits[-4:]}" if len(digits) >= 4 else "****-****-****-****"
+                )
             elif pii_type == PIIType.SSN:
                 return "***-**-****"
             elif pii_type == PIIType.IP_ADDRESS:
-                parts = original.split('.')
+                parts = original.split(".")
                 return f"{parts[0]}.{parts[1]}.xxx.xxx" if len(parts) == 4 else "xxx.xxx.xxx.xxx"
-            return '*' * len(original)
+            return "*" * len(original)
 
         elif level == AnonymizationLevel.PSEUDONYMIZE:
             # Return consistent pseudonym
@@ -285,9 +288,7 @@ class PrivacyManager:
             return f"[PSEUDONYM_{random_id}]"
 
     async def process_erasure_request(
-        self,
-        subject_id: str,
-        scope: list[str] | None = None
+        self, subject_id: str, scope: list[str] | None = None
     ) -> PrivacyRequest:
         """
         Process a right-to-erasure request (GDPR Article 17).
@@ -303,27 +304,19 @@ class PrivacyManager:
             request_id=secrets.token_urlsafe(16),
             request_type="erasure",
             subject_id=subject_id,
-            metadata={"scope": scope or ["all"]}
+            metadata={"scope": scope or ["all"]},
         )
 
         self._pending_requests[request.request_id] = request
 
-        logger.info(
-            "erasure_request_created",
-            request_id=request.request_id,
-            subject_id=subject_id
-        )
+        logger.info("erasure_request_created", request_id=request.request_id, subject_id=subject_id)
 
         # In production, this would trigger async processing
         # For now, we just create the request
 
         return request
 
-    async def process_export_request(
-        self,
-        subject_id: str,
-        format: str = "json"
-    ) -> PrivacyRequest:
+    async def process_export_request(self, subject_id: str, format: str = "json") -> PrivacyRequest:
         """
         Process a data portability request (GDPR Article 20).
 
@@ -338,16 +331,12 @@ class PrivacyManager:
             request_id=secrets.token_urlsafe(16),
             request_type="export",
             subject_id=subject_id,
-            metadata={"format": format}
+            metadata={"format": format},
         )
 
         self._pending_requests[request.request_id] = request
 
-        logger.info(
-            "export_request_created",
-            request_id=request.request_id,
-            subject_id=subject_id
-        )
+        logger.info("export_request_created", request_id=request.request_id, subject_id=subject_id)
 
         return request
 
@@ -362,16 +351,9 @@ class PrivacyManager:
     def set_retention_policy(self, policy: RetentionPolicy) -> None:
         """Update data retention policy."""
         self._retention = policy
-        logger.info(
-            "retention_policy_updated",
-            default_days=policy.default_retention_days
-        )
+        logger.info("retention_policy_updated", default_days=policy.default_retention_days)
 
-    def calculate_expiry_date(
-        self,
-        data_type: str,
-        created_at: datetime | None = None
-    ) -> datetime:
+    def calculate_expiry_date(self, data_type: str, created_at: datetime | None = None) -> datetime:
         """
         Calculate expiry date for data based on retention policy.
 
@@ -395,11 +377,7 @@ class PrivacyManager:
         days = retention_map.get(data_type, self._retention.default_retention_days)
         return created_at + timedelta(days=days)
 
-    def is_expired(
-        self,
-        data_type: str,
-        created_at: datetime
-    ) -> bool:
+    def is_expired(self, data_type: str, created_at: datetime) -> bool:
         """Check if data has exceeded retention period."""
         expiry = self.calculate_expiry_date(data_type, created_at)
         return datetime.now(UTC) > expiry

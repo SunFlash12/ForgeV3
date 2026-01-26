@@ -31,9 +31,10 @@ T = TypeVar("T")
 
 class CircuitState(str, Enum):
     """Circuit breaker states."""
-    CLOSED = "closed"       # Normal - requests flow through
-    OPEN = "open"           # Tripped - requests blocked
-    HALF_OPEN = "half_open" # Testing - limited requests allowed
+
+    CLOSED = "closed"  # Normal - requests flow through
+    OPEN = "open"  # Tripped - requests blocked
+    HALF_OPEN = "half_open"  # Testing - limited requests allowed
 
 
 @dataclass
@@ -41,22 +42,22 @@ class CircuitBreakerConfig:
     """Configuration for circuit breaker behavior."""
 
     # Failure thresholds
-    failure_threshold: int = 5          # Failures before opening
-    failure_rate_threshold: float = 0.5 # 50% failure rate triggers
+    failure_threshold: int = 5  # Failures before opening
+    failure_rate_threshold: float = 0.5  # 50% failure rate triggers
 
     # Timing
-    recovery_timeout: float = 30.0      # Seconds before half-open
-    half_open_max_calls: int = 3        # Test calls in half-open state
+    recovery_timeout: float = 30.0  # Seconds before half-open
+    half_open_max_calls: int = 3  # Test calls in half-open state
 
     # Sliding window
-    window_size: int = 10               # Calls to track for rate calculation
-    min_calls_for_rate: int = 5         # Minimum calls before rate applies
+    window_size: int = 10  # Calls to track for rate calculation
+    min_calls_for_rate: int = 5  # Minimum calls before rate applies
 
     # Success threshold for closing
-    success_threshold: int = 2          # Successes in half-open to close
+    success_threshold: int = 2  # Successes in half-open to close
 
     # Timeouts
-    call_timeout: float | None = 30.0   # Max seconds for wrapped call
+    call_timeout: float | None = 30.0  # Max seconds for wrapped call
 
     # Exclusions
     excluded_exceptions: tuple[type[Exception], ...] = ()  # Don't count these
@@ -77,9 +78,7 @@ class CircuitStats:
     recent_failures: list[float] = field(default_factory=list)
 
     # State tracking
-    state_changes: list[tuple[datetime, CircuitState, CircuitState]] = field(
-        default_factory=list
-    )
+    state_changes: list[tuple[datetime, CircuitState, CircuitState]] = field(default_factory=list)
     last_failure_time: float | None = None
     last_success_time: float | None = None
     opened_at: float | None = None
@@ -178,7 +177,9 @@ class CircuitBreaker(Generic[T]):
         self._state = CircuitState.CLOSED
         self._stats = CircuitStats()
         self._lock = asyncio.Lock()
-        self._listeners: list[Callable[[CircuitState, CircuitState], Coroutine[Any, Any, None]]] = []
+        self._listeners: list[
+            Callable[[CircuitState, CircuitState], Coroutine[Any, Any, None]]
+        ] = []
 
         logger.info(
             "circuit_breaker_created",
@@ -252,11 +253,13 @@ class CircuitBreaker(Generic[T]):
         self._state = new_state
 
         # Track state change
-        self._stats.state_changes.append((
-            datetime.now(UTC),
-            old_state,
-            new_state,
-        ))
+        self._stats.state_changes.append(
+            (
+                datetime.now(UTC),
+                old_state,
+                new_state,
+            )
+        )
 
         # State-specific actions
         if new_state == CircuitState.OPEN:
@@ -293,10 +296,7 @@ class CircuitBreaker(Generic[T]):
 
         if self._state == CircuitState.HALF_OPEN:
             # Allow limited calls for testing
-            total_half_open = (
-                self._stats.half_open_successes +
-                self._stats.half_open_failures
-            )
+            total_half_open = self._stats.half_open_successes + self._stats.half_open_failures
             return total_half_open < self.config.half_open_max_calls
 
         return False
@@ -455,7 +455,9 @@ class CircuitBreaker(Generic[T]):
                 await self._record_failure(TimeoutError("Call timed out"))
             raise
 
-        except Exception as e:  # Intentional broad catch: circuit breaker must track all failure types
+        except (
+            Exception
+        ) as e:  # Intentional broad catch: circuit breaker must track all failure types
             # Check if exception should be excluded
             if isinstance(e, self.config.excluded_exceptions):
                 async with self._lock:
@@ -471,6 +473,7 @@ class CircuitBreaker(Generic[T]):
         func: Callable[..., Coroutine[Any, Any, T]],
     ) -> Callable[..., Coroutine[Any, Any, T]]:
         """Decorator syntax for circuit breaker."""
+
         async def wrapper(*args: Any, **kwargs: Any) -> T:
             return await self.call(func, *args, **kwargs)
 
@@ -559,10 +562,7 @@ class CircuitBreakerRegistry:
 
     def get_all_status(self) -> dict[str, dict[str, Any]]:
         """Get status of all circuit breakers."""
-        return {
-            name: breaker.get_status()
-            for name, breaker in self._breakers.items()
-        }
+        return {name: breaker.get_status() for name, breaker in self._breakers.items()}
 
     async def reset_all(self) -> None:
         """Reset all circuit breakers."""
@@ -571,10 +571,7 @@ class CircuitBreakerRegistry:
 
     def get_open_circuits(self) -> list[str]:
         """Get list of currently open circuits."""
-        return [
-            name for name, breaker in self._breakers.items()
-            if breaker.is_open
-        ]
+        return [name for name, breaker in self._breakers.items() if breaker.is_open]
 
     def get_health_summary(self) -> dict[str, Any]:
         """Get health summary for all circuits."""

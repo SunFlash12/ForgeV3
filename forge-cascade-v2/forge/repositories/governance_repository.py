@@ -86,6 +86,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
 
         # Serialize action dict to JSON string for Neo4j
         import json
+
         action_json = json.dumps(data.action) if data.action else "{}"
 
         query = """
@@ -183,7 +184,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
         query = f"""
         MATCH (p:Proposal {{id: $id}})
         WHERE p.status = 'draft'
-        SET {', '.join(set_parts)}
+        SET {", ".join(set_parts)}
         RETURN p {{.*}} AS entity
         """
 
@@ -275,10 +276,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
             quorum_met = participation_rate >= proposal.quorum_percent
 
         # Determine if passed (must meet both quorum AND approval threshold)
-        passed = (
-            quorum_met and
-            proposal.approval_ratio >= proposal.pass_threshold
-        )
+        passed = quorum_met and proposal.approval_ratio >= proposal.pass_threshold
 
         # Log quorum status
         self.logger.info(
@@ -296,10 +294,11 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
 
         # SECURITY FIX (Audit 3): Calculate timelock for passed proposals
         from datetime import timedelta
+
         now = self._now()
         execution_allowed_after = None
         if passed:
-            timelock_hours = getattr(proposal, 'timelock_hours', 24)
+            timelock_hours = getattr(proposal, "timelock_hours", 24)
             execution_allowed_after = now + timedelta(hours=timelock_hours)
             self.logger.info(
                 "timelock_set",
@@ -323,7 +322,9 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
                 "id": proposal_id,
                 "status": new_status.value,
                 "now": now.isoformat(),
-                "execution_allowed_after": execution_allowed_after.isoformat() if execution_allowed_after else None,
+                "execution_allowed_after": execution_allowed_after.isoformat()
+                if execution_allowed_after
+                else None,
             },
         )
 
@@ -420,12 +421,13 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
             if status == "passed" and timelock:
                 # Log that timelock blocked execution
                 import structlog
+
                 logger = structlog.get_logger(__name__)
                 logger.warning(
                     "proposal_execution_blocked_by_timelock",
                     proposal_id=proposal_id,
                     timelock=timelock,
-                    current_time=now_iso
+                    current_time=now_iso,
                 )
 
         return None
@@ -533,7 +535,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
                 voter_id=voter_id,
                 claimed_weight=trust_weight,
                 verified_weight=verified_weight,
-                actual_trust=actual_trust
+                actual_trust=actual_trust,
             )
 
         # Create vote and update proposal tallies atomically
@@ -564,7 +566,9 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
         """
 
         # Handle both string and enum choice
-        choice_val = vote_data.choice.value if hasattr(vote_data.choice, 'value') else str(vote_data.choice)
+        choice_val = (
+            vote_data.choice.value if hasattr(vote_data.choice, "value") else str(vote_data.choice)
+        )
 
         result = await self.client.execute_single(
             query,
@@ -630,11 +634,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
             {"proposal_id": proposal_id, "skip": skip, "limit": limit},
         )
 
-        return [
-            Vote.model_validate(r["vote"])
-            for r in results
-            if r.get("vote")
-        ]
+        return [Vote.model_validate(r["vote"]) for r in results if r.get("vote")]
 
     async def get_voter_history(
         self,
@@ -657,11 +657,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
             {"voter_id": voter_id, "limit": limit},
         )
 
-        return [
-            Vote.model_validate(r["vote"])
-            for r in results
-            if r.get("vote")
-        ]
+        return [Vote.model_validate(r["vote"]) for r in results if r.get("vote")]
 
     # ═══════════════════════════════════════════════════════════════
     # VOTE DELEGATION
@@ -704,9 +700,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
                     else None
                 ),
                 "expires_at": (
-                    delegation.expires_at.isoformat()
-                    if delegation.expires_at
-                    else None
+                    delegation.expires_at.isoformat() if delegation.expires_at else None
                 ),
                 "created_at": delegation.created_at.isoformat(),
             },
@@ -754,20 +748,20 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
         for r in results:
             if r.get("delegation"):
                 d = r["delegation"]
-                delegations.append(VoteDelegation(
-                    delegator_id=d["delegator_id"],
-                    delegate_id=d["delegate_id"],
-                    proposal_types=(
-                        [ProposalType(t) for t in d["proposal_types"]]
-                        if d.get("proposal_types")
-                        else None
-                    ),
-                    expires_at=(
-                        datetime.fromisoformat(d["expires_at"])
-                        if d.get("expires_at")
-                        else None
-                    ),
-                ))
+                delegations.append(
+                    VoteDelegation(
+                        delegator_id=d["delegator_id"],
+                        delegate_id=d["delegate_id"],
+                        proposal_types=(
+                            [ProposalType(t) for t in d["proposal_types"]]
+                            if d.get("proposal_types")
+                            else None
+                        ),
+                        expires_at=(
+                            datetime.fromisoformat(d["expires_at"]) if d.get("expires_at") else None
+                        ),
+                    )
+                )
         return delegations
 
     # ═══════════════════════════════════════════════════════════════
@@ -1097,7 +1091,7 @@ class GovernanceRepository(BaseRepository[Proposal, ProposalCreate, ProposalUpda
         """
 
         # Handle both string and enum choice
-        choice_str = vote.choice.value if hasattr(vote.choice, 'value') else str(vote.choice)
+        choice_str = vote.choice.value if hasattr(vote.choice, "value") else str(vote.choice)
 
         result = await self.client.execute_single(
             query,

@@ -16,6 +16,7 @@ from forge.models.base import ForgeModel, generate_id
 
 class ListingStatus(str, Enum):
     """Status of a marketplace listing."""
+
     DRAFT = "draft"
     ACTIVE = "active"
     SOLD = "sold"
@@ -25,22 +26,25 @@ class ListingStatus(str, Enum):
 
 class LicenseType(str, Enum):
     """Types of licenses for capsule access."""
-    PERPETUAL = "perpetual"       # One-time purchase, forever access
+
+    PERPETUAL = "perpetual"  # One-time purchase, forever access
     SUBSCRIPTION = "subscription"  # Recurring payment
-    USAGE = "usage"               # Pay per use
-    DERIVATIVE = "derivative"     # Can create derived works
+    USAGE = "usage"  # Pay per use
+    DERIVATIVE = "derivative"  # Can create derived works
 
 
 class Currency(str, Enum):
     """Supported currencies."""
-    FORGE = "FORGE"   # Platform token
+
+    FORGE = "FORGE"  # Platform token
     USD = "USD"
-    SOL = "SOL"       # Solana
-    ETH = "ETH"       # Ethereum
+    SOL = "SOL"  # Solana
+    ETH = "ETH"  # Ethereum
 
 
 class ListingVisibility(str, Enum):
     """Visibility options for listings."""
+
     PUBLIC = "public"
     UNLISTED = "unlisted"
     PRIVATE = "private"
@@ -48,12 +52,14 @@ class ListingVisibility(str, Enum):
 
 class PaymentMethod(str, Enum):
     """Supported payment methods."""
+
     PLATFORM = "platform"
     BLOCKCHAIN = "blockchain"
 
 
 class PaymentStatus(str, Enum):
     """Status of a payment transaction."""
+
     PENDING = "pending"
     COMPLETED = "completed"
     FAILED = "failed"
@@ -73,16 +79,12 @@ class CapsuleListing(ForgeModel):
     price: Decimal = Field(ge=0, description="Listing price")
     currency: Currency = Field(default=Currency.FORGE)
     suggested_price: Decimal | None = Field(
-        default=None,
-        description="System-suggested price based on trust metrics"
+        default=None, description="System-suggested price based on trust metrics"
     )
 
     # License
     license_type: LicenseType = Field(default=LicenseType.PERPETUAL)
-    license_terms: str | None = Field(
-        default=None,
-        description="Custom license terms"
-    )
+    license_terms: str | None = Field(default=None, description="Custom license terms")
 
     # Subscription details (if applicable)
     subscription_period_days: int | None = None
@@ -100,8 +102,7 @@ class CapsuleListing(ForgeModel):
     description: str | None = None
     tags: list[str] = Field(default_factory=list)
     preview_content: str | None = Field(
-        default=None,
-        description="Public preview of capsule content"
+        default=None, description="Public preview of capsule content"
     )
 
     # Stats
@@ -189,6 +190,7 @@ class Cart(ForgeModel):
     def totals_by_currency(self) -> dict[Currency, Decimal]:
         """Calculate cart totals grouped by currency."""
         from collections import defaultdict
+
         totals: dict[Currency, Decimal] = defaultdict(Decimal)
         for item in self.items:
             totals[item.currency] += item.price
@@ -285,8 +287,7 @@ class RevenueDistribution(ForgeModel):
 
     # Lineage breakdown
     lineage_recipients: list[dict[str, Any]] = Field(
-        default_factory=list,
-        description="[{user_id, amount, contribution_weight}]"
+        default_factory=list, description="[{user_id, amount, contribution_weight}]"
     )
 
     distributed_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

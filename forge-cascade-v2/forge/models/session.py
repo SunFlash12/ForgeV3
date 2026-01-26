@@ -18,19 +18,19 @@ from forge.models.base import ForgeModel, TimestampMixin
 class SessionBindingMode(str, Enum):
     """Session binding enforcement modes."""
 
-    DISABLED = "disabled"      # No binding enforcement
-    LOG_ONLY = "log_only"      # Log changes only (audit trail)
-    WARN = "warn"              # Log warnings but allow access
-    FLEXIBLE = "flexible"      # Block after threshold changes
-    STRICT = "strict"          # Block any change immediately
+    DISABLED = "disabled"  # No binding enforcement
+    LOG_ONLY = "log_only"  # Log changes only (audit trail)
+    WARN = "warn"  # Log warnings but allow access
+    FLEXIBLE = "flexible"  # Block after threshold changes
+    STRICT = "strict"  # Block any change immediately
 
 
 class SessionStatus(str, Enum):
     """Session status states."""
 
-    ACTIVE = "active"          # Normal active session
-    EXPIRED = "expired"        # Session has expired
-    REVOKED = "revoked"        # Explicitly revoked
+    ACTIVE = "active"  # Normal active session
+    EXPIRED = "expired"  # Session has expired
+    REVOKED = "revoked"  # Explicitly revoked
     SUSPICIOUS = "suspicious"  # Flagged as suspicious but still active
 
 
@@ -193,17 +193,11 @@ class SessionBindingWarning(ForgeModel):
 class SessionRevokeRequest(ForgeModel):
     """Request schema for revoking a session."""
 
-    reason: str | None = Field(
-        default=None, max_length=500, description="Reason for revocation"
-    )
+    reason: str | None = Field(default=None, max_length=500, description="Reason for revocation")
 
 
 class SessionRevokeAllRequest(ForgeModel):
     """Request schema for revoking all sessions."""
 
-    except_current: bool = Field(
-        default=True, description="Keep the current session active"
-    )
-    reason: str | None = Field(
-        default=None, max_length=500, description="Reason for revocation"
-    )
+    except_current: bool = Field(default=True, description="Keep the current session active")
+    reason: str | None = Field(default=None, max_length=500, description="Reason for revocation")

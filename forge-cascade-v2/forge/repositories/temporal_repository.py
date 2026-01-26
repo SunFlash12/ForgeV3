@@ -607,6 +607,7 @@ class TemporalRepository:
 
         if trust_values:
             import statistics
+
             min_trust = min(trust_values)
             max_trust = max(trust_values)
             avg_trust = statistics.mean(trust_values)
@@ -708,6 +709,7 @@ class TemporalRepository:
 
         # Neo4j can't store dicts as properties - serialize to JSON strings
         import json
+
         params = {
             "id": snapshot_id,
             "total_nodes": metrics.get("total_nodes", 0),
@@ -789,11 +791,7 @@ class TemporalRepository:
 
         results = await self.client.execute(query, params)
 
-        return [
-            self._to_graph_snapshot(r["snapshot"])
-            for r in results
-            if r.get("snapshot")
-        ]
+        return [self._to_graph_snapshot(r["snapshot"]) for r in results if r.get("snapshot")]
 
     def _to_graph_snapshot(self, record: dict[str, Any]) -> GraphSnapshot:
         """Convert a Neo4j record to GraphSnapshot."""
@@ -827,6 +825,7 @@ class TemporalRepository:
         if isinstance(value, str):
             try:
                 import json
+
                 parsed: dict[str, Any] = json.loads(value)
                 return parsed
             except (json.JSONDecodeError, TypeError):
@@ -842,6 +841,7 @@ class TemporalRepository:
         if isinstance(value, str):
             try:
                 import json
+
                 parsed: list[Any] = json.loads(value)
                 return parsed
             except (json.JSONDecodeError, TypeError):

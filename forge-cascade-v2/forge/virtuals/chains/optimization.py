@@ -32,6 +32,7 @@ T = TypeVar("T")
 @dataclass
 class CacheEntry:
     """Cache entry with value and expiration."""
+
     value: Any
     expires_at: datetime
     hit_count: int = 0
@@ -101,10 +102,7 @@ class QueryCache:
             return
 
         # Find entry with lowest hit count
-        lru_key = min(
-            self._cache.keys(),
-            key=lambda k: self._cache[k].hit_count
-        )
+        lru_key = min(self._cache.keys(), key=lambda k: self._cache[k].hit_count)
         del self._cache[lru_key]
 
     def invalidate(self, key: str) -> None:
@@ -151,6 +149,7 @@ def cached(
         key_func: Function to generate cache key from args
         ttl_seconds: Optional TTL override
     """
+
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         @wraps(func)
         async def wrapper(*args: Any, **kwargs: Any) -> Any:
@@ -164,6 +163,7 @@ def cached(
             return result
 
         return wrapper
+
     return decorator
 
 
@@ -208,10 +208,7 @@ class RateLimiter:
 
             # Refill tokens
             time_passed = now - self._last_update
-            self._tokens = min(
-                self._burst,
-                self._tokens + time_passed * self._rate
-            )
+            self._tokens = min(self._burst, self._tokens + time_passed * self._rate)
             self._last_update = now
 
             # Wait if no tokens available
@@ -281,11 +278,13 @@ class RequestBatcher:
             future = asyncio.get_event_loop().create_future()
             self._results[request_id] = future
 
-            self._pending.append({
-                "id": request_id,
-                "method": method,
-                "params": params,
-            })
+            self._pending.append(
+                {
+                    "id": request_id,
+                    "method": method,
+                    "params": params,
+                }
+            )
 
             # Trigger batch if full
             if len(self._pending) >= self._batch_size:
@@ -367,6 +366,7 @@ class ParallelExecutor:
         Returns:
             List of results in order
         """
+
         async def run_task(
             chain: ChainNetwork,
             func: Callable[..., Any],
@@ -375,10 +375,7 @@ class ParallelExecutor:
         ) -> Any:
             return await self.execute(chain, func, *args, **kwargs)
 
-        coroutines = [
-            run_task(chain, func, args, kwargs)
-            for chain, func, args, kwargs in tasks
-        ]
+        coroutines = [run_task(chain, func, args, kwargs) for chain, func, args, kwargs in tasks]
 
         return await asyncio.gather(*coroutines, return_exceptions=True)
 
@@ -419,9 +416,7 @@ class ChainQueryOptimizer:
     def get_rate_limiter(self, chain: ChainNetwork) -> RateLimiter:
         """Get or create rate limiter for a chain."""
         if chain not in self._rate_limiters:
-            self._rate_limiters[chain] = RateLimiter(
-                requests_per_second=self._requests_per_second
-            )
+            self._rate_limiters[chain] = RateLimiter(requests_per_second=self._requests_per_second)
         return self._rate_limiters[chain]
 
     async def query(
@@ -494,6 +489,7 @@ class ChainQueryOptimizer:
         Returns:
             List of results
         """
+
         async def run_query(q: dict[str, Any]) -> Any:
             args = q.get("args", ())
             kwargs = q.get("kwargs", {})
@@ -518,8 +514,7 @@ class ChainQueryOptimizer:
             "total_requests": self._total_requests,
             "cached_requests": self._cached_requests,
             "cache_hit_rate": (
-                self._cached_requests / self._total_requests
-                if self._total_requests > 0 else 0
+                self._cached_requests / self._total_requests if self._total_requests > 0 else 0
             ),
             "cache_stats": self.cache.stats,
         }

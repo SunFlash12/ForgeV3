@@ -30,19 +30,21 @@ T = TypeVar("T")
 
 class CanaryState(str, Enum):
     """Canary deployment states."""
-    PENDING = "pending"           # Not yet started
-    RUNNING = "running"           # Active rollout in progress
-    PAUSED = "paused"            # Manually paused
-    SUCCEEDED = "succeeded"       # Fully rolled out
-    FAILED = "failed"            # Rolled back due to failure
-    ROLLING_BACK = "rolling_back" # Rollback in progress
+
+    PENDING = "pending"  # Not yet started
+    RUNNING = "running"  # Active rollout in progress
+    PAUSED = "paused"  # Manually paused
+    SUCCEEDED = "succeeded"  # Fully rolled out
+    FAILED = "failed"  # Rolled back due to failure
+    ROLLING_BACK = "rolling_back"  # Rollback in progress
 
 
 class RolloutStrategy(str, Enum):
     """How to advance traffic percentage."""
-    LINEAR = "linear"       # Fixed increments (e.g., 10% -> 20% -> 30%)
+
+    LINEAR = "linear"  # Fixed increments (e.g., 10% -> 20% -> 30%)
     EXPONENTIAL = "exponential"  # Doubling (e.g., 1% -> 2% -> 4% -> 8%)
-    MANUAL = "manual"       # Human-triggered advances
+    MANUAL = "manual"  # Human-triggered advances
 
 
 @dataclass
@@ -50,19 +52,19 @@ class CanaryConfig:
     """Configuration for canary deployment."""
 
     # Traffic control
-    initial_percentage: float = 5.0       # Start with 5% traffic
-    increment_percentage: float = 10.0    # Increase by 10% each step
-    max_percentage: float = 100.0         # Full rollout target
+    initial_percentage: float = 5.0  # Start with 5% traffic
+    increment_percentage: float = 10.0  # Increase by 10% each step
+    max_percentage: float = 100.0  # Full rollout target
 
     # Timing
     step_duration_seconds: float = 300.0  # 5 min per step
-    min_samples_per_step: int = 100       # Min requests before advancing
+    min_samples_per_step: int = 100  # Min requests before advancing
 
     # Strategy
     strategy: RolloutStrategy = RolloutStrategy.LINEAR
 
     # Thresholds for automatic rollback
-    error_rate_threshold: float = 0.05    # 5% errors triggers rollback
+    error_rate_threshold: float = 0.05  # 5% errors triggers rollback
     latency_p99_threshold_ms: float = 2000.0  # 2s p99 triggers rollback
     anomaly_score_threshold: float = 0.8  # Anomaly detection threshold
 
@@ -134,17 +136,19 @@ class CanaryMetrics:
 
     def record_step(self, step_number: int, percentage: float) -> None:
         """Record metrics for completed step."""
-        self.step_metrics.append({
-            "step": step_number,
-            "percentage": percentage,
-            "canary_requests": self.canary_requests,
-            "canary_errors": self.canary_errors,
-            "canary_error_rate": self.canary_error_rate,
-            "canary_p99": self.canary_p99,
-            "control_error_rate": self.control_error_rate,
-            "control_p99": self.control_p99,
-            "timestamp": datetime.now(UTC).isoformat(),
-        })
+        self.step_metrics.append(
+            {
+                "step": step_number,
+                "percentage": percentage,
+                "canary_requests": self.canary_requests,
+                "canary_errors": self.canary_errors,
+                "canary_error_rate": self.canary_error_rate,
+                "canary_p99": self.canary_p99,
+                "control_error_rate": self.control_error_rate,
+                "control_p99": self.control_p99,
+                "timestamp": datetime.now(UTC).isoformat(),
+            }
+        )
 
     def reset_window(self) -> None:
         """Reset metrics for new step window."""
@@ -264,7 +268,10 @@ class CanaryManager(Generic[T]):
     def __init__(
         self,
         default_config: CanaryConfig | None = None,
-        on_state_change: Callable[[CanaryDeployment[T], CanaryState, CanaryState], Coroutine[Any, Any, None]] | None = None,
+        on_state_change: Callable[
+            [CanaryDeployment[T], CanaryState, CanaryState], Coroutine[Any, Any, None]
+        ]
+        | None = None,
     ):
         self.default_config = default_config or CanaryConfig()
         self.on_state_change = on_state_change
@@ -513,9 +520,11 @@ class CanaryManager(Generic[T]):
 
         # Check for approval requirement
         if (
-            config.require_approval_at_percent and
-            deployment.current_percentage < config.require_approval_at_percent <= next_percentage and
-            not deployment.approved_by
+            config.require_approval_at_percent
+            and deployment.current_percentage
+            < config.require_approval_at_percent
+            <= next_percentage
+            and not deployment.approved_by
         ):
             deployment.awaiting_approval = True
             await self.pause(deployment.id)
@@ -553,20 +562,29 @@ class CanaryManager(Generic[T]):
 
         # Check error rate
         if metrics.canary_error_rate > config.error_rate_threshold:
-            return False, f"Error rate {metrics.canary_error_rate:.2%} exceeds threshold {config.error_rate_threshold:.2%}"
+            return (
+                False,
+                f"Error rate {metrics.canary_error_rate:.2%} exceeds threshold {config.error_rate_threshold:.2%}",
+            )
 
         # Check latency
         if metrics.canary_p99 > config.latency_p99_threshold_ms:
-            return False, f"P99 latency {metrics.canary_p99:.0f}ms exceeds threshold {config.latency_p99_threshold_ms:.0f}ms"
+            return (
+                False,
+                f"P99 latency {metrics.canary_p99:.0f}ms exceeds threshold {config.latency_p99_threshold_ms:.0f}ms",
+            )
 
         # Compare to control (if we have control samples)
         if metrics.control_requests >= 10:
             # Error rate shouldn't be 2x worse than control
             if (
-                metrics.control_error_rate > 0 and
-                metrics.canary_error_rate > metrics.control_error_rate * 2
+                metrics.control_error_rate > 0
+                and metrics.canary_error_rate > metrics.control_error_rate * 2
             ):
-                return False, f"Error rate {metrics.canary_error_rate:.2%} is 2x+ worse than control {metrics.control_error_rate:.2%}"
+                return (
+                    False,
+                    f"Error rate {metrics.canary_error_rate:.2%} is 2x+ worse than control {metrics.control_error_rate:.2%}",
+                )
 
         return True, None
 
@@ -589,12 +607,16 @@ class CanaryManager(Generic[T]):
                 # Check if time to advance
                 if deployment.step_started_at:
                     elapsed = time.monotonic() - deployment.step_started_at
-                    has_min_samples = deployment.metrics.canary_requests >= deployment.config.min_samples_per_step
+                    has_min_samples = (
+                        deployment.metrics.canary_requests >= deployment.config.min_samples_per_step
+                    )
 
                     if elapsed >= deployment.config.step_duration_seconds and has_min_samples:
                         await self._advance_step(deployment)
 
-            except Exception as e:  # Intentional broad catch: background monitor loop must not crash
+            except (
+                Exception
+            ) as e:  # Intentional broad catch: background monitor loop must not crash
                 logger.error(
                     "canary_monitor_error",
                     deployment_id=deployment.id,
@@ -711,7 +733,8 @@ class CanaryManager(Generic[T]):
     def get_active_deployments(self) -> list[str]:
         """Get IDs of active deployments."""
         return [
-            d.id for d in self._deployments.values()
+            d.id
+            for d in self._deployments.values()
             if d.state in (CanaryState.RUNNING, CanaryState.PAUSED)
         ]
 

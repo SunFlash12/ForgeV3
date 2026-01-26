@@ -25,22 +25,26 @@ logger = structlog.get_logger()
 
 class OverlayNotFoundError(OverlayError):
     """Overlay not found in registry."""
+
     pass
 
 
 class OverlayRegistrationError(OverlayError):
     """Error registering overlay."""
+
     pass
 
 
 class OverlayExecutionError(OverlayError):
     """Error executing overlay."""
+
     pass
 
 
 @dataclass
 class OverlayExecutionRequest:
     """Request to execute an overlay."""
+
     overlay_name: str
     input_data: dict[str, Any] | None = None
     event: Event | None = None
@@ -55,6 +59,7 @@ class OverlayExecutionRequest:
 @dataclass
 class OverlayRegistry:
     """Registry of overlay instances."""
+
     instances: dict[str, BaseOverlay] = field(default_factory=dict)  # id -> instance
     by_name: dict[str, list[str]] = field(default_factory=dict)  # name -> [ids]
     by_event: dict[EventType, set[str]] = field(default_factory=dict)  # event -> {ids}
@@ -123,10 +128,7 @@ class OverlayManager:
             task.cancel()
 
         if self._pending_executions:
-            await asyncio.gather(
-                *self._pending_executions.values(),
-                return_exceptions=True
-            )
+            await asyncio.gather(*self._pending_executions.values(), return_exceptions=True)
 
         # Cleanup all overlays
         async with self._lock:
@@ -147,11 +149,7 @@ class OverlayManager:
     # Registration
     # =========================================================================
 
-    def register_class(
-        self,
-        overlay_class: type[BaseOverlay],
-        name: str | None = None
-    ) -> None:
+    def register_class(self, overlay_class: type[BaseOverlay], name: str | None = None) -> None:
         """
         Register an overlay class for later instantiation.
 
@@ -164,10 +162,7 @@ class OverlayManager:
         self._logger.info("overlay_class_registered", name=class_name)
 
     async def create_instance(
-        self,
-        name: str,
-        auto_init: bool = True,
-        **kwargs: Any
+        self, name: str, auto_init: bool = True, **kwargs: Any
     ) -> BaseOverlay:
         """
         Create and register a new overlay instance.
@@ -189,11 +184,7 @@ class OverlayManager:
         await self.register_instance(overlay, auto_init=auto_init)
         return overlay
 
-    async def register_instance(
-        self,
-        overlay: BaseOverlay,
-        auto_init: bool = True
-    ) -> str:
+    async def register_instance(self, overlay: BaseOverlay, auto_init: bool = True) -> str:
         """
         Register an overlay instance.
 
@@ -223,7 +214,7 @@ class OverlayManager:
             "overlay_instance_registered",
             overlay_id=overlay.id,
             name=overlay.NAME,
-            events=len(overlay.SUBSCRIBED_EVENTS)
+            events=len(overlay.SUBSCRIBED_EVENTS),
         )
 
         # Initialize if requested
@@ -231,9 +222,7 @@ class OverlayManager:
             success = await overlay.initialize()
             if not success:
                 await self.unregister(overlay.id)
-                raise OverlayRegistrationError(
-                    f"Failed to initialize overlay '{overlay.NAME}'"
-                )
+                raise OverlayRegistrationError(f"Failed to initialize overlay '{overlay.NAME}'")
 
         return overlay.id
 
@@ -261,7 +250,7 @@ class OverlayManager:
                 self._logger.error(
                     "overlay_activation_failed",
                     overlay_id=overlay_id,
-                    reason="initialization_failed"
+                    reason="initialization_failed",
                 )
                 return False
         else:
@@ -370,27 +359,33 @@ class OverlayManager:
 
     def list_active(self) -> list[BaseOverlay]:
         """List all active overlays."""
-        return [
-            o for o in self._registry.instances.values()
-            if o.state == OverlayState.ACTIVE
-        ]
+        return [o for o in self._registry.instances.values() if o.state == OverlayState.ACTIVE]
 
     def get_overlays_for_phase(self, phase: int) -> list[BaseOverlay]:
         """List overlays for a specific pipeline phase."""
         return [
-            o for o in self._registry.instances.values()
-            if getattr(o, 'phase', None) == phase or
-               (hasattr(o, 'phase') and hasattr(o.phase, 'value') and
-                self._phase_to_int(o.phase) == phase)
+            o
+            for o in self._registry.instances.values()
+            if getattr(o, "phase", None) == phase
+            or (
+                hasattr(o, "phase")
+                and hasattr(o.phase, "value")
+                and self._phase_to_int(o.phase) == phase
+            )
         ]
 
     def _phase_to_int(self, phase: Any) -> int:
         """Convert phase enum to integer."""
         phase_map = {
-            "intake": 1, "validation": 2, "analysis": 3, "governance": 4,
-            "integration": 5, "distribution": 6, "feedback": 7
+            "intake": 1,
+            "validation": 2,
+            "analysis": 3,
+            "governance": 4,
+            "integration": 5,
+            "distribution": 6,
+            "feedback": 7,
         }
-        if hasattr(phase, 'value'):
+        if hasattr(phase, "value"):
             return phase_map.get(phase.value.lower(), 0)
         return phase_map.get(str(phase).lower(), 0)
 
@@ -399,26 +394,17 @@ class OverlayManager:
         return {
             "total_instances": len(self._registry.instances),
             "total_classes": len(self._registry.classes),
-            "by_name": {
-                name: len(ids)
-                for name, ids in self._registry.by_name.items()
-            },
-            "by_event": {
-                et.value: len(ids)
-                for et, ids in self._registry.by_event.items()
-            },
+            "by_name": {name: len(ids) for name, ids in self._registry.by_name.items()},
+            "by_event": {et.value: len(ids) for et, ids in self._registry.by_event.items()},
             "active": len(self.list_active()),
-            "circuit_open": len(self._circuit_open)
+            "circuit_open": len(self._circuit_open),
         }
 
     # =========================================================================
     # Execution
     # =========================================================================
 
-    async def execute(
-        self,
-        request: OverlayExecutionRequest
-    ) -> OverlayResult:
+    async def execute(self, request: OverlayExecutionRequest) -> OverlayResult:
         """
         Execute an overlay by name.
 
@@ -431,9 +417,7 @@ class OverlayManager:
         # Get overlay instances
         overlays = self.get_by_name(request.overlay_name)
         if not overlays:
-            return OverlayResult.fail(
-                f"No overlay found with name: {request.overlay_name}"
-            )
+            return OverlayResult.fail(f"No overlay found with name: {request.overlay_name}")
 
         # Use first active overlay
         overlay = None
@@ -444,16 +428,12 @@ class OverlayManager:
                     break
 
         if not overlay:
-            return OverlayResult.fail(
-                f"No active overlay available: {request.overlay_name}"
-            )
+            return OverlayResult.fail(f"No active overlay available: {request.overlay_name}")
 
         return await self.execute_overlay(overlay.id, request)
 
     async def execute_overlay(
-        self,
-        overlay_id: str,
-        request: OverlayExecutionRequest
+        self, overlay_id: str, request: OverlayExecutionRequest
     ) -> OverlayResult:
         """
         Execute a specific overlay instance.
@@ -471,9 +451,7 @@ class OverlayManager:
 
         # Check circuit breaker
         if self._is_circuit_open(overlay_id):
-            return OverlayResult.fail(
-                f"Overlay circuit breaker open: {overlay.NAME}"
-            )
+            return OverlayResult.fail(f"Overlay circuit breaker open: {overlay.NAME}")
 
         # Build context
         context = OverlayContext(
@@ -486,7 +464,7 @@ class OverlayManager:
             trust_flame=request.trust_flame,
             capabilities=request.capabilities or overlay.REQUIRED_CAPABILITIES,
             fuel_budget=request.fuel_budget or overlay.DEFAULT_FUEL_BUDGET,
-            metadata=request.metadata
+            metadata=request.metadata,
         )
 
         # Execute
@@ -500,7 +478,7 @@ class OverlayManager:
                 execution_id=context.execution_id,
                 success=result.success,
                 duration_ms=result.duration_ms,
-                error=result.error
+                error=result.error,
             )
 
             if result.success:
@@ -536,7 +514,7 @@ class OverlayManager:
         event: Event,
         user_id: str | None = None,
         trust_flame: int = 60,
-        capabilities: set[Capability] | None = None
+        capabilities: set[Capability] | None = None,
     ) -> dict[str, OverlayResult]:
         """
         Execute all overlays that subscribe to an event.
@@ -567,7 +545,7 @@ class OverlayManager:
                 user_id=user_id,
                 trust_flame=trust_flame,
                 capabilities=capabilities or overlay.REQUIRED_CAPABILITIES,
-                correlation_id=event.correlation_id
+                correlation_id=event.correlation_id,
             )
 
             result = await self.execute_overlay(overlay.id, request)
@@ -589,9 +567,7 @@ class OverlayManager:
             return
 
         self._logger.debug(
-            "routing_event_to_overlays",
-            event_type=event.type.value,
-            overlay_count=len(overlays)
+            "routing_event_to_overlays", event_type=event.type.value, overlay_count=len(overlays)
         )
 
         # Execute overlays concurrently
@@ -603,14 +579,10 @@ class OverlayManager:
                 continue
 
             request = OverlayExecutionRequest(
-                overlay_name=overlay.NAME,
-                event=event,
-                correlation_id=event.correlation_id
+                overlay_name=overlay.NAME, event=event, correlation_id=event.correlation_id
             )
 
-            task = asyncio.create_task(
-                self.execute_overlay(overlay.id, request)
-            )
+            task = asyncio.create_task(self.execute_overlay(overlay.id, request))
             tasks.append(task)
 
         if tasks:
@@ -623,8 +595,9 @@ class OverlayManager:
 
     def __init_circuit_lock(self) -> None:
         """Initialize circuit breaker lock if not already done."""
-        if not hasattr(self, '_circuit_lock'):
+        if not hasattr(self, "_circuit_lock"):
             import threading
+
             self._circuit_lock = threading.Lock()
 
     def _is_circuit_open(self, overlay_id: str) -> bool:
@@ -657,15 +630,14 @@ class OverlayManager:
         self.__init_circuit_lock()
 
         with self._circuit_lock:
-            self._failure_counts[overlay_id] = \
-                self._failure_counts.get(overlay_id, 0) + 1
+            self._failure_counts[overlay_id] = self._failure_counts.get(overlay_id, 0) + 1
 
             if self._failure_counts[overlay_id] >= self._circuit_threshold:
                 self._circuit_open[overlay_id] = datetime.now(UTC)
                 self._logger.warning(
                     "overlay_circuit_opened",
                     overlay_id=overlay_id,
-                    failures=self._failure_counts[overlay_id]
+                    failures=self._failure_counts[overlay_id],
                 )
 
     def reset_circuit(self, overlay_id: str) -> None:
@@ -729,22 +701,21 @@ class OverlayManager:
         execution_id: str,
         success: bool,
         duration_ms: float,
-        error: str | None = None
+        error: str | None = None,
     ) -> None:
         """Record execution in history (deque auto-trims at maxlen)."""
-        self._execution_history.append({
-            "overlay_id": overlay_id,
-            "execution_id": execution_id,
-            "success": success,
-            "duration_ms": duration_ms,
-            "error": error,
-            "timestamp": datetime.now(UTC).isoformat()
-        })
+        self._execution_history.append(
+            {
+                "overlay_id": overlay_id,
+                "execution_id": execution_id,
+                "success": success,
+                "duration_ms": duration_ms,
+                "error": error,
+                "timestamp": datetime.now(UTC).isoformat(),
+            }
+        )
 
-    def get_execution_stats(
-        self,
-        overlay_id: str | None = None
-    ) -> dict[str, Any]:
+    def get_execution_stats(self, overlay_id: str | None = None) -> dict[str, Any]:
         """
         Get execution statistics.
 
@@ -764,7 +735,7 @@ class OverlayManager:
                 "success": 0,
                 "failure": 0,
                 "success_rate": 0.0,
-                "avg_duration_ms": 0.0
+                "avg_duration_ms": 0.0,
             }
 
         success_count = sum(1 for e in history if e["success"])
@@ -777,13 +748,11 @@ class OverlayManager:
             "success_rate": success_count / len(history),
             "avg_duration_ms": sum(durations) / len(durations),
             "max_duration_ms": max(durations),
-            "min_duration_ms": min(durations)
+            "min_duration_ms": min(durations),
         }
 
     def get_recent_executions(
-        self,
-        limit: int = 10,
-        overlay_id: str | None = None
+        self, limit: int = 10, overlay_id: str | None = None
     ) -> list[dict[str, Any]]:
         """Get recent executions."""
         history: list[dict[str, Any]] = list(self._execution_history)
@@ -808,9 +777,7 @@ def get_overlay_manager() -> OverlayManager:
     return _overlay_manager
 
 
-async def init_overlay_manager(
-    event_bus: EventBus | None = None
-) -> OverlayManager:
+async def init_overlay_manager(event_bus: EventBus | None = None) -> OverlayManager:
     """Initialize and start the global overlay manager."""
     global _overlay_manager
     _overlay_manager = OverlayManager(event_bus)

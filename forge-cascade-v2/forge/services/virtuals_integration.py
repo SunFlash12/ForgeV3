@@ -561,17 +561,14 @@ class VirtualsIntegrationService:
             if cap_value == "query_graph":
                 properties["query_text"] = {
                     "type": "string",
-                    "description": "Natural language query"
+                    "description": "Natural language query",
                 }
             elif cap_value == "semantic_search":
-                properties["query"] = {
-                    "type": "string",
-                    "description": "Semantic search query"
-                }
+                properties["query"] = {"type": "string", "description": "Semantic search query"}
             elif cap_value == "create_capsules":
                 properties["capsule_data"] = {
                     "type": "object",
-                    "description": "Capsule creation data"
+                    "description": "Capsule creation data",
                 }
 
         return {"type": "object", "properties": properties}
@@ -710,7 +707,9 @@ class VirtualsIntegrationService:
                 "id": agent.id,
                 "name": agent.name,
                 "game_agent_id": agent.game_agent_id,
-                "status": agent.status.value if hasattr(agent.status, "value") else str(agent.status),
+                "status": agent.status.value
+                if hasattr(agent.status, "value")
+                else str(agent.status),
                 "workers": list(self._agent_workers.get(agent_id, {}).keys()),
             }
 
@@ -724,7 +723,9 @@ class VirtualsIntegrationService:
             "id": agent_result.id,
             "name": agent_result.name,
             "game_agent_id": agent_result.game_agent_id,
-            "status": agent_result.status.value if hasattr(agent_result.status, "value") else str(agent_result.status),
+            "status": agent_result.status.value
+            if hasattr(agent_result.status, "value")
+            else str(agent_result.status),
             "workers": [],
         }
 
@@ -750,7 +751,9 @@ class VirtualsIntegrationService:
                 "id": agent.id,
                 "name": agent.name,
                 "game_agent_id": agent.game_agent_id,
-                "status": agent.status.value if hasattr(agent.status, "value") else str(agent.status),
+                "status": agent.status.value
+                if hasattr(agent.status, "value")
+                else str(agent.status),
                 "workers": list(self._agent_workers.get(agent.id, {}).keys()),
             }
             for agent in self._agents.values()
@@ -945,51 +948,57 @@ class VirtualsIntegrationService:
         functions = []
 
         if self._capsule_repo:
-            functions.extend([
-                {
-                    "name": "search_capsules",
-                    "worker": "knowledge_worker",
-                    "description": "Search knowledge capsules by semantic similarity",
-                },
-                {
-                    "name": "get_capsule",
-                    "worker": "knowledge_worker",
-                    "description": "Retrieve full capsule content by ID",
-                },
-                {
-                    "name": "create_capsule",
-                    "worker": "knowledge_worker",
-                    "description": "Create a new knowledge capsule",
-                },
-            ])
+            functions.extend(
+                [
+                    {
+                        "name": "search_capsules",
+                        "worker": "knowledge_worker",
+                        "description": "Search knowledge capsules by semantic similarity",
+                    },
+                    {
+                        "name": "get_capsule",
+                        "worker": "knowledge_worker",
+                        "description": "Retrieve full capsule content by ID",
+                    },
+                    {
+                        "name": "create_capsule",
+                        "worker": "knowledge_worker",
+                        "description": "Create a new knowledge capsule",
+                    },
+                ]
+            )
 
         if self._overlay_manager:
-            functions.extend([
-                {
-                    "name": "run_overlay",
-                    "worker": "analysis_worker",
-                    "description": "Execute a Forge overlay for analysis",
-                },
-                {
-                    "name": "list_overlays",
-                    "worker": "analysis_worker",
-                    "description": "List available analysis overlays",
-                },
-            ])
+            functions.extend(
+                [
+                    {
+                        "name": "run_overlay",
+                        "worker": "analysis_worker",
+                        "description": "Execute a Forge overlay for analysis",
+                    },
+                    {
+                        "name": "list_overlays",
+                        "worker": "analysis_worker",
+                        "description": "List available analysis overlays",
+                    },
+                ]
+            )
 
         if self._governance_service:
-            functions.extend([
-                {
-                    "name": "get_proposals",
-                    "worker": "governance_worker",
-                    "description": "Get governance proposals",
-                },
-                {
-                    "name": "cast_vote",
-                    "worker": "governance_worker",
-                    "description": "Cast a vote on a proposal",
-                },
-            ])
+            functions.extend(
+                [
+                    {
+                        "name": "get_proposals",
+                        "worker": "governance_worker",
+                        "description": "Get governance proposals",
+                    },
+                    {
+                        "name": "cast_vote",
+                        "worker": "governance_worker",
+                        "description": "Cast a vote on a proposal",
+                    },
+                ]
+            )
 
         return functions
 

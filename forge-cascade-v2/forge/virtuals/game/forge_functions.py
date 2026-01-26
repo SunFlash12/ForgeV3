@@ -39,12 +39,13 @@ logger = logging.getLogger(__name__)
 # ==================== Function Result Statuses ====================
 # These constants match the GAME SDK's expected status values
 
-STATUS_DONE = "DONE"        # Function completed successfully
-STATUS_FAILED = "FAILED"    # Function encountered an error
+STATUS_DONE = "DONE"  # Function completed successfully
+STATUS_FAILED = "FAILED"  # Function encountered an error
 STATUS_PENDING = "PENDING"  # Function started async operation
 
 
 # ==================== Knowledge Capsule Functions ====================
+
 
 def create_search_capsules_function(
     capsule_repository: CapsuleRepositoryProtocol,
@@ -62,6 +63,7 @@ def create_search_capsules_function(
     Returns:
         FunctionDefinition for capsule search
     """
+
     async def search_capsules(
         query: str,
         capsule_types: str | None = None,
@@ -91,22 +93,36 @@ def create_search_capsules_function(
             # Format results for agent consumption
             formatted_results = []
             for capsule in results:
-                formatted_results.append({
-                    "id": capsule.id,
-                    "title": capsule.title,
-                    "type": capsule.capsule_type,
-                    "content_preview": capsule.content[:500] if capsule.content else "",
-                    "trust_level": capsule.trust_level,
-                    "created_at": capsule.created_at.isoformat(),
-                    "relevance_score": capsule.relevance_score,
-                })
+                formatted_results.append(
+                    {
+                        "id": capsule.id,
+                        "title": capsule.title,
+                        "type": capsule.capsule_type,
+                        "content_preview": capsule.content[:500] if capsule.content else "",
+                        "trust_level": capsule.trust_level,
+                        "created_at": capsule.created_at.isoformat(),
+                        "relevance_score": capsule.relevance_score,
+                    }
+                )
 
-            return STATUS_DONE, formatted_results, {
-                "last_search_query": query,
-                "results_count": len(formatted_results),
-            }
+            return (
+                STATUS_DONE,
+                formatted_results,
+                {
+                    "last_search_query": query,
+                    "results_count": len(formatted_results),
+                },
+            )
 
-        except (ConnectionError, TimeoutError, OSError, ValueError, RuntimeError, KeyError, TypeError) as e:
+        except (
+            ConnectionError,
+            TimeoutError,
+            OSError,
+            ValueError,
+            RuntimeError,
+            KeyError,
+            TypeError,
+        ) as e:
             logger.error(f"Capsule search failed: {e}")
             return STATUS_FAILED, str(e), {}
 
@@ -156,6 +172,7 @@ def create_get_capsule_function(
     This function allows agents to fetch the complete content of a capsule
     when they need more detail than the search preview provides.
     """
+
     async def get_capsule(capsule_id: str) -> tuple[str, object, dict[str, object]]:
         """Retrieve the full content and metadata of a specific capsule."""
         try:
@@ -183,7 +200,15 @@ def create_get_capsule_function(
 
             return STATUS_DONE, result, {"last_retrieved_capsule": capsule_id}
 
-        except (ConnectionError, TimeoutError, OSError, ValueError, RuntimeError, KeyError, TypeError) as e:
+        except (
+            ConnectionError,
+            TimeoutError,
+            OSError,
+            ValueError,
+            RuntimeError,
+            KeyError,
+            TypeError,
+        ) as e:
             logger.error(f"Failed to get capsule {capsule_id}: {e}")
             return STATUS_FAILED, str(e), {}
 
@@ -214,6 +239,7 @@ def create_create_capsule_function(
     This allows agents to contribute new knowledge to the Forge system,
     preserving insights and decisions as persistent institutional memory.
     """
+
     async def create_capsule(
         title: str,
         content: str,
@@ -238,14 +264,26 @@ def create_create_capsule_function(
                 parent_ids=[parent_capsule_id] if parent_capsule_id else [],
             )
 
-            return STATUS_DONE, {
-                "id": capsule.id,
-                "message": f"Capsule '{title}' created successfully",
-            }, {
-                "created_capsule_id": capsule.id,
-            }
+            return (
+                STATUS_DONE,
+                {
+                    "id": capsule.id,
+                    "message": f"Capsule '{title}' created successfully",
+                },
+                {
+                    "created_capsule_id": capsule.id,
+                },
+            )
 
-        except (ConnectionError, TimeoutError, OSError, ValueError, RuntimeError, KeyError, TypeError) as e:
+        except (
+            ConnectionError,
+            TimeoutError,
+            OSError,
+            ValueError,
+            RuntimeError,
+            KeyError,
+            TypeError,
+        ) as e:
             logger.error(f"Failed to create capsule: {e}")
             return STATUS_FAILED, str(e), {}
 
@@ -283,8 +321,7 @@ def create_create_capsule_function(
                 "name": "parent_capsule_id",
                 "type": "string",
                 "description": (
-                    "Optional ID of a parent capsule this derives from "
-                    "(maintains lineage tracking)"
+                    "Optional ID of a parent capsule this derives from (maintains lineage tracking)"
                 ),
             },
         ],
@@ -294,6 +331,7 @@ def create_create_capsule_function(
 
 
 # ==================== Overlay Analysis Functions ====================
+
 
 def create_run_overlay_function(
     overlay_manager: OverlayManagerProtocol,
@@ -305,6 +343,7 @@ def create_run_overlay_function(
     that can process data and provide insights. This function allows agents
     to invoke overlays and receive their analysis results.
     """
+
     async def run_overlay(
         overlay_id: str,
         input_data: str,
@@ -329,18 +368,31 @@ def create_run_overlay_function(
                 parameters=params_dict,
             )
 
-            return STATUS_DONE, {
-                "overlay_id": overlay_id,
-                "status": result.status,
-                "output": result.output,
-                "execution_time_ms": result.execution_time_ms,
-                "confidence_score": result.confidence_score,
-            }, {
-                "last_overlay_run": overlay_id,
-                "last_overlay_result": result.status,
-            }
+            return (
+                STATUS_DONE,
+                {
+                    "overlay_id": overlay_id,
+                    "status": result.status,
+                    "output": result.output,
+                    "execution_time_ms": result.execution_time_ms,
+                    "confidence_score": result.confidence_score,
+                },
+                {
+                    "last_overlay_run": overlay_id,
+                    "last_overlay_result": result.status,
+                },
+            )
 
-        except (ConnectionError, TimeoutError, OSError, ValueError, RuntimeError, KeyError, TypeError, json.JSONDecodeError) as e:
+        except (
+            ConnectionError,
+            TimeoutError,
+            OSError,
+            ValueError,
+            RuntimeError,
+            KeyError,
+            TypeError,
+            json.JSONDecodeError,
+        ) as e:
             logger.error(f"Overlay execution failed: {e}")
             return STATUS_FAILED, str(e), {}
 
@@ -380,29 +432,38 @@ def create_list_overlays_function(
     overlay_manager: OverlayManagerProtocol,
 ) -> FunctionDefinition:
     """Create a function for listing available overlays."""
+
     async def list_overlays(
         status_filter: str | None = None,
     ) -> tuple[str, object, dict[str, object]]:
         """List all available Forge overlays with their status and capabilities."""
         try:
-            overlays = await overlay_manager.list_overlays(
-                status_filter=status_filter
-            )
+            overlays = await overlay_manager.list_overlays(status_filter=status_filter)
 
             formatted = []
             for overlay in overlays:
-                formatted.append({
-                    "id": overlay.id,
-                    "name": overlay.name,
-                    "description": overlay.description,
-                    "status": overlay.status,
-                    "capabilities": overlay.capabilities,
-                    "trust_level": overlay.trust_level,
-                })
+                formatted.append(
+                    {
+                        "id": overlay.id,
+                        "name": overlay.name,
+                        "description": overlay.description,
+                        "status": overlay.status,
+                        "capabilities": overlay.capabilities,
+                        "trust_level": overlay.trust_level,
+                    }
+                )
 
             return STATUS_DONE, formatted, {}
 
-        except (ConnectionError, TimeoutError, OSError, ValueError, RuntimeError, KeyError, TypeError) as e:
+        except (
+            ConnectionError,
+            TimeoutError,
+            OSError,
+            ValueError,
+            RuntimeError,
+            KeyError,
+            TypeError,
+        ) as e:
             logger.error(f"Failed to list overlays: {e}")
             return STATUS_FAILED, str(e), {}
 
@@ -426,10 +487,12 @@ def create_list_overlays_function(
 
 # ==================== Governance Functions ====================
 
+
 def create_get_proposals_function(
     governance_service: GovernanceServiceProtocol,
 ) -> FunctionDefinition:
     """Create a function for retrieving governance proposals."""
+
     async def get_proposals(
         status_filter: str | None = None,
         limit: int = 10,
@@ -443,23 +506,39 @@ def create_get_proposals_function(
 
             formatted = []
             for prop in proposals:
-                formatted.append({
-                    "id": prop.id,
-                    "title": prop.title,
-                    "description": prop.description[:500],
-                    "proposal_type": prop.proposal_type,
-                    "status": prop.status,
-                    "votes_for": prop.votes_for,
-                    "votes_against": prop.votes_against,
-                    "voting_ends": prop.voting_ends.isoformat(),
-                    "quorum_reached": prop.quorum_reached,
-                })
+                formatted.append(
+                    {
+                        "id": prop.id,
+                        "title": prop.title,
+                        "description": prop.description[:500],
+                        "proposal_type": prop.proposal_type,
+                        "status": prop.status,
+                        "votes_for": prop.votes_for,
+                        "votes_against": prop.votes_against,
+                        "voting_ends": prop.voting_ends.isoformat(),
+                        "quorum_reached": prop.quorum_reached,
+                    }
+                )
 
-            return STATUS_DONE, formatted, {
-                "active_proposals_count": len([p for p in formatted if p["status"] == "active"]),
-            }
+            return (
+                STATUS_DONE,
+                formatted,
+                {
+                    "active_proposals_count": len(
+                        [p for p in formatted if p["status"] == "active"]
+                    ),
+                },
+            )
 
-        except (ConnectionError, TimeoutError, OSError, ValueError, RuntimeError, KeyError, TypeError) as e:
+        except (
+            ConnectionError,
+            TimeoutError,
+            OSError,
+            ValueError,
+            RuntimeError,
+            KeyError,
+            TypeError,
+        ) as e:
             logger.error(f"Failed to get proposals: {e}")
             return STATUS_FAILED, str(e), {}
 
@@ -496,6 +575,7 @@ def create_cast_vote_function(
     This enables agents to participate in Forge's democratic governance
     by voting on proposals according to their analysis and judgment.
     """
+
     async def cast_vote(
         proposal_id: str,
         vote: str,
@@ -519,17 +599,29 @@ def create_cast_vote_function(
                 voter_address=agent_wallet,
             )
 
-            return STATUS_DONE, {
-                "proposal_id": proposal_id,
-                "vote": vote,
-                "tx_hash": result.tx_hash,
-                "message": f"Vote '{vote}' recorded successfully",
-            }, {
-                "last_vote_proposal": proposal_id,
-                "last_vote_direction": vote,
-            }
+            return (
+                STATUS_DONE,
+                {
+                    "proposal_id": proposal_id,
+                    "vote": vote,
+                    "tx_hash": result.tx_hash,
+                    "message": f"Vote '{vote}' recorded successfully",
+                },
+                {
+                    "last_vote_proposal": proposal_id,
+                    "last_vote_direction": vote,
+                },
+            )
 
-        except (ConnectionError, TimeoutError, OSError, ValueError, RuntimeError, KeyError, TypeError) as e:
+        except (
+            ConnectionError,
+            TimeoutError,
+            OSError,
+            ValueError,
+            RuntimeError,
+            KeyError,
+            TypeError,
+        ) as e:
             logger.error(f"Failed to cast vote: {e}")
             return STATUS_FAILED, str(e), {}
 
@@ -567,6 +659,7 @@ def create_cast_vote_function(
 
 # ==================== Worker Factory Functions ====================
 
+
 def create_knowledge_worker(
     capsule_repository: CapsuleRepositoryProtocol,
     worker_id: str = "knowledge_worker",
@@ -601,10 +694,12 @@ def create_knowledge_worker(
                 if "search_history" not in state:
                     state["search_history"] = []
                 history = cast(list[dict[str, object]], state["search_history"])
-                history.append({
-                    "query": function_result["state_update"]["last_search_query"],
-                    "timestamp": datetime.now(UTC).isoformat(),
-                })
+                history.append(
+                    {
+                        "query": function_result["state_update"]["last_search_query"],
+                        "timestamp": datetime.now(UTC).isoformat(),
+                    }
+                )
                 # Keep last 10 searches
                 state["search_history"] = history[-10:]
 

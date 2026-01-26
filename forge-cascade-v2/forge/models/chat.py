@@ -20,17 +20,17 @@ from forge.models.base import ForgeModel, TimestampMixin
 class RoomVisibility(str, Enum):
     """Room visibility/access level."""
 
-    PUBLIC = "public"           # Anyone can join
-    PRIVATE = "private"         # Members only (must be added by admin/owner)
-    INVITE_ONLY = "invite_only" # Requires invite code to join
+    PUBLIC = "public"  # Anyone can join
+    PRIVATE = "private"  # Members only (must be added by admin/owner)
+    INVITE_ONLY = "invite_only"  # Requires invite code to join
 
 
 class RoomRole(str, Enum):
     """Member role within a room."""
 
-    OWNER = "owner"     # Full control: delete room, manage all members
-    ADMIN = "admin"     # Can manage members (except owner), moderate messages
-    MEMBER = "member"   # Can read/write messages
+    OWNER = "owner"  # Full control: delete room, manage all members
+    ADMIN = "admin"  # Can manage members (except owner), moderate messages
+    MEMBER = "member"  # Can read/write messages
 
     @classmethod
     def can_manage_members(cls, role: RoomRole) -> bool:
@@ -62,18 +62,12 @@ class RoomRole(str, Enum):
 class RoomCreate(ForgeModel):
     """Schema for creating a new room."""
 
-    name: str = Field(
-        ..., min_length=1, max_length=100, description="Room display name"
-    )
-    description: str | None = Field(
-        default=None, max_length=500, description="Room description"
-    )
+    name: str = Field(..., min_length=1, max_length=100, description="Room display name")
+    description: str | None = Field(default=None, max_length=500, description="Room description")
     visibility: RoomVisibility = Field(
         default=RoomVisibility.PUBLIC, description="Room visibility level"
     )
-    max_members: int = Field(
-        default=100, ge=2, le=1000, description="Maximum number of members"
-    )
+    max_members: int = Field(default=100, ge=2, le=1000, description="Maximum number of members")
 
 
 class RoomUpdate(ForgeModel):
@@ -101,9 +95,7 @@ class ChatRoom(ForgeModel, TimestampMixin):
     is_archived: bool = Field(default=False, description="Whether room is archived")
 
     # Invite code for invite-only rooms
-    invite_code: str | None = Field(
-        default=None, description="Invite code for invite-only rooms"
-    )
+    invite_code: str | None = Field(default=None, description="Invite code for invite-only rooms")
     invite_code_expires_at: datetime | None = Field(
         default=None, description="When the invite code expires"
     )
@@ -128,14 +120,10 @@ class RoomResponse(ForgeModel):
     created_at: datetime
     updated_at: datetime
     # User's role in this room (if member)
-    user_role: RoomRole | None = Field(
-        default=None, description="Current user's role in this room"
-    )
+    user_role: RoomRole | None = Field(default=None, description="Current user's role in this room")
 
     @classmethod
-    def from_room(
-        cls, room: ChatRoom, user_role: RoomRole | None = None
-    ) -> RoomResponse:
+    def from_room(cls, room: ChatRoom, user_role: RoomRole | None = None) -> RoomResponse:
         """Create response from room entity."""
         return cls(
             id=room.id,
@@ -168,9 +156,7 @@ class MemberCreate(ForgeModel):
     """Schema for adding a member to a room."""
 
     user_id: str = Field(description="User ID to add")
-    role: RoomRole = Field(
-        default=RoomRole.MEMBER, description="Role to assign"
-    )
+    role: RoomRole = Field(default=RoomRole.MEMBER, description="Role to assign")
 
 
 class MemberUpdate(ForgeModel):
@@ -186,12 +172,9 @@ class RoomMember(ForgeModel):
     user_id: str = Field(description="User ID")
     role: RoomRole = Field(description="Member's role in the room")
     joined_at: datetime = Field(
-        default_factory=lambda: datetime.now(UTC),
-        description="When the user joined"
+        default_factory=lambda: datetime.now(UTC), description="When the user joined"
     )
-    invited_by: str | None = Field(
-        default=None, description="User ID who invited this member"
-    )
+    invited_by: str | None = Field(default=None, description="User ID who invited this member")
 
     @property
     def can_manage_members(self) -> bool:
@@ -229,9 +212,7 @@ class MemberListResponse(ForgeModel):
 class MessageCreate(ForgeModel):
     """Schema for creating a message."""
 
-    content: str = Field(
-        ..., min_length=1, max_length=4096, description="Message content"
-    )
+    content: str = Field(..., min_length=1, max_length=4096, description="Message content")
 
     @field_validator("content")
     @classmethod
@@ -248,18 +229,11 @@ class ChatMessage(ForgeModel):
     sender_id: str = Field(description="User ID who sent the message")
     content: str = Field(description="Message content")
     created_at: datetime = Field(
-        default_factory=lambda: datetime.now(UTC),
-        description="When the message was sent"
+        default_factory=lambda: datetime.now(UTC), description="When the message was sent"
     )
-    edited_at: datetime | None = Field(
-        default=None, description="When the message was last edited"
-    )
-    is_deleted: bool = Field(
-        default=False, description="Whether the message is soft-deleted"
-    )
-    deleted_by: str | None = Field(
-        default=None, description="User ID who deleted the message"
-    )
+    edited_at: datetime | None = Field(default=None, description="When the message was last edited")
+    is_deleted: bool = Field(default=False, description="Whether the message is soft-deleted")
+    deleted_by: str | None = Field(default=None, description="User ID who deleted the message")
 
 
 class MessageResponse(ForgeModel):
@@ -323,9 +297,7 @@ class InviteCodeResponse(ForgeModel):
 class JoinRoomRequest(ForgeModel):
     """Request to join a room via invite code."""
 
-    invite_code: str = Field(
-        ..., min_length=8, max_length=32, description="Invite code"
-    )
+    invite_code: str = Field(..., min_length=8, max_length=32, description="Invite code")
 
 
 class JoinRoomResponse(ForgeModel):
@@ -344,12 +316,8 @@ class RoomAccessCheck(ForgeModel):
     """Result of checking room access for a user."""
 
     can_access: bool = Field(description="Whether user can access the room")
-    role: RoomRole | None = Field(
-        default=None, description="User's role if they have access"
-    )
-    reason: str | None = Field(
-        default=None, description="Reason for denial if can_access is False"
-    )
+    role: RoomRole | None = Field(default=None, description="User's role if they have access")
+    reason: str | None = Field(default=None, description="Reason for denial if can_access is False")
 
 
 class RoomAccessDenied(ForgeModel):

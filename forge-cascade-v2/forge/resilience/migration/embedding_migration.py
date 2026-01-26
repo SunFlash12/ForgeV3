@@ -145,10 +145,7 @@ class EmbeddingMigrationService:
             "embeddings_cleaned": 0,
         }
 
-    def set_embed_callback(
-        self,
-        callback: Callable[[str, str], Awaitable[list[float]]]
-    ) -> None:
+    def set_embed_callback(self, callback: Callable[[str, str], Awaitable[list[float]]]) -> None:
         """
         Set callback for generating embeddings.
 
@@ -158,8 +155,7 @@ class EmbeddingMigrationService:
         self._embed_callback = callback
 
     def set_store_callback(
-        self,
-        callback: Callable[[str, list[float], str], Awaitable[bool]]
+        self, callback: Callable[[str, list[float], str], Awaitable[bool]]
     ) -> None:
         """
         Set callback for storing embeddings.
@@ -169,10 +165,7 @@ class EmbeddingMigrationService:
         """
         self._store_callback = callback
 
-    def set_cleanup_callback(
-        self,
-        callback: Callable[[str, str], Awaitable[bool]]
-    ) -> None:
+    def set_cleanup_callback(self, callback: Callable[[str, str], Awaitable[bool]]) -> None:
         """
         Set callback for cleaning up old embeddings.
 
@@ -186,7 +179,7 @@ class EmbeddingMigrationService:
         from_version: str,
         to_version: str,
         capsule_filter: dict[str, Any] | None = None,
-        cleanup_old: bool | None = None
+        cleanup_old: bool | None = None,
     ) -> MigrationJob:
         """
         Create a new migration job.
@@ -209,9 +202,7 @@ class EmbeddingMigrationService:
         # Check migration path exists
         path = self._registry.get_migration_path(from_version, to_version)
         if not path:
-            raise ValueError(
-                f"No migration path from {from_version} to {to_version}"
-            )
+            raise ValueError(f"No migration path from {from_version} to {to_version}")
 
         job = MigrationJob(
             job_id=f"mig_{secrets.token_urlsafe(8)}",
@@ -220,7 +211,9 @@ class EmbeddingMigrationService:
             capsule_filter=capsule_filter,
             batch_size=self._config.batch_size,
             delay_between_batches=self._config.delay_seconds,
-            cleanup_old=cleanup_old if cleanup_old is not None else self._config.cleanup_old_embeddings,
+            cleanup_old=cleanup_old
+            if cleanup_old is not None
+            else self._config.cleanup_old_embeddings,
         )
 
         self._jobs[job.job_id] = job
@@ -229,7 +222,7 @@ class EmbeddingMigrationService:
             "migration_job_created",
             job_id=job.job_id,
             from_version=from_version,
-            to_version=to_version
+            to_version=to_version,
         )
 
         return job
@@ -248,10 +241,7 @@ class EmbeddingMigrationService:
             return False
 
         if self._active_job:
-            logger.warning(
-                "migration_job_already_active",
-                active_job=self._active_job
-            )
+            logger.warning("migration_job_already_active", active_job=self._active_job)
             return False
 
         job = self._jobs[job_id]
@@ -265,10 +255,7 @@ class EmbeddingMigrationService:
         # Start background task
         self._task = asyncio.create_task(self._run_migration(job))
 
-        logger.info(
-            "migration_job_started",
-            job_id=job_id
-        )
+        logger.info("migration_job_started", job_id=job_id)
 
         return True
 
@@ -326,25 +313,20 @@ class EmbeddingMigrationService:
             # If old embeddings weren't cleaned, just switch active version back
             self._registry.set_active(job.from_version)
             logger.info(
-                "migration_rollback_version_switch",
-                job_id=job_id,
-                version=job.from_version
+                "migration_rollback_version_switch", job_id=job_id, version=job.from_version
             )
             return True
 
         # Need to regenerate old embeddings
         job.status = MigrationStatus.ROLLING_BACK
-        logger.info(
-            "migration_rollback_started",
-            job_id=job_id
-        )
+        logger.info("migration_rollback_started", job_id=job_id)
 
         # Create reverse job
         rollback_job = await self.create_job(
             from_version=job.to_version,
             to_version=job.from_version,
             capsule_filter=job.capsule_filter,
-            cleanup_old=True
+            cleanup_old=True,
         )
 
         await self.start_job(rollback_job.job_id)
@@ -354,10 +336,7 @@ class EmbeddingMigrationService:
         """Get a migration job by ID."""
         return self._jobs.get(job_id)
 
-    def list_jobs(
-        self,
-        status: MigrationStatus | None = None
-    ) -> list[MigrationJob]:
+    def list_jobs(self, status: MigrationStatus | None = None) -> list[MigrationJob]:
         """List all migration jobs, optionally filtered by status."""
         jobs = list(self._jobs.values())
         if status:
@@ -376,7 +355,7 @@ class EmbeddingMigrationService:
                 "migration_batch_processing_started",
                 job_id=job.job_id,
                 total_capsules=job.progress.total_capsules,
-                total_batches=job.progress.total_batches
+                total_batches=job.progress.total_batches,
             )
 
             # Process in batches
@@ -385,7 +364,7 @@ class EmbeddingMigrationService:
                     break
 
                 job.progress.current_batch += 1
-                batch = capsules[batch_num:batch_num + job.batch_size]
+                batch = capsules[batch_num : batch_num + job.batch_size]
 
                 await self._process_batch(job, batch)
 
@@ -406,7 +385,7 @@ class EmbeddingMigrationService:
                     "migration_job_completed",
                     job_id=job.job_id,
                     processed=job.progress.processed_capsules,
-                    failed=job.progress.failed_capsules
+                    failed=job.progress.failed_capsules,
                 )
 
         except (RuntimeError, OSError, ValueError, ConnectionError) as e:
@@ -415,19 +394,12 @@ class EmbeddingMigrationService:
             job.completed_at = datetime.now(UTC)
             self._stats["jobs_failed"] += 1
 
-            logger.error(
-                "migration_job_failed",
-                job_id=job.job_id,
-                error=str(e)
-            )
+            logger.error("migration_job_failed", job_id=job.job_id, error=str(e))
 
         finally:
             self._active_job = None
 
-    async def _get_capsules_to_migrate(
-        self,
-        job: MigrationJob
-    ) -> list[dict[str, Any]]:
+    async def _get_capsules_to_migrate(self, job: MigrationJob) -> list[dict[str, Any]]:
         """
         Get list of capsules that need migration.
 
@@ -475,7 +447,7 @@ class EmbeddingMigrationService:
                     logger.warning(
                         "unexpected_filter_keys_rejected",
                         job_id=job.job_id,
-                        unexpected_keys=list(unexpected_keys)
+                        unexpected_keys=list(unexpected_keys),
                     )
                     # Don't fail, just ignore unexpected keys
 
@@ -549,11 +521,7 @@ class EmbeddingMigrationService:
             )
             raise
 
-    async def _process_batch(
-        self,
-        job: MigrationJob,
-        batch: list[dict[str, Any]]
-    ) -> None:
+    async def _process_batch(self, job: MigrationJob, batch: list[dict[str, Any]]) -> None:
         """Process a batch of capsules."""
         for capsule in batch:
             if job.status != MigrationStatus.RUNNING:
@@ -561,10 +529,7 @@ class EmbeddingMigrationService:
 
             try:
                 success = await self._migrate_capsule(
-                    capsule,
-                    job.from_version,
-                    job.to_version,
-                    job.cleanup_old
+                    capsule, job.from_version, job.to_version, job.cleanup_old
                 )
 
                 if success:
@@ -575,17 +540,11 @@ class EmbeddingMigrationService:
             except (RuntimeError, OSError, ConnectionError, ValueError, TypeError) as e:
                 job.progress.failed_capsules += 1
                 logger.warning(
-                    "capsule_migration_error",
-                    capsule_id=capsule.get("id"),
-                    error=str(e)
+                    "capsule_migration_error", capsule_id=capsule.get("id"), error=str(e)
                 )
 
     async def _migrate_capsule(
-        self,
-        capsule: dict[str, Any],
-        from_version: str,
-        to_version: str,
-        cleanup_old: bool
+        self, capsule: dict[str, Any], from_version: str, to_version: str, cleanup_old: bool
     ) -> bool:
         """Migrate a single capsule's embedding."""
         capsule_id: str = str(capsule.get("id", ""))
@@ -599,11 +558,7 @@ class EmbeddingMigrationService:
             try:
                 embedding = await self._embed_callback(content, to_version)
             except (RuntimeError, OSError, ConnectionError, ValueError, TypeError) as e:
-                logger.error(
-                    "embedding_generation_failed",
-                    capsule_id=capsule_id,
-                    error=str(e)
-                )
+                logger.error("embedding_generation_failed", capsule_id=capsule_id, error=str(e))
                 return False
         else:
             # No callback set - simulate
@@ -616,11 +571,7 @@ class EmbeddingMigrationService:
                 if not stored:
                     return False
             except (RuntimeError, OSError, ConnectionError, ValueError, TypeError) as e:
-                logger.error(
-                    "embedding_store_failed",
-                    capsule_id=capsule_id,
-                    error=str(e)
-                )
+                logger.error("embedding_store_failed", capsule_id=capsule_id, error=str(e))
                 return False
 
         # Update the embedding version on the capsule
@@ -628,11 +579,7 @@ class EmbeddingMigrationService:
             if capsule_id is not None:
                 await self._update_capsule_embedding_version(capsule_id, to_version)
         except (RuntimeError, OSError, ConnectionError, ValueError) as e:
-            logger.warning(
-                "embedding_version_update_failed",
-                capsule_id=capsule_id,
-                error=str(e)
-            )
+            logger.warning("embedding_version_update_failed", capsule_id=capsule_id, error=str(e))
 
         # Cleanup old embedding
         if cleanup_old and self._cleanup_callback:
@@ -640,19 +587,11 @@ class EmbeddingMigrationService:
                 await self._cleanup_callback(capsule_id, from_version)
                 self._stats["embeddings_cleaned"] += 1
             except (RuntimeError, OSError, ConnectionError, ValueError) as e:
-                logger.warning(
-                    "old_embedding_cleanup_failed",
-                    capsule_id=capsule_id,
-                    error=str(e)
-                )
+                logger.warning("old_embedding_cleanup_failed", capsule_id=capsule_id, error=str(e))
 
         return True
 
-    async def _update_capsule_embedding_version(
-        self,
-        capsule_id: str,
-        version: str
-    ) -> None:
+    async def _update_capsule_embedding_version(self, capsule_id: str, version: str) -> None:
         """
         Update the embedding version field on a capsule.
 
@@ -670,11 +609,15 @@ class EmbeddingMigrationService:
             """
 
             from datetime import UTC, datetime
-            await db_client.execute(query, {
-                "capsule_id": capsule_id,
-                "version": version,
-                "now": datetime.now(UTC).isoformat(),
-            })
+
+            await db_client.execute(
+                query,
+                {
+                    "capsule_id": capsule_id,
+                    "version": version,
+                    "now": datetime.now(UTC).isoformat(),
+                },
+            )
 
         except (RuntimeError, OSError, ConnectionError, ValueError) as e:
             logger.warning(

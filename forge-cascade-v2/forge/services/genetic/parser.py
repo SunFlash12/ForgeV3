@@ -27,6 +27,7 @@ logger = structlog.get_logger(__name__)
 @dataclass
 class VCFHeader:
     """Parsed VCF header information."""
+
     file_format: str = "VCFv4.2"
     reference: str | None = None
     contigs: list[str] | None = None
@@ -56,13 +57,13 @@ class VCFParser:
 
     # Regex for parsing INFO field metadata
     INFO_META_PATTERN = re.compile(
-        r'##INFO=<ID=(?P<id>[^,]+),Number=(?P<number>[^,]+),'
+        r"##INFO=<ID=(?P<id>[^,]+),Number=(?P<number>[^,]+),"
         r'Type=(?P<type>[^,]+),Description="(?P<desc>[^"]*)"'
     )
 
     # Regex for parsing FORMAT field metadata
     FORMAT_META_PATTERN = re.compile(
-        r'##FORMAT=<ID=(?P<id>[^,]+),Number=(?P<number>[^,]+),'
+        r"##FORMAT=<ID=(?P<id>[^,]+),Number=(?P<number>[^,]+),"
         r'Type=(?P<type>[^,]+),Description="(?P<desc>[^"]*)"'
     )
 
@@ -116,9 +117,7 @@ class VCFParser:
                     sample_idx = header.sample_names.index(sample_name)
                 else:
                     logger.warning(
-                        "vcf_sample_not_found",
-                        requested=sample_name,
-                        available=header.sample_names
+                        "vcf_sample_not_found", requested=sample_name, available=header.sample_names
                     )
 
             # Parse variants
@@ -135,8 +134,7 @@ class VCFParser:
         # Create result
         pathogenic = [v for v in variants if v.is_pathogenic_or_likely()]
         vous = [
-            v for v in variants
-            if v.pathogenicity == VariantPathogenicity.UNCERTAIN_SIGNIFICANCE
+            v for v in variants if v.pathogenicity == VariantPathogenicity.UNCERTAIN_SIGNIFICANCE
         ]
 
         return GeneticTestResult(
@@ -151,6 +149,7 @@ class VCFParser:
     def parse_string(self, vcf_content: str) -> list[GeneticVariant]:
         """Parse VCF content from a string."""
         from io import StringIO
+
         file_handle = StringIO(vcf_content)
 
         header = self._parse_header(file_handle)
@@ -171,7 +170,7 @@ class VCFParser:
 
             elif line.startswith("##contig="):
                 # Extract contig ID
-                match = re.search(r'ID=([^,>]+)', line)
+                match = re.search(r"ID=([^,>]+)", line)
                 if match and header.contigs is not None:
                     header.contigs.append(match.group(1))
 
@@ -265,7 +264,9 @@ class VCFParser:
         read_depth = None
         if len(fields) > 9 and header.format_fields:
             format_keys = fields[8].split(":")
-            sample_values = fields[9 + sample_idx].split(":") if len(fields) > 9 + sample_idx else []
+            sample_values = (
+                fields[9 + sample_idx].split(":") if len(fields) > 9 + sample_idx else []
+            )
             sample_data = dict(zip(format_keys, sample_values, strict=False))
 
             # Extract zygosity from GT
@@ -417,6 +418,7 @@ class VCFParser:
 # =============================================================================
 # Factory Function
 # =============================================================================
+
 
 def create_vcf_parser(
     min_quality: float = 20.0,

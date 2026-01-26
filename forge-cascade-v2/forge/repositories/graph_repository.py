@@ -15,7 +15,7 @@ import structlog
 
 # SECURITY FIX: Pattern for validating Neo4j identifiers (labels, relationship types, graph names)
 # Only allows alphanumeric characters and underscores to prevent Cypher injection
-_SAFE_IDENTIFIER_PATTERN = re.compile(r'^[a-zA-Z][a-zA-Z0-9_]*$')
+_SAFE_IDENTIFIER_PATTERN = re.compile(r"^[a-zA-Z][a-zA-Z0-9_]*$")
 
 
 def validate_neo4j_identifier(value: str, identifier_type: str = "identifier") -> str:
@@ -70,6 +70,7 @@ def validate_relationship_pattern(rel_types: list[str]) -> str:
 
     validated = [validate_neo4j_identifier(rt, "relationship_type") for rt in rel_types]
     return "|".join(validated)
+
 
 from forge.database.client import Neo4jClient
 from forge.models.graph_analysis import (
@@ -133,9 +134,7 @@ class GraphAlgorithmProvider:
     async def _check_gds_available(self) -> bool:
         """Check if Neo4j GDS plugin is available."""
         try:
-            result = await self.client.execute_single(
-                "RETURN gds.version() AS version"
-            )
+            result = await self.client.execute_single("RETURN gds.version() AS version")
             if result and result.get("version"):
                 self.logger.info(
                     "GDS plugin detected",
@@ -194,9 +193,7 @@ class GraphAlgorithmProvider:
             result = await self._cypher_pagerank(request)
 
         result.backend_used = backend
-        result.computation_time_ms = (
-            datetime.now(UTC) - start_time
-        ).total_seconds() * 1000
+        result.computation_time_ms = (datetime.now(UTC) - start_time).total_seconds() * 1000
 
         self._set_cached(cache_key, result)
         return result
@@ -205,7 +202,9 @@ class GraphAlgorithmProvider:
         """Compute PageRank using Neo4j GDS."""
         # SECURITY FIX: Validate all user-controlled identifiers to prevent Cypher injection
         node_label = validate_neo4j_identifier(request.node_label, "node_label")
-        relationship_type = validate_neo4j_identifier(request.relationship_type, "relationship_type")
+        relationship_type = validate_neo4j_identifier(
+            request.relationship_type, "relationship_type"
+        )
         # Safe: graph_name built from validated identifiers only
         graph_name = f"pagerank_{node_label}_{relationship_type}"
 
@@ -285,9 +284,7 @@ class GraphAlgorithmProvider:
             # Clean up projected graph
             # Safe: graph_name built from validated identifiers
             try:
-                await self.client.execute(
-                    f"CALL gds.graph.drop('{graph_name}', false)"
-                )
+                await self.client.execute(f"CALL gds.graph.drop('{graph_name}', false)")
             except (RuntimeError, OSError, ValueError):
                 pass  # Best-effort GDS graph cleanup
 
@@ -299,7 +296,9 @@ class GraphAlgorithmProvider:
         """
         # SECURITY FIX: Validate all user-controlled identifiers to prevent Cypher injection
         node_label = validate_neo4j_identifier(request.node_label, "node_label")
-        relationship_type = validate_neo4j_identifier(request.relationship_type, "relationship_type")
+        relationship_type = validate_neo4j_identifier(
+            request.relationship_type, "relationship_type"
+        )
 
         # SECURITY FIX (Audit 4 - Session 4): Bound limit to prevent memory exhaustion
         safe_limit = max(1, min(int(request.limit), 1000))
@@ -390,9 +389,7 @@ class GraphAlgorithmProvider:
             result = await self._cypher_centrality(request)
 
         result.backend_used = backend
-        result.computation_time_ms = (
-            datetime.now(UTC) - start_time
-        ).total_seconds() * 1000
+        result.computation_time_ms = (datetime.now(UTC) - start_time).total_seconds() * 1000
 
         self._set_cached(cache_key, result)
         return result
@@ -406,7 +403,9 @@ class GraphAlgorithmProvider:
         node_label = validate_neo4j_identifier(request.node_label, "node_label")
         rel_clause = ""
         if request.relationship_type:
-            relationship_type = validate_neo4j_identifier(request.relationship_type, "relationship_type")
+            relationship_type = validate_neo4j_identifier(
+                request.relationship_type, "relationship_type"
+            )
             rel_clause = f":{relationship_type}"
 
         # SECURITY FIX (Audit 4 - Session 4): Bound limit to prevent memory exhaustion
@@ -539,9 +538,7 @@ class GraphAlgorithmProvider:
         finally:
             # Safe: graph_name built from validated identifier
             try:
-                await self.client.execute(
-                    f"CALL gds.graph.drop('{graph_name}', false)"
-                )
+                await self.client.execute(f"CALL gds.graph.drop('{graph_name}', false)")
             except (RuntimeError, OSError, ValueError):
                 pass  # Best-effort GDS graph cleanup
 
@@ -583,9 +580,7 @@ class GraphAlgorithmProvider:
             result = await self._cypher_communities(request)
 
         result.backend_used = backend
-        result.computation_time_ms = (
-            datetime.now(UTC) - start_time
-        ).total_seconds() * 1000
+        result.computation_time_ms = (datetime.now(UTC) - start_time).total_seconds() * 1000
 
         self._set_cached(cache_key, result)
         return result
@@ -598,7 +593,9 @@ class GraphAlgorithmProvider:
         graph_name = "community_detection"
         # SECURITY FIX: Validate all user-controlled identifiers to prevent Cypher injection
         node_label = validate_neo4j_identifier(request.node_label or "Capsule", "node_label")
-        rel_type = validate_neo4j_identifier(request.relationship_type or "DERIVED_FROM", "relationship_type")
+        rel_type = validate_neo4j_identifier(
+            request.relationship_type or "DERIVED_FROM", "relationship_type"
+        )
 
         try:
             # Note: GDS CALL arguments do not support $param syntax for graph/label names;
@@ -680,9 +677,7 @@ class GraphAlgorithmProvider:
         finally:
             # Safe: graph_name is constant "community_detection"
             try:
-                await self.client.execute(
-                    f"CALL gds.graph.drop('{graph_name}', false)"
-                )
+                await self.client.execute(f"CALL gds.graph.drop('{graph_name}', false)")
             except (RuntimeError, OSError, ValueError):
                 pass  # Best-effort GDS graph cleanup
 
@@ -697,7 +692,9 @@ class GraphAlgorithmProvider:
         """
         # SECURITY FIX: Validate all user-controlled identifiers to prevent Cypher injection
         node_label = validate_neo4j_identifier(request.node_label or "Capsule", "node_label")
-        rel_type = validate_neo4j_identifier(request.relationship_type or "DERIVED_FROM", "relationship_type")
+        rel_type = validate_neo4j_identifier(
+            request.relationship_type or "DERIVED_FROM", "relationship_type"
+        )
 
         # Find connected components using path traversal
         # Safe: node_label and rel_type validated above
@@ -736,9 +733,7 @@ class GraphAlgorithmProvider:
             community = Community(
                 community_id=i,
                 members=[
-                    CommunityMember(node_id=mid, node_type=node_label)
-                    for mid in member_ids
-                    if mid
+                    CommunityMember(node_id=mid, node_type=node_label) for mid in member_ids if mid
                 ],
                 size=len(member_ids),
                 density=0.0,
@@ -993,9 +988,7 @@ class GraphAlgorithmProvider:
         else:
             result = await self._cypher_node_similarity(request)
 
-        result.computation_time_ms = (
-            datetime.now(UTC) - start_time
-        ).total_seconds() * 1000
+        result.computation_time_ms = (datetime.now(UTC) - start_time).total_seconds() * 1000
         return result
 
     async def _gds_node_similarity(
@@ -1005,7 +998,9 @@ class GraphAlgorithmProvider:
         """Compute node similarity using GDS."""
         # SECURITY FIX: Validate all user-controlled identifiers to prevent Cypher injection
         node_label = validate_neo4j_identifier(request.node_label, "node_label")
-        relationship_type = validate_neo4j_identifier(request.relationship_type, "relationship_type")
+        relationship_type = validate_neo4j_identifier(
+            request.relationship_type, "relationship_type"
+        )
         # Safe: graph_name built from validated identifier
         graph_name = f"similarity_{node_label}"
 
@@ -1094,9 +1089,7 @@ class GraphAlgorithmProvider:
         finally:
             # Safe: graph_name built from validated identifier
             try:
-                await self.client.execute(
-                    f"CALL gds.graph.drop('{graph_name}', false)"
-                )
+                await self.client.execute(f"CALL gds.graph.drop('{graph_name}', false)")
             except (RuntimeError, OSError, ValueError):
                 pass  # Best-effort GDS graph cleanup
 
@@ -1111,7 +1104,9 @@ class GraphAlgorithmProvider:
         """
         # SECURITY FIX: Validate all user-controlled identifiers to prevent Cypher injection
         node_label = validate_neo4j_identifier(request.node_label, "node_label")
-        relationship_type = validate_neo4j_identifier(request.relationship_type, "relationship_type")
+        relationship_type = validate_neo4j_identifier(
+            request.relationship_type, "relationship_type"
+        )
 
         # SECURITY FIX (Audit 4 - Session 4): Bound top_k to prevent memory exhaustion
         safe_top_k = max(1, min(int(request.top_k), 500))
@@ -1213,9 +1208,7 @@ class GraphAlgorithmProvider:
         else:
             result = await self._cypher_shortest_path(request)
 
-        result.computation_time_ms = (
-            datetime.now(UTC) - start_time
-        ).total_seconds() * 1000
+        result.computation_time_ms = (datetime.now(UTC) - start_time).total_seconds() * 1000
         return result
 
     async def _gds_shortest_path(
@@ -1225,7 +1218,9 @@ class GraphAlgorithmProvider:
         """Compute weighted shortest path using GDS Dijkstra."""
         graph_name = "shortest_path_graph"  # Safe: constant value
         # SECURITY FIX: Validate all user-controlled identifiers to prevent Cypher injection
-        rel_types_list = [validate_neo4j_identifier(rt, "relationship_type") for rt in request.relationship_types]
+        rel_types_list = [
+            validate_neo4j_identifier(rt, "relationship_type") for rt in request.relationship_types
+        ]
         # Safe: each element validated above; join is safe for GDS projection syntax
         rel_types_for_projection = ", ".join(rel_types_list)
 
@@ -1308,9 +1303,7 @@ class GraphAlgorithmProvider:
         finally:
             # Safe: graph_name is constant "shortest_path_graph"
             try:
-                await self.client.execute(
-                    f"CALL gds.graph.drop('{graph_name}', false)"
-                )
+                await self.client.execute(f"CALL gds.graph.drop('{graph_name}', false)")
             except (RuntimeError, OSError, ValueError):
                 pass  # Best-effort GDS graph cleanup
 
@@ -1371,7 +1364,7 @@ class GraphAlgorithmProvider:
                 if valid_trusts:
                     total_trust = 1.0
                     for t in valid_trusts:
-                        total_trust *= (t / 100.0)
+                        total_trust *= t / 100.0
 
             return ShortestPathResult(
                 source_id=request.source_id,

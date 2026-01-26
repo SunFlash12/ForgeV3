@@ -20,21 +20,25 @@ R = TypeVar("R")
 
 class AuthorizationError(Exception):
     """Base exception for authorization failures."""
+
     pass
 
 
 class InsufficientTrustError(AuthorizationError):
     """User's trust level is insufficient for the operation."""
+
     pass
 
 
 class InsufficientRoleError(AuthorizationError):
     """User's role is insufficient for the operation."""
+
     pass
 
 
 class MissingCapabilityError(AuthorizationError):
     """Required capability is missing."""
+
     pass
 
 
@@ -48,7 +52,7 @@ TRUST_LEVEL_VALUES = {
     TrustLevel.SANDBOX: 40,
     TrustLevel.STANDARD: 60,
     TrustLevel.TRUSTED: 80,
-    TrustLevel.CORE: 100
+    TrustLevel.CORE: 100,
 }
 
 # What each trust level can do
@@ -60,7 +64,7 @@ TRUST_LEVEL_PERMISSIONS = {
         "can_create_proposals": False,
         "can_run_overlays": False,
         "can_access_api": False,
-        "rate_limit_multiplier": 0.1
+        "rate_limit_multiplier": 0.1,
     },
     TrustLevel.SANDBOX: {
         "can_read_public": True,
@@ -69,7 +73,7 @@ TRUST_LEVEL_PERMISSIONS = {
         "can_create_proposals": False,
         "can_run_overlays": False,
         "can_access_api": True,
-        "rate_limit_multiplier": 0.5
+        "rate_limit_multiplier": 0.5,
     },
     TrustLevel.STANDARD: {
         "can_read_public": True,
@@ -78,7 +82,7 @@ TRUST_LEVEL_PERMISSIONS = {
         "can_create_proposals": False,
         "can_run_overlays": True,
         "can_access_api": True,
-        "rate_limit_multiplier": 1.0
+        "rate_limit_multiplier": 1.0,
     },
     TrustLevel.TRUSTED: {
         "can_read_public": True,
@@ -87,7 +91,7 @@ TRUST_LEVEL_PERMISSIONS = {
         "can_create_proposals": True,
         "can_run_overlays": True,
         "can_access_api": True,
-        "rate_limit_multiplier": 2.0
+        "rate_limit_multiplier": 2.0,
     },
     TrustLevel.CORE: {
         "can_read_public": True,
@@ -97,8 +101,8 @@ TRUST_LEVEL_PERMISSIONS = {
         "can_run_overlays": True,
         "can_access_api": True,
         "rate_limit_multiplier": 10.0,
-        "immune_to_rate_limit": True
-    }
+        "immune_to_rate_limit": True,
+    },
 }
 
 
@@ -161,7 +165,7 @@ def is_admin(user: Any) -> bool:
     Returns:
         True if user is admin
     """
-    role = getattr(user, 'role', None)
+    role = getattr(user, "role", None)
     if role is None:
         return False
     normalized = normalize_role(role)
@@ -195,6 +199,7 @@ def require_trust_level(required_level: TrustLevel) -> Callable[[Callable[P, R]]
         async def create_proposal(trust_flame: int, ...):
             ...
     """
+
     def decorator(func: Callable[P, R]) -> Callable[P, R]:
         @wraps(func)
         async def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
@@ -211,7 +216,9 @@ def require_trust_level(required_level: TrustLevel) -> Callable[[Callable[P, R]]
                 )
 
             return await func(*args, **kwargs)  # type: ignore[misc, no-any-return]
+
         return wrapper  # type: ignore[return-value]
+
     return decorator
 
 
@@ -234,20 +241,11 @@ def get_trust_permissions(trust_flame: int) -> dict[str, Any]:
 # =============================================================================
 
 # Role hierarchy (higher roles include lower role permissions)
-ROLE_HIERARCHY = {
-    UserRole.USER: 1,
-    UserRole.MODERATOR: 2,
-    UserRole.ADMIN: 3,
-    UserRole.SYSTEM: 4
-}
+ROLE_HIERARCHY = {UserRole.USER: 1, UserRole.MODERATOR: 2, UserRole.ADMIN: 3, UserRole.SYSTEM: 4}
 
 # Role-specific permissions
 ROLE_PERMISSIONS = {
-    UserRole.USER: {
-        "can_manage_own_content": True,
-        "can_view_public": True,
-        "can_report": True
-    },
+    UserRole.USER: {"can_manage_own_content": True, "can_view_public": True, "can_report": True},
     UserRole.MODERATOR: {
         "can_manage_own_content": True,
         "can_view_public": True,
@@ -255,7 +253,7 @@ ROLE_PERMISSIONS = {
         "can_moderate_content": True,
         "can_warn_users": True,
         "can_view_reports": True,
-        "can_quarantine_capsules": True
+        "can_quarantine_capsules": True,
     },
     UserRole.ADMIN: {
         "can_manage_own_content": True,
@@ -269,7 +267,7 @@ ROLE_PERMISSIONS = {
         "can_adjust_trust": True,
         "can_manage_overlays": True,
         "can_view_audit_logs": True,
-        "can_manage_system_config": True
+        "can_manage_system_config": True,
     },
     UserRole.SYSTEM: {
         # SECURITY FIX (Audit 3): Explicitly enumerate SYSTEM permissions instead of "all": True
@@ -291,7 +289,7 @@ ROLE_PERMISSIONS = {
         "can_manage_federation": True,
         "can_bypass_rate_limits": True,
         "can_access_internal_apis": True,
-    }
+    },
 }
 
 
@@ -315,6 +313,7 @@ def require_role(required_role: UserRole) -> Callable[[Callable[P, R]], Callable
 
     The decorated function must receive role as a keyword argument.
     """
+
     def decorator(func: Callable[P, R]) -> Callable[P, R]:
         @wraps(func)
         async def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
@@ -330,14 +329,15 @@ def require_role(required_role: UserRole) -> Callable[[Callable[P, R]], Callable
                 role = UserRole(str(role_raw))
 
             if not check_role(role, required_role):
-                role_value: str = role.value if hasattr(role, 'value') else str(role)
+                role_value: str = role.value if hasattr(role, "value") else str(role)
                 raise InsufficientRoleError(
-                    f"Operation requires {required_role.value} role, "
-                    f"user has {role_value}"
+                    f"Operation requires {required_role.value} role, user has {role_value}"
                 )
 
             return await func(*args, **kwargs)  # type: ignore[misc, no-any-return]
+
         return wrapper  # type: ignore[return-value]
+
     return decorator
 
 
@@ -378,14 +378,12 @@ def has_role_permission(role: UserRole, permission: str) -> bool:
 # Default capabilities for each trust level
 TRUST_LEVEL_CAPABILITIES: dict[TrustLevel, set[Capability]] = {
     TrustLevel.QUARANTINE: set(),
-    TrustLevel.SANDBOX: {
-        Capability.CAPSULE_READ
-    },
+    TrustLevel.SANDBOX: {Capability.CAPSULE_READ},
     TrustLevel.STANDARD: {
         Capability.CAPSULE_READ,
         Capability.CAPSULE_WRITE,
         Capability.EVENT_SUBSCRIBE,
-        Capability.DATABASE_READ
+        Capability.DATABASE_READ,
     },
     TrustLevel.TRUSTED: {
         Capability.CAPSULE_READ,
@@ -395,7 +393,7 @@ TRUST_LEVEL_CAPABILITIES: dict[TrustLevel, set[Capability]] = {
         Capability.DATABASE_READ,
         Capability.DATABASE_WRITE,
         Capability.GOVERNANCE_VOTE,
-        Capability.GOVERNANCE_PROPOSE
+        Capability.GOVERNANCE_PROPOSE,
     },
     TrustLevel.CORE: {
         Capability.NETWORK_ACCESS,
@@ -408,8 +406,8 @@ TRUST_LEVEL_CAPABILITIES: dict[TrustLevel, set[Capability]] = {
         Capability.CAPSULE_DELETE,
         Capability.GOVERNANCE_VOTE,
         Capability.GOVERNANCE_PROPOSE,
-        Capability.GOVERNANCE_EXECUTE
-    }
+        Capability.GOVERNANCE_EXECUTE,
+    },
 }
 
 
@@ -427,10 +425,7 @@ def get_capabilities_for_trust(trust_flame: int) -> set[Capability]:
     return TRUST_LEVEL_CAPABILITIES.get(level, set()).copy()
 
 
-def check_capability(
-    user_capabilities: set[Capability],
-    required_capability: Capability
-) -> bool:
+def check_capability(user_capabilities: set[Capability], required_capability: Capability) -> bool:
     """
     Check if user has a specific capability.
 
@@ -445,8 +440,7 @@ def check_capability(
 
 
 def check_all_capabilities(
-    user_capabilities: set[Capability],
-    required_capabilities: set[Capability]
+    user_capabilities: set[Capability], required_capabilities: set[Capability]
 ) -> bool:
     """
     Check if user has ALL required capabilities.
@@ -462,8 +456,7 @@ def check_all_capabilities(
 
 
 def check_any_capability(
-    user_capabilities: set[Capability],
-    required_capabilities: set[Capability]
+    user_capabilities: set[Capability], required_capabilities: set[Capability]
 ) -> bool:
     """
     Check if user has ANY of the required capabilities.
@@ -478,12 +471,15 @@ def check_any_capability(
     return bool(required_capabilities.intersection(user_capabilities))
 
 
-def require_capability(required_capability: Capability) -> Callable[[Callable[P, R]], Callable[P, R]]:
+def require_capability(
+    required_capability: Capability,
+) -> Callable[[Callable[P, R]], Callable[P, R]]:
     """
     Decorator to require a specific capability.
 
     The decorated function must receive capabilities as a keyword argument.
     """
+
     def decorator(func: Callable[P, R]) -> Callable[P, R]:
         @wraps(func)
         async def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
@@ -496,14 +492,19 @@ def require_capability(required_capability: Capability) -> Callable[[Callable[P,
                 )
 
             return await func(*args, **kwargs)  # type: ignore[misc, no-any-return]
+
         return wrapper  # type: ignore[return-value]
+
     return decorator
 
 
-def require_capabilities(*required_capabilities: Capability) -> Callable[[Callable[P, R]], Callable[P, R]]:
+def require_capabilities(
+    *required_capabilities: Capability,
+) -> Callable[[Callable[P, R]], Callable[P, R]]:
     """
     Decorator to require multiple capabilities (ALL must be present).
     """
+
     def decorator(func: Callable[P, R]) -> Callable[P, R]:
         @wraps(func)
         async def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
@@ -517,13 +518,16 @@ def require_capabilities(*required_capabilities: Capability) -> Callable[[Callab
                 )
 
             return await func(*args, **kwargs)  # type: ignore[misc, no-any-return]
+
         return wrapper  # type: ignore[return-value]
+
     return decorator
 
 
 # =============================================================================
 # Combined Authorization
 # =============================================================================
+
 
 class AuthorizationContext:
     """
@@ -538,7 +542,7 @@ class AuthorizationContext:
         user_id: str,
         trust_flame: int,
         role: UserRole,
-        capabilities: set[Capability] | None = None
+        capabilities: set[Capability] | None = None,
     ):
         self.user_id = user_id
         self.trust_flame = trust_flame
@@ -584,9 +588,7 @@ class AuthorizationContext:
         return get_role_permissions(self.role)
 
     def can_access_resource(
-        self,
-        resource_trust_level: TrustLevel,
-        resource_owner_id: str | None = None
+        self, resource_trust_level: TrustLevel, resource_owner_id: str | None = None
     ) -> bool:
         """
         Check if user can access a resource.
@@ -608,9 +610,7 @@ class AuthorizationContext:
         return self.has_trust(resource_trust_level)
 
     def can_modify_resource(
-        self,
-        resource_owner_id: str,
-        resource_trust_level: TrustLevel = TrustLevel.STANDARD
+        self, resource_owner_id: str, resource_trust_level: TrustLevel = TrustLevel.STANDARD
     ) -> bool:
         """
         Check if user can modify a resource.
@@ -636,15 +636,12 @@ class AuthorizationContext:
             "trust_flame": self.trust_flame,
             "trust_level": self.trust_level.name,
             "role": self.role.value,
-            "capabilities": [c.value for c in self.capabilities]
+            "capabilities": [c.value for c in self.capabilities],
         }
 
 
 def create_auth_context(
-    user_id: str,
-    trust_flame: int,
-    role: str,
-    capabilities: list[str] | None = None
+    user_id: str, trust_flame: int, role: str, capabilities: list[str] | None = None
 ) -> AuthorizationContext:
     """
     Factory function to create AuthorizationContext from raw values.
@@ -665,10 +662,7 @@ def create_auth_context(
         caps = {Capability(c) for c in capabilities}
 
     return AuthorizationContext(
-        user_id=user_id,
-        trust_flame=trust_flame,
-        role=user_role,
-        capabilities=caps
+        user_id=user_id, trust_flame=trust_flame, role=user_role, capabilities=caps
     )
 
 
@@ -696,7 +690,7 @@ class TrustAuthorizer:
         Returns:
             True if user meets minimum trust level
         """
-        trust_flame_raw = getattr(user, 'trust_score', None) or getattr(user, 'trust_flame', 0)
+        trust_flame_raw = getattr(user, "trust_score", None) or getattr(user, "trust_flame", 0)
         trust_flame: int = int(trust_flame_raw) if trust_flame_raw is not None else 0
         user_level = get_trust_level_from_score(trust_flame)
         result: bool = user_level.value >= self.min_level.value
@@ -727,11 +721,11 @@ class RoleAuthorizer:
         Returns:
             True if user has one of the allowed roles
         """
-        user_role = getattr(user, 'role', None)
+        user_role = getattr(user, "role", None)
         if user_role is None:
             return False
 
-        role_str = user_role.value if hasattr(user_role, 'value') else str(user_role)
+        role_str = user_role.value if hasattr(user_role, "value") else str(user_role)
         return role_str in self.allowed_roles
 
 
@@ -759,11 +753,11 @@ class CapabilityAuthorizer:
         Returns:
             True if user has all required capabilities
         """
-        trust_flame_raw = getattr(user, 'trust_score', None) or getattr(user, 'trust_flame', 0)
+        trust_flame_raw = getattr(user, "trust_score", None) or getattr(user, "trust_flame", 0)
         trust_flame: int = int(trust_flame_raw) if trust_flame_raw is not None else 0
         user_capabilities = get_capabilities_for_trust(trust_flame)
 
-        explicit_caps: set[Capability] = getattr(user, 'capabilities', set())
+        explicit_caps: set[Capability] = getattr(user, "capabilities", set())
         if explicit_caps:
             user_capabilities = user_capabilities | explicit_caps
 

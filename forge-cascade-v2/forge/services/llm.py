@@ -35,6 +35,7 @@ logger = structlog.get_logger(__name__)
 
 class LLMProvider(str, Enum):
     """Supported LLM providers."""
+
     OPENAI = "openai"
     ANTHROPIC = "anthropic"
     OLLAMA = "ollama"
@@ -44,6 +45,7 @@ class LLMProvider(str, Enum):
 @dataclass
 class LLMConfig:
     """Configuration for LLM service."""
+
     provider: LLMProvider = LLMProvider.OPENAI
     model: str = "gpt-4-turbo-preview"
     api_key: str | None = None
@@ -57,6 +59,7 @@ class LLMConfig:
 @dataclass
 class LLMMessage:
     """A message in a conversation."""
+
     role: str  # "system", "user", "assistant"
     content: str
 
@@ -64,6 +67,7 @@ class LLMMessage:
 @dataclass
 class LLMResponse:
     """Response from LLM."""
+
     content: str
     model: str
     tokens_used: int = 0
@@ -96,6 +100,7 @@ class LLMProviderBase(ABC):
 
 class LLMConfigurationError(Exception):
     """Raised when LLM is not properly configured."""
+
     pass
 
 
@@ -126,6 +131,7 @@ class AnthropicProvider(LLMProviderBase):
     def _get_client(self) -> httpx.AsyncClient:
         """Get or create the HTTP client (lazy initialization)."""
         import httpx
+
         if self._http_client is None:
             self._http_client = httpx.AsyncClient(timeout=self._timeout)
         return self._http_client
@@ -162,10 +168,12 @@ class AnthropicProvider(LLMProviderBase):
             if msg.role == "system":
                 system_message = msg.content
             else:
-                api_messages.append({
-                    "role": msg.role,
-                    "content": msg.content,
-                })
+                api_messages.append(
+                    {
+                        "role": msg.role,
+                        "content": msg.content,
+                    }
+                )
 
         payload = {
             "model": self._model,
@@ -195,8 +203,8 @@ class AnthropicProvider(LLMProviderBase):
         return LLMResponse(
             content=content,
             model=self._model,
-            tokens_used=data.get("usage", {}).get("input_tokens", 0) +
-                       data.get("usage", {}).get("output_tokens", 0),
+            tokens_used=data.get("usage", {}).get("input_tokens", 0)
+            + data.get("usage", {}).get("output_tokens", 0),
             finish_reason=data.get("stop_reason", "stop"),
             latency_ms=latency_ms,
         )
@@ -226,6 +234,7 @@ class OpenAIProvider(LLMProviderBase):
     def _get_client(self) -> httpx.AsyncClient:
         """Get or create the HTTP client (lazy initialization)."""
         import httpx
+
         if self._http_client is None:
             self._http_client = httpx.AsyncClient(timeout=self._timeout)
         return self._http_client
@@ -253,10 +262,7 @@ class OpenAIProvider(LLMProviderBase):
             "Content-Type": "application/json",
         }
 
-        api_messages = [
-            {"role": msg.role, "content": msg.content}
-            for msg in messages
-        ]
+        api_messages = [{"role": msg.role, "content": msg.content} for msg in messages]
 
         payload = {
             "model": self._model,
@@ -309,6 +315,7 @@ class OllamaProvider(LLMProviderBase):
     def _get_client(self) -> httpx.AsyncClient:
         """Get or create the HTTP client (lazy initialization)."""
         import httpx
+
         if self._http_client is None:
             self._http_client = httpx.AsyncClient(timeout=self._timeout)
         return self._http_client
@@ -332,10 +339,7 @@ class OllamaProvider(LLMProviderBase):
 
         url = f"{self._api_base}/api/chat"
 
-        api_messages = [
-            {"role": msg.role, "content": msg.content}
-            for msg in messages
-        ]
+        api_messages = [{"role": msg.role, "content": msg.content} for msg in messages]
 
         payload = {
             "model": self._model,
@@ -598,7 +602,7 @@ class LLMService:
                     attempt=attempt + 1,
                     error=str(e),
                 )
-                await asyncio.sleep(2 ** attempt)
+                await asyncio.sleep(2**attempt)
 
         self._record_failure()
         raise RuntimeError("LLM completion failed after retries")
@@ -663,7 +667,9 @@ Be balanced and thorough. Acknowledge uncertainty where it exists."""
 
         # SECURITY FIX (Audit 4): Sanitize all user-provided content
         safe_title = sanitize_for_prompt(proposal_title, field_name="title", max_length=500)
-        safe_description = sanitize_for_prompt(proposal_description, field_name="description", max_length=10000)
+        safe_description = sanitize_for_prompt(
+            proposal_description, field_name="description", max_length=10000
+        )
         safe_type = sanitize_for_prompt(proposal_type, field_name="type", max_length=100)
 
         user_prompt = f"""Please analyze this governance proposal:
@@ -918,7 +924,7 @@ Respond with a JSON object:
         Close the LLM service and release resources.
         This should be called during application shutdown.
         """
-        if hasattr(self._provider, 'close'):
+        if hasattr(self._provider, "close"):
             await self._provider.close()
         logger.info("llm_service_closed")
 

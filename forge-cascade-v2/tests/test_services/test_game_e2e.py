@@ -21,10 +21,7 @@ import pytest
 # Skip tests requiring real API key unless configured
 def requires_game_api():
     """Decorator to skip tests without GAME API key."""
-    return pytest.mark.skipif(
-        not os.environ.get("GAME_API_KEY"),
-        reason="GAME_API_KEY not set"
-    )
+    return pytest.mark.skipif(not os.environ.get("GAME_API_KEY"), reason="GAME_API_KEY not set")
 
 
 class TestGAMEAgentCreation:
@@ -36,17 +33,21 @@ class TestGAMEAgentCreation:
         with patch("forge.virtuals.game.sdk_client.GAMESDKClient") as MockClient:
             client = MockClient.return_value
             client.initialize = AsyncMock()
-            client.create_agent = AsyncMock(return_value={
-                "agent_id": "test-agent-123",
-                "name": "Forge Knowledge Agent",
-                "status": "prototype",
-            })
-            client.get_agent = AsyncMock(return_value={
-                "agent_id": "test-agent-123",
-                "name": "Forge Knowledge Agent",
-                "status": "prototype",
-                "workers": [],
-            })
+            client.create_agent = AsyncMock(
+                return_value={
+                    "agent_id": "test-agent-123",
+                    "name": "Forge Knowledge Agent",
+                    "status": "prototype",
+                }
+            )
+            client.get_agent = AsyncMock(
+                return_value={
+                    "agent_id": "test-agent-123",
+                    "name": "Forge Knowledge Agent",
+                    "status": "prototype",
+                    "workers": [],
+                }
+            )
             yield client
 
     @pytest.mark.asyncio
@@ -110,23 +111,30 @@ class TestForgeFunction:
     @pytest.fixture
     def mock_forge_functions(self):
         """Create mock Forge functions object."""
+
         class MockForgeFunctions:
             pass
 
         functions = MockForgeFunctions()
 
         # Mock the actual implementation
-        functions.query_knowledge_graph = AsyncMock(return_value={
-            "results": [{"id": "capsule-1", "content": "Test data"}],
-            "count": 1,
-        })
-        functions.create_capsule = AsyncMock(return_value={
-            "capsule_id": "new-capsule-123",
-            "status": "created",
-        })
-        functions.semantic_search = AsyncMock(return_value={
-            "matches": [{"score": 0.95, "content": "Relevant content"}],
-        })
+        functions.query_knowledge_graph = AsyncMock(
+            return_value={
+                "results": [{"id": "capsule-1", "content": "Test data"}],
+                "count": 1,
+            }
+        )
+        functions.create_capsule = AsyncMock(
+            return_value={
+                "capsule_id": "new-capsule-123",
+                "status": "created",
+            }
+        )
+        functions.semantic_search = AsyncMock(
+            return_value={
+                "matches": [{"score": 0.95, "content": "Relevant content"}],
+            }
+        )
 
         return functions
 
@@ -175,11 +183,13 @@ class TestAgentExecutionLoop:
         runner.start = AsyncMock()
         runner.stop = AsyncMock()
         runner.is_running = False
-        runner.run_step = AsyncMock(return_value={
-            "action": "query_knowledge_graph",
-            "params": {"query": "test"},
-            "result": {"count": 1},
-        })
+        runner.run_step = AsyncMock(
+            return_value={
+                "action": "query_knowledge_graph",
+                "params": {"query": "test"},
+                "result": {"count": 1},
+            }
+        )
         return runner
 
     @pytest.mark.asyncio
@@ -207,18 +217,24 @@ class TestACPIntegration:
     def mock_acp_service(self):
         """Create mock ACP service."""
         service = MagicMock()
-        service.create_job = AsyncMock(return_value={
-            "job_id": "acp-job-123",
-            "status": "open",
-        })
-        service.accept_job = AsyncMock(return_value={
-            "job_id": "acp-job-123",
-            "status": "in_progress",
-        })
-        service.deliver_result = AsyncMock(return_value={
-            "job_id": "acp-job-123",
-            "status": "delivered",
-        })
+        service.create_job = AsyncMock(
+            return_value={
+                "job_id": "acp-job-123",
+                "status": "open",
+            }
+        )
+        service.accept_job = AsyncMock(
+            return_value={
+                "job_id": "acp-job-123",
+                "status": "in_progress",
+            }
+        )
+        service.deliver_result = AsyncMock(
+            return_value={
+                "job_id": "acp-job-123",
+                "status": "delivered",
+            }
+        )
         return service
 
     @pytest.mark.asyncio
@@ -286,11 +302,13 @@ class TestFullE2EWorkflow:
         # 3. Simulate worker registration
         registered_workers = []
         for worker in agent_config["workers"]:
-            registered_workers.append({
-                **worker,
-                "registered": True,
-                "agent_id": mock_agent["agent_id"],
-            })
+            registered_workers.append(
+                {
+                    **worker,
+                    "registered": True,
+                    "agent_id": mock_agent["agent_id"],
+                }
+            )
 
         assert all(w["registered"] for w in registered_workers)
 
@@ -365,6 +383,7 @@ class TestAgentMonitoring:
 
     def test_agent_health_check(self):
         """Test agent health check logic."""
+
         def check_health(metrics: dict) -> dict:
             success_rate = metrics["successful_steps"] / max(metrics["total_steps"], 1)
             return {

@@ -31,6 +31,7 @@ router = APIRouter(prefix="/users", tags=["users"])
 
 class UserListResponse(BaseModel):
     """Paginated user list response."""
+
     users: list[UserResponse]
     total: int
     page: int
@@ -39,6 +40,7 @@ class UserListResponse(BaseModel):
 
 class UserSearchResult(BaseModel):
     """User search result item."""
+
     id: str
     username: str
     display_name: str | None
@@ -48,11 +50,13 @@ class UserSearchResult(BaseModel):
 
 class UserSearchResponse(BaseModel):
     """User search response."""
+
     users: list[UserSearchResult]
 
 
 class UserActivityItem(BaseModel):
     """Single activity item."""
+
     id: str
     action: str
     entity_type: str
@@ -63,6 +67,7 @@ class UserActivityItem(BaseModel):
 
 class UserActivityResponse(BaseModel):
     """User activity timeline."""
+
     user_id: str
     activities: list[UserActivityItem]
     total: int
@@ -70,6 +75,7 @@ class UserActivityResponse(BaseModel):
 
 class UserCapsulesResponse(BaseModel):
     """User's capsules summary."""
+
     user_id: str
     capsule_count: int
     recent_capsules: list[dict[str, Any]]
@@ -77,6 +83,7 @@ class UserCapsulesResponse(BaseModel):
 
 class UserGovernanceResponse(BaseModel):
     """User's governance participation."""
+
     user_id: str
     proposals_created: int
     votes_cast: int
@@ -86,12 +93,14 @@ class UserGovernanceResponse(BaseModel):
 
 class UpdateTrustRequest(BaseModel):
     """Request to update user trust level."""
+
     trust_flame: int = Field(..., ge=0, le=100)
     reason: str = Field(..., min_length=5)
 
 
 class AdminUpdateUserRequest(BaseModel):
     """Admin request to update user."""
+
     role: UserRole | None = None
     is_active: bool | None = None
     trust_flame: int | None = Field(None, ge=0, le=100)
@@ -125,7 +134,9 @@ async def search_users(
                 id=u.id,
                 username=u.username,
                 display_name=u.display_name,
-                trust_level=TrustLevel.from_value(u.trust_flame).name if u.trust_flame is not None else "UNKNOWN",
+                trust_level=TrustLevel.from_value(u.trust_flame).name
+                if u.trust_flame is not None
+                else "UNKNOWN",
                 created_at=u.created_at.isoformat() if u.created_at else "",
             )
             for u in users
@@ -297,7 +308,7 @@ async def get_user_capsules(
             {
                 "id": c.id,
                 "title": c.title,
-                "type": c.type.value if hasattr(c.type, 'value') else c.type,
+                "type": c.type.value if hasattr(c.type, "value") else c.type,
                 "created_at": c.created_at.isoformat() if c.created_at else None,
             }
             for c in capsules
@@ -403,7 +414,7 @@ async def get_user_governance(
             {
                 "id": p.id,
                 "title": p.title,
-                "status": p.status.value if hasattr(p.status, 'value') else p.status,
+                "status": p.status.value if hasattr(p.status, "value") else p.status,
                 "created_at": p.created_at.isoformat() if p.created_at else None,
             }
             for p in proposals[:5]
@@ -411,7 +422,7 @@ async def get_user_governance(
         recent_votes=[
             {
                 "proposal_id": v.proposal_id,
-                "choice": v.choice.value if hasattr(v.choice, 'value') else v.choice,
+                "choice": v.choice.value if hasattr(v.choice, "value") else v.choice,
                 "created_at": v.created_at.isoformat() if v.created_at else None,
             }
             for v in votes[:5]

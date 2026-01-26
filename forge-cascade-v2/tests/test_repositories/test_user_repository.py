@@ -33,6 +33,7 @@ from forge.repositories.user_repository import UserRepository
 # Fixtures
 # =============================================================================
 
+
 @pytest.fixture
 def mock_db_client():
     """Create mock database client."""
@@ -86,11 +87,14 @@ def sample_user_in_db_data(sample_user_data):
 # User Creation Tests
 # =============================================================================
 
+
 class TestUserRepositoryCreate:
     """Tests for user creation."""
 
     @pytest.mark.asyncio
-    async def test_create_user_success(self, user_repository, mock_db_client, sample_user_in_db_data):
+    async def test_create_user_success(
+        self, user_repository, mock_db_client, sample_user_in_db_data
+    ):
         """Successful user creation returns UserInDB."""
         mock_db_client.execute_single.return_value = {"user": sample_user_in_db_data}
 
@@ -111,7 +115,9 @@ class TestUserRepositoryCreate:
         mock_db_client.execute_single.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_create_user_with_role(self, user_repository, mock_db_client, sample_user_in_db_data):
+    async def test_create_user_with_role(
+        self, user_repository, mock_db_client, sample_user_in_db_data
+    ):
         """User creation with specific role."""
         sample_user_in_db_data["role"] = "admin"
         mock_db_client.execute_single.return_value = {"user": sample_user_in_db_data}
@@ -153,6 +159,7 @@ class TestUserRepositoryCreate:
 # =============================================================================
 # User Retrieval Tests
 # =============================================================================
+
 
 class TestUserRepositoryRetrieval:
     """Tests for user retrieval operations."""
@@ -199,7 +206,9 @@ class TestUserRepositoryRetrieval:
         assert result.email == "test@example.com"
 
     @pytest.mark.asyncio
-    async def test_get_by_username_or_email(self, user_repository, mock_db_client, sample_user_in_db_data):
+    async def test_get_by_username_or_email(
+        self, user_repository, mock_db_client, sample_user_in_db_data
+    ):
         """Get user by username or email."""
         mock_db_client.execute_single.return_value = {"user": sample_user_in_db_data}
 
@@ -220,6 +229,7 @@ class TestUserRepositoryRetrieval:
 # =============================================================================
 # User Update Tests
 # =============================================================================
+
 
 class TestUserRepositoryUpdate:
     """Tests for user update operations."""
@@ -261,6 +271,7 @@ class TestUserRepositoryUpdate:
 # =============================================================================
 # Authentication Helper Tests
 # =============================================================================
+
 
 class TestUserRepositoryAuthHelpers:
     """Tests for authentication helper methods."""
@@ -339,6 +350,7 @@ class TestUserRepositoryAuthHelpers:
 # Refresh Token Tests
 # =============================================================================
 
+
 class TestUserRepositoryRefreshToken:
     """Tests for refresh token operations."""
 
@@ -416,6 +428,7 @@ class TestUserRepositoryRefreshToken:
 # Password Reset Token Tests
 # =============================================================================
 
+
 class TestUserRepositoryPasswordReset:
     """Tests for password reset token operations."""
 
@@ -427,9 +440,7 @@ class TestUserRepositoryPasswordReset:
         token_hash = hashlib.sha256("reset_token".encode()).hexdigest()
         expires_at = datetime.now(UTC) + timedelta(hours=1)
 
-        result = await user_repository.store_password_reset_token(
-            "user123", token_hash, expires_at
-        )
+        result = await user_repository.store_password_reset_token("user123", token_hash, expires_at)
 
         assert result is True
         call_args = mock_db_client.execute_single.call_args
@@ -471,6 +482,7 @@ class TestUserRepositoryPasswordReset:
 # =============================================================================
 # Trust Flame Tests
 # =============================================================================
+
 
 class TestUserRepositoryTrustFlame:
     """Tests for trust flame operations."""
@@ -566,6 +578,7 @@ class TestUserRepositoryTrustFlame:
 # Account Status Tests
 # =============================================================================
 
+
 class TestUserRepositoryAccountStatus:
     """Tests for account status operations."""
 
@@ -603,6 +616,7 @@ class TestUserRepositoryAccountStatus:
 # Safe User Model Tests
 # =============================================================================
 
+
 class TestUserRepositorySafeUser:
     """Tests for safe user model conversion."""
 
@@ -638,6 +652,7 @@ class TestUserRepositorySafeUser:
 # Search Tests
 # =============================================================================
 
+
 class TestUserRepositorySearch:
     """Tests for user search operations."""
 
@@ -667,6 +682,7 @@ class TestUserRepositorySearch:
 # Cypher Injection Prevention Tests
 # =============================================================================
 
+
 class TestCypherInjectionPrevention:
     """
     SECURITY TESTS: Verify that user input is properly parameterized
@@ -683,22 +699,18 @@ class TestCypherInjectionPrevention:
         "' OR '1'='1",
         "admin'--",
         "' UNION MATCH (n) RETURN n //",
-
         # Cypher-specific attacks
         "}) RETURN n // ",
         "', injection: 'value'}) RETURN n //",
         "test' OR 1=1 //",
         "'] MATCH (m) DETACH DELETE m //",
-
         # Property access attacks
         "test']})-[r]-() DELETE r //",
         "{{injection}}",
         "${injection}",
-
         # Unicode and encoding attacks
         "test\u0027; DROP (n)",
         "test%27; DROP (n)",
-
         # Comment attacks
         "test /* comment */ OR '1'='1",
         "test // comment",
@@ -725,7 +737,9 @@ class TestCypherInjectionPrevention:
         params = call_args[0][1]
 
         # The payload should be in params, not directly in the query string
-        assert payload not in query, f"Payload '{payload[:20]}...' should not appear directly in query"
+        assert payload not in query, (
+            f"Payload '{payload[:20]}...' should not appear directly in query"
+        )
         assert params.get("username") == payload, "Payload should be passed as a parameter"
 
     @pytest.mark.asyncio
@@ -770,7 +784,9 @@ class TestCypherInjectionPrevention:
         assert payload not in query, "Search term should not be embedded in query"
 
     @pytest.mark.asyncio
-    async def test_create_user_injection_in_username(self, user_repository, mock_db_client, sample_user_in_db_data):
+    async def test_create_user_injection_in_username(
+        self, user_repository, mock_db_client, sample_user_in_db_data
+    ):
         """
         Verify user creation sanitizes username input.
         """
@@ -795,7 +811,9 @@ class TestCypherInjectionPrevention:
             query = call_args[0][0]
 
             # Malicious payload should not be in query
-            assert "DROP" not in query.upper() or "DROP" in str(mock_db_client.execute_single.call_args[0][1].values())
+            assert "DROP" not in query.upper() or "DROP" in str(
+                mock_db_client.execute_single.call_args[0][1].values()
+            )
 
     @pytest.mark.asyncio
     async def test_adjust_trust_flame_injection_in_reason(self, user_repository, mock_db_client):
@@ -842,7 +860,9 @@ class TestCypherInjectionPrevention:
         assert params.get("id") == malicious_id or params.get("user_id") == malicious_id
 
     @pytest.mark.asyncio
-    async def test_update_user_injection_in_display_name(self, user_repository, mock_db_client, sample_user_data):
+    async def test_update_user_injection_in_display_name(
+        self, user_repository, mock_db_client, sample_user_data
+    ):
         """
         Verify update sanitizes display_name input.
         """

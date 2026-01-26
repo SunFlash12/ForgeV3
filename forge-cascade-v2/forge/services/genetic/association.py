@@ -97,10 +97,7 @@ class GeneAssociationService:
                 gene_id=r["entrez_id"] or "",
                 ensembl_id=r.get("ensembl_id"),
                 full_name=r.get("full_name"),
-                associated_diseases=[
-                    d for d in r.get("diseases", [])
-                    if d.get("disease_id")
-                ],
+                associated_diseases=[d for d in r.get("diseases", []) if d.get("disease_id")],
                 pathways=r.get("pathways", []),
                 is_disease_gene=len([d for d in r.get("diseases", []) if d.get("disease_id")]) > 0,
             )
@@ -156,16 +153,18 @@ class GeneAssociationService:
             for r in results:
                 score = r.get("score") or 0.5
                 if score >= min_confidence:
-                    associations.append(GeneDiseaseAssociation(
-                        gene_symbol=r["gene_symbol"],
-                        gene_id=r["gene_id"] or "",
-                        disease_id=r["disease_id"] or "",
-                        disease_name=r["disease_name"] or "",
-                        associated_phenotypes=r.get("phenotypes", []),
-                        association_score=score,
-                        source=r.get("source"),
-                        confidence=score,
-                    ))
+                    associations.append(
+                        GeneDiseaseAssociation(
+                            gene_symbol=r["gene_symbol"],
+                            gene_id=r["gene_id"] or "",
+                            disease_id=r["disease_id"] or "",
+                            disease_name=r["disease_name"] or "",
+                            associated_phenotypes=r.get("phenotypes", []),
+                            association_score=score,
+                            source=r.get("source"),
+                            confidence=score,
+                        )
+                    )
 
             # Sort by confidence
             associations.sort(key=lambda a: a.confidence, reverse=True)
@@ -209,10 +208,13 @@ class GeneAssociationService:
         """
 
         try:
-            results = await self._neo4j.run(query, {
-                "disease_id": disease_id,
-                "limit": limit,
-            })
+            results = await self._neo4j.run(
+                query,
+                {
+                    "disease_id": disease_id,
+                    "limit": limit,
+                },
+            )
 
             return [
                 GeneDiseaseAssociation(
@@ -280,11 +282,13 @@ class GeneAssociationService:
                 # Add supporting variants
                 gene_variants = [v for v in variants if v.gene_symbol == gene]
                 for var in gene_variants:
-                    disease_evidence[disease_id]["supporting_variants"].append({
-                        "variant": var.notation,
-                        "gene": var.gene_symbol,
-                        "pathogenicity": var.pathogenicity.value,
-                    })
+                    disease_evidence[disease_id]["supporting_variants"].append(
+                        {
+                            "variant": var.notation,
+                            "gene": var.gene_symbol,
+                            "pathogenicity": var.pathogenicity.value,
+                        }
+                    )
 
                 # Add phenotypes
                 disease_evidence[disease_id]["phenotypes"].update(assoc.associated_phenotypes)
@@ -329,10 +333,13 @@ class GeneAssociationService:
         """
 
         try:
-            results = await self._neo4j.run(query, {
-                "symbol": gene_symbol,
-                "disease_id": disease_id,
-            })
+            results = await self._neo4j.run(
+                query,
+                {
+                    "symbol": gene_symbol,
+                    "disease_id": disease_id,
+                },
+            )
 
             if results:
                 inheritance = results[0].get("inheritance", "").lower()
@@ -393,6 +400,7 @@ class GeneAssociationService:
 # =============================================================================
 # Factory Function
 # =============================================================================
+
 
 def create_gene_association_service(
     neo4j_client: Any = None,

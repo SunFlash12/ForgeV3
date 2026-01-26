@@ -25,6 +25,7 @@ from forge.security.capsule_integrity import (
 # Fixtures
 # =============================================================================
 
+
 @pytest.fixture
 def integrity_service():
     """Create integrity service instance."""
@@ -41,9 +42,7 @@ def sample_content():
 def sample_keypair():
     """Generate sample Ed25519 keypair."""
     private_key, public_key = CapsuleIntegrityService.generate_keypair()
-    private_b64, public_b64 = CapsuleIntegrityService.keypair_to_base64(
-        private_key, public_key
-    )
+    private_b64, public_b64 = CapsuleIntegrityService.keypair_to_base64(private_key, public_key)
     return {
         "private_bytes": private_key,
         "public_bytes": public_key,
@@ -55,6 +54,7 @@ def sample_keypair():
 @dataclass
 class MockCapsule:
     """Mock capsule for testing."""
+
     id: str
     content: str
     content_hash: str | None = None
@@ -65,6 +65,7 @@ class MockCapsule:
 # =============================================================================
 # Content Hash Tests
 # =============================================================================
+
 
 class TestContentHash:
     """Tests for content hash computation and verification."""
@@ -153,6 +154,7 @@ class TestContentHash:
 # Digital Signature Tests
 # =============================================================================
 
+
 class TestDigitalSignatures:
     """Tests for Ed25519 digital signatures."""
 
@@ -161,7 +163,7 @@ class TestDigitalSignatures:
         private_key, public_key = CapsuleIntegrityService.generate_keypair()
 
         assert len(private_key) == 32  # Ed25519 private key size
-        assert len(public_key) == 32   # Ed25519 public key size
+        assert len(public_key) == 32  # Ed25519 public key size
 
     def test_generate_keypair_unique(self):
         """Each keypair is unique."""
@@ -206,12 +208,8 @@ class TestDigitalSignatures:
         """Ed25519 signatures are deterministic."""
         content_hash = CapsuleIntegrityService.compute_content_hash(sample_content)
 
-        sig1 = CapsuleIntegrityService.sign_capsule(
-            content_hash, sample_keypair["private_bytes"]
-        )
-        sig2 = CapsuleIntegrityService.sign_capsule(
-            content_hash, sample_keypair["private_bytes"]
-        )
+        sig1 = CapsuleIntegrityService.sign_capsule(content_hash, sample_keypair["private_bytes"])
+        sig2 = CapsuleIntegrityService.sign_capsule(content_hash, sample_keypair["private_bytes"])
 
         assert sig1 == sig2
 
@@ -222,9 +220,12 @@ class TestDigitalSignatures:
             content_hash, sample_keypair["private_bytes"]
         )
 
-        assert CapsuleIntegrityService.verify_signature(
-            content_hash, signature, sample_keypair["public_b64"]
-        ) is True
+        assert (
+            CapsuleIntegrityService.verify_signature(
+                content_hash, signature, sample_keypair["public_b64"]
+            )
+            is True
+        )
 
     def test_verify_signature_wrong_content(self, sample_content, sample_keypair):
         """Signature fails with different content."""
@@ -235,9 +236,12 @@ class TestDigitalSignatures:
 
         wrong_hash = CapsuleIntegrityService.compute_content_hash("Different content")
 
-        assert CapsuleIntegrityService.verify_signature(
-            wrong_hash, signature, sample_keypair["public_b64"]
-        ) is False
+        assert (
+            CapsuleIntegrityService.verify_signature(
+                wrong_hash, signature, sample_keypair["public_b64"]
+            )
+            is False
+        )
 
     def test_verify_signature_wrong_key(self, sample_content, sample_keypair):
         """Signature fails with different public key."""
@@ -248,22 +252,24 @@ class TestDigitalSignatures:
 
         # Generate different keypair
         _, other_public = CapsuleIntegrityService.generate_keypair()
-        _, other_public_b64 = CapsuleIntegrityService.keypair_to_base64(
-            b"\x00" * 32, other_public
-        )
+        _, other_public_b64 = CapsuleIntegrityService.keypair_to_base64(b"\x00" * 32, other_public)
 
-        assert CapsuleIntegrityService.verify_signature(
-            content_hash, signature, other_public_b64
-        ) is False
+        assert (
+            CapsuleIntegrityService.verify_signature(content_hash, signature, other_public_b64)
+            is False
+        )
 
     def test_verify_signature_invalid_format(self, sample_content, sample_keypair):
         """Invalid signature format fails gracefully."""
         content_hash = CapsuleIntegrityService.compute_content_hash(sample_content)
 
         # Invalid base64
-        assert CapsuleIntegrityService.verify_signature(
-            content_hash, "not-valid-base64!", sample_keypair["public_b64"]
-        ) is False
+        assert (
+            CapsuleIntegrityService.verify_signature(
+                content_hash, "not-valid-base64!", sample_keypair["public_b64"]
+            )
+            is False
+        )
 
     def test_verify_signature_with_raw_key(self, sample_content, sample_keypair):
         """Signature verification with raw key bytes works."""
@@ -272,14 +278,18 @@ class TestDigitalSignatures:
             content_hash, sample_keypair["private_bytes"]
         )
 
-        assert CapsuleIntegrityService.verify_signature_with_raw_key(
-            content_hash, signature, sample_keypair["public_bytes"]
-        ) is True
+        assert (
+            CapsuleIntegrityService.verify_signature_with_raw_key(
+                content_hash, signature, sample_keypair["public_bytes"]
+            )
+            is True
+        )
 
 
 # =============================================================================
 # Merkle Tree Tests
 # =============================================================================
+
 
 class TestMerkleTree:
     """Tests for Merkle tree lineage verification."""
@@ -299,9 +309,7 @@ class TestMerkleTree:
         content_hash = CapsuleIntegrityService.compute_content_hash(sample_content)
         parent_merkle_root = "a" * 64
 
-        merkle_root = CapsuleIntegrityService.compute_merkle_root(
-            content_hash, parent_merkle_root
-        )
+        merkle_root = CapsuleIntegrityService.compute_merkle_root(content_hash, parent_merkle_root)
 
         # Should be different from both content hash and parent
         assert merkle_root != content_hash
@@ -327,9 +335,12 @@ class TestMerkleTree:
             content_hash, parent_merkle_root
         )
 
-        assert CapsuleIntegrityService.verify_merkle_root(
-            content_hash, parent_merkle_root, expected_merkle_root
-        ) is True
+        assert (
+            CapsuleIntegrityService.verify_merkle_root(
+                content_hash, parent_merkle_root, expected_merkle_root
+            )
+            is True
+        )
 
     def test_verify_merkle_root_invalid(self, sample_content):
         """Invalid Merkle root fails verification."""
@@ -337,9 +348,12 @@ class TestMerkleTree:
         parent_merkle_root = "d" * 64
         wrong_merkle_root = "e" * 64
 
-        assert CapsuleIntegrityService.verify_merkle_root(
-            content_hash, parent_merkle_root, wrong_merkle_root
-        ) is False
+        assert (
+            CapsuleIntegrityService.verify_merkle_root(
+                content_hash, parent_merkle_root, wrong_merkle_root
+            )
+            is False
+        )
 
     def test_verify_merkle_chain_empty(self):
         """Empty chain is valid."""
@@ -432,6 +446,7 @@ class TestMerkleTree:
 # Comprehensive Verification Tests
 # =============================================================================
 
+
 class TestCapsuleIntegrityVerification:
     """Tests for comprehensive capsule integrity verification."""
 
@@ -485,9 +500,7 @@ class TestCapsuleIntegrityVerification:
 
         # Sign with one key, verify with another
         _, other_public = CapsuleIntegrityService.generate_keypair()
-        _, other_public_b64 = CapsuleIntegrityService.keypair_to_base64(
-            b"\x00" * 32, other_public
-        )
+        _, other_public_b64 = CapsuleIntegrityService.keypair_to_base64(b"\x00" * 32, other_public)
 
         signature = CapsuleIntegrityService.sign_capsule(
             content_hash, sample_keypair["private_bytes"]

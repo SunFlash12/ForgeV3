@@ -37,26 +37,31 @@ logger = structlog.get_logger()
 
 class GovernanceError(OverlayError):
     """Governance processing error."""
+
     pass
 
 
 class InsufficientQuorumError(GovernanceError):
     """Quorum not reached."""
+
     pass
 
 
 class PolicyViolationError(GovernanceError):
     """Policy rule violated."""
+
     pass
 
 
 class ConsensusFailedError(GovernanceError):
     """Consensus could not be reached."""
+
     pass
 
 
 class VotingStatus(str, Enum):
     """Status of voting on a proposal."""
+
     NOT_STARTED = "not_started"
     IN_PROGRESS = "in_progress"
     QUORUM_REACHED = "quorum_reached"
@@ -71,17 +76,18 @@ class ConditionOperator(str, Enum):
 
     SECURITY: Only these operators are allowed - no arbitrary code execution.
     """
+
     # Comparison operators
-    EQ = "eq"           # ==
-    NE = "ne"           # !=
-    GT = "gt"           # >
-    GE = "ge"           # >=
-    LT = "lt"           # <
-    LE = "le"           # <=
+    EQ = "eq"  # ==
+    NE = "ne"  # !=
+    GT = "gt"  # >
+    GE = "ge"  # >=
+    LT = "lt"  # <
+    LE = "le"  # <=
 
     # Existence operators
-    EXISTS = "exists"           # Field is truthy
-    NOT_EXISTS = "not_exists"   # Field is falsy
+    EXISTS = "exists"  # Field is truthy
+    NOT_EXISTS = "not_exists"  # Field is falsy
 
     # Logical operators (for combining conditions)
     AND = "and"
@@ -106,6 +112,7 @@ class SafeCondition:
         # Combine conditions with AND
         SafeCondition.and_conditions([cond1, cond2])
     """
+
     field: str
     operator: ConditionOperator
     value: Any | None = None
@@ -187,6 +194,7 @@ class PolicyRule:
     SECURITY: Uses SafeCondition instead of arbitrary Callable to prevent
     remote code execution through policy injection.
     """
+
     name: str
     description: str
     condition: SafeCondition  # Safe declarative condition
@@ -212,6 +220,7 @@ class PolicyRule:
 @dataclass
 class ConsensusConfig:
     """Configuration for consensus calculation."""
+
     # Quorum requirements
     min_votes: int = 3
     quorum_percentage: float = 0.1  # 10% of eligible voters
@@ -236,6 +245,7 @@ class ConsensusConfig:
 @dataclass
 class VoteRecord:
     """Record of a vote with trust context."""
+
     vote_id: str
     voter_id: str
     vote_type: VoteChoice
@@ -248,6 +258,7 @@ class VoteRecord:
 @dataclass
 class ConsensusResult:
     """Result of consensus calculation."""
+
     status: VotingStatus
 
     # Vote counts
@@ -288,6 +299,7 @@ class ConsensusResult:
 @dataclass
 class GovernanceDecision:
     """Final governance decision."""
+
     proposal_id: str
     decision: str  # "approved", "rejected", "pending", "expired"
     consensus: ConsensusResult
@@ -318,7 +330,7 @@ class GovernanceOverlay(BaseOverlay):
     REQUIRED_CAPABILITIES = {
         Capability.DATABASE_READ,
         Capability.DATABASE_WRITE,
-        Capability.EVENT_PUBLISH
+        Capability.EVENT_PUBLISH,
     }
 
     def __init__(
@@ -326,7 +338,7 @@ class GovernanceOverlay(BaseOverlay):
         consensus_config: ConsensusConfig | None = None,
         policy_rules: list[PolicyRule] | None = None,
         enable_ghost_council: bool = True,
-        eligible_voters_provider: Callable[[], int] | None = None
+        eligible_voters_provider: Callable[[], int] | None = None,
     ):
         """
         Initialize the governance overlay.
@@ -356,7 +368,7 @@ class GovernanceOverlay(BaseOverlay):
             "proposals_evaluated": 0,
             "votes_processed": 0,
             "consensus_reached": 0,
-            "policies_enforced": 0
+            "policies_enforced": 0,
         }
         self._stats_lock = asyncio.Lock()  # Lock for stats updates
 
@@ -380,42 +392,48 @@ class GovernanceOverlay(BaseOverlay):
     def _add_default_policies(self) -> None:
         """Add default governance policies using safe conditions."""
         # Trust threshold policy: proposer_trust >= STANDARD
-        self._policies.append(PolicyRule(
-            name="trust_threshold",
-            description="Proposer must have sufficient trust",
-            condition=SafeCondition(
-                field="proposer_trust",
-                operator=ConditionOperator.GE,
-                value=TrustLevel.STANDARD.value
-            ),
-            required_trust=0,
-            applies_to=[ProposalType.POLICY, ProposalType.SYSTEM]
-        ))
+        self._policies.append(
+            PolicyRule(
+                name="trust_threshold",
+                description="Proposer must have sufficient trust",
+                condition=SafeCondition(
+                    field="proposer_trust",
+                    operator=ConditionOperator.GE,
+                    value=TrustLevel.STANDARD.value,
+                ),
+                required_trust=0,
+                applies_to=[ProposalType.POLICY, ProposalType.SYSTEM],
+            )
+        )
 
         # Content policy: title AND description must exist
-        self._policies.append(PolicyRule(
-            name="proposal_content",
-            description="Proposal must have title and description",
-            condition=SafeCondition.and_conditions([
-                SafeCondition("title", ConditionOperator.EXISTS),
-                SafeCondition("description", ConditionOperator.EXISTS),
-            ]),
-            required_trust=0,
-            applies_to=[]  # All types
-        ))
+        self._policies.append(
+            PolicyRule(
+                name="proposal_content",
+                description="Proposal must have title and description",
+                condition=SafeCondition.and_conditions(
+                    [
+                        SafeCondition("title", ConditionOperator.EXISTS),
+                        SafeCondition("description", ConditionOperator.EXISTS),
+                    ]
+                ),
+                required_trust=0,
+                applies_to=[],  # All types
+            )
+        )
 
         # Resource limits policy: estimated_resources <= 1000
-        self._policies.append(PolicyRule(
-            name="resource_limits",
-            description="Proposal must not exceed resource limits",
-            condition=SafeCondition(
-                field="estimated_resources",
-                operator=ConditionOperator.LE,
-                value=1000
-            ),
-            required_trust=TrustLevel.TRUSTED.value,
-            applies_to=[ProposalType.SYSTEM]
-        ))
+        self._policies.append(
+            PolicyRule(
+                name="resource_limits",
+                description="Proposal must not exceed resource limits",
+                condition=SafeCondition(
+                    field="estimated_resources", operator=ConditionOperator.LE, value=1000
+                ),
+                required_trust=TrustLevel.TRUSTED.value,
+                applies_to=[ProposalType.SYSTEM],
+            )
+        )
 
     async def initialize(self) -> bool:
         """Initialize the governance overlay."""
@@ -425,8 +443,8 @@ class GovernanceOverlay(BaseOverlay):
             config={
                 "approval_threshold": self._config.approval_threshold,
                 "quorum_percentage": self._config.quorum_percentage,
-                "voting_period_hours": self._config.voting_period_hours
-            }
+                "voting_period_hours": self._config.voting_period_hours,
+            },
         )
         return True
 
@@ -434,7 +452,7 @@ class GovernanceOverlay(BaseOverlay):
         self,
         context: OverlayContext,
         event: Event | None = None,
-        input_data: dict[str, Any] | None = None
+        input_data: dict[str, Any] | None = None,
     ) -> OverlayResult:
         """
         Execute governance processing.
@@ -448,6 +466,7 @@ class GovernanceOverlay(BaseOverlay):
             Governance result
         """
         import time
+
         start_time = time.time()
 
         data = input_data or {}
@@ -474,15 +493,13 @@ class GovernanceOverlay(BaseOverlay):
         self._logger.info(
             "governance_execution_complete",
             action=event.type.value if event else "evaluate",
-            duration_ms=round(duration_ms, 2)
+            duration_ms=round(duration_ms, 2),
         )
 
         return result
 
     async def _handle_proposal_created(
-        self,
-        data: dict[str, Any],
-        context: OverlayContext
+        self, data: dict[str, Any], context: OverlayContext
     ) -> OverlayResult:
         """Handle new proposal creation."""
         proposal_id: str = str(data.get("proposal_id", ""))
@@ -496,10 +513,7 @@ class GovernanceOverlay(BaseOverlay):
         await self._update_stats("policies_enforced", len(policy_results))
 
         if not all_passed:
-            failed_policies = [
-                name for name, (passed, _) in policy_results.items()
-                if not passed
-            ]
+            failed_policies = [name for name, (passed, _) in policy_results.items() if not passed]
             return OverlayResult(
                 success=False,
                 error=f"Policy violations: {', '.join(failed_policies)}",
@@ -508,16 +522,18 @@ class GovernanceOverlay(BaseOverlay):
                     "policy_results": {
                         name: {"passed": passed, "error": error}
                         for name, (passed, error) in policy_results.items()
-                    }
+                    },
                 },
-                events_to_emit=[{
-                    "event_type": EventType.GOVERNANCE_ACTION,
-                    "payload": {
-                        "action": "proposal_rejected",
-                        "proposal_id": proposal_id,
-                        "reason": "policy_violation"
+                events_to_emit=[
+                    {
+                        "event_type": EventType.GOVERNANCE_ACTION,
+                        "payload": {
+                            "action": "proposal_rejected",
+                            "proposal_id": proposal_id,
+                            "reason": "policy_violation",
+                        },
                     }
-                }]
+                ],
             )
 
         # SECURITY FIX (Audit 2): Use lock for initializing proposal voting
@@ -526,9 +542,7 @@ class GovernanceOverlay(BaseOverlay):
             self._active_proposals[proposal_id] = []
 
         # Calculate voting end time
-        voting_ends_at = datetime.now(UTC) + timedelta(
-            hours=self._config.voting_period_hours
-        )
+        voting_ends_at = datetime.now(UTC) + timedelta(hours=self._config.voting_period_hours)
 
         return OverlayResult(
             success=True,
@@ -540,22 +554,22 @@ class GovernanceOverlay(BaseOverlay):
                     for name, (passed, error) in policy_results.items()
                 },
                 "voting_ends_at": voting_ends_at.isoformat(),
-                "quorum_needed": self._calculate_quorum()
+                "quorum_needed": self._calculate_quorum(),
             },
-            events_to_emit=[{
-                "event_type": EventType.GOVERNANCE_ACTION,
-                "payload": {
-                    "action": "voting_started",
-                    "proposal_id": proposal_id,
-                    "voting_ends_at": voting_ends_at.isoformat()
+            events_to_emit=[
+                {
+                    "event_type": EventType.GOVERNANCE_ACTION,
+                    "payload": {
+                        "action": "voting_started",
+                        "proposal_id": proposal_id,
+                        "voting_ends_at": voting_ends_at.isoformat(),
+                    },
                 }
-            }]
+            ],
         )
 
     async def _handle_vote_cast(
-        self,
-        data: dict[str, Any],
-        context: OverlayContext
+        self, data: dict[str, Any], context: OverlayContext
     ) -> OverlayResult:
         """Handle vote being cast."""
         raw_proposal_id = data.get("proposal_id")
@@ -564,10 +578,7 @@ class GovernanceOverlay(BaseOverlay):
         comment: str | None = data.get("comment")
 
         if not raw_proposal_id:
-            return OverlayResult(
-                success=False,
-                error="Missing proposal_id"
-            )
+            return OverlayResult(success=False, error="Missing proposal_id")
         proposal_id: str = str(raw_proposal_id)
 
         # Calculate vote weight based on trust
@@ -582,7 +593,7 @@ class GovernanceOverlay(BaseOverlay):
             trust_level=trust_level,
             weight=weight,
             timestamp=datetime.now(UTC),
-            comment=comment
+            comment=comment,
         )
 
         # SECURITY FIX (Audit 2): Use per-proposal lock to prevent race conditions
@@ -594,8 +605,7 @@ class GovernanceOverlay(BaseOverlay):
 
             # Remove previous vote from same voter (atomic with lock)
             self._active_proposals[proposal_id] = [
-                v for v in self._active_proposals[proposal_id]
-                if v.voter_id != voter_id
+                v for v in self._active_proposals[proposal_id] if v.voter_id != voter_id
             ]
             self._active_proposals[proposal_id].append(vote_record)
 
@@ -606,17 +616,14 @@ class GovernanceOverlay(BaseOverlay):
         await self._update_stats("votes_processed")
 
         # Calculate current consensus with the copy
-        consensus = self._calculate_consensus(
-            votes_copy,
-            data.get("created_at")
-        )
+        consensus = self._calculate_consensus(votes_copy, data.get("created_at"))
 
         # Check if decision can be made
         decision = None
         if consensus.status in {
             VotingStatus.CONSENSUS_REACHED,
             VotingStatus.CONSENSUS_FAILED,
-            VotingStatus.EXPIRED
+            VotingStatus.EXPIRED,
         }:
             decision, consensus_reached = self._make_decision(proposal_id, consensus, {})
             # SECURITY FIX (Audit 2): Thread-safe stats update
@@ -631,26 +638,26 @@ class GovernanceOverlay(BaseOverlay):
                     "voter_id": voter_id,
                     "vote_type": vote_type.value,
                     "weight": weight,
-                    "trust_level": trust_level
+                    "trust_level": trust_level,
                 },
                 "consensus": self._consensus_to_dict(consensus),
-                "decision": decision.__dict__ if decision else None
+                "decision": decision.__dict__ if decision else None,
             },
-            events_to_emit=[{
-                "event_type": EventType.VOTE_CAST,
-                "payload": {
-                    "proposal_id": proposal_id,
-                    "voter_id": voter_id,
-                    "vote_type": vote_type.value,
-                    "consensus_status": consensus.status.value
+            events_to_emit=[
+                {
+                    "event_type": EventType.VOTE_CAST,
+                    "payload": {
+                        "proposal_id": proposal_id,
+                        "voter_id": voter_id,
+                        "vote_type": vote_type.value,
+                        "consensus_status": consensus.status.value,
+                    },
                 }
-            }]
+            ],
         )
 
     async def _handle_governance_action(
-        self,
-        data: dict[str, Any],
-        context: OverlayContext
+        self, data: dict[str, Any], context: OverlayContext
     ) -> OverlayResult:
         """Handle governance actions."""
         action = data.get("action")
@@ -683,8 +690,8 @@ class GovernanceOverlay(BaseOverlay):
                     data={
                         "action": "voting_closed",
                         "proposal_id": proposal_id,
-                        "decision": decision.__dict__
-                    }
+                        "decision": decision.__dict__,
+                    },
                 )
 
         elif action == "execute_proposal":
@@ -696,11 +703,12 @@ class GovernanceOverlay(BaseOverlay):
                 # Parse the datetime if it's a string
                 if isinstance(execution_allowed_after, str):
                     try:
-                        execution_allowed_after = dt.fromisoformat(execution_allowed_after.replace('Z', '+00:00'))
+                        execution_allowed_after = dt.fromisoformat(
+                            execution_allowed_after.replace("Z", "+00:00")
+                        )
                     except ValueError:
                         return OverlayResult(
-                            success=False,
-                            error="Invalid execution_allowed_after format"
+                            success=False, error="Invalid execution_allowed_after format"
                         )
 
                 now = dt.now(UTC)
@@ -712,41 +720,29 @@ class GovernanceOverlay(BaseOverlay):
                     self._logger.warning(
                         "proposal_execution_blocked_timelock",
                         proposal_id=proposal_id,
-                        remaining_seconds=remaining_seconds
+                        remaining_seconds=remaining_seconds,
                     )
                     return OverlayResult(
                         success=False,
                         error=f"Proposal execution blocked: timelock has {remaining_seconds} seconds remaining",
                         data={
                             "timelock_remaining_seconds": remaining_seconds,
-                            "execution_allowed_after": execution_allowed_after.isoformat()
-                        }
+                            "execution_allowed_after": execution_allowed_after.isoformat(),
+                        },
                     )
 
             # Timelock passed or not set - proceed with execution
-            self._logger.info(
-                "proposal_execution_allowed",
-                proposal_id=proposal_id
-            )
+            self._logger.info("proposal_execution_allowed", proposal_id=proposal_id)
             await self._update_stats("proposals_executed")
 
             return OverlayResult(
-                success=True,
-                data={
-                    "action": "proposal_executed",
-                    "proposal_id": proposal_id
-                }
+                success=True, data={"action": "proposal_executed", "proposal_id": proposal_id}
             )
 
-        return OverlayResult(
-            success=False,
-            error=f"Unknown action: {action}"
-        )
+        return OverlayResult(success=False, error=f"Unknown action: {action}")
 
     async def _evaluate_consensus(
-        self,
-        data: dict[str, Any],
-        context: OverlayContext
+        self, data: dict[str, Any], context: OverlayContext
     ) -> OverlayResult:
         """Evaluate current consensus state."""
         raw_proposal_id = data.get("proposal_id")
@@ -761,11 +757,7 @@ class GovernanceOverlay(BaseOverlay):
                 num_active = len(self._active_proposals)
 
             return OverlayResult(
-                success=True,
-                data={
-                    "active_proposals": num_active,
-                    "summary": active_summary
-                }
+                success=True, data={"active_proposals": num_active, "summary": active_summary}
             )
 
         proposal_id: str = str(raw_proposal_id)
@@ -792,11 +784,11 @@ class GovernanceOverlay(BaseOverlay):
                         "voter_id": v.voter_id,
                         "vote_type": v.vote_type.value,
                         "weight": v.weight,
-                        "timestamp": v.timestamp.isoformat()
+                        "timestamp": v.timestamp.isoformat(),
                     }
                     for v in votes
-                ]
-            }
+                ],
+            },
         )
 
     def _evaluate_policies(self, data: dict[str, Any]) -> dict[str, tuple[bool, str | None]]:
@@ -843,16 +835,11 @@ class GovernanceOverlay(BaseOverlay):
         """Calculate required quorum."""
         if self._eligible_voters_provider:
             eligible = self._eligible_voters_provider()
-            return max(
-                self._config.min_votes,
-                int(eligible * self._config.quorum_percentage)
-            )
+            return max(self._config.min_votes, int(eligible * self._config.quorum_percentage))
         return self._config.min_votes
 
     def _calculate_consensus(
-        self,
-        votes: list[VoteRecord],
-        proposal_created_at: str | None
+        self, votes: list[VoteRecord], proposal_created_at: str | None
     ) -> ConsensusResult:
         """Calculate consensus from votes."""
         result = ConsensusResult(status=VotingStatus.IN_PROGRESS)
@@ -869,15 +856,9 @@ class GovernanceOverlay(BaseOverlay):
         result.abstain_votes = sum(1 for v in votes if v.vote_type == VoteChoice.ABSTAIN)
 
         # Calculate weighted scores
-        result.weighted_approve = sum(
-            v.weight for v in votes if v.vote_type == VoteChoice.APPROVE
-        )
-        result.weighted_reject = sum(
-            v.weight for v in votes if v.vote_type == VoteChoice.REJECT
-        )
-        result.weighted_abstain = sum(
-            v.weight for v in votes if v.vote_type == VoteChoice.ABSTAIN
-        )
+        result.weighted_approve = sum(v.weight for v in votes if v.vote_type == VoteChoice.APPROVE)
+        result.weighted_reject = sum(v.weight for v in votes if v.vote_type == VoteChoice.REJECT)
+        result.weighted_abstain = sum(v.weight for v in votes if v.vote_type == VoteChoice.ABSTAIN)
 
         total_weight = result.weighted_approve + result.weighted_reject
         if self._config.allow_abstentions:
@@ -893,8 +874,12 @@ class GovernanceOverlay(BaseOverlay):
         result.quorum_met = result.total_votes >= result.quorum_needed
 
         # Check thresholds
-        result.approval_threshold_met = result.approval_percentage >= self._config.approval_threshold
-        result.rejection_threshold_met = result.rejection_percentage >= self._config.rejection_threshold
+        result.approval_threshold_met = (
+            result.approval_percentage >= self._config.approval_threshold
+        )
+        result.rejection_threshold_met = (
+            result.rejection_percentage >= self._config.rejection_threshold
+        )
 
         # Check core votes
         core_votes = [v for v in votes if v.trust_level >= TrustLevel.CORE.value]
@@ -904,7 +889,7 @@ class GovernanceOverlay(BaseOverlay):
         # Calculate voting end time
         if proposal_created_at:
             try:
-                created = datetime.fromisoformat(proposal_created_at.replace('Z', '+00:00'))
+                created = datetime.fromisoformat(proposal_created_at.replace("Z", "+00:00"))
                 result.voting_ends_at = created + timedelta(hours=self._config.voting_period_hours)
                 remaining = result.voting_ends_at - datetime.now(UTC)
                 result.time_remaining_hours = max(0, remaining.total_seconds() / 3600)
@@ -940,7 +925,7 @@ class GovernanceOverlay(BaseOverlay):
         self,
         proposal_id: str,
         consensus: ConsensusResult,
-        policy_results: dict[str, tuple[bool, str | None]]
+        policy_results: dict[str, tuple[bool, str | None]],
     ) -> tuple[GovernanceDecision, bool]:
         """
         Make final governance decision.
@@ -970,14 +955,12 @@ class GovernanceOverlay(BaseOverlay):
             consensus=consensus,
             policy_results=policy_results,
             effective_at=datetime.now(UTC) if decision_str == "approved" else None,
-            rationale=rationale
+            rationale=rationale,
         )
         return decision, consensus_reached
 
     def _get_ghost_council_recommendation(
-        self,
-        data: dict[str, Any],
-        consensus: ConsensusResult
+        self, data: dict[str, Any], consensus: ConsensusResult
     ) -> str:
         """
         Get Ghost Council recommendation.
@@ -1018,9 +1001,11 @@ class GovernanceOverlay(BaseOverlay):
             "approval_threshold_met": consensus.approval_threshold_met,
             "has_core_approval": consensus.has_core_approval,
             "has_core_rejection": consensus.has_core_rejection,
-            "voting_ends_at": consensus.voting_ends_at.isoformat() if consensus.voting_ends_at else None,
+            "voting_ends_at": consensus.voting_ends_at.isoformat()
+            if consensus.voting_ends_at
+            else None,
             "time_remaining_hours": round(consensus.time_remaining_hours, 1),
-            "ghost_council_recommendation": consensus.ghost_council_recommendation
+            "ghost_council_recommendation": consensus.ghost_council_recommendation,
         }
 
     def add_policy(self, policy: PolicyRule) -> None:
@@ -1040,11 +1025,7 @@ class GovernanceOverlay(BaseOverlay):
         self._validate_safe_condition(policy.condition)
 
         self._policies.append(policy)
-        self._logger.info(
-            "policy_added",
-            policy_name=policy.name,
-            description=policy.description
-        )
+        self._logger.info("policy_added", policy_name=policy.name, description=policy.description)
 
     def _validate_safe_condition(self, condition: SafeCondition, depth: int = 0) -> None:
         """
@@ -1061,25 +1042,19 @@ class GovernanceOverlay(BaseOverlay):
 
         # Validate operator is from our enum (not an arbitrary value)
         if not isinstance(condition.operator, ConditionOperator):
-            raise PolicyViolationError(
-                f"Invalid condition operator: {condition.operator}"
-            )
+            raise PolicyViolationError(f"Invalid condition operator: {condition.operator}")
 
         # For logical operators, validate sub-conditions
         if condition.operator in (ConditionOperator.AND, ConditionOperator.OR):
             if condition.sub_conditions:
                 for sub in condition.sub_conditions:
                     if not isinstance(sub, SafeCondition):
-                        raise PolicyViolationError(
-                            "Sub-conditions must be SafeCondition instances"
-                        )
+                        raise PolicyViolationError("Sub-conditions must be SafeCondition instances")
                     self._validate_safe_condition(sub, depth + 1)
         else:
             # For comparison operators, validate field name
             if not isinstance(condition.field, str) or not condition.field:
-                raise PolicyViolationError(
-                    "Condition field must be a non-empty string"
-                )
+                raise PolicyViolationError("Condition field must be a non-empty string")
 
             # SECURITY: Block potentially dangerous field patterns
             dangerous_patterns = ["..", "__", "\\", "/", "\x00"]
@@ -1104,7 +1079,7 @@ class GovernanceOverlay(BaseOverlay):
                 "name": p.name,
                 "description": p.description,
                 "required_trust": p.required_trust,
-                "applies_to": [t.value for t in p.applies_to]
+                "applies_to": [t.value for t in p.applies_to],
             }
             for p in self._policies
         ]
@@ -1114,15 +1089,12 @@ class GovernanceOverlay(BaseOverlay):
         return {
             **self._stats,
             "active_proposals": len(self._active_proposals),
-            "policies_count": len(self._policies)
+            "policies_count": len(self._policies),
         }
 
 
 # Convenience function
-def create_governance_overlay(
-    strict_mode: bool = False,
-    **kwargs: Any
-) -> GovernanceOverlay:
+def create_governance_overlay(strict_mode: bool = False, **kwargs: Any) -> GovernanceOverlay:
     """
     Create a governance overlay.
 
@@ -1135,10 +1107,7 @@ def create_governance_overlay(
     """
     if strict_mode:
         config = ConsensusConfig(
-            min_votes=5,
-            quorum_percentage=0.2,
-            approval_threshold=0.7,
-            require_core_approval=True
+            min_votes=5, quorum_percentage=0.2, approval_threshold=0.7, require_core_approval=True
         )
         kwargs["consensus_config"] = config
 

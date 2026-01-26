@@ -21,6 +21,7 @@ from forge.models.semantic_edges import SemanticEdgeCreate, SemanticRelationType
 # Graph Repository Tests
 # =============================================================================
 
+
 class TestGraphRepository:
     """Tests for GraphRepository."""
 
@@ -36,10 +37,13 @@ class TestGraphRepository:
     def graph_repo(self, mock_db_client: MagicMock) -> Any:
         """Create GraphRepository with mock client."""
         from forge.repositories.graph_repository import GraphRepository
+
         return GraphRepository(mock_db_client)
 
     @pytest.mark.asyncio
-    async def test_compute_pagerank_returns_rankings(self, graph_repo: Any, mock_db_client: MagicMock) -> None:
+    async def test_compute_pagerank_returns_rankings(
+        self, graph_repo: Any, mock_db_client: MagicMock
+    ) -> None:
         """Test PageRank computation returns properly ranked nodes."""
         # Setup mock response
         mock_db_client.execute.return_value = [
@@ -60,7 +64,9 @@ class TestGraphRepository:
         assert result[2].rank == 3
 
     @pytest.mark.asyncio
-    async def test_compute_centrality_degree(self, graph_repo: Any, mock_db_client: MagicMock) -> None:
+    async def test_compute_centrality_degree(
+        self, graph_repo: Any, mock_db_client: MagicMock
+    ) -> None:
         """Test degree centrality computation."""
         mock_db_client.execute.return_value = [
             {"node_id": "hub1", "node_type": "Capsule", "score": 15.0},
@@ -94,7 +100,9 @@ class TestGraphRepository:
         assert len(result[0].node_ids) == 5
 
     @pytest.mark.asyncio
-    async def test_trust_transitivity_calculation(self, graph_repo: Any, mock_db_client: MagicMock) -> None:
+    async def test_trust_transitivity_calculation(
+        self, graph_repo: Any, mock_db_client: MagicMock
+    ) -> None:
         """Test trust transitivity through graph paths."""
         mock_db_client.execute_single.return_value = {
             "trust_score": 0.729,  # 0.9^3 for 3 hops
@@ -138,6 +146,7 @@ class TestGraphRepository:
 # Temporal Repository Tests
 # =============================================================================
 
+
 class TestTemporalRepository:
     """Tests for TemporalRepository."""
 
@@ -153,6 +162,7 @@ class TestTemporalRepository:
     def temporal_repo(self, mock_db_client: MagicMock) -> Any:
         """Create TemporalRepository with mock client."""
         from forge.repositories.temporal_repository import TemporalRepository
+
         return TemporalRepository(mock_db_client)
 
     @pytest.mark.asyncio
@@ -182,9 +192,21 @@ class TestTemporalRepository:
     async def test_get_version_history(self, temporal_repo: Any, mock_db_client: MagicMock) -> None:
         """Test retrieving version history."""
         mock_db_client.execute.return_value = [
-            {"version_id": "v3", "version_number": "1.2.0", "created_at": datetime.now(UTC).isoformat()},
-            {"version_id": "v2", "version_number": "1.1.0", "created_at": (datetime.now(UTC) - timedelta(days=1)).isoformat()},
-            {"version_id": "v1", "version_number": "1.0.0", "created_at": (datetime.now(UTC) - timedelta(days=2)).isoformat()},
+            {
+                "version_id": "v3",
+                "version_number": "1.2.0",
+                "created_at": datetime.now(UTC).isoformat(),
+            },
+            {
+                "version_id": "v2",
+                "version_number": "1.1.0",
+                "created_at": (datetime.now(UTC) - timedelta(days=1)).isoformat(),
+            },
+            {
+                "version_id": "v1",
+                "version_number": "1.0.0",
+                "created_at": (datetime.now(UTC) - timedelta(days=2)).isoformat(),
+            },
         ]
 
         result = await temporal_repo.get_version_history(capsule_id="cap1", limit=10)
@@ -216,9 +238,21 @@ class TestTemporalRepository:
     async def test_get_trust_timeline(self, temporal_repo: Any, mock_db_client: MagicMock) -> None:
         """Test trust evolution timeline."""
         mock_db_client.execute.return_value = [
-            {"trust_value": 60, "timestamp": datetime.now(UTC).isoformat(), "change_type": "derived"},
-            {"trust_value": 65, "timestamp": (datetime.now(UTC) - timedelta(days=7)).isoformat(), "change_type": "essential"},
-            {"trust_value": 50, "timestamp": (datetime.now(UTC) - timedelta(days=14)).isoformat(), "change_type": "essential"},
+            {
+                "trust_value": 60,
+                "timestamp": datetime.now(UTC).isoformat(),
+                "change_type": "derived",
+            },
+            {
+                "trust_value": 65,
+                "timestamp": (datetime.now(UTC) - timedelta(days=7)).isoformat(),
+                "change_type": "essential",
+            },
+            {
+                "trust_value": 50,
+                "timestamp": (datetime.now(UTC) - timedelta(days=14)).isoformat(),
+                "change_type": "essential",
+            },
         ]
 
         result = await temporal_repo.get_trust_timeline(
@@ -236,6 +270,7 @@ class TestTemporalRepository:
 # Semantic Edge Tests
 # =============================================================================
 
+
 class TestSemanticEdges:
     """Tests for semantic edge operations."""
 
@@ -251,10 +286,13 @@ class TestSemanticEdges:
     def capsule_repo(self, mock_db_client: MagicMock) -> Any:
         """Create CapsuleRepository with mock client."""
         from forge.repositories.capsule_repository import CapsuleRepository
+
         return CapsuleRepository(mock_db_client)
 
     @pytest.mark.asyncio
-    async def test_create_semantic_edge_supports(self, capsule_repo: Any, mock_db_client: MagicMock) -> None:
+    async def test_create_semantic_edge_supports(
+        self, capsule_repo: Any, mock_db_client: MagicMock
+    ) -> None:
         """Test creating SUPPORTS relationship."""
         now = datetime.now(UTC)
         mock_db_client.execute_single.return_value = {
@@ -290,7 +328,9 @@ class TestSemanticEdges:
         assert result.target_id == "cap2"
 
     @pytest.mark.asyncio
-    async def test_create_semantic_edge_contradicts_bidirectional(self, capsule_repo: Any, mock_db_client: MagicMock) -> None:
+    async def test_create_semantic_edge_contradicts_bidirectional(
+        self, capsule_repo: Any, mock_db_client: MagicMock
+    ) -> None:
         """Test creating CONTRADICTS relationship (bidirectional)."""
         now = datetime.now(UTC)
         mock_db_client.execute_single.return_value = {
@@ -326,7 +366,9 @@ class TestSemanticEdges:
         assert result.bidirectional is True
 
     @pytest.mark.asyncio
-    async def test_get_semantic_neighbors(self, capsule_repo: Any, mock_db_client: MagicMock) -> None:
+    async def test_get_semantic_neighbors(
+        self, capsule_repo: Any, mock_db_client: MagicMock
+    ) -> None:
         """Test getting semantic neighbors of a capsule."""
         mock_db_client.execute.return_value = [
             {
@@ -374,7 +416,7 @@ class TestSemanticEdges:
                     "created_at": now.isoformat(),
                     "updated_at": now.isoformat(),
                     "properties": "{}",
-                }
+                },
             }
         ]
 
@@ -388,6 +430,7 @@ class TestSemanticEdges:
 # =============================================================================
 # Semantic Edge Detector Tests
 # =============================================================================
+
 
 class TestSemanticEdgeDetector:
     """Tests for SemanticEdgeDetector service."""
@@ -429,7 +472,9 @@ class TestSemanticEdgeDetector:
         )
 
     @pytest.mark.asyncio
-    async def test_analyze_capsule_finds_similar(self, detector: Any, mock_capsule_repo: MagicMock) -> None:
+    async def test_analyze_capsule_finds_similar(
+        self, detector: Any, mock_capsule_repo: MagicMock
+    ) -> None:
         """Test that analyzer finds similar capsules."""
 
         source_capsule = MagicMock()
@@ -445,12 +490,10 @@ class TestSemanticEdgeDetector:
         similar_capsule.content = "Related security content"
         similar_capsule.type = MagicMock(value="KNOWLEDGE")
 
-        mock_capsule_repo.find_similar_by_embedding.return_value = [
-            (similar_capsule, 0.85)
-        ]
+        mock_capsule_repo.find_similar_by_embedding.return_value = [(similar_capsule, 0.85)]
 
         # Mock LLM response to skip actual LLM call
-        with patch.object(detector, '_classify_relationship') as mock_classify:
+        with patch.object(detector, "_classify_relationship") as mock_classify:
             from forge.services.semantic_edge_detector import RelationshipClassification
 
             mock_classify.return_value = RelationshipClassification(
@@ -469,6 +512,7 @@ class TestSemanticEdgeDetector:
 # Lineage Tracker with Semantic Edges Tests
 # =============================================================================
 
+
 class TestLineageTrackerSemanticEdges:
     """Tests for lineage tracker with semantic edge support."""
 
@@ -476,6 +520,7 @@ class TestLineageTrackerSemanticEdges:
     def lineage_tracker(self) -> Any:
         """Create LineageTrackerOverlay."""
         from forge.overlays.lineage_tracker import LineageTrackerOverlay
+
         return LineageTrackerOverlay(
             enable_anomaly_detection=True,
             enable_metrics=True,
@@ -485,6 +530,7 @@ class TestLineageTrackerSemanticEdges:
     def overlay_context(self) -> Any:
         """Create overlay context."""
         from forge.overlays.base import OverlayContext
+
         return OverlayContext(
             overlay_id="test-overlay",
             overlay_name="test",
@@ -496,7 +542,9 @@ class TestLineageTrackerSemanticEdges:
         )
 
     @pytest.mark.asyncio
-    async def test_handle_semantic_edge_created(self, lineage_tracker: Any, overlay_context: Any) -> None:
+    async def test_handle_semantic_edge_created(
+        self, lineage_tracker: Any, overlay_context: Any
+    ) -> None:
         """Test handling semantic edge creation event."""
 
         # First create the source and target nodes
@@ -529,7 +577,9 @@ class TestLineageTrackerSemanticEdges:
         assert "cap2" in node.supports
 
     @pytest.mark.asyncio
-    async def test_contradiction_detection(self, lineage_tracker: Any, overlay_context: Any) -> None:
+    async def test_contradiction_detection(
+        self, lineage_tracker: Any, overlay_context: Any
+    ) -> None:
         """Test contradiction anomaly detection."""
         # Create two capsules
         await lineage_tracker._handle_capsule_created(
@@ -621,6 +671,7 @@ class TestLineageTrackerSemanticEdges:
 # Knowledge Query Tests
 # =============================================================================
 
+
 class TestKnowledgeQueryOverlay:
     """Tests for knowledge query overlay."""
 
@@ -635,6 +686,7 @@ class TestKnowledgeQueryOverlay:
     def knowledge_overlay(self) -> Any:
         """Create KnowledgeQueryOverlay."""
         from forge.overlays.knowledge_query import KnowledgeQueryOverlay
+
         return KnowledgeQueryOverlay()
 
     @pytest.mark.asyncio
@@ -660,6 +712,7 @@ class TestKnowledgeQueryOverlay:
 # =============================================================================
 # API Route Integration Tests
 # =============================================================================
+
 
 class TestGraphAPIRoutes:
     """Integration tests for graph API routes."""

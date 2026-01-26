@@ -77,10 +77,10 @@ def get_cookie_settings() -> dict[str, Any]:
     is_production = settings.app_env == "production"
 
     return {
-        "httponly": True,      # Prevent JavaScript access (XSS protection)
+        "httponly": True,  # Prevent JavaScript access (XSS protection)
         "secure": is_production,  # Only require HTTPS in production
-        "samesite": "lax",     # CSRF protection (allows top-level navigation)
-        "path": "/",           # Available for all paths
+        "samesite": "lax",  # CSRF protection (allows top-level navigation)
+        "path": "/",  # Available for all paths
     }
 
 
@@ -151,8 +151,10 @@ def generate_csrf_token() -> str:
 # Request/Response Models
 # =============================================================================
 
+
 class RegisterRequest(BaseModel):
     """User registration request."""
+
     username: str = Field(..., min_length=3, max_length=50, pattern=r"^[a-zA-Z0-9_-]+$")
     email: EmailStr
     # SECURITY FIX (Audit 4 - M): Bcrypt truncates at 72 bytes, so limit max_length
@@ -162,6 +164,7 @@ class RegisterRequest(BaseModel):
 
 class LoginRequest(BaseModel):
     """User login request."""
+
     # SECURITY FIX (Audit 2): Add length limits to prevent DoS
     username: str = Field(..., min_length=1, max_length=255)
     password: str = Field(..., min_length=1, max_length=128)
@@ -169,6 +172,7 @@ class LoginRequest(BaseModel):
 
 class TokenResponse(BaseModel):
     """JWT token response."""
+
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
@@ -177,12 +181,14 @@ class TokenResponse(BaseModel):
 
 class RefreshRequest(BaseModel):
     """Token refresh request."""
+
     # SECURITY FIX (Audit 2): Add max_length to prevent DoS
     refresh_token: str = Field(..., max_length=1024)
 
 
 class ChangePasswordRequest(BaseModel):
     """Password change request."""
+
     # Current password can be longer in case user previously set a long password
     current_password: str = Field(..., min_length=1, max_length=128)
     # SECURITY FIX (Audit 4 - M): Bcrypt truncates at 72 bytes, so limit new password
@@ -214,6 +220,7 @@ def validate_metadata_size(v: dict[str, Any] | None) -> dict[str, Any] | None:
     if len(v) > 10:
         raise ValueError("Metadata cannot have more than 10 keys")
     import json
+
     for key, value in v.items():
         # SECURITY: Reject reserved/dangerous keys to prevent prototype pollution
         if key in RESERVED_METADATA_KEYS or key.startswith("__"):
@@ -231,9 +238,12 @@ def validate_metadata_size(v: dict[str, Any] | None) -> dict[str, Any] | None:
 
 class UpdateProfileRequest(BaseModel):
     """Profile update request."""
+
     display_name: str | None = Field(default=None, max_length=100)
     email: EmailStr | None = None
-    metadata: dict[str, Any] | None = Field(default=None, description="User metadata (max 10 keys, 1KB value limit)")
+    metadata: dict[str, Any] | None = Field(
+        default=None, description="User metadata (max 10 keys, 1KB value limit)"
+    )
 
     @field_validator("metadata")
     @classmethod
@@ -243,6 +253,7 @@ class UpdateProfileRequest(BaseModel):
 
 class UserResponse(BaseModel):
     """User profile response."""
+
     id: str
     username: str
     email: str
@@ -262,7 +273,7 @@ class UserResponse(BaseModel):
             display_name=user.display_name,
             trust_level=user.trust_level.name,
             trust_score=float(user.trust_flame),
-            roles=[user.role.value] if hasattr(user.role, 'value') else [user.role],
+            roles=[user.role.value] if hasattr(user.role, "value") else [user.role],
             is_active=user.is_active,
             created_at=user.created_at.isoformat() if user.created_at else "",
         )
@@ -271,6 +282,7 @@ class UserResponse(BaseModel):
 # =============================================================================
 # Endpoints
 # =============================================================================
+
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def register(
@@ -343,6 +355,7 @@ async def register(
     except ValueError as e:
         # SECURITY FIX (Audit 3): Generic message for unexpected validation errors
         import logging
+
         logging.getLogger(__name__).warning(f"registration_validation_error: {e}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -352,6 +365,7 @@ async def register(
 
 class LoginResponse(BaseModel):
     """Login response with CSRF token (tokens are in httpOnly cookies)."""
+
     csrf_token: str
     expires_in: int
     user: UserResponse
@@ -364,6 +378,7 @@ class LoginMFARequiredResponse(BaseModel):
     SECURITY FIX (Audit 6 - Session 3): Two-step login flow for MFA users.
     Password was verified, but user must now provide TOTP/backup code.
     """
+
     mfa_required: Literal[True] = True
     mfa_token: str  # Temporary token for MFA verification (5 min expiry)
     expires_in: int  # Token expiry in seconds
@@ -372,8 +387,16 @@ class LoginMFARequiredResponse(BaseModel):
 
 class MFALoginVerifyRequest(BaseModel):
     """Request to complete MFA login verification."""
-    mfa_token: str = Field(..., max_length=2048, description="MFA pending token from login response")
-    code: str = Field(..., min_length=6, max_length=12, description="TOTP code (6 digits) or backup code (XXXX-XXXX)")
+
+    mfa_token: str = Field(
+        ..., max_length=2048, description="MFA pending token from login response"
+    )
+    code: str = Field(
+        ...,
+        min_length=6,
+        max_length=12,
+        description="TOTP code (6 digits) or backup code (XXXX-XXXX)",
+    )
 
 
 @router.post("/login", response_model=LoginResponse | LoginMFARequiredResponse)
@@ -579,6 +602,7 @@ async def verify_mfa_login(
 
 class RefreshResponse(BaseModel):
     """Refresh response with new CSRF token."""
+
     csrf_token: str
     expires_in: int
 
@@ -772,7 +796,9 @@ async def update_profile(
             actor_id=user.id,
             target_user_id=user.id,
             action="profile_updated",
-            details={"fields": [f for f in ["display_name", "email"] if getattr(request, f) is not None]},
+            details={
+                "fields": [f for f in ["display_name", "email"] if getattr(request, f) is not None]
+            },
         )
 
         return UserResponse.from_user(updated_user)
@@ -886,6 +912,7 @@ from forge.security.mfa import get_mfa_service
 
 class MFASetupResponse(BaseModel):
     """Response for MFA setup."""
+
     secret: str
     provisioning_uri: str
     qr_code: str  # Alias for provisioning_uri (frontend compatibility)
@@ -894,11 +921,13 @@ class MFASetupResponse(BaseModel):
 
 class MFAVerifyRequest(BaseModel):
     """Request to verify MFA code."""
+
     code: str = Field(..., min_length=6, max_length=8, description="TOTP or backup code")
 
 
 class MFAStatusResponse(BaseModel):
     """MFA status response."""
+
     enabled: bool
     verified: bool
     backup_codes_remaining: int
@@ -926,7 +955,7 @@ async def setup_mfa(
         # MFA already being enabled is a resource conflict, not a malformed request.
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="MFA is already enabled. Disable it first to reconfigure."
+            detail="MFA is already enabled. Disable it first to reconfigure.",
         )
 
     result = await mfa.setup_mfa(user.id, user.email)
@@ -968,7 +997,7 @@ async def verify_mfa_setup(
 
     raise HTTPException(
         status_code=status.HTTP_400_BAD_REQUEST,
-        detail="Invalid verification code. Please try again."
+        detail="Invalid verification code. Please try again.",
     )
 
 
@@ -1014,7 +1043,7 @@ async def disable_mfa(
     if not verified:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid verification code. MFA cannot be disabled."
+            detail="Invalid verification code. MFA cannot be disabled.",
         )
 
     await mfa.disable_mfa(user.id)
@@ -1047,7 +1076,7 @@ async def regenerate_backup_codes(
     if not await mfa.verify_totp(user.id, request.code):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid TOTP code. Cannot regenerate backup codes."
+            detail="Invalid TOTP code. Cannot regenerate backup codes.",
         )
 
     try:
@@ -1063,8 +1092,7 @@ async def regenerate_backup_codes(
     except ValueError:
         # SECURITY FIX (Audit 3): Generic message for MFA errors
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="MFA is not enabled for this account"
+            status_code=status.HTTP_400_BAD_REQUEST, detail="MFA is not enabled for this account"
         )
 
 
@@ -1080,15 +1108,16 @@ from forge.security.google_oauth import (
 
 class GoogleAuthRequest(BaseModel):
     """Request for Google OAuth authentication."""
+
     credential: str = Field(..., description="Google ID token from Sign-In")
     client_type: Literal["cascade", "shop"] = Field(
-        default="cascade",
-        description="Client type for redirect URI selection"
+        default="cascade", description="Client type for redirect URI selection"
     )
 
 
 class GoogleAuthResponse(BaseModel):
     """Response after Google OAuth authentication."""
+
     csrf_token: str
     expires_in: int
     user: UserResponse
@@ -1097,6 +1126,7 @@ class GoogleAuthResponse(BaseModel):
 
 class GoogleLinkResponse(BaseModel):
     """Response after linking Google account."""
+
     linked: bool
     google_email: str
 
@@ -1120,7 +1150,7 @@ async def google_auth(
     if not google_service.is_configured:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Google Sign-In is not configured"
+            detail="Google Sign-In is not configured",
         )
 
     try:
@@ -1128,9 +1158,7 @@ async def google_auth(
         google_user = await google_service.verify_id_token(request.credential)
 
         # Get or create user
-        user, is_new_user = await google_service.get_or_create_user(
-            google_user, user_repo
-        )
+        user, is_new_user = await google_service.get_or_create_user(google_user, user_repo)
 
         # Generate tokens
         from forge.config import get_settings
@@ -1182,8 +1210,7 @@ async def google_auth(
     except GoogleOAuthError as e:
         logger.warning(f"Google OAuth error: {e}")
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Google authentication failed"
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Google authentication failed"
         )
 
 
@@ -1204,7 +1231,7 @@ async def link_google_account(
     if not google_service.is_configured:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Google Sign-In is not configured"
+            detail="Google Sign-In is not configured",
         )
 
     try:
@@ -1216,7 +1243,7 @@ async def link_google_account(
         if existing and existing.id != user.id:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="This Google account is already linked to another user"
+                detail="This Google account is already linked to another user",
             )
 
         # Link the account
@@ -1230,7 +1257,7 @@ async def link_google_account(
             # SECURITY FIX (Audit 7 - Session 3): Generic error message, don't hint at internals
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="An unexpected error occurred. Please try again later."
+                detail="An unexpected error occurred. Please try again later.",
             )
 
         # Audit log
@@ -1248,8 +1275,7 @@ async def link_google_account(
     except GoogleOAuthError as e:
         logger.warning(f"Google OAuth error: {e}")
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Google authentication failed"
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Google authentication failed"
         )
 
 
@@ -1268,17 +1294,13 @@ async def unlink_google_account(
     full_user = await user_repo.get_by_id(user.id)
 
     if not full_user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
     # Check if user has Google linked
     user_db = await user_repo.get_by_username(full_user.username)
     if not user_db or not user_db.google_id:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No Google account is linked"
+            status_code=status.HTTP_400_BAD_REQUEST, detail="No Google account is linked"
         )
 
     # Prevent lockout: if auth_provider is GOOGLE, user needs password
@@ -1286,7 +1308,7 @@ async def unlink_google_account(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot unlink Google - this is your only sign-in method. "
-                   "Please set a password first."
+            "Please set a password first.",
         )
 
     # Unlink
@@ -1296,7 +1318,7 @@ async def unlink_google_account(
         # SECURITY FIX (Audit 7 - Session 3): Generic error message, don't hint at internals
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An unexpected error occurred. Please try again later."
+            detail="An unexpected error occurred. Please try again later.",
         )
 
     # Audit log

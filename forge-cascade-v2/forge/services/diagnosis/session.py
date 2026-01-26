@@ -28,6 +28,7 @@ logger = structlog.get_logger(__name__)
 
 class SessionEvent(str, Enum):
     """Events emitted during diagnosis session."""
+
     SESSION_STARTED = "session_started"
     INTAKE_COMPLETE = "intake_complete"
     HYPOTHESES_GENERATED = "hypotheses_generated"
@@ -50,6 +51,7 @@ def _utc_now() -> datetime:
 @dataclass
 class SessionEventData:
     """Data for a session event."""
+
     event_type: SessionEvent
     session_id: str
     timestamp: datetime = field(default_factory=_utc_now)
@@ -67,6 +69,7 @@ class SessionEventData:
 @dataclass
 class SessionConfig:
     """Configuration for session controller."""
+
     # Timeouts
     session_timeout: timedelta = field(default_factory=lambda: timedelta(hours=1))
     question_timeout: timedelta = field(default_factory=lambda: timedelta(minutes=10))
@@ -207,10 +210,14 @@ class SessionController:
         if event_callback:
             self._event_callbacks[session.id] = [event_callback]
 
-        await self._emit_event(SessionEvent.SESSION_STARTED, session, {
-            "patient_id": session.patient.id,
-            "expires_at": session.expires_at.isoformat(),
-        })
+        await self._emit_event(
+            SessionEvent.SESSION_STARTED,
+            session,
+            {
+                "patient_id": session.patient.id,
+                "expires_at": session.expires_at.isoformat(),
+            },
+        )
 
         return session
 
@@ -255,10 +262,14 @@ class SessionController:
                 demographics=demographics,
             )
 
-            await self._emit_event(SessionEvent.INTAKE_COMPLETE, session, {
-                "phenotype_count": len(session.patient.phenotypes),
-                "variant_count": len(session.patient.genetic_variants),
-            })
+            await self._emit_event(
+                SessionEvent.INTAKE_COMPLETE,
+                session,
+                {
+                    "phenotype_count": len(session.patient.phenotypes),
+                    "variant_count": len(session.patient.genetic_variants),
+                },
+            )
 
             # Start autonomous processing
             if self.config.auto_advance:
@@ -294,48 +305,74 @@ class SessionController:
             if session.state == DiagnosisState.INTAKE:
                 # Generate hypotheses
                 session = await self._engine.generate_hypotheses(session)
-                await self._emit_event(SessionEvent.HYPOTHESES_GENERATED, session, {
-                    "hypothesis_count": len(session.hypotheses),
-                })
+                await self._emit_event(
+                    SessionEvent.HYPOTHESES_GENERATED,
+                    session,
+                    {
+                        "hypothesis_count": len(session.hypotheses),
+                    },
+                )
 
             elif session.state == DiagnosisState.ANALYZING:
                 # Score hypotheses
                 session = await self._engine.score_hypotheses(session)
-                await self._emit_event(SessionEvent.SCORING_COMPLETE, session, {
-                    "top_hypotheses": [
-                        {"disease": h.disease_name, "score": h.combined_score}
-                        for h in session.top_hypotheses[:5]
-                    ],
-                })
+                await self._emit_event(
+                    SessionEvent.SCORING_COMPLETE,
+                    session,
+                    {
+                        "top_hypotheses": [
+                            {"disease": h.disease_name, "score": h.combined_score}
+                            for h in session.top_hypotheses[:5]
+                        ],
+                    },
+                )
 
                 # Check for early termination
-                if session.top_diagnosis and session.top_diagnosis.combined_score >= self.config.early_termination_confidence:
+                if (
+                    session.top_diagnosis
+                    and session.top_diagnosis.combined_score
+                    >= self.config.early_termination_confidence
+                ):
                     session.state = DiagnosisState.COMPLETE
                     break
 
             elif session.state == DiagnosisState.QUESTIONING:
                 # Generate questions
                 session = await self._engine.generate_questions(session)
-                await self._emit_event(SessionEvent.QUESTIONS_READY, session, {
-                    "questions": [q.to_dict() for q in session.pending_questions],
-                })
+                await self._emit_event(
+                    SessionEvent.QUESTIONS_READY,
+                    session,
+                    {
+                        "questions": [q.to_dict() for q in session.pending_questions],
+                    },
+                )
 
                 # Pause for questions if configured
                 if self.config.pause_for_questions and session.pending_questions:
                     session.state = DiagnosisState.PAUSED
-                    await self._emit_event(SessionEvent.SESSION_PAUSED, session, {
-                        "reason": "awaiting_answers",
-                        "pending_questions": len(session.pending_questions),
-                    })
+                    await self._emit_event(
+                        SessionEvent.SESSION_PAUSED,
+                        session,
+                        {
+                            "reason": "awaiting_answers",
+                            "pending_questions": len(session.pending_questions),
+                        },
+                    )
                     break
 
             elif session.state == DiagnosisState.REFINING:
                 # Re-score with new evidence
                 session = await self._engine.score_hypotheses(session)
-                await self._emit_event(SessionEvent.REFINEMENT_COMPLETE, session, {
-                    "iteration": session.iterations,
-                    "top_score": session.top_diagnosis.combined_score if session.top_diagnosis else 0,
-                })
+                await self._emit_event(
+                    SessionEvent.REFINEMENT_COMPLETE,
+                    session,
+                    {
+                        "iteration": session.iterations,
+                        "top_score": session.top_diagnosis.combined_score
+                        if session.top_diagnosis
+                        else 0,
+                    },
+                )
 
             elif session.state == DiagnosisState.PAUSED:
                 # Wait for resume
@@ -350,11 +387,19 @@ class SessionController:
         # Check if complete
         if session.state == DiagnosisState.COMPLETE or session.is_confident:
             session.state = DiagnosisState.COMPLETE
-            await self._emit_event(SessionEvent.SESSION_COMPLETE, session, {
-                "primary_diagnosis": session.top_diagnosis.disease_name if session.top_diagnosis else None,
-                "confidence": session.top_diagnosis.combined_score if session.top_diagnosis else 0,
-                "iterations": session.iterations,
-            })
+            await self._emit_event(
+                SessionEvent.SESSION_COMPLETE,
+                session,
+                {
+                    "primary_diagnosis": session.top_diagnosis.disease_name
+                    if session.top_diagnosis
+                    else None,
+                    "confidence": session.top_diagnosis.combined_score
+                    if session.top_diagnosis
+                    else 0,
+                    "iterations": session.iterations,
+                },
+            )
 
         return session
 
@@ -391,10 +436,14 @@ class SessionController:
                         additional_info=additional_info,
                     )
 
-                    await self._emit_event(SessionEvent.ANSWER_RECEIVED, session, {
-                        "question_id": question_id,
-                        "answer": answer,
-                    })
+                    await self._emit_event(
+                        SessionEvent.ANSWER_RECEIVED,
+                        session,
+                        {
+                            "question_id": question_id,
+                            "answer": answer,
+                        },
+                    )
 
             # Resume autonomous processing
             if session.state == DiagnosisState.PAUSED:
@@ -427,11 +476,19 @@ class SessionController:
             session.pending_questions.clear()
             session.state = DiagnosisState.COMPLETE
 
-            await self._emit_event(SessionEvent.SESSION_COMPLETE, session, {
-                "primary_diagnosis": session.top_diagnosis.disease_name if session.top_diagnosis else None,
-                "confidence": session.top_diagnosis.combined_score if session.top_diagnosis else 0,
-                "questions_skipped": True,
-            })
+            await self._emit_event(
+                SessionEvent.SESSION_COMPLETE,
+                session,
+                {
+                    "primary_diagnosis": session.top_diagnosis.disease_name
+                    if session.top_diagnosis
+                    else None,
+                    "confidence": session.top_diagnosis.combined_score
+                    if session.top_diagnosis
+                    else 0,
+                    "questions_skipped": True,
+                },
+            )
 
             return session
 
@@ -455,9 +512,13 @@ class SessionController:
         async with self._session_locks[session_id]:
             if session.is_active:
                 session.state = DiagnosisState.PAUSED
-                await self._emit_event(SessionEvent.SESSION_PAUSED, session, {
-                    "reason": "user_requested",
-                })
+                await self._emit_event(
+                    SessionEvent.SESSION_PAUSED,
+                    session,
+                    {
+                        "reason": "user_requested",
+                    },
+                )
 
             return session
 
@@ -724,7 +785,11 @@ class SessionController:
 
         for session_id in expired_ids:
             expired_session = self._sessions.get(session_id)
-            if expired_session and expired_session.expires_at and expired_session.expires_at < cleanup_threshold:
+            if (
+                expired_session
+                and expired_session.expires_at
+                and expired_session.expires_at < cleanup_threshold
+            ):
                 await self.delete_session(session_id)
                 cleanup_count += 1
 
@@ -732,7 +797,11 @@ class SessionController:
         completed_cleanup_threshold = now - timedelta(hours=2)
         for session_id in idle_ids:
             idle_session = self._sessions.get(session_id)
-            if idle_session and idle_session.updated_at and idle_session.updated_at < completed_cleanup_threshold:
+            if (
+                idle_session
+                and idle_session.updated_at
+                and idle_session.updated_at < completed_cleanup_threshold
+            ):
                 await self.delete_session(session_id)
                 cleanup_count += 1
 
@@ -775,8 +844,7 @@ class SessionController:
             "total_sessions": len(self._sessions),
             "by_state": states,
             "average_age_seconds": (
-                total_age.total_seconds() / len(self._sessions)
-                if self._sessions else 0
+                total_age.total_seconds() / len(self._sessions) if self._sessions else 0
             ),
         }
 
@@ -784,6 +852,7 @@ class SessionController:
 # =============================================================================
 # Factory Function
 # =============================================================================
+
 
 def create_session_controller(
     config: SessionConfig | None = None,

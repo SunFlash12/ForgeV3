@@ -32,21 +32,23 @@ logger = structlog.get_logger(__name__)
 
 class AnomalyType(str, Enum):
     """Types of anomalies detected."""
-    STATISTICAL = "statistical"       # Z-score / IQR based
-    BEHAVIORAL = "behavioral"         # User behavior changes
-    TEMPORAL = "temporal"             # Time-series patterns
-    ISOLATION = "isolation"           # IsolationForest detection
-    THRESHOLD = "threshold"           # Simple threshold breach
-    RATE = "rate"                     # Rate-based anomalies
-    COMPOSITE = "composite"           # Multiple signals
+
+    STATISTICAL = "statistical"  # Z-score / IQR based
+    BEHAVIORAL = "behavioral"  # User behavior changes
+    TEMPORAL = "temporal"  # Time-series patterns
+    ISOLATION = "isolation"  # IsolationForest detection
+    THRESHOLD = "threshold"  # Simple threshold breach
+    RATE = "rate"  # Rate-based anomalies
+    COMPOSITE = "composite"  # Multiple signals
 
 
 class AnomalySeverity(str, Enum):
     """Severity levels for anomalies."""
-    LOW = "low"           # Minor deviation
-    MEDIUM = "medium"     # Notable anomaly
-    HIGH = "high"         # Significant threat
-    CRITICAL = "critical" # Immediate action needed
+
+    LOW = "low"  # Minor deviation
+    MEDIUM = "medium"  # Notable anomaly
+    HIGH = "high"  # Significant threat
+    CRITICAL = "critical"  # Immediate action needed
 
 
 @dataclass
@@ -64,7 +66,7 @@ class Anomaly:
 
     # Scores
     anomaly_score: float  # 0-1, higher = more anomalous
-    confidence: float     # 0-1, confidence in detection
+    confidence: float  # 0-1, confidence in detection
 
     # Context
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
@@ -126,35 +128,31 @@ class AnomalyDetectorConfig:
     """Configuration for anomaly detectors."""
 
     # Statistical detection
-    z_score_threshold: float = 3.0     # Standard deviations
-    iqr_multiplier: float = 1.5        # IQR fence multiplier
+    z_score_threshold: float = 3.0  # Standard deviations
+    iqr_multiplier: float = 1.5  # IQR fence multiplier
 
     # IsolationForest
-    contamination: float = 0.1         # Expected anomaly proportion
-    n_estimators: int = 100            # Number of trees
-    max_samples: int = 256             # Samples per tree
+    contamination: float = 0.1  # Expected anomaly proportion
+    n_estimators: int = 100  # Number of trees
+    max_samples: int = 256  # Samples per tree
 
     # Sliding window
-    window_size: int = 100             # Data points to keep
-    min_samples: int = 20              # Minimum for detection
+    window_size: int = 100  # Data points to keep
+    min_samples: int = 20  # Minimum for detection
 
     # Sensitivity
-    score_threshold: float = 0.6       # Anomaly score threshold
+    score_threshold: float = 0.6  # Anomaly score threshold
     confidence_threshold: float = 0.7  # Minimum confidence
 
     # Rate limiting
-    cooldown_seconds: float = 60.0     # Min time between same alerts
-    max_alerts_per_hour: int = 100     # Rate limit alerts
+    cooldown_seconds: float = 60.0  # Min time between same alerts
+    max_alerts_per_hour: int = 100  # Rate limit alerts
 
 
 class AnomalyDetector(ABC):
     """Base class for anomaly detectors."""
 
-    def __init__(
-        self,
-        name: str,
-        config: AnomalyDetectorConfig | None = None
-    ):
+    def __init__(self, name: str, config: AnomalyDetectorConfig | None = None):
         self.name = name
         self.config = config or AnomalyDetectorConfig()
         self._data_buffer: list[tuple[datetime, float]] = []
@@ -174,7 +172,7 @@ class AnomalyDetector(ABC):
 
         # Trim to window size
         if len(self._data_buffer) > self.config.window_size:
-            self._data_buffer = self._data_buffer[-self.config.window_size:]
+            self._data_buffer = self._data_buffer[-self.config.window_size :]
 
     def get_values(self) -> list[float]:
         """Get buffered values."""
@@ -235,6 +233,7 @@ class AnomalyDetector(ABC):
     def _generate_id(self) -> str:
         """Generate unique anomaly ID."""
         import uuid
+
         return f"anomaly_{uuid.uuid4().hex[:12]}"
 
 
@@ -580,7 +579,9 @@ class RateAnomalyDetector(AnomalyDetector):
         self.bucket_seconds = bucket_seconds
         self._buckets: dict[int, int] = defaultdict(int)
 
-    async def detect(self, value: float = 1.0, context: dict[str, Any] | None = None) -> Anomaly | None:
+    async def detect(
+        self, value: float = 1.0, context: dict[str, Any] | None = None
+    ) -> Anomaly | None:
         """Detect rate anomalies. value is the event weight (usually 1)."""
         now = datetime.now(UTC)
         bucket = int(now.timestamp() / self.bucket_seconds)
@@ -669,11 +670,7 @@ class BehavioralAnomalyDetector(AnomalyDetector):
         super().__init__(name, config)
         self._user_profiles: dict[str, UserProfile] = {}
 
-    async def detect(
-        self,
-        value: float,
-        context: dict[str, Any] | None = None
-    ) -> Anomaly | None:
+    async def detect(self, value: float, context: dict[str, Any] | None = None) -> Anomaly | None:
         """Detect behavioral anomalies for a user."""
         if not context or "user_id" not in context:
             return None
@@ -757,7 +754,7 @@ class UserProfile:
 
         # Trim
         if len(self._observations[metric]) > self._max_observations:
-            self._observations[metric] = self._observations[metric][-self._max_observations:]
+            self._observations[metric] = self._observations[metric][-self._max_observations :]
 
     def get_stats(self, metric: str) -> dict[str, float]:
         """Get statistics for a metric."""
@@ -823,8 +820,12 @@ class CompositeAnomalyDetector(AnomalyDetector):
 
         # Use max severity
         severities = [a.severity for a in anomalies]
-        severity_order = [AnomalySeverity.LOW, AnomalySeverity.MEDIUM,
-                         AnomalySeverity.HIGH, AnomalySeverity.CRITICAL]
+        severity_order = [
+            AnomalySeverity.LOW,
+            AnomalySeverity.MEDIUM,
+            AnomalySeverity.HIGH,
+            AnomalySeverity.CRITICAL,
+        ]
         max_severity = max(severities, key=lambda s: severity_order.index(s))
 
         # Combine expected ranges
@@ -875,18 +876,12 @@ class ForgeAnomalySystem:
         self._detectors[metric_name] = detector
         logger.info("anomaly_detector_registered", metric=metric_name, detector=detector.name)
 
-    def register_callback(
-        self,
-        callback: Callable[[Anomaly], Coroutine[Any, Any, None]]
-    ) -> None:
+    def register_callback(self, callback: Callable[[Anomaly], Coroutine[Any, Any, None]]) -> None:
         """Register callback for anomaly notifications."""
         self._callbacks.append(callback)
 
     async def record_metric(
-        self,
-        metric_name: str,
-        value: float,
-        context: dict[str, Any] | None = None
+        self, metric_name: str, value: float, context: dict[str, Any] | None = None
     ) -> Anomaly | None:
         """Record a metric value and check for anomalies."""
         detector = self._detectors.get(metric_name)
@@ -913,7 +908,7 @@ class ForgeAnomalySystem:
         # Store
         self._anomaly_history.append(anomaly)
         if len(self._anomaly_history) > self._max_history:
-            self._anomaly_history = self._anomaly_history[-self._max_history:]
+            self._anomaly_history = self._anomaly_history[-self._max_history :]
 
         logger.warning(
             "anomaly_detected",
@@ -944,8 +939,12 @@ class ForgeAnomalySystem:
             result = [a for a in result if a.timestamp >= since]
 
         if severity:
-            severity_order = [AnomalySeverity.LOW, AnomalySeverity.MEDIUM,
-                            AnomalySeverity.HIGH, AnomalySeverity.CRITICAL]
+            severity_order = [
+                AnomalySeverity.LOW,
+                AnomalySeverity.MEDIUM,
+                AnomalySeverity.HIGH,
+                AnomalySeverity.CRITICAL,
+            ]
             min_idx = severity_order.index(severity)
             result = [a for a in result if severity_order.index(a.severity) >= min_idx]
 
@@ -968,6 +967,7 @@ class ForgeAnomalySystem:
     def acknowledge(self, anomaly_id: str, acknowledged_by: str | None = None) -> bool:
         """Acknowledge an anomaly."""
         from datetime import datetime
+
         for anomaly in self._anomaly_history:
             if anomaly.id == anomaly_id:
                 anomaly.acknowledged = True
@@ -976,9 +976,12 @@ class ForgeAnomalySystem:
                 return True
         return False
 
-    def resolve(self, anomaly_id: str, resolved_by: str | None = None, notes: str | None = None) -> bool:
+    def resolve(
+        self, anomaly_id: str, resolved_by: str | None = None, notes: str | None = None
+    ) -> bool:
         """Mark an anomaly as resolved."""
         from datetime import datetime
+
         for anomaly in self._anomaly_history:
             if anomaly.id == anomaly_id:
                 anomaly.resolved = True
@@ -1051,28 +1054,23 @@ def create_forge_anomaly_system(
             cooldown_seconds=30.0,
         )
         system.register_detector(
-            "error_rate",
-            RateAnomalyDetector("error_rate", error_rate_config, bucket_seconds=60.0)
+            "error_rate", RateAnomalyDetector("error_rate", error_rate_config, bucket_seconds=60.0)
         )
 
     # Capsule creation rate
     if include_rate_detector:
         system.register_detector(
             "capsule_creation_rate",
-            RateAnomalyDetector("capsule_rate", config, bucket_seconds=60.0)
+            RateAnomalyDetector("capsule_rate", config, bucket_seconds=60.0),
         )
 
     # Trust score changes
     system.register_detector(
-        "trust_score_change",
-        StatisticalAnomalyDetector("trust_change", config)
+        "trust_score_change", StatisticalAnomalyDetector("trust_change", config)
     )
 
     # Memory usage
-    system.register_detector(
-        "memory_usage_mb",
-        StatisticalAnomalyDetector("memory", config)
-    )
+    system.register_detector("memory_usage_mb", StatisticalAnomalyDetector("memory", config))
 
     # User behavior (if enabled)
     if include_behavioral:
@@ -1082,8 +1080,7 @@ def create_forge_anomaly_system(
             window_size=50,
         )
         system.register_detector(
-            "user_activity",
-            BehavioralAnomalyDetector("user_behavior", behavioral_config)
+            "user_activity", BehavioralAnomalyDetector("user_behavior", behavioral_config)
         )
 
     return system

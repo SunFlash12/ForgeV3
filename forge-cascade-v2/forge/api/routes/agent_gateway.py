@@ -34,7 +34,7 @@ def _handle_gateway_error(e: Exception, context: str) -> HTTPException:
     logger.error(f"agent_gateway_error: {context}", exc_info=True)
     return HTTPException(
         status_code=500,
-        detail=f"Internal error during {context}. Please try again or contact support."
+        detail=f"Internal error during {context}. Please try again or contact support.",
     )
 
 
@@ -42,8 +42,10 @@ def _handle_gateway_error(e: Exception, context: str) -> HTTPException:
 # Request/Response Models
 # ============================================================================
 
+
 class CreateSessionRequest(BaseModel):
     """Request to create an agent session."""
+
     agent_name: str = Field(max_length=100)
     trust_level: AgentTrustLevel = Field(default=AgentTrustLevel.BASIC)
     capabilities: list[AgentCapability] | None = None
@@ -53,6 +55,7 @@ class CreateSessionRequest(BaseModel):
 
 class SessionResponse(BaseModel):
     """Agent session information."""
+
     id: str
     agent_id: str
     agent_name: str
@@ -71,6 +74,7 @@ class SessionResponse(BaseModel):
 
 class QueryRequest(BaseModel):
     """Request to execute a query."""
+
     query_type: QueryType = Field(default=QueryType.NATURAL_LANGUAGE)
     query_text: str = Field(min_length=1, max_length=4096)
     context: dict[str, Any] = Field(default_factory=dict)
@@ -83,6 +87,7 @@ class QueryRequest(BaseModel):
 
 class QueryResponse(BaseModel):
     """Query result response."""
+
     query_id: str
     success: bool
     results: list[dict[str, Any]]
@@ -99,6 +104,7 @@ class QueryResponse(BaseModel):
 
 class CreateCapsuleRequest(BaseModel):
     """Request for agent to create a capsule."""
+
     capsule_type: str
     title: str = Field(max_length=200)
     content: str = Field(min_length=1)
@@ -111,6 +117,7 @@ class CreateCapsuleRequest(BaseModel):
 
 class StatsResponse(BaseModel):
     """Gateway statistics response."""
+
     active_sessions: int
     total_sessions: int
     queries_today: int
@@ -126,6 +133,7 @@ class StatsResponse(BaseModel):
 # ============================================================================
 # Dependencies
 # ============================================================================
+
 
 async def get_gateway() -> AgentGatewayService:
     """Get gateway service dependency."""
@@ -155,6 +163,7 @@ AgentSessionDep = Depends(get_agent_session)
 # ============================================================================
 # Session Management Endpoints (User-facing)
 # ============================================================================
+
 
 @router.post("/sessions", response_model=SessionResponse)
 async def create_session(
@@ -271,6 +280,7 @@ async def revoke_session(
 # ============================================================================
 # Query Endpoints (Agent-facing)
 # ============================================================================
+
 
 @router.post("/query", response_model=QueryResponse)
 async def execute_query(
@@ -438,6 +448,7 @@ async def get_capsule_neighbors(
 # Capsule Creation Endpoints
 # ============================================================================
 
+
 @router.post("/capsules")
 async def create_capsule(
     request: CreateCapsuleRequest,
@@ -468,6 +479,7 @@ async def create_capsule(
     except ValueError as e:
         # SECURITY FIX (Audit 3): Log error internally, return generic message
         import logging
+
         logging.getLogger(__name__).warning(f"agent_gateway_capsule_creation_failed: {e}")
         raise HTTPException(status_code=403, detail="Capsule creation not permitted")
 
@@ -475,6 +487,7 @@ async def create_capsule(
 # ============================================================================
 # Statistics Endpoints
 # ============================================================================
+
 
 @router.get("/stats", response_model=StatsResponse)
 async def get_gateway_stats(
@@ -531,6 +544,7 @@ async def get_access_logs(
 # WebSocket Streaming Endpoint
 # ============================================================================
 
+
 @router.websocket("/stream")
 async def websocket_stream(
     websocket: WebSocket,
@@ -545,6 +559,7 @@ async def websocket_stream(
     """
     # SECURITY FIX (Audit 6): Validate Origin header to prevent CSWSH attacks
     from forge.api.websocket.handlers import validate_websocket_origin
+
     if not validate_websocket_origin(websocket):
         await websocket.close(code=4003, reason="Origin not allowed")
         return
@@ -576,24 +591,30 @@ async def websocket_stream(
                 )
             except (ValueError, TypeError, KeyError) as e:
                 # SECURITY FIX (Audit 7 - Session 3): Don't leak internal error details
-                logger.warning("agent_websocket_invalid_query session_id=%s error=%s", session.id, str(e))
-                await websocket.send_json({
-                    "error": "Invalid query format. Please check your request.",
-                    "error_code": "INVALID_QUERY",
-                })
+                logger.warning(
+                    "agent_websocket_invalid_query session_id=%s error=%s", session.id, str(e)
+                )
+                await websocket.send_json(
+                    {
+                        "error": "Invalid query format. Please check your request.",
+                        "error_code": "INVALID_QUERY",
+                    }
+                )
                 continue
 
             # Stream results
             async for chunk in gateway.stream_query(session, query):
-                await websocket.send_json({
-                    "chunk_id": chunk.chunk_id,
-                    "query_id": chunk.query_id,
-                    "content_type": chunk.content_type,
-                    "content": chunk.content,
-                    "is_final": chunk.is_final,
-                    "progress_percent": chunk.progress_percent,
-                    "timestamp": chunk.timestamp.isoformat(),
-                })
+                await websocket.send_json(
+                    {
+                        "chunk_id": chunk.chunk_id,
+                        "query_id": chunk.query_id,
+                        "content_type": chunk.content_type,
+                        "content": chunk.content,
+                        "is_final": chunk.is_final,
+                        "progress_percent": chunk.progress_percent,
+                        "timestamp": chunk.timestamp.isoformat(),
+                    }
+                )
 
     except WebSocketDisconnect:
         logger.info("agent_websocket_disconnected session_id=%s", session.id)
@@ -606,6 +627,7 @@ async def websocket_stream(
 # ============================================================================
 # Capability Reference Endpoint
 # ============================================================================
+
 
 @router.get("/capabilities")
 async def list_capabilities(

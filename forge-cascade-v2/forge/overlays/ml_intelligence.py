@@ -31,17 +31,20 @@ logger = structlog.get_logger()
 
 class MLProcessingError(OverlayError):
     """ML processing error."""
+
     pass
 
 
 class EmbeddingError(MLProcessingError):
     """Embedding generation error."""
+
     pass
 
 
 @dataclass
 class EmbeddingResult:
     """Result of embedding generation."""
+
     embedding: list[float]
     model: str
     dimensions: int
@@ -52,6 +55,7 @@ class EmbeddingResult:
 @dataclass
 class ClassificationResult:
     """Result of content classification."""
+
     primary_class: str
     confidence: float
     all_classes: dict[str, float]
@@ -61,6 +65,7 @@ class ClassificationResult:
 @dataclass
 class EntityExtractionResult:
     """Result of entity extraction."""
+
     entities: list[dict[str, Any]]  # [{"text": ..., "type": ..., "start": ..., "end": ...}]
     relationships: list[dict[str, Any]]  # [{"from": ..., "to": ..., "type": ...}]
 
@@ -68,6 +73,7 @@ class EntityExtractionResult:
 @dataclass
 class PatternMatch:
     """A detected pattern."""
+
     pattern_name: str
     confidence: float
     evidence: list[str]
@@ -77,6 +83,7 @@ class PatternMatch:
 @dataclass
 class AnalysisResult:
     """Complete analysis result."""
+
     embedding: EmbeddingResult | None = None
     classification: ClassificationResult | None = None
     entities: EntityExtractionResult | None = None
@@ -124,13 +131,13 @@ class MLIntelligenceOverlay(BaseOverlay):
 
     # Entity patterns
     ENTITY_PATTERNS = {
-        "email": r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b',
+        "email": r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b",
         "url": r'https?://[^\s<>"{}|\\^`\[\]]+',
-        "date": r'\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b|\b\d{4}[/-]\d{1,2}[/-]\d{1,2}\b',
-        "time": r'\b\d{1,2}:\d{2}(?::\d{2})?\s*(?:AM|PM|am|pm)?\b',
-        "money": r'\$\d+(?:,\d{3})*(?:\.\d{2})?|\b\d+(?:,\d{3})*(?:\.\d{2})?\s*(?:USD|EUR|GBP)\b',
-        "phone": r'\b(?:\+?1[-.]?)?\(?\d{3}\)?[-.]?\d{3}[-.]?\d{4}\b',
-        "version": r'\bv?\d+\.\d+(?:\.\d+)?(?:-[a-zA-Z0-9]+)?\b',
+        "date": r"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b|\b\d{4}[/-]\d{1,2}[/-]\d{1,2}\b",
+        "time": r"\b\d{1,2}:\d{2}(?::\d{2})?\s*(?:AM|PM|am|pm)?\b",
+        "money": r"\$\d+(?:,\d{3})*(?:\.\d{2})?|\b\d+(?:,\d{3})*(?:\.\d{2})?\s*(?:USD|EUR|GBP)\b",
+        "phone": r"\b(?:\+?1[-.]?)?\(?\d{3}\)?[-.]?\d{3}[-.]?\d{4}\b",
+        "version": r"\bv?\d+\.\d+(?:\.\d+)?(?:-[a-zA-Z0-9]+)?\b",
     }
 
     def __init__(
@@ -141,7 +148,7 @@ class MLIntelligenceOverlay(BaseOverlay):
         enable_pattern_detection: bool = True,
         enable_sentiment: bool = True,
         custom_categories: dict[str, list[str]] | None = None,
-        embedding_provider: Callable[[str], Coroutine[Any, Any, list[float]]] | None = None
+        embedding_provider: Callable[[str], Coroutine[Any, Any, list[float]]] | None = None,
     ) -> None:
         """
         Initialize the ML Intelligence overlay.
@@ -169,7 +176,9 @@ class MLIntelligenceOverlay(BaseOverlay):
             self._categories.update(custom_categories)
 
         # External provider
-        self._embedding_provider: Callable[[str], Coroutine[Any, Any, list[float]]] | None = embedding_provider
+        self._embedding_provider: Callable[[str], Coroutine[Any, Any, list[float]]] | None = (
+            embedding_provider
+        )
 
         # Cache for embeddings
         self._embedding_cache: dict[str, list[float]] = {}
@@ -180,7 +189,7 @@ class MLIntelligenceOverlay(BaseOverlay):
             "embeddings_generated": 0,
             "classifications_performed": 0,
             "entities_extracted": 0,
-            "cache_hits": 0
+            "cache_hits": 0,
         }
 
         self._logger = logger.bind(overlay=self.NAME)
@@ -190,7 +199,7 @@ class MLIntelligenceOverlay(BaseOverlay):
         self._logger.info(
             "ml_intelligence_initialized",
             embedding_dim=self._embedding_dim,
-            categories=list(self._categories.keys())
+            categories=list(self._categories.keys()),
         )
         return True
 
@@ -198,7 +207,7 @@ class MLIntelligenceOverlay(BaseOverlay):
         self,
         context: OverlayContext,
         event: Event | None = None,
-        input_data: dict[str, Any] | None = None
+        input_data: dict[str, Any] | None = None,
     ) -> OverlayResult:
         """
         Execute ML analysis.
@@ -212,6 +221,7 @@ class MLIntelligenceOverlay(BaseOverlay):
             Analysis result
         """
         import time
+
         start_time = time.time()
 
         data = input_data or {}
@@ -222,9 +232,7 @@ class MLIntelligenceOverlay(BaseOverlay):
         content = self._extract_content(data)
         if not content:
             # SECURITY FIX (Audit 4 - M): Fix OverlayResult construction - remove invalid params
-            return OverlayResult.ok(
-                data={"analysis": None, "reason": "No content to analyze"}
-            )
+            return OverlayResult.ok(data={"analysis": None, "reason": "No content to analyze"})
 
         # Run analysis
         try:
@@ -234,10 +242,12 @@ class MLIntelligenceOverlay(BaseOverlay):
             self._logger.info(
                 "ml_analysis_complete",
                 has_embedding=result.embedding is not None,
-                classification=result.classification.primary_class if result.classification else None,
+                classification=result.classification.primary_class
+                if result.classification
+                else None,
                 entities_found=len(result.entities.entities) if result.entities else 0,
                 patterns_found=len(result.patterns),
-                duration_ms=round(result.processing_time_ms, 2)
+                duration_ms=round(result.processing_time_ms, 2),
             )
 
             # SECURITY FIX (Audit 4 - M): Fix OverlayResult construction - use class methods
@@ -249,8 +259,10 @@ class MLIntelligenceOverlay(BaseOverlay):
                         "classification": {
                             "primary": result.classification.primary_class,
                             "confidence": result.classification.confidence,
-                            "all": result.classification.all_classes
-                        } if result.classification else None,
+                            "all": result.classification.all_classes,
+                        }
+                        if result.classification
+                        else None,
                         "entities": result.entities.entities if result.entities else [],
                         "relationships": result.entities.relationships if result.entities else [],
                         "patterns": [
@@ -261,18 +273,25 @@ class MLIntelligenceOverlay(BaseOverlay):
                         "keywords": result.keywords,
                         "sentiment": result.sentiment,
                         "summary": result.summary,
-                        "processing_time_ms": round(result.processing_time_ms, 2)
+                        "processing_time_ms": round(result.processing_time_ms, 2),
                     }
                 },
                 metrics={
                     "content_length": len(content),
                     "entities_found": len(result.entities.entities) if result.entities else 0,
                     "patterns_found": len(result.patterns),
-                    "embedding_dimensions": self._embedding_dim
-                }
+                    "embedding_dimensions": self._embedding_dim,
+                },
             )
 
-        except (MLProcessingError, EmbeddingError, ValueError, TypeError, KeyError, RuntimeError) as e:
+        except (
+            MLProcessingError,
+            EmbeddingError,
+            ValueError,
+            TypeError,
+            KeyError,
+            RuntimeError,
+        ) as e:
             self._logger.error(
                 "ml_analysis_error",
                 error=str(e),
@@ -294,11 +313,7 @@ class MLIntelligenceOverlay(BaseOverlay):
         # Fallback to full data
         return str(data) if data else ""
 
-    async def _analyze(
-        self,
-        content: str,
-        context: OverlayContext
-    ) -> AnalysisResult:
+    async def _analyze(self, content: str, context: OverlayContext) -> AnalysisResult:
         """Perform full analysis on content."""
         result = AnalysisResult()
 
@@ -343,10 +358,11 @@ class MLIntelligenceOverlay(BaseOverlay):
         Falls back to external provider if configured.
         """
         import time
+
         start_time = time.time()
 
         # Check cache
-        cache_key = hashlib.md5(content.encode()).hexdigest()
+        cache_key = hashlib.md5(content.encode(), usedforsecurity=False).hexdigest()
         if cache_key in self._embedding_cache:
             self._stats["cache_hits"] += 1
             return EmbeddingResult(
@@ -354,7 +370,7 @@ class MLIntelligenceOverlay(BaseOverlay):
                 model="cache",
                 dimensions=self._embedding_dim,
                 input_tokens=len(content.split()),
-                generation_time_ms=0.0
+                generation_time_ms=0.0,
             )
 
         embedding = None
@@ -365,7 +381,14 @@ class MLIntelligenceOverlay(BaseOverlay):
             try:
                 embedding = await self._embedding_provider(content)
                 model_name = "external"
-            except (EmbeddingError, ConnectionError, TimeoutError, ValueError, RuntimeError, OSError) as e:
+            except (
+                EmbeddingError,
+                ConnectionError,
+                TimeoutError,
+                ValueError,
+                RuntimeError,
+                OSError,
+            ) as e:
                 self._logger.warning(
                     "external_embedding_provider_failed",
                     error=str(e),
@@ -390,7 +413,7 @@ class MLIntelligenceOverlay(BaseOverlay):
                 self._logger.warning(
                     "embedding_service_not_configured",
                     error=str(e),
-                    action="falling_back_to_pseudo_embedding"
+                    action="falling_back_to_pseudo_embedding",
                 )
                 # Fall back to pseudo-embedding only if no embedding service configured
                 embedding = self._pseudo_embedding(content)
@@ -420,7 +443,7 @@ class MLIntelligenceOverlay(BaseOverlay):
             model=model_name,
             dimensions=len(embedding),
             input_tokens=len(content.split()),
-            generation_time_ms=duration_ms
+            generation_time_ms=duration_ms,
         )
 
     def _pseudo_embedding(self, content: str) -> list[float]:
@@ -444,11 +467,11 @@ class MLIntelligenceOverlay(BaseOverlay):
             # Create different hash for each dimension
             h = hashlib.sha256(f"{normalized}:{i}".encode()).digest()
             # Convert to float in [-1, 1]
-            value = (int.from_bytes(h[:4], 'big') / (2**32 - 1)) * 2 - 1
+            value = (int.from_bytes(h[:4], "big") / (2**32 - 1)) * 2 - 1
             embedding.append(value)
 
         # Normalize to unit length
-        magnitude = math.sqrt(sum(x*x for x in embedding))
+        magnitude = math.sqrt(sum(x * x for x in embedding))
         if magnitude > 0:
             embedding = [x / magnitude for x in embedding]
 
@@ -457,7 +480,7 @@ class MLIntelligenceOverlay(BaseOverlay):
     def _classify(self, content: str) -> ClassificationResult:
         """Classify content into categories."""
         content_lower = content.lower()
-        words = set(re.findall(r'\b\w+\b', content_lower))
+        words = set(re.findall(r"\b\w+\b", content_lower))
 
         scores = {}
         features_used = []
@@ -481,7 +504,7 @@ class MLIntelligenceOverlay(BaseOverlay):
             primary_class=primary[0],
             confidence=primary[1],
             all_classes=normalized,
-            features_used=features_used[:10]  # Limit features returned
+            features_used=features_used[:10],  # Limit features returned
         )
 
     def _extract_entities(self, content: str) -> EntityExtractionResult:
@@ -490,89 +513,102 @@ class MLIntelligenceOverlay(BaseOverlay):
 
         for entity_type, pattern in self.ENTITY_PATTERNS.items():
             for match in re.finditer(pattern, content):
-                entities.append({
-                    "text": match.group(),
-                    "type": entity_type,
-                    "start": match.start(),
-                    "end": match.end()
-                })
+                entities.append(
+                    {
+                        "text": match.group(),
+                        "type": entity_type,
+                        "start": match.start(),
+                        "end": match.end(),
+                    }
+                )
 
         # Simple relationship detection (entities in same sentence)
         relationships = []
-        sentences = re.split(r'[.!?]', content)
+        sentences = re.split(r"[.!?]", content)
 
         for sentence in sentences:
-            sentence_entities = [
-                e for e in entities
-                if e["text"] in sentence
-            ]
+            sentence_entities = [e for e in entities if e["text"] in sentence]
             # Create relationships between entities in same sentence
             for i, e1 in enumerate(sentence_entities):
-                for e2 in sentence_entities[i+1:]:
-                    relationships.append({
-                        "from": e1["text"],
-                        "to": e2["text"],
-                        "type": "co_occurrence",
-                        "context": sentence[:100]
-                    })
+                for e2 in sentence_entities[i + 1 :]:
+                    relationships.append(
+                        {
+                            "from": e1["text"],
+                            "to": e2["text"],
+                            "type": "co_occurrence",
+                            "context": sentence[:100],
+                        }
+                    )
 
         return EntityExtractionResult(
             entities=entities,
-            relationships=relationships[:20]  # Limit relationships
+            relationships=relationships[:20],  # Limit relationships
         )
 
-    def _detect_patterns(
-        self,
-        content: str,
-        context: OverlayContext
-    ) -> list[PatternMatch]:
+    def _detect_patterns(self, content: str, context: OverlayContext) -> list[PatternMatch]:
         """Detect patterns in content."""
         patterns = []
 
         # Question pattern
         if "?" in content:
             question_count = content.count("?")
-            patterns.append(PatternMatch(
-                pattern_name="questions",
-                confidence=min(question_count / 5, 1.0),
-                evidence=[f"Found {question_count} question(s)"]
-            ))
+            patterns.append(
+                PatternMatch(
+                    pattern_name="questions",
+                    confidence=min(question_count / 5, 1.0),
+                    evidence=[f"Found {question_count} question(s)"],
+                )
+            )
 
         # List pattern
-        list_indicators = re.findall(r'^\s*[-*•]\s', content, re.MULTILINE)
+        list_indicators = re.findall(r"^\s*[-*•]\s", content, re.MULTILINE)
         if list_indicators:
-            patterns.append(PatternMatch(
-                pattern_name="list_format",
-                confidence=min(len(list_indicators) / 10, 1.0),
-                evidence=[f"Found {len(list_indicators)} list items"]
-            ))
+            patterns.append(
+                PatternMatch(
+                    pattern_name="list_format",
+                    confidence=min(len(list_indicators) / 10, 1.0),
+                    evidence=[f"Found {len(list_indicators)} list items"],
+                )
+            )
 
         # Code pattern
-        code_indicators = re.findall(r'```|def |function |class |import |const |let |var ', content)
+        code_indicators = re.findall(r"```|def |function |class |import |const |let |var ", content)
         if code_indicators:
-            patterns.append(PatternMatch(
-                pattern_name="code_content",
-                confidence=min(len(code_indicators) / 5, 1.0),
-                evidence=code_indicators[:5]
-            ))
+            patterns.append(
+                PatternMatch(
+                    pattern_name="code_content",
+                    confidence=min(len(code_indicators) / 5, 1.0),
+                    evidence=code_indicators[:5],
+                )
+            )
 
         # Technical pattern
-        tech_terms = re.findall(r'\b(?:API|HTTP|JSON|SQL|HTML|CSS|JWT|REST|GraphQL)\b', content, re.IGNORECASE)
+        tech_terms = re.findall(
+            r"\b(?:API|HTTP|JSON|SQL|HTML|CSS|JWT|REST|GraphQL)\b", content, re.IGNORECASE
+        )
         if tech_terms:
-            patterns.append(PatternMatch(
-                pattern_name="technical_content",
-                confidence=min(len(tech_terms) / 5, 1.0),
-                evidence=list(set(tech_terms))[:5]
-            ))
+            patterns.append(
+                PatternMatch(
+                    pattern_name="technical_content",
+                    confidence=min(len(tech_terms) / 5, 1.0),
+                    evidence=list(set(tech_terms))[:5],
+                )
+            )
 
         # Reference pattern (links to other content)
-        references = re.findall(r'(?:see|refer to|mentioned in|linked from)\s+["\']?[\w\s]+["\']?', content, re.IGNORECASE)
+        references = re.findall(
+            r'(?:see|refer to|mentioned in|linked from)\s+["\']?[\w\s]+["\']?',
+            content,
+            re.IGNORECASE,
+        )
         if references:
-            patterns.append(PatternMatch(
-                pattern_name="references",
-                confidence=min(len(references) / 3, 1.0),
-                evidence=references[:3]
-            ))
+            patterns.append(
+                PatternMatch(
+                    pattern_name="references",
+                    confidence=min(len(references) / 3, 1.0),
+                    evidence=references[:3],
+                )
+            )
 
         return patterns
 
@@ -583,17 +619,50 @@ class MLIntelligenceOverlay(BaseOverlay):
         Returns value from -1.0 (negative) to 1.0 (positive).
         """
         positive_words = {
-            "good", "great", "excellent", "amazing", "wonderful", "fantastic",
-            "love", "happy", "joy", "success", "perfect", "best", "better",
-            "thank", "thanks", "appreciate", "helpful", "useful", "awesome"
+            "good",
+            "great",
+            "excellent",
+            "amazing",
+            "wonderful",
+            "fantastic",
+            "love",
+            "happy",
+            "joy",
+            "success",
+            "perfect",
+            "best",
+            "better",
+            "thank",
+            "thanks",
+            "appreciate",
+            "helpful",
+            "useful",
+            "awesome",
         }
         negative_words = {
-            "bad", "terrible", "awful", "horrible", "hate", "sad", "angry",
-            "fail", "failure", "worst", "worse", "problem", "issue", "error",
-            "bug", "broken", "wrong", "difficult", "hard", "frustrating"
+            "bad",
+            "terrible",
+            "awful",
+            "horrible",
+            "hate",
+            "sad",
+            "angry",
+            "fail",
+            "failure",
+            "worst",
+            "worse",
+            "problem",
+            "issue",
+            "error",
+            "bug",
+            "broken",
+            "wrong",
+            "difficult",
+            "hard",
+            "frustrating",
         }
 
-        words = set(re.findall(r'\b\w+\b', content.lower()))
+        words = set(re.findall(r"\b\w+\b", content.lower()))
 
         positive_count = len(words & positive_words)
         negative_count = len(words & negative_words)
@@ -607,13 +676,32 @@ class MLIntelligenceOverlay(BaseOverlay):
     def _extract_keywords(self, content: str, max_keywords: int = 10) -> list[str]:
         """Extract key terms from content."""
         # Simple TF approach
-        words = re.findall(r'\b[a-zA-Z]{4,}\b', content.lower())
+        words = re.findall(r"\b[a-zA-Z]{4,}\b", content.lower())
 
         # Filter stopwords
         stopwords = {
-            "that", "this", "with", "from", "have", "been", "were", "they",
-            "their", "what", "when", "where", "which", "while", "about",
-            "would", "could", "should", "there", "these", "those", "being"
+            "that",
+            "this",
+            "with",
+            "from",
+            "have",
+            "been",
+            "were",
+            "they",
+            "their",
+            "what",
+            "when",
+            "where",
+            "which",
+            "while",
+            "about",
+            "would",
+            "could",
+            "should",
+            "there",
+            "these",
+            "those",
+            "being",
         }
         words = [w for w in words if w not in stopwords]
 
@@ -627,11 +715,7 @@ class MLIntelligenceOverlay(BaseOverlay):
 
         return [word for word, _ in sorted_words[:max_keywords]]
 
-    def _compute_anomaly_score(
-        self,
-        content: str,
-        result: AnalysisResult
-    ) -> float:
+    def _compute_anomaly_score(self, content: str, result: AnalysisResult) -> float:
         """
         Compute anomaly score for content.
 
@@ -666,7 +750,7 @@ class MLIntelligenceOverlay(BaseOverlay):
     def _generate_summary(self, content: str, max_length: int = 200) -> str:
         """Generate a brief summary of content."""
         # Simple extractive summary - first sentence(s)
-        sentences = re.split(r'[.!?]', content)
+        sentences = re.split(r"[.!?]", content)
         sentences = [s.strip() for s in sentences if s.strip()]
 
         if not sentences:
@@ -689,7 +773,7 @@ class MLIntelligenceOverlay(BaseOverlay):
         return {
             **self._stats,
             "cache_size": len(self._embedding_cache),
-            "categories": list(self._categories.keys())
+            "categories": list(self._categories.keys()),
         }
 
     def clear_cache(self) -> int:
@@ -698,11 +782,7 @@ class MLIntelligenceOverlay(BaseOverlay):
         self._embedding_cache.clear()
         return count
 
-    async def compute_similarity(
-        self,
-        content1: str,
-        content2: str
-    ) -> float:
+    async def compute_similarity(self, content1: str, content2: str) -> float:
         """
         Compute cosine similarity between two pieces of content.
 
@@ -713,8 +793,8 @@ class MLIntelligenceOverlay(BaseOverlay):
 
         # Cosine similarity
         dot_product = sum(a * b for a, b in zip(emb1.embedding, emb2.embedding, strict=False))
-        mag1 = math.sqrt(sum(x*x for x in emb1.embedding))
-        mag2 = math.sqrt(sum(x*x for x in emb2.embedding))
+        mag1 = math.sqrt(sum(x * x for x in emb1.embedding))
+        mag2 = math.sqrt(sum(x * x for x in emb2.embedding))
 
         if mag1 * mag2 == 0:
             return 0.0

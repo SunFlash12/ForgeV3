@@ -22,7 +22,7 @@ import pytest
 # Skip all tests if testnet testing is not enabled
 pytestmark = pytest.mark.skipif(
     os.environ.get("RUN_TESTNET_TESTS", "").lower() != "true",
-    reason="Testnet tests disabled. Set RUN_TESTNET_TESTS=true to enable."
+    reason="Testnet tests disabled. Set RUN_TESTNET_TESTS=true to enable.",
 )
 
 
@@ -403,7 +403,7 @@ class TestPerformance:
             times.append(elapsed)
 
         avg_time = sum(times) / len(times)
-        print(f"Average block query latency: {avg_time*1000:.2f}ms")
+        print(f"Average block query latency: {avg_time * 1000:.2f}ms")
         assert avg_time < 5.0  # Should be under 5 seconds
 
     @pytest.mark.asyncio
@@ -422,5 +422,5 @@ class TestPerformance:
             times.append(elapsed)
 
         avg_time = sum(times) / len(times)
-        print(f"Average balance query latency: {avg_time*1000:.2f}ms")
+        print(f"Average balance query latency: {avg_time * 1000:.2f}ms")
         assert avg_time < 5.0

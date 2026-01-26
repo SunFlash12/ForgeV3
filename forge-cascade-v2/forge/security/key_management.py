@@ -129,9 +129,7 @@ class KeyManagementService:
         )
 
     @staticmethod
-    def keypair_to_b64(
-        private_key: bytes, public_key: bytes
-    ) -> tuple[str, str]:
+    def keypair_to_b64(private_key: bytes, public_key: bytes) -> tuple[str, str]:
         """
         Encode keypair as base64 strings.
 
@@ -244,8 +242,7 @@ class KeyManagementService:
                 + KeyManagementService.AES_NONCE_SIZE
             ]
             ciphertext = combined[
-                KeyManagementService.HKDF_SALT_SIZE
-                + KeyManagementService.AES_NONCE_SIZE :
+                KeyManagementService.HKDF_SALT_SIZE + KeyManagementService.AES_NONCE_SIZE :
             ]
 
             # Derive encryption key
@@ -397,9 +394,7 @@ class KeyManagementService:
         }
 
     @classmethod
-    def get_private_key_password_derived(
-        cls, password: str, salt_b64: str
-    ) -> bytes:
+    def get_private_key_password_derived(cls, password: str, salt_b64: str) -> bytes:
         """
         Recover private key from password and salt.
 
@@ -495,9 +490,7 @@ class KeyManagementService:
 
         if strategy == KeyStorageStrategy.SERVER_CUSTODY:
             if not password or not encrypted_private_key:
-                raise ValueError(
-                    "Password and encrypted_private_key required for SERVER_CUSTODY"
-                )
+                raise ValueError("Password and encrypted_private_key required for SERVER_CUSTODY")
             return cls.decrypt_private_key(encrypted_private_key, password)
 
         if strategy == KeyStorageStrategy.CLIENT_ONLY:

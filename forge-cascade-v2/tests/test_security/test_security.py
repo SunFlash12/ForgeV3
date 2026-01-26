@@ -21,6 +21,7 @@ import pytest
 # Password Security Tests
 # =============================================================================
 
+
 class TestPasswordValidation:
     """Tests for password validation and strength checking."""
 
@@ -107,7 +108,9 @@ class TestPasswordValidation:
         from forge.security.password import validate_password_strength
 
         # Should not raise
-        validate_password_strength("SecureP@ss2024!", username="different", email="other@example.com")
+        validate_password_strength(
+            "SecureP@ss2024!", username="different", email="other@example.com"
+        )
 
     def test_password_hashing_returns_bcrypt(self):
         """Password hashing returns valid bcrypt hash."""
@@ -137,6 +140,7 @@ class TestPasswordValidation:
 # MFA Tests
 # =============================================================================
 
+
 class TestMFA:
     """Tests for Multi-Factor Authentication."""
 
@@ -144,6 +148,7 @@ class TestMFA:
     def mfa_service(self):
         """Get fresh MFA service instance."""
         from forge.security.mfa import MFAService
+
         return MFAService()
 
     def test_generate_secret_length(self, mfa_service):
@@ -153,6 +158,7 @@ class TestMFA:
         assert len(secret) == 32
         # Must be valid base32
         import base64
+
         decoded = base64.b32decode(secret)
         assert len(decoded) == 20
 
@@ -166,7 +172,7 @@ class TestMFA:
         codes = mfa_service.generate_backup_codes(count=1)
         code = codes[0]
         # Format: XXXX-XXXX
-        assert re.match(r'^[0-9A-F]{4}-[0-9A-F]{4}$', code)
+        assert re.match(r"^[0-9A-F]{4}-[0-9A-F]{4}$", code)
 
     def test_backup_codes_unique(self, mfa_service):
         """All backup codes are unique."""
@@ -248,6 +254,7 @@ class TestMFA:
 # Safe Regex Tests
 # =============================================================================
 
+
 class TestSafeRegex:
     """Tests for ReDoS-safe regex utilities."""
 
@@ -315,6 +322,7 @@ class TestSafeRegex:
 # Governance Action Validation Tests
 # =============================================================================
 
+
 class TestGovernanceActionValidation:
     """Tests for governance proposal action validation."""
 
@@ -327,7 +335,7 @@ class TestGovernanceActionValidation:
             title="Test Proposal Title Here",
             description="This is a test proposal description that meets the minimum length requirement.",
             type=ProposalType.SYSTEM,
-            action={"type": "update_config", "config_key": "rate_limit", "new_value": 100}
+            action={"type": "update_config", "config_key": "rate_limit", "new_value": 100},
         )
         assert proposal.action["type"] == "update_config"
 
@@ -342,7 +350,7 @@ class TestGovernanceActionValidation:
                 title="Test Proposal Title Here",
                 description="This is a test proposal description that meets the minimum length requirement.",
                 type=ProposalType.SYSTEM,
-                action={"type": "amend_constitution"}  # Wrong type for SYSTEM proposals
+                action={"type": "amend_constitution"},  # Wrong type for SYSTEM proposals
             )
 
     def test_missing_required_fields_rejected(self):
@@ -356,7 +364,7 @@ class TestGovernanceActionValidation:
                 title="Test Proposal Title Here",
                 description="This is a test proposal description that meets the minimum length requirement.",
                 type=ProposalType.SYSTEM,
-                action={"type": "update_config"}  # Missing config_key and new_value
+                action={"type": "update_config"},  # Missing config_key and new_value
             )
 
     def test_dangerous_fields_rejected(self):
@@ -374,8 +382,8 @@ class TestGovernanceActionValidation:
                     "type": "update_config",
                     "config_key": "test",
                     "new_value": "test",
-                    "__import__": "os"  # Dangerous field
-                }
+                    "__import__": "os",  # Dangerous field
+                },
             )
 
     def test_empty_action_allowed(self):
@@ -387,7 +395,7 @@ class TestGovernanceActionValidation:
             title="Informational Proposal",
             description="This is an informational proposal without any action to execute.",
             type=ProposalType.POLICY,
-            action={}
+            action={},
         )
         assert proposal.action == {}
 
@@ -395,6 +403,7 @@ class TestGovernanceActionValidation:
 # =============================================================================
 # Token Security Tests
 # =============================================================================
+
 
 class TestTokenSecurity:
     """Tests for JWT token security."""
@@ -433,6 +442,7 @@ class TestTokenSecurity:
 # Input Validation Tests
 # =============================================================================
 
+
 class TestInputValidation:
     """Tests for API input validation."""
 
@@ -463,6 +473,7 @@ class TestInputValidation:
 # =============================================================================
 # Integration Tests
 # =============================================================================
+
 
 class TestSecurityIntegration:
     """Integration tests for security features working together."""

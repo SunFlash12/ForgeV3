@@ -35,6 +35,7 @@ logger = structlog.get_logger(__name__)
 @dataclass
 class ContentAnalysis:
     """Results of content analysis."""
+
     word_count: int = 0
     char_count: int = 0
     sentence_count: int = 0
@@ -49,6 +50,7 @@ class ContentAnalysis:
 @dataclass
 class InsightExtraction:
     """Extracted insights from content."""
+
     main_ideas: list[str] = field(default_factory=list)
     key_facts: list[str] = field(default_factory=list)
     action_items: list[str] = field(default_factory=list)
@@ -59,6 +61,7 @@ class InsightExtraction:
 @dataclass
 class SimilarityResult:
     """Similarity comparison result."""
+
     capsule_id: str
     similarity_score: float
     common_terms: list[str] = field(default_factory=list)
@@ -172,7 +175,7 @@ class CapsuleAnalyzerOverlay(BaseOverlay):
         char_count = len(content)
 
         # Sentence analysis
-        sentences = re.split(r'[.!?]+', content)
+        sentences = re.split(r"[.!?]+", content)
         sentences = [s.strip() for s in sentences if s.strip()]
         sentence_count = len(sentences)
         avg_sentence_length = word_count / sentence_count if sentence_count > 0 else 0
@@ -188,10 +191,7 @@ class CapsuleAnalyzerOverlay(BaseOverlay):
             reading_level = "expert"
 
         # Extract key terms (simple frequency-based)
-        word_freq = Counter(
-            word.lower() for word in words
-            if len(word) > 4 and word.isalpha()
-        )
+        word_freq = Counter(word.lower() for word in words if len(word) > 4 and word.isalpha())
         key_terms = [term for term, _ in word_freq.most_common(10)]
 
         # Topic detection (simplified keyword matching)
@@ -201,9 +201,7 @@ class CapsuleAnalyzerOverlay(BaseOverlay):
         sentiment = self._analyze_sentiment(content)
 
         # Quality score
-        quality_score = self._calculate_quality_score(
-            word_count, sentence_count, len(key_terms)
-        )
+        quality_score = self._calculate_quality_score(word_count, sentence_count, len(key_terms))
 
         # Update global term frequency
         self._term_frequency.update(word_freq)
@@ -263,7 +261,7 @@ class CapsuleAnalyzerOverlay(BaseOverlay):
         if not content:
             return {"error": "No content provided"}
 
-        sentences = re.split(r'[.!?]+', content)
+        sentences = re.split(r"[.!?]+", content)
         sentences = [s.strip() for s in sentences if s.strip()]
 
         # Extract different types of insights
@@ -285,7 +283,9 @@ class CapsuleAnalyzerOverlay(BaseOverlay):
                 questions.append(sentence)
 
             # Facts (contains numbers or definitive statements)
-            elif re.search(r'\d+', sentence) or any(word in lower for word in ["is", "are", "was", "were"]):
+            elif re.search(r"\d+", sentence) or any(
+                word in lower for word in ["is", "are", "was", "were"]
+            ):
                 key_facts.append(sentence)
 
             # References (mentions external sources)
@@ -325,9 +325,12 @@ class CapsuleAnalyzerOverlay(BaseOverlay):
         }
 
         # Code detection
-        if any(pattern in content for pattern in ["def ", "class ", "import ", "function", "=>", "{}", "return "]):
+        if any(
+            pattern in content
+            for pattern in ["def ", "class ", "import ", "function", "=>", "{}", "return "]
+        ):
             scores[CapsuleType.CODE.value] += 3
-        if re.search(r'```[\w]*\n', content):
+        if re.search(r"```[\w]*\n", content):
             scores[CapsuleType.CODE.value] += 2
 
         # Decision detection
@@ -335,7 +338,10 @@ class CapsuleAnalyzerOverlay(BaseOverlay):
             scores[CapsuleType.DECISION.value] += 2
 
         # Insight detection
-        if any(word in lower for word in ["insight", "learned", "discovered", "realized", "observation"]):
+        if any(
+            word in lower
+            for word in ["insight", "learned", "discovered", "realized", "observation"]
+        ):
             scores[CapsuleType.INSIGHT.value] += 2
 
         # Config detection
@@ -343,7 +349,9 @@ class CapsuleAnalyzerOverlay(BaseOverlay):
             scores[CapsuleType.CONFIG.value] += 2
 
         # Knowledge detection
-        if any(word in lower for word in ["how to", "guide", "tutorial", "explanation", "overview"]):
+        if any(
+            word in lower for word in ["how to", "guide", "tutorial", "explanation", "overview"]
+        ):
             scores[CapsuleType.KNOWLEDGE.value] += 2
 
         # Memory is default low-content type
@@ -388,7 +396,7 @@ class CapsuleAnalyzerOverlay(BaseOverlay):
             scores["completeness"] = word_count / 100
 
         # Clarity: based on sentence structure
-        sentences = re.split(r'[.!?]+', content)
+        sentences = re.split(r"[.!?]+", content)
         avg_sentence_words = word_count / len(sentences) if sentences else 0
         if 10 <= avg_sentence_words <= 25:
             scores["clarity"] = 0.9
@@ -398,8 +406,8 @@ class CapsuleAnalyzerOverlay(BaseOverlay):
             scores["clarity"] = max(0.3, 1.0 - (avg_sentence_words - 25) * 0.02)
 
         # Structure: check for headers, lists, paragraphs
-        has_headers = bool(re.search(r'^#+\s|^###', content, re.MULTILINE))
-        has_lists = bool(re.search(r'^\s*[-*•]\s|^\d+\.\s', content, re.MULTILINE))
+        has_headers = bool(re.search(r"^#+\s|^###", content, re.MULTILINE))
+        has_lists = bool(re.search(r"^\s*[-*•]\s|^\d+\.\s", content, re.MULTILINE))
         has_paragraphs = "\n\n" in content
 
         structure_features = sum([has_headers, has_lists, has_paragraphs])
@@ -458,12 +466,15 @@ class CapsuleAnalyzerOverlay(BaseOverlay):
                         if other_analysis:
                             common = set(other_analysis.key_terms) & content_terms
                             if common:
-                                similar.append({
-                                    "capsule_id": other_id,
-                                    "similarity_score": len(common) / max(len(content_terms), 1),
-                                    "common_terms": list(common)[:5],
-                                    "relationship": "related",
-                                })
+                                similar.append(
+                                    {
+                                        "capsule_id": other_id,
+                                        "similarity_score": len(common)
+                                        / max(len(content_terms), 1),
+                                        "common_terms": list(common)[:5],
+                                        "relationship": "related",
+                                    }
+                                )
 
         # Sort by similarity and limit
         similar.sort(key=lambda x: x["similarity_score"], reverse=True)
@@ -507,7 +518,7 @@ class CapsuleAnalyzerOverlay(BaseOverlay):
             return {"error": "No content provided"}
 
         # Split into sentences
-        sentences = re.split(r'[.!?]+', content)
+        sentences = re.split(r"[.!?]+", content)
         sentences = [s.strip() for s in sentences if s.strip() and len(s.split()) > 3]
 
         if not sentences:
@@ -534,7 +545,9 @@ class CapsuleAnalyzerOverlay(BaseOverlay):
         return {
             "summary": ". ".join(summary_sentences) + ".",
             "sentence_count": len(summary_sentences),
-            "compression_ratio": round(len(summary_sentences) / len(sentences), 2) if sentences else 1.0,
+            "compression_ratio": round(len(summary_sentences) / len(sentences), 2)
+            if sentences
+            else 1.0,
             "method": "extractive",
         }
 
@@ -587,7 +600,7 @@ class CapsuleAnalyzerOverlay(BaseOverlay):
         structure_score = min(sentence_count / 10, 1.0) if sentence_count > 0 else 0
         depth_score = min(key_term_count / 5, 1.0)
 
-        return (length_score * 0.3 + structure_score * 0.3 + depth_score * 0.4)
+        return length_score * 0.3 + structure_score * 0.3 + depth_score * 0.4
 
     def _quality_level(self, score: float) -> str:
         """Convert numeric score to quality level."""
@@ -627,10 +640,12 @@ class CapsuleAnalyzerOverlay(BaseOverlay):
 
             if capsule_id and content:
                 # Auto-analyze new/updated capsules
-                await self._analyze_content({
-                    "capsule_id": capsule_id,
-                    "content": content,
-                })
+                await self._analyze_content(
+                    {
+                        "capsule_id": capsule_id,
+                        "content": content,
+                    }
+                )
 
                 self._logger.debug(
                     "Auto-analyzed capsule",

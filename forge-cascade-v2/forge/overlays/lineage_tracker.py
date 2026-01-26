@@ -29,22 +29,26 @@ logger = structlog.get_logger()
 
 class LineageError(OverlayError):
     """Lineage tracking error."""
+
     pass
 
 
 class CircularLineageError(LineageError):
     """Circular reference detected in lineage."""
+
     pass
 
 
 class BrokenChainError(LineageError):
     """Lineage chain is broken."""
+
     pass
 
 
 @dataclass
 class SemanticEdgeInfo:
     """Information about a semantic edge."""
+
     target_id: str
     relationship_type: str  # SUPPORTS, CONTRADICTS, etc.
     confidence: float = 1.0
@@ -54,6 +58,7 @@ class SemanticEdgeInfo:
 @dataclass
 class LineageNode:
     """A node in the lineage graph."""
+
     capsule_id: str
     capsule_type: str
     title: str | None = None
@@ -84,6 +89,7 @@ class LineageNode:
 @dataclass
 class LineageChain:
     """A chain of lineage (Isnad)."""
+
     chain_id: str
     root_id: str
     leaf_id: str
@@ -100,6 +106,7 @@ class LineageChain:
 @dataclass
 class LineageMetrics:
     """Metrics for a lineage tree."""
+
     root_id: str
     total_nodes: int = 0
     max_depth: int = 0
@@ -116,6 +123,7 @@ class LineageMetrics:
 @dataclass
 class LineageAnomaly:
     """An anomaly detected in lineage."""
+
     anomaly_type: str  # "circular", "broken", "trust_spike", "rapid_derivation"
     severity: str  # "low", "medium", "high"
     affected_nodes: list[str]
@@ -144,10 +152,7 @@ class LineageTrackerOverlay(BaseOverlay):
         EventType.SEMANTIC_EDGE_CREATED,  # New: track semantic relationships
     }
 
-    REQUIRED_CAPABILITIES = {
-        Capability.DATABASE_READ,
-        Capability.DATABASE_WRITE
-    }
+    REQUIRED_CAPABILITIES = {Capability.DATABASE_READ, Capability.DATABASE_WRITE}
 
     # Maximum lineage depth to track
     MAX_DEPTH = 100
@@ -158,7 +163,7 @@ class LineageTrackerOverlay(BaseOverlay):
         enable_metrics: bool = True,
         trust_decay_rate: float = 0.05,
         max_derivations_per_day: int = 100,
-        lineage_provider: Any | None = None
+        lineage_provider: Any | None = None,
     ) -> None:
         """
         Initialize the lineage tracker.
@@ -199,7 +204,7 @@ class LineageTrackerOverlay(BaseOverlay):
             "chains_computed": 0,
             "anomalies_detected": 0,
             "derivations_recorded": 0,
-            "nodes_evicted": 0  # Track evictions
+            "nodes_evicted": 0,  # Track evictions
         }
 
         self._logger = logger.bind(overlay=self.NAME)
@@ -209,7 +214,7 @@ class LineageTrackerOverlay(BaseOverlay):
         self._logger.info(
             "lineage_tracker_initialized",
             anomaly_detection=self._enable_anomaly_detection,
-            trust_decay_rate=self._trust_decay_rate
+            trust_decay_rate=self._trust_decay_rate,
         )
         return True
 
@@ -217,7 +222,7 @@ class LineageTrackerOverlay(BaseOverlay):
         self,
         context: OverlayContext,
         event: Event | None = None,
-        input_data: dict[str, Any] | None = None
+        input_data: dict[str, Any] | None = None,
     ) -> OverlayResult:
         """
         Execute lineage tracking.
@@ -231,6 +236,7 @@ class LineageTrackerOverlay(BaseOverlay):
             Lineage tracking result
         """
         import time
+
         start_time = time.time()
 
         data = input_data or {}
@@ -271,7 +277,7 @@ class LineageTrackerOverlay(BaseOverlay):
             "lineage_tracking_complete",
             nodes=len(self._nodes),
             anomalies=len(anomalies),
-            duration_ms=round(duration_ms, 2)
+            duration_ms=round(duration_ms, 2),
         )
 
         # Prepare events
@@ -279,48 +285,46 @@ class LineageTrackerOverlay(BaseOverlay):
         if anomalies:
             for anomaly in anomalies:
                 if anomaly.severity in {"medium", "high"}:
-                    events_to_emit.append({
-                        "event_type": EventType.ANOMALY_DETECTED,
-                        "payload": {
-                            "anomaly_type": anomaly.anomaly_type,
-                            "severity": anomaly.severity,
-                            "affected_nodes": anomaly.affected_nodes,
-                            "description": anomaly.description
+                    events_to_emit.append(
+                        {
+                            "event_type": EventType.ANOMALY_DETECTED,
+                            "payload": {
+                                "anomaly_type": anomaly.anomaly_type,
+                                "severity": anomaly.severity,
+                                "affected_nodes": anomaly.affected_nodes,
+                                "description": anomaly.description,
+                            },
                         }
-                    })
+                    )
 
         return OverlayResult(
             success=True,
             data={
                 **result_data,
                 "anomalies": [
-                    {
-                        "type": a.anomaly_type,
-                        "severity": a.severity,
-                        "description": a.description
-                    }
+                    {"type": a.anomaly_type, "severity": a.severity, "description": a.description}
                     for a in anomalies
                 ],
-                "processing_time_ms": round(duration_ms, 2)
+                "processing_time_ms": round(duration_ms, 2),
             },
             events_to_emit=events_to_emit,
             metrics={
                 "nodes_tracked": len(self._nodes),
                 "roots_count": len(self._roots),
-                "anomalies_found": len(anomalies)
-            }
+                "anomalies_found": len(anomalies),
+            },
         )
 
     async def _handle_capsule_created(
-        self,
-        data: dict[str, Any],
-        context: OverlayContext
+        self, data: dict[str, Any], context: OverlayContext
     ) -> dict[str, Any]:
         """Handle new capsule creation."""
         capsule_id = data.get("capsule_id")
         parent_id = data.get("parent_id")
         parent_ids = [parent_id] if parent_id else []
-        capsule_type: str = str(data.get("type", data.get("capsule_type", CapsuleType.KNOWLEDGE.value)))
+        capsule_type: str = str(
+            data.get("type", data.get("capsule_type", CapsuleType.KNOWLEDGE.value))
+        )
 
         if not capsule_id:
             return {"error": "Missing capsule_id"}
@@ -333,16 +337,12 @@ class LineageTrackerOverlay(BaseOverlay):
             creator_id=context.user_id,
             created_at=datetime.now(UTC),
             trust_at_creation=context.trust_flame,
-            parent_ids=parent_ids
+            parent_ids=parent_ids,
         )
 
         # Calculate depth
         if parent_ids:
-            parent_depths = [
-                self._nodes[pid].depth
-                for pid in parent_ids
-                if pid in self._nodes
-            ]
+            parent_depths = [self._nodes[pid].depth for pid in parent_ids if pid in self._nodes]
             node.depth = max(parent_depths, default=0) + 1
         else:
             # Root node
@@ -388,8 +388,9 @@ class LineageTrackerOverlay(BaseOverlay):
             self._recent_derivations[context.user_id].append(datetime.now(UTC))
             # Enforce per-user limit
             if len(self._recent_derivations[context.user_id]) > self._MAX_DERIVATIONS_PER_USER:
-                self._recent_derivations[context.user_id] = \
-                    self._recent_derivations[context.user_id][-self._MAX_DERIVATIONS_PER_USER:]
+                self._recent_derivations[context.user_id] = self._recent_derivations[
+                    context.user_id
+                ][-self._MAX_DERIVATIONS_PER_USER :]
 
         self._stats["derivations_recorded"] += 1
 
@@ -401,17 +402,13 @@ class LineageTrackerOverlay(BaseOverlay):
             "depth": node.depth,
             "parent_count": len(parent_ids),
             "is_root": capsule_id in self._roots,
-            "chain": {
-                "root_id": chain.root_id,
-                "length": chain.total_length,
-                "nodes": chain.nodes
-            } if chain else None
+            "chain": {"root_id": chain.root_id, "length": chain.total_length, "nodes": chain.nodes}
+            if chain
+            else None,
         }
 
     async def _handle_capsule_linked(
-        self,
-        data: dict[str, Any],
-        context: OverlayContext
+        self, data: dict[str, Any], context: OverlayContext
     ) -> dict[str, Any]:
         """Handle capsule linking (new parent-child relationship)."""
         parent_id = data.get("parent_id")
@@ -425,7 +422,7 @@ class LineageTrackerOverlay(BaseOverlay):
             return {
                 "error": "Would create circular reference",
                 "parent_id": parent_id,
-                "child_id": child_id
+                "child_id": child_id,
             }
 
         # Update relationships
@@ -444,16 +441,10 @@ class LineageTrackerOverlay(BaseOverlay):
         # Update influence
         self._update_influence(parent_id)
 
-        return {
-            "linked": True,
-            "parent_id": parent_id,
-            "child_id": child_id
-        }
+        return {"linked": True, "parent_id": parent_id, "child_id": child_id}
 
     async def _handle_cascade(
-        self,
-        data: dict[str, Any],
-        context: OverlayContext
+        self, data: dict[str, Any], context: OverlayContext
     ) -> dict[str, Any]:
         """Handle cascade event - update affected lineages."""
         source_id = data.get("source_id")
@@ -473,13 +464,11 @@ class LineageTrackerOverlay(BaseOverlay):
             "cascade_processed": True,
             "source_id": source_id,
             "affected_count": len(affected_ids),
-            "metrics": metrics.__dict__ if metrics else None
+            "metrics": metrics.__dict__ if metrics else None,
         }
 
     async def _handle_semantic_edge_created(
-        self,
-        data: dict[str, Any],
-        context: OverlayContext
+        self, data: dict[str, Any], context: OverlayContext
     ) -> dict[str, Any]:
         """Handle semantic edge creation event."""
         source_id = data.get("source_id")
@@ -554,10 +543,7 @@ class LineageTrackerOverlay(BaseOverlay):
         }
 
     def compute_semantic_distance(
-        self,
-        source_id: str,
-        target_id: str,
-        max_hops: int = 5
+        self, source_id: str, target_id: str, max_hops: int = 5
     ) -> dict[str, Any] | None:
         """
         Compute semantic distance between two capsules.
@@ -605,30 +591,20 @@ class LineageTrackerOverlay(BaseOverlay):
                 neighbor_id = edge.target_id
                 if neighbor_id not in visited and neighbor_id in self._nodes:
                     visited.add(neighbor_id)
-                    queue.append((
-                        neighbor_id,
-                        path + [neighbor_id],
-                        rel_types + [edge.relationship_type]
-                    ))
+                    queue.append(
+                        (neighbor_id, path + [neighbor_id], rel_types + [edge.relationship_type])
+                    )
 
             # Also follow derivation edges
             for parent_id in node.parent_ids:
                 if parent_id not in visited and parent_id in self._nodes:
                     visited.add(parent_id)
-                    queue.append((
-                        parent_id,
-                        path + [parent_id],
-                        rel_types + ["DERIVED_FROM"]
-                    ))
+                    queue.append((parent_id, path + [parent_id], rel_types + ["DERIVED_FROM"]))
 
             for child_id in node.child_ids:
                 if child_id not in visited and child_id in self._nodes:
                     visited.add(child_id)
-                    queue.append((
-                        child_id,
-                        path + [child_id],
-                        rel_types + ["DERIVED_TO"]
-                    ))
+                    queue.append((child_id, path + [child_id], rel_types + ["DERIVED_TO"]))
 
         return {"distance": -1, "path": [], "relationship_types": [], "found": False}
 
@@ -668,19 +644,19 @@ class LineageTrackerOverlay(BaseOverlay):
                             queue.append(contra_id)
 
             if len(cluster) >= min_size:
-                clusters.append({
-                    "cluster_id": f"contra_{len(clusters)}",
-                    "capsule_ids": list(cluster),
-                    "size": len(cluster),
-                    "severity": "high" if len(cluster) > 3 else "medium",
-                })
+                clusters.append(
+                    {
+                        "cluster_id": f"contra_{len(clusters)}",
+                        "capsule_ids": list(cluster),
+                        "size": len(cluster),
+                        "severity": "high" if len(cluster) > 3 else "medium",
+                    }
+                )
 
         return clusters
 
     async def _get_lineage_info(
-        self,
-        data: dict[str, Any],
-        context: OverlayContext
+        self, data: dict[str, Any], context: OverlayContext
     ) -> dict[str, Any]:
         """Get lineage information for a capsule."""
         capsule_id = data.get("capsule_id")
@@ -690,14 +666,11 @@ class LineageTrackerOverlay(BaseOverlay):
             return {
                 "total_nodes": len(self._nodes),
                 "root_count": len(self._roots),
-                "stats": self._stats
+                "stats": self._stats,
             }
 
         if capsule_id not in self._nodes:
-            return {
-                "capsule_id": capsule_id,
-                "found": False
-            }
+            return {"capsule_id": capsule_id, "found": False}
 
         node = self._nodes[capsule_id]
 
@@ -732,17 +705,14 @@ class LineageTrackerOverlay(BaseOverlay):
             },
             "ancestors": {
                 "count": len(ancestors),
-                "ids": ancestors[:10]  # Limit for response size
+                "ids": ancestors[:10],  # Limit for response size
             },
-            "descendants": {
-                "count": len(descendants),
-                "ids": descendants[:10]
-            },
+            "descendants": {"count": len(descendants), "ids": descendants[:10]},
             "isnad": {
                 "chain_id": chain.chain_id if chain else None,
                 "root_id": chain.root_id if chain else None,
                 "length": chain.total_length if chain else 0,
-                "trust_gradient": chain.trust_gradient if chain else []
+                "trust_gradient": chain.trust_gradient if chain else [],
             },
             "semantic_edges": {
                 "supports": node.supports[:10],
@@ -753,7 +723,7 @@ class LineageTrackerOverlay(BaseOverlay):
                 "related_to": node.related_to[:10],
                 "total_count": node.semantic_connectivity,
             },
-            "metrics": metrics.__dict__ if metrics else None
+            "metrics": metrics.__dict__ if metrics else None,
         }
 
     def _compute_chain_to_root(self, capsule_id: str) -> LineageChain | None:
@@ -794,7 +764,7 @@ class LineageTrackerOverlay(BaseOverlay):
             leaf_id=capsule_id,
             nodes=chain_nodes,
             total_length=len(chain_nodes),
-            trust_gradient=trust_gradient
+            trust_gradient=trust_gradient,
         )
 
     def _get_ancestors(self, capsule_id: str, max_depth: int = 50) -> list[str]:
@@ -883,9 +853,7 @@ class LineageTrackerOverlay(BaseOverlay):
             # Calculate depth from parents
             if node.parent_ids:
                 parent_depths = [
-                    self._nodes[pid].depth
-                    for pid in node.parent_ids
-                    if pid in self._nodes
+                    self._nodes[pid].depth for pid in node.parent_ids if pid in self._nodes
                 ]
                 node.depth = max(parent_depths, default=0) + 1
             else:
@@ -950,17 +918,18 @@ class LineageTrackerOverlay(BaseOverlay):
             children_counts.append(len(node.child_ids))
 
             # By depth
-            metrics.nodes_by_depth[node.depth] = \
-                metrics.nodes_by_depth.get(node.depth, 0) + 1
+            metrics.nodes_by_depth[node.depth] = metrics.nodes_by_depth.get(node.depth, 0) + 1
 
             # By type
-            metrics.nodes_by_type[node.capsule_type] = \
+            metrics.nodes_by_type[node.capsule_type] = (
                 metrics.nodes_by_type.get(node.capsule_type, 0) + 1
+            )
 
             # By creator
             if node.creator_id:
-                metrics.nodes_by_creator[node.creator_id] = \
+                metrics.nodes_by_creator[node.creator_id] = (
                     metrics.nodes_by_creator.get(node.creator_id, 0) + 1
+                )
 
         if depths:
             metrics.max_depth = max(depths)
@@ -994,12 +963,14 @@ class LineageTrackerOverlay(BaseOverlay):
 
         # Check for excessive depth
         if node.depth > 50:
-            anomalies.append(LineageAnomaly(
-                anomaly_type="excessive_depth",
-                severity="low",
-                affected_nodes=[capsule_id],
-                description=f"Capsule has depth {node.depth}, which may indicate over-derivation"
-            ))
+            anomalies.append(
+                LineageAnomaly(
+                    anomaly_type="excessive_depth",
+                    severity="low",
+                    affected_nodes=[capsule_id],
+                    description=f"Capsule has depth {node.depth}, which may indicate over-derivation",
+                )
+            )
 
         # Check for rapid derivation
         if node.creator_id:
@@ -1011,52 +982,62 @@ class LineageTrackerOverlay(BaseOverlay):
             self._recent_derivations[node.creator_id] = recent
 
             if len(recent) > self._max_derivations_per_day:
-                anomalies.append(LineageAnomaly(
-                    anomaly_type="rapid_derivation",
-                    severity="medium",
-                    affected_nodes=[capsule_id],
-                    description=f"User has created {len(recent)} derivations in 24h"
-                ))
+                anomalies.append(
+                    LineageAnomaly(
+                        anomaly_type="rapid_derivation",
+                        severity="medium",
+                        affected_nodes=[capsule_id],
+                        description=f"User has created {len(recent)} derivations in 24h",
+                    )
+                )
 
         # Check for trust spike (child trust >> parent trust)
         for parent_id in node.parent_ids:
             if parent_id in self._nodes:
                 parent = self._nodes[parent_id]
                 if node.trust_at_creation > parent.trust_at_creation + 20:
-                    anomalies.append(LineageAnomaly(
-                        anomaly_type="trust_spike",
-                        severity="medium",
-                        affected_nodes=[capsule_id, parent_id],
-                        description=f"Trust increased significantly from parent ({parent.trust_at_creation}) to child ({node.trust_at_creation})"
-                    ))
+                    anomalies.append(
+                        LineageAnomaly(
+                            anomaly_type="trust_spike",
+                            severity="medium",
+                            affected_nodes=[capsule_id, parent_id],
+                            description=f"Trust increased significantly from parent ({parent.trust_at_creation}) to child ({node.trust_at_creation})",
+                        )
+                    )
 
         # Check for orphaned references
         for parent_id in node.parent_ids:
             if parent_id not in self._nodes:
-                anomalies.append(LineageAnomaly(
-                    anomaly_type="broken_chain",
-                    severity="high",
-                    affected_nodes=[capsule_id, parent_id],
-                    description=f"Parent {parent_id} not found in lineage graph"
-                ))
+                anomalies.append(
+                    LineageAnomaly(
+                        anomaly_type="broken_chain",
+                        severity="high",
+                        affected_nodes=[capsule_id, parent_id],
+                        description=f"Parent {parent_id} not found in lineage graph",
+                    )
+                )
 
         # Check for contradiction involvement
         if node.contradicts:
-            anomalies.append(LineageAnomaly(
-                anomaly_type="contradiction_detected",
-                severity="medium" if len(node.contradicts) == 1 else "high",
-                affected_nodes=[capsule_id] + node.contradicts[:5],
-                description=f"Capsule has {len(node.contradicts)} contradicting relationships"
-            ))
+            anomalies.append(
+                LineageAnomaly(
+                    anomaly_type="contradiction_detected",
+                    severity="medium" if len(node.contradicts) == 1 else "high",
+                    affected_nodes=[capsule_id] + node.contradicts[:5],
+                    description=f"Capsule has {len(node.contradicts)} contradicting relationships",
+                )
+            )
 
         # Check for high semantic connectivity (potential knowledge hub)
         if node.semantic_connectivity > 20:
-            anomalies.append(LineageAnomaly(
-                anomaly_type="high_connectivity",
-                severity="low",
-                affected_nodes=[capsule_id],
-                description=f"Capsule has high semantic connectivity ({node.semantic_connectivity} edges)"
-            ))
+            anomalies.append(
+                LineageAnomaly(
+                    anomaly_type="high_connectivity",
+                    severity="low",
+                    affected_nodes=[capsule_id],
+                    description=f"Capsule has high semantic connectivity ({node.semantic_connectivity} edges)",
+                )
+            )
 
         return anomalies
 
@@ -1070,11 +1051,7 @@ class LineageTrackerOverlay(BaseOverlay):
 
     def get_stats(self) -> dict[str, Any]:
         """Get lineage tracking statistics."""
-        return {
-            **self._stats,
-            "nodes_in_memory": len(self._nodes),
-            "roots_count": len(self._roots)
-        }
+        return {**self._stats, "nodes_in_memory": len(self._nodes), "roots_count": len(self._roots)}
 
     def _evict_lru_nodes(self, count: int = 1000) -> int:
         """
@@ -1116,11 +1093,7 @@ class LineageTrackerOverlay(BaseOverlay):
         self._nodes_access_order = self._nodes_access_order[evict_count:]
         self._stats["nodes_evicted"] += evicted
 
-        self._logger.info(
-            "lineage_nodes_evicted",
-            evicted=evicted,
-            remaining=len(self._nodes)
-        )
+        self._logger.info("lineage_nodes_evicted", evicted=evicted, remaining=len(self._nodes))
 
         return evicted
 
@@ -1136,10 +1109,7 @@ class LineageTrackerOverlay(BaseOverlay):
 
 
 # Convenience function
-def create_lineage_tracker(
-    strict_mode: bool = False,
-    **kwargs: Any
-) -> LineageTrackerOverlay:
+def create_lineage_tracker(strict_mode: bool = False, **kwargs: Any) -> LineageTrackerOverlay:
     """
     Create a lineage tracker overlay.
 

@@ -41,7 +41,7 @@ class AuditRepository:
         user_agent: str | None = None,
         correlation_id: str | None = None,
         priority: EventPriority = EventPriority.LOW,
-        trust_level_required: TrustLevel = TrustLevel.STANDARD
+        trust_level_required: TrustLevel = TrustLevel.STANDARD,
     ) -> AuditEvent:
         """
         Log an audit event.
@@ -91,6 +91,7 @@ class AuditRepository:
 
         # Serialize dicts to JSON strings for Neo4j storage
         import json
+
         details_json = json.dumps(details) if details else None
         old_value_json = json.dumps(old_value) if old_value else None
         new_value_json = json.dumps(new_value) if new_value else None
@@ -111,7 +112,7 @@ class AuditRepository:
             "priority": priority.value,
             "trust_level_required": trust_level_required.value,
             "timestamp": now.isoformat(),
-            "created_at": now.isoformat()
+            "created_at": now.isoformat(),
         }
 
         record = await self.db.execute_single(query, params)
@@ -127,7 +128,7 @@ class AuditRepository:
         details: dict[str, Any] | None = None,
         old_value: dict[str, Any] | None = None,
         new_value: dict[str, Any] | None = None,
-        correlation_id: str | None = None
+        correlation_id: str | None = None,
     ) -> AuditEvent:
         """Log a capsule-related action."""
         event_type_map = {
@@ -137,7 +138,7 @@ class AuditRepository:
             "archive": EventType.CAPSULE_ARCHIVED,
             "fork": EventType.CAPSULE_FORKED,
             "view": EventType.CAPSULE_VIEWED,
-            "search": EventType.CAPSULE_SEARCHED
+            "search": EventType.CAPSULE_SEARCHED,
         }
 
         event_type = event_type_map.get(action.lower(), EventType.SYSTEM_EVENT)
@@ -151,7 +152,7 @@ class AuditRepository:
             details=details,
             old_value=old_value,
             new_value=new_value,
-            correlation_id=correlation_id
+            correlation_id=correlation_id,
         )
 
     async def log_user_action(
@@ -161,7 +162,7 @@ class AuditRepository:
         action: str,
         details: dict[str, Any] | None = None,
         ip_address: str | None = None,
-        user_agent: str | None = None
+        user_agent: str | None = None,
     ) -> AuditEvent:
         """Log a user-related action."""
         event_type_map = {
@@ -172,7 +173,7 @@ class AuditRepository:
             "updated": EventType.USER_UPDATED,
             "trust_changed": EventType.USER_TRUST_CHANGED,
             "locked": EventType.USER_LOCKED,
-            "unlocked": EventType.USER_UNLOCKED
+            "unlocked": EventType.USER_UNLOCKED,
         }
 
         event_type = event_type_map.get(action.lower(), EventType.SYSTEM_EVENT)
@@ -187,15 +188,11 @@ class AuditRepository:
             details=details,
             ip_address=ip_address,
             user_agent=user_agent,
-            priority=priority
+            priority=priority,
         )
 
     async def log_governance_action(
-        self,
-        actor_id: str,
-        proposal_id: str,
-        action: str,
-        details: dict[str, Any] | None = None
+        self, actor_id: str, proposal_id: str, action: str, details: dict[str, Any] | None = None
     ) -> AuditEvent:
         """Log a governance-related action."""
         event_type_map = {
@@ -204,7 +201,7 @@ class AuditRepository:
             "vote_cast": EventType.VOTE_CAST,
             "proposal_passed": EventType.PROPOSAL_PASSED,
             "proposal_rejected": EventType.PROPOSAL_REJECTED,
-            "proposal_executed": EventType.PROPOSAL_EXECUTED
+            "proposal_executed": EventType.PROPOSAL_EXECUTED,
         }
 
         event_type = event_type_map.get(action.lower(), EventType.GOVERNANCE_EVENT)
@@ -216,15 +213,11 @@ class AuditRepository:
             resource_type="proposal",
             resource_id=proposal_id,
             details=details,
-            priority=EventPriority.HIGH
+            priority=EventPriority.HIGH,
         )
 
     async def log_overlay_action(
-        self,
-        actor_id: str,
-        overlay_id: str,
-        action: str,
-        details: dict[str, Any] | None = None
+        self, actor_id: str, overlay_id: str, action: str, details: dict[str, Any] | None = None
     ) -> AuditEvent:
         """Log an overlay-related action."""
         event_type_map = {
@@ -233,11 +226,13 @@ class AuditRepository:
             "deactivated": EventType.OVERLAY_DEACTIVATED,
             "executed": EventType.OVERLAY_EXECUTED,
             "error": EventType.OVERLAY_ERROR,
-            "timeout": EventType.OVERLAY_TIMEOUT
+            "timeout": EventType.OVERLAY_TIMEOUT,
         }
 
         event_type = event_type_map.get(action.lower(), EventType.OVERLAY_EVENT)
-        priority = EventPriority.HIGH if action.lower() in ("error", "timeout") else EventPriority.NORMAL
+        priority = (
+            EventPriority.HIGH if action.lower() in ("error", "timeout") else EventPriority.NORMAL
+        )
 
         return await self.log(
             event_type=event_type,
@@ -246,7 +241,7 @@ class AuditRepository:
             resource_type="overlay",
             resource_id=overlay_id,
             details=details,
-            priority=priority
+            priority=priority,
         )
 
     async def log_security_event(
@@ -256,7 +251,7 @@ class AuditRepository:
         details: dict[str, Any],
         resource_type: str = "security",
         resource_id: str | None = None,
-        ip_address: str | None = None
+        ip_address: str | None = None,
     ) -> AuditEvent:
         """Log a security-related event (high priority)."""
         return await self.log(
@@ -268,7 +263,7 @@ class AuditRepository:
             details=details,
             ip_address=ip_address,
             priority=EventPriority.CRITICAL,
-            trust_level_required=TrustLevel.TRUSTED
+            trust_level_required=TrustLevel.TRUSTED,
         )
 
     async def log_immune_event(
@@ -276,7 +271,7 @@ class AuditRepository:
         event_name: str,
         details: dict[str, Any],
         resource_type: str = "system",
-        resource_id: str | None = None
+        resource_id: str | None = None,
     ) -> AuditEvent:
         """Log an immune system event."""
         return await self.log(
@@ -287,7 +282,7 @@ class AuditRepository:
             resource_id=resource_id,
             details=details,
             priority=EventPriority.HIGH,
-            trust_level_required=TrustLevel.TRUSTED
+            trust_level_required=TrustLevel.TRUSTED,
         )
 
     async def log_cascade_action(
@@ -296,13 +291,13 @@ class AuditRepository:
         cascade_id: str,
         action: str,
         details: dict[str, Any] | None = None,
-        correlation_id: str | None = None
+        correlation_id: str | None = None,
     ) -> AuditEvent:
         """Log a cascade-related action."""
         event_type_map = {
             "triggered": EventType.CASCADE_INITIATED,
             "propagated": EventType.CASCADE_PROPAGATED,
-            "completed": EventType.CASCADE_COMPLETE
+            "completed": EventType.CASCADE_COMPLETE,
         }
 
         event_type = event_type_map.get(action.lower(), EventType.CASCADE_TRIGGERED)
@@ -315,7 +310,7 @@ class AuditRepository:
             resource_id=cascade_id,
             details=details,
             correlation_id=correlation_id,
-            priority=EventPriority.NORMAL
+            priority=EventPriority.NORMAL,
         )
 
     async def log_action(
@@ -325,7 +320,7 @@ class AuditRepository:
         entity_id: str,
         user_id: str,
         details: dict[str, Any] | None = None,
-        correlation_id: str | None = None
+        correlation_id: str | None = None,
     ) -> AuditEvent:
         """
         Generic action logging method.
@@ -339,28 +334,19 @@ class AuditRepository:
                 capsule_id=entity_id,
                 action=action,
                 details=details,
-                correlation_id=correlation_id
+                correlation_id=correlation_id,
             )
         elif entity_type == "user":
             return await self.log_user_action(
-                actor_id=user_id,
-                target_user_id=entity_id,
-                action=action,
-                details=details
+                actor_id=user_id, target_user_id=entity_id, action=action, details=details
             )
         elif entity_type == "proposal":
             return await self.log_governance_action(
-                actor_id=user_id,
-                proposal_id=entity_id,
-                action=action,
-                details=details
+                actor_id=user_id, proposal_id=entity_id, action=action, details=details
             )
         elif entity_type == "overlay":
             return await self.log_overlay_action(
-                actor_id=user_id,
-                overlay_id=entity_id,
-                action=action,
-                details=details
+                actor_id=user_id, overlay_id=entity_id, action=action, details=details
             )
         elif entity_type == "cascade":
             return await self.log_cascade_action(
@@ -368,7 +354,7 @@ class AuditRepository:
                 cascade_id=entity_id,
                 action=action,
                 details=details,
-                correlation_id=correlation_id
+                correlation_id=correlation_id,
             )
         else:
             # Generic logging for unknown entity types
@@ -379,7 +365,7 @@ class AuditRepository:
                 resource_type=entity_type,
                 resource_id=entity_id,
                 details=details,
-                correlation_id=correlation_id
+                correlation_id=correlation_id,
             )
 
     # =========================================================================
@@ -406,11 +392,7 @@ class AuditRepository:
         return [self._to_audit_event(r["a"]) for r in records]
 
     async def get_by_actor(
-        self,
-        actor_id: str,
-        limit: int = 100,
-        offset: int = 0,
-        since: datetime | None = None
+        self, actor_id: str, limit: int = 100, offset: int = 0, since: datetime | None = None
     ) -> list[AuditEvent]:
         """Get audit events for a specific actor."""
         # SECURITY FIX (Audit 4 - S4): Bound limit/offset to prevent resource exhaustion
@@ -426,11 +408,7 @@ class AuditRepository:
         LIMIT $limit
         """
 
-        params = {
-            "actor_id": actor_id,
-            "limit": limit,
-            "offset": offset
-        }
+        params = {"actor_id": actor_id, "limit": limit, "offset": offset}
         if since:
             params["since"] = since.isoformat()
 
@@ -438,11 +416,7 @@ class AuditRepository:
         return [self._to_audit_event(r["a"]) for r in records]
 
     async def get_by_resource(
-        self,
-        resource_type: str,
-        resource_id: str,
-        limit: int = 100,
-        offset: int = 0
+        self, resource_type: str, resource_id: str, limit: int = 100, offset: int = 0
     ) -> list[AuditEvent]:
         """Get audit events for a specific resource."""
         # SECURITY FIX (Audit 4 - S4): Bound limit/offset to prevent resource exhaustion
@@ -457,12 +431,15 @@ class AuditRepository:
         LIMIT $limit
         """
 
-        records = await self.db.execute(query, {
-            "resource_type": resource_type,
-            "resource_id": resource_id,
-            "limit": limit,
-            "offset": offset
-        })
+        records = await self.db.execute(
+            query,
+            {
+                "resource_type": resource_type,
+                "resource_id": resource_id,
+                "limit": limit,
+                "offset": offset,
+            },
+        )
         return [self._to_audit_event(r["a"]) for r in records]
 
     async def get_by_event_type(
@@ -470,7 +447,7 @@ class AuditRepository:
         event_type: EventType,
         since: datetime | None = None,
         until: datetime | None = None,
-        limit: int = 100
+        limit: int = 100,
     ) -> list[AuditEvent]:
         """Get audit events of a specific type within time range."""
         # SECURITY FIX (Audit 4 - S4): Bound limit to prevent resource exhaustion
@@ -492,10 +469,7 @@ class AuditRepository:
         LIMIT $limit
         """
 
-        params = {
-            "event_type": event_type.value,
-            "limit": limit
-        }
+        params = {"event_type": event_type.value, "limit": limit}
         if since:
             params["since"] = since.isoformat()
         if until:
@@ -514,7 +488,7 @@ class AuditRepository:
         until: datetime | None = None,
         priority: EventPriority | None = None,
         limit: int = 100,
-        offset: int = 0
+        offset: int = 0,
     ) -> list[AuditEvent]:
         """
         Search audit logs with multiple filters.
@@ -551,11 +525,7 @@ class AuditRepository:
         LIMIT $limit
         """
 
-        params = {
-            "query_text": query_text,
-            "limit": limit,
-            "offset": offset
-        }
+        params = {"query_text": query_text, "limit": limit, "offset": offset}
         if event_types:
             params["event_types"] = [et.value for et in event_types]
         if actor_ids:
@@ -577,9 +547,7 @@ class AuditRepository:
     # =========================================================================
 
     async def get_activity_summary(
-        self,
-        since: datetime,
-        until: datetime | None = None
+        self, since: datetime, until: datetime | None = None
     ) -> dict[str, Any]:
         """Get summary statistics for audit activity."""
         until = until or datetime.now(UTC)
@@ -595,10 +563,9 @@ class AuditRepository:
             collect(DISTINCT a.resource_type) as resource_types
         """
 
-        record = await self.db.execute_single(query, {
-            "since": since.isoformat(),
-            "until": until.isoformat()
-        })
+        record = await self.db.execute_single(
+            query, {"since": since.isoformat(), "until": until.isoformat()}
+        )
 
         if not record:
             return {
@@ -608,7 +575,7 @@ class AuditRepository:
                 "event_types": [],
                 "resource_types": [],
                 "period_start": since.isoformat(),
-                "period_end": until.isoformat()
+                "period_end": until.isoformat(),
             }
 
         return {
@@ -618,13 +585,11 @@ class AuditRepository:
             "event_types": record["event_types"],
             "resource_types": record["resource_types"],
             "period_start": since.isoformat(),
-            "period_end": until.isoformat()
+            "period_end": until.isoformat(),
         }
 
     async def get_event_counts_by_type(
-        self,
-        since: datetime,
-        until: datetime | None = None
+        self, since: datetime, until: datetime | None = None
     ) -> dict[str, int]:
         """Get event counts grouped by type."""
         until = until or datetime.now(UTC)
@@ -636,18 +601,14 @@ class AuditRepository:
         ORDER BY count DESC
         """
 
-        records = await self.db.execute(query, {
-            "since": since.isoformat(),
-            "until": until.isoformat()
-        })
+        records = await self.db.execute(
+            query, {"since": since.isoformat(), "until": until.isoformat()}
+        )
 
         return {r["event_type"]: r["count"] for r in records}
 
     async def get_actor_activity(
-        self,
-        since: datetime,
-        until: datetime | None = None,
-        limit: int = 20
+        self, since: datetime, until: datetime | None = None, limit: int = 20
     ) -> list[dict[str, Any]]:
         """Get most active actors in time period."""
         # SECURITY FIX (Audit 4 - S4): Bound limit to prevent resource exhaustion
@@ -663,19 +624,13 @@ class AuditRepository:
         LIMIT $limit
         """
 
-        records = await self.db.execute(query, {
-            "since": since.isoformat(),
-            "until": until.isoformat(),
-            "limit": limit
-        })
+        records = await self.db.execute(
+            query, {"since": since.isoformat(), "until": until.isoformat(), "limit": limit}
+        )
 
         return [{"actor_id": r["actor_id"], "event_count": r["event_count"]} for r in records]
 
-    async def get_failed_logins(
-        self,
-        since: datetime,
-        threshold: int = 3
-    ) -> list[dict[str, Any]]:
+    async def get_failed_logins(self, since: datetime, threshold: int = 3) -> list[dict[str, Any]]:
         """Get actors with multiple failed login attempts (security concern)."""
         query = """
         MATCH (a:AuditLog {event_type: $event_type})
@@ -689,34 +644,32 @@ class AuditRepository:
         ORDER BY attempt_count DESC
         """
 
-        records = await self.db.execute(query, {
-            "event_type": EventType.USER_LOGIN_FAILED.value,
-            "since": since.isoformat(),
-            "threshold": threshold
-        })
+        records = await self.db.execute(
+            query,
+            {
+                "event_type": EventType.USER_LOGIN_FAILED.value,
+                "since": since.isoformat(),
+                "threshold": threshold,
+            },
+        )
 
         return [
             {
                 "actor_id": r["actor_id"],
                 "attempt_count": r["attempt_count"],
                 "ip_addresses": list({ip for ip in r["ip_addresses"] if ip}),
-                "last_attempt": r["last_attempt"]
+                "last_attempt": r["last_attempt"],
             }
             for r in records
         ]
 
     async def get_security_events(
-        self,
-        since: datetime,
-        until: datetime | None = None
+        self, since: datetime, until: datetime | None = None
     ) -> list[AuditEvent]:
         """Get all security-related events (for security review)."""
 
         return await self.get_by_event_type(
-            event_type=EventType.SECURITY_EVENT,
-            since=since,
-            until=until,
-            limit=1000
+            event_type=EventType.SECURITY_EVENT, since=since, until=until, limit=1000
         )
 
     # =========================================================================
@@ -724,10 +677,7 @@ class AuditRepository:
     # =========================================================================
 
     async def purge_old_events(
-        self,
-        older_than: datetime,
-        keep_security_events: bool = True,
-        keep_critical: bool = True
+        self, older_than: datetime, keep_security_events: bool = True, keep_critical: bool = True
     ) -> int:
         """
         Purge audit events older than specified date.
@@ -767,9 +717,7 @@ class AuditRepository:
         return record["deleted_count"] if record else 0
 
     async def archive_events(
-        self,
-        older_than: datetime,
-        archive_label: str = "ArchivedAuditLog"
+        self, older_than: datetime, archive_label: str = "ArchivedAuditLog"
     ) -> int:
         """
         Archive old events by adding an archive label.
@@ -784,8 +732,10 @@ class AuditRepository:
         # Labels must be alphanumeric with underscores only, max 100 chars
         if not archive_label or len(archive_label) > 100:
             raise ValueError("archive_label must be 1-100 characters")
-        if not re.match(r'^[A-Za-z][A-Za-z0-9_]*$', archive_label):
-            raise ValueError("archive_label must start with letter and contain only alphanumeric/underscore")
+        if not re.match(r"^[A-Za-z][A-Za-z0-9_]*$", archive_label):
+            raise ValueError(
+                "archive_label must start with letter and contain only alphanumeric/underscore"
+            )
 
         query = f"""
         MATCH (a:AuditLog)
@@ -796,15 +746,11 @@ class AuditRepository:
         RETURN count(a) as archived_count
         """
 
-        record = await self.db.execute_single(query, {
-            "older_than": older_than.isoformat()
-        })
+        record = await self.db.execute_single(query, {"older_than": older_than.isoformat()})
         return record["archived_count"] if record else 0
 
     async def count_events(
-        self,
-        since: datetime | None = None,
-        until: datetime | None = None
+        self, since: datetime | None = None, until: datetime | None = None
     ) -> int:
         """Count total audit events in time range."""
         conditions = []
@@ -863,10 +809,10 @@ class AuditRepository:
         # Handle datetime conversion
         timestamp_raw = node.get("timestamp")
         timestamp: datetime
-        if hasattr(timestamp_raw, 'to_native'):
+        if hasattr(timestamp_raw, "to_native"):
             timestamp = timestamp_raw.to_native()  # type: ignore[union-attr]
         elif isinstance(timestamp_raw, str):
-            timestamp = datetime.fromisoformat(timestamp_raw.replace('Z', '+00:00'))
+            timestamp = datetime.fromisoformat(timestamp_raw.replace("Z", "+00:00"))
         elif isinstance(timestamp_raw, datetime):
             timestamp = timestamp_raw
         else:
@@ -886,7 +832,7 @@ class AuditRepository:
             user_agent=node.get("user_agent"),
             correlation_id=node.get("correlation_id"),
             priority=EventPriority(node.get("priority", EventPriority.LOW.value)),
-            timestamp=timestamp
+            timestamp=timestamp,
         )
 
     async def list_events(
@@ -964,7 +910,7 @@ class AuditRepository:
         resource_count: int,
         resource_ids: list[str] | None = None,
         details: dict[str, Any] | None = None,
-        correlation_id: str | None = None
+        correlation_id: str | None = None,
     ) -> AuditEvent:
         """
         SECURITY FIX (Audit 3): Log bulk operations for audit compliance.
@@ -994,7 +940,7 @@ class AuditRepository:
             "resource_count": resource_count,
             "resource_ids": truncated_ids,
             "ids_truncated": len(resource_ids) > 100 if resource_ids else False,
-            **(details or {})
+            **(details or {}),
         }
 
         return await self.log(
@@ -1005,7 +951,7 @@ class AuditRepository:
             resource_id=f"bulk:{resource_count}",
             details=full_details,
             correlation_id=correlation_id,
-            priority=EventPriority.HIGH  # Bulk ops are high priority
+            priority=EventPriority.HIGH,  # Bulk ops are high priority
         )
 
     async def log_data_export(
@@ -1018,7 +964,7 @@ class AuditRepository:
         filters_applied: dict[str, Any] | None = None,
         destination: str | None = None,
         ip_address: str | None = None,
-        user_agent: str | None = None
+        user_agent: str | None = None,
     ) -> AuditEvent:
         """
         SECURITY FIX (Audit 3): Log data export operations for compliance.
@@ -1044,7 +990,7 @@ class AuditRepository:
             "record_count": record_count,
             "format": format,
             "filters_applied": filters_applied or {},
-            "destination": destination or "download"
+            "destination": destination or "download",
         }
 
         return await self.log(
@@ -1056,7 +1002,7 @@ class AuditRepository:
             details=details,
             ip_address=ip_address,
             user_agent=user_agent,
-            priority=EventPriority.HIGH  # Data exports are high priority for compliance
+            priority=EventPriority.HIGH,  # Data exports are high priority for compliance
         )
 
     async def log_maintenance_mode(
@@ -1065,7 +1011,7 @@ class AuditRepository:
         action: str,
         reason: str | None = None,
         duration_minutes: int | None = None,
-        affected_services: list[str] | None = None
+        affected_services: list[str] | None = None,
     ) -> AuditEvent:
         """
         SECURITY FIX (Audit 3): Log maintenance mode changes.
@@ -1083,7 +1029,7 @@ class AuditRepository:
         details = {
             "reason": reason,
             "duration_minutes": duration_minutes,
-            "affected_services": affected_services or ["all"]
+            "affected_services": affected_services or ["all"],
         }
 
         return await self.log(
@@ -1093,7 +1039,7 @@ class AuditRepository:
             resource_type="system",
             resource_id="maintenance_mode",
             details=details,
-            priority=EventPriority.CRITICAL  # Maintenance mode is critical
+            priority=EventPriority.CRITICAL,  # Maintenance mode is critical
         )
 
     async def log_self_audit(
@@ -1101,7 +1047,7 @@ class AuditRepository:
         actor_id: str,
         action: str,
         target_audit_ids: list[str] | None = None,
-        details: dict[str, Any] | None = None
+        details: dict[str, Any] | None = None,
     ) -> AuditEvent:
         """
         SECURITY FIX (Audit 3): Self-audit logging for audit log operations.
@@ -1120,7 +1066,7 @@ class AuditRepository:
         full_details = {
             "target_count": len(target_audit_ids) if target_audit_ids else 0,
             "target_sample": target_audit_ids[:10] if target_audit_ids else [],
-            **(details or {})
+            **(details or {}),
         }
 
         return await self.log(
@@ -1130,7 +1076,7 @@ class AuditRepository:
             resource_type="audit_log",
             resource_id="self",
             details=full_details,
-            priority=EventPriority.CRITICAL  # Self-audit is critical
+            priority=EventPriority.CRITICAL,  # Self-audit is critical
         )
 
 

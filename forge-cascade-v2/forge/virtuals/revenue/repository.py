@@ -64,7 +64,9 @@ class RevenueRepository:
 
         params = {
             "id": record.id,
-            "timestamp": record.timestamp.isoformat() if record.timestamp else datetime.now(UTC).isoformat(),
+            "timestamp": record.timestamp.isoformat()
+            if record.timestamp
+            else datetime.now(UTC).isoformat(),
             "revenue_type": record.revenue_type.value,
             "amount_virtual": record.amount_virtual,
             "amount_usd": record.amount_usd,
@@ -73,7 +75,7 @@ class RevenueRepository:
             "beneficiary_addresses": record.beneficiary_addresses,
             "distribution_complete": record.distribution_complete,
             "tx_hash": record.tx_hash,
-            "metadata": json.dumps(record.metadata) if hasattr(record, 'metadata') else "{}",
+            "metadata": json.dumps(record.metadata) if hasattr(record, "metadata") else "{}",
         }
 
         try:
@@ -249,8 +251,7 @@ class RevenueRepository:
 
         try:
             results = await self.client.execute_read(
-                query,
-                parameters={"entity_id": entity_id, "entity_type": entity_type}
+                query, parameters={"entity_id": entity_id, "entity_type": entity_type}
             )
             if results and results[0]["total"]:
                 return float(results[0]["total"])
@@ -276,10 +277,7 @@ class RevenueRepository:
         """
 
         try:
-            await self.client.execute_write(
-                query,
-                parameters={"id": record_id}
-            )
+            await self.client.execute_write(query, parameters={"id": record_id})
             return True
         except (ConnectionError, TimeoutError, OSError, RuntimeError) as e:
             self.logger.error(f"Failed to delete revenue record: {e}")

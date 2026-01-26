@@ -28,19 +28,21 @@ router = APIRouter(prefix="/notifications", tags=["Notifications"])
 # Request/Response Models
 # ============================================================================
 
+
 class CreateWebhookRequest(BaseModel):
     """Request to create a webhook."""
+
     url: HttpUrl = Field(description="HTTPS URL to receive notifications")
     name: str = Field(default="", max_length=100)
     events: list[NotificationEvent] = Field(
-        default_factory=list,
-        description="Events to subscribe to (empty = all)"
+        default_factory=list, description="Events to subscribe to (empty = all)"
     )
     filter_min_priority: NotificationPriority = Field(default=NotificationPriority.LOW)
 
 
 class UpdateWebhookRequest(BaseModel):
     """Request to update a webhook."""
+
     name: str | None = None
     events: list[NotificationEvent] | None = None
     filter_min_priority: NotificationPriority | None = None
@@ -49,6 +51,7 @@ class UpdateWebhookRequest(BaseModel):
 
 class WebhookResponse(BaseModel):
     """Webhook information response."""
+
     id: str
     name: str
     url: str
@@ -67,6 +70,7 @@ class WebhookResponse(BaseModel):
 
 class NotificationResponse(BaseModel):
     """Notification response."""
+
     id: str
     event_type: str
     title: str
@@ -83,6 +87,7 @@ class NotificationResponse(BaseModel):
 
 class NotificationListResponse(BaseModel):
     """List of notifications."""
+
     notifications: list[NotificationResponse]
     unread_count: int
     total: int
@@ -90,6 +95,7 @@ class NotificationListResponse(BaseModel):
 
 class UpdatePreferencesRequest(BaseModel):
     """Request to update notification preferences."""
+
     mute_all: bool | None = None
     quiet_hours_start: int | None = Field(default=None, ge=0, le=23)
     quiet_hours_end: int | None = Field(default=None, ge=0, le=23)
@@ -100,6 +106,7 @@ class UpdatePreferencesRequest(BaseModel):
 
 class PreferencesResponse(BaseModel):
     """Notification preferences response."""
+
     mute_all: bool
     mute_until: datetime | None
     quiet_hours_start: int | None
@@ -114,6 +121,7 @@ class PreferencesResponse(BaseModel):
 # Dependencies
 # ============================================================================
 
+
 async def get_notification_svc() -> NotificationService:
     """Get notification service dependency."""
     return await get_notification_service()
@@ -125,6 +133,7 @@ NotificationSvcDep = Depends(get_notification_svc)
 # ============================================================================
 # Notification Endpoints
 # ============================================================================
+
 
 @router.get("", response_model=NotificationListResponse)
 async def list_notifications(
@@ -217,6 +226,7 @@ async def dismiss_notification(
 # Webhook Endpoints
 # ============================================================================
 
+
 @router.post("/webhooks", response_model=WebhookResponse)
 async def create_webhook(
     request: CreateWebhookRequest,
@@ -230,10 +240,7 @@ async def create_webhook(
     """
     # Validate URL is HTTPS
     if not str(request.url).startswith("https://"):
-        raise HTTPException(
-            status_code=400,
-            detail="Webhook URL must use HTTPS"
-        )
+        raise HTTPException(status_code=400, detail="Webhook URL must use HTTPS")
 
     # Generate secret
     secret = secrets.token_urlsafe(32)
@@ -397,6 +404,7 @@ async def test_webhook(
 # Preferences Endpoints
 # ============================================================================
 
+
 @router.get("/preferences", response_model=PreferencesResponse)
 async def get_preferences(
     user: ActiveUserDep,
@@ -444,17 +452,20 @@ async def update_preferences(
 # Event Types Info
 # ============================================================================
 
+
 @router.get("/events")
 async def list_event_types() -> dict[str, list[dict[str, str]]]:
     """Get list of available notification event types."""
     events = []
     for event in NotificationEvent:
         category = event.value.split(".")[0]
-        events.append({
-            "event": event.value,
-            "category": category,
-            "description": _get_event_description(event),
-        })
+        events.append(
+            {
+                "event": event.value,
+                "category": category,
+                "description": _get_event_description(event),
+            }
+        )
 
     return {"events": events}
 

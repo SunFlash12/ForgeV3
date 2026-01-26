@@ -4,7 +4,6 @@ Tests for diagnosis input validation module.
 Tests HPO code validation, gene symbol validation, and input sanitization.
 """
 
-
 from forge.services.diagnosis.validation import (
     InputValidator,
     is_valid_disease_id,

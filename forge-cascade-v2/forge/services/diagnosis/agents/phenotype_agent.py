@@ -17,6 +17,7 @@ logger = structlog.get_logger(__name__)
 @dataclass
 class PhenotypeAgentConfig(AgentConfig):
     """Configuration for phenotype agent."""
+
     # HPO matching thresholds
     min_semantic_similarity: float = 0.7
     include_parent_terms: bool = True
@@ -130,9 +131,7 @@ class PhenotypeAgent(DiagnosticAgent):
 
         # Age-based adjustments
         if self.config.adjust_for_age and age_of_onset is not None:
-            profile["age_onset_notes"] = self._assess_age_onset(
-                normalized, age_of_onset
-            )
+            profile["age_onset_notes"] = self._assess_age_onset(normalized, age_of_onset)
 
         logger.info(
             "phenotype_analysis_complete",
@@ -191,14 +190,17 @@ class PhenotypeAgent(DiagnosticAgent):
             """
 
             try:
-                results = await self._neo4j.run(query, {
-                    "phenotypes": hpo_codes,
-                    "min_matches": max(1, len(hpo_codes) // 3),
-                    "input_count": len(hpo_codes),
-                    "limit": self.config.max_hypotheses,
-                })
+                results = await self._neo4j.run(
+                    query,
+                    {
+                        "phenotypes": hpo_codes,
+                        "min_matches": max(1, len(hpo_codes) // 3),
+                        "input_count": len(hpo_codes),
+                        "limit": self.config.max_hypotheses,
+                    },
+                )
 
-                for r in (results or []):
+                for r in results or []:
                     hypothesis = {
                         "disease_id": r["disease_id"],
                         "disease_name": r["disease_name"],
@@ -284,7 +286,9 @@ class PhenotypeAgent(DiagnosticAgent):
         if missing:
             reasoning_parts.append(f"Missing {len(missing)} expected phenotypes")
         if contradicted:
-            reasoning_parts.append(f"Warning: {len(contradicted)} negated phenotypes are expected for this disease")
+            reasoning_parts.append(
+                f"Warning: {len(contradicted)} negated phenotypes are expected for this disease"
+            )
 
         return {
             "score": score,
@@ -332,10 +336,7 @@ class PhenotypeAgent(DiagnosticAgent):
 
         for hpo_id in all_phenotypes - known_set:
             # Count how many hypotheses have this phenotype
-            present_count = sum(
-                1 for phenos in hypothesis_phenotypes.values()
-                if hpo_id in phenos
-            )
+            present_count = sum(1 for phenos in hypothesis_phenotypes.values() if hpo_id in phenos)
 
             # Best discriminators are present in roughly half
             discrimination_score = 1 - abs(present_count / len(hypotheses) - 0.5) * 2
@@ -351,22 +352,28 @@ class PhenotypeAgent(DiagnosticAgent):
                     except (ValueError, KeyError, AttributeError):
                         pass
 
-                suggestions.append({
-                    "hpo_id": hpo_id,
-                    "name": name,
-                    "discrimination_score": float(discrimination_score),  # Ensure float for sorting
-                    "present_in_hypotheses": present_count,
-                    "hypotheses_affected": [
-                        h["disease_id"] for h in hypotheses[:5]
-                        if h["disease_id"] in hypothesis_phenotypes
-                        and hpo_id in hypothesis_phenotypes[h["disease_id"]]
-                    ],
-                })
+                suggestions.append(
+                    {
+                        "hpo_id": hpo_id,
+                        "name": name,
+                        "discrimination_score": float(
+                            discrimination_score
+                        ),  # Ensure float for sorting
+                        "present_in_hypotheses": present_count,
+                        "hypotheses_affected": [
+                            h["disease_id"]
+                            for h in hypotheses[:5]
+                            if h["disease_id"] in hypothesis_phenotypes
+                            and hpo_id in hypothesis_phenotypes[h["disease_id"]]
+                        ],
+                    }
+                )
 
         # Sort by discrimination score (float cast for type safety)
         def get_score(item: dict[str, object]) -> float:
             score = item["discrimination_score"]
             return float(score) if isinstance(score, int | float) else 0.0
+
         suggestions.sort(key=get_score, reverse=True)
         return suggestions[:10]
 
@@ -401,11 +408,13 @@ class PhenotypeAgent(DiagnosticAgent):
             else:
                 continue
 
-            normalized.append({
-                "hpo_id": hpo_id,
-                "name": name,
-                "original": phenotype,
-            })
+            normalized.append(
+                {
+                    "hpo_id": hpo_id,
+                    "name": name,
+                    "original": phenotype,
+                }
+            )
 
         return normalized
 
@@ -597,6 +606,7 @@ class PhenotypeAgent(DiagnosticAgent):
 # =============================================================================
 # Factory Function
 # =============================================================================
+
 
 def create_phenotype_agent(
     config: PhenotypeAgentConfig | None = None,

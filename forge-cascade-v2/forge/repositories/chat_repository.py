@@ -220,7 +220,7 @@ class ChatRepository:
 
         query = f"""
         MATCH (r:ChatRoom {{id: $room_id}})
-        SET {', '.join(set_parts)}
+        SET {", ".join(set_parts)}
         RETURN r {{.*}} AS room
         """
 
@@ -395,11 +395,14 @@ class ChatRepository:
         RETURN count(m) > 0 AS removed
         """
 
-        result = await self.client.execute_single(query, {
-            "room_id": room_id,
-            "user_id": user_id,
-            "now": now.isoformat(),
-        })
+        result = await self.client.execute_single(
+            query,
+            {
+                "room_id": room_id,
+                "user_id": user_id,
+                "now": now.isoformat(),
+            },
+        )
 
         if result and result.get("removed"):
             self.logger.info("member_removed", room_id=room_id, user_id=user_id)
@@ -423,10 +426,13 @@ class ChatRepository:
         RETURN m {.*} AS member
         """
 
-        result = await self.client.execute_single(query, {
-            "room_id": room_id,
-            "user_id": user_id,
-        })
+        result = await self.client.execute_single(
+            query,
+            {
+                "room_id": room_id,
+                "user_id": user_id,
+            },
+        )
 
         if result and result.get("member"):
             return RoomMember.model_validate(result["member"])
@@ -458,10 +464,13 @@ class ChatRepository:
         LIMIT $limit
         """
 
-        results = await self.client.execute(query, {
-            "room_id": room_id,
-            "limit": limit,
-        })
+        results = await self.client.execute(
+            query,
+            {
+                "room_id": room_id,
+                "limit": limit,
+            },
+        )
 
         members = []
         for r in results:
@@ -494,11 +503,14 @@ class ChatRepository:
         RETURN count(m) > 0 AS updated
         """
 
-        result = await self.client.execute_single(query, {
-            "room_id": room_id,
-            "user_id": user_id,
-            "role": new_role.value,
-        })
+        result = await self.client.execute_single(
+            query,
+            {
+                "room_id": room_id,
+                "user_id": user_id,
+                "role": new_role.value,
+            },
+        )
 
         if result and result.get("updated"):
             self.logger.info(
@@ -536,18 +548,17 @@ class ChatRepository:
         RETURN r {.*} AS room, m.role AS role
         """
 
-        result = await self.client.execute_single(query, {
-            "room_id": room_id,
-            "user_id": user_id,
-        })
+        result = await self.client.execute_single(
+            query,
+            {
+                "room_id": room_id,
+                "user_id": user_id,
+            },
+        )
 
         if not result or not result.get("room"):
             # Room doesn't exist - allow creation on-demand
-            return RoomAccessCheck(
-                can_access=True,
-                role=None,
-                reason="room_not_found"
-            )
+            return RoomAccessCheck(can_access=True, role=None, reason="room_not_found")
 
         room_data = result["room"]
         role_str = result.get("role")
@@ -555,34 +566,20 @@ class ChatRepository:
         is_archived = room_data.get("is_archived", False)
 
         if is_archived:
-            return RoomAccessCheck(
-                can_access=False,
-                role=None,
-                reason="Room is archived"
-            )
+            return RoomAccessCheck(can_access=False, role=None, reason="Room is archived")
 
         # If user is a member, they have access
         if role_str:
-            return RoomAccessCheck(
-                can_access=True,
-                role=RoomRole(role_str),
-                reason=None
-            )
+            return RoomAccessCheck(can_access=True, role=RoomRole(role_str), reason=None)
 
         # Check visibility
         if visibility == RoomVisibility.PUBLIC.value:
             # Public rooms allow anyone to join
-            return RoomAccessCheck(
-                can_access=True,
-                role=None,
-                reason=None
-            )
+            return RoomAccessCheck(can_access=True, role=None, reason=None)
 
         # Private or invite-only - no access
         return RoomAccessCheck(
-            can_access=False,
-            role=None,
-            reason="Room is private. You must be invited to join."
+            can_access=False, role=None, reason="Room is private. You must be invited to join."
         )
 
     async def get_user_role(
@@ -743,11 +740,14 @@ class ChatRepository:
         RETURN count(m) > 0 AS deleted
         """
 
-        result = await self.client.execute_single(query, {
-            "message_id": message_id,
-            "deleted_by": deleted_by,
-            "now": now.isoformat(),
-        })
+        result = await self.client.execute_single(
+            query,
+            {
+                "message_id": message_id,
+                "deleted_by": deleted_by,
+                "now": now.isoformat(),
+            },
+        )
 
         if result and result.get("deleted"):
             self.logger.info(
@@ -806,6 +806,7 @@ class ChatRepository:
         expires_at = None
         if expires_hours:
             from datetime import timedelta
+
             expires_at = now + timedelta(hours=expires_hours)
 
         query = """
@@ -816,12 +817,15 @@ class ChatRepository:
         RETURN r.invite_code AS code
         """
 
-        result = await self.client.execute_single(query, {
-            "room_id": room_id,
-            "invite_code": new_code,
-            "expires_at": expires_at.isoformat() if expires_at else None,
-            "now": now.isoformat(),
-        })
+        result = await self.client.execute_single(
+            query,
+            {
+                "room_id": room_id,
+                "invite_code": new_code,
+                "expires_at": expires_at.isoformat() if expires_at else None,
+                "now": now.isoformat(),
+            },
+        )
 
         if result and result.get("code"):
             self.logger.info("invite_code_regenerated", room_id=room_id)

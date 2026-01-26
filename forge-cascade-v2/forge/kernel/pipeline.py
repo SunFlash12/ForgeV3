@@ -37,6 +37,7 @@ logger = structlog.get_logger()
 
 class PipelinePhase(str, Enum):
     """The seven phases of the Forge pipeline."""
+
     INGESTION = "ingestion"
     ANALYSIS = "analysis"
     VALIDATION = "validation"
@@ -48,6 +49,7 @@ class PipelinePhase(str, Enum):
 
 class PipelineStatus(str, Enum):
     """Status of a pipeline execution."""
+
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -62,6 +64,7 @@ class PipelineError(OverlayError):
     SECURITY FIX (Audit 7 - Session 2): Includes phase, overlay, and capsule
     context for production debugging.
     """
+
     def __init__(
         self,
         message: str,
@@ -85,13 +88,21 @@ class PipelineError(OverlayError):
 
 class PhaseError(PipelineError):
     """Error in a specific phase."""
-    def __init__(self, phase: PipelinePhase, message: str, overlay: str | None = None, capsule_id: str | None = None):
+
+    def __init__(
+        self,
+        phase: PipelinePhase,
+        message: str,
+        overlay: str | None = None,
+        capsule_id: str | None = None,
+    ):
         super().__init__(message, phase=phase.value, overlay=overlay, capsule_id=capsule_id)
 
 
 @dataclass
 class PhaseConfig:
     """Configuration for a pipeline phase."""
+
     name: PipelinePhase
     enabled: bool = True
     timeout_ms: int = 5000
@@ -104,6 +115,7 @@ class PhaseConfig:
 @dataclass
 class PhaseResult:
     """Result of a phase execution."""
+
     phase: PipelinePhase
     status: PipelineStatus
     data: dict[str, Any] = field(default_factory=dict)
@@ -117,6 +129,7 @@ class PhaseResult:
 @dataclass
 class PipelineContext:
     """Context for a pipeline execution."""
+
     # Identity
     pipeline_id: str
     correlation_id: str
@@ -158,6 +171,7 @@ class PipelineContext:
 @dataclass
 class PipelineResult:
     """Result of a complete pipeline execution."""
+
     pipeline_id: str
     correlation_id: str
     status: PipelineStatus
@@ -200,43 +214,31 @@ class Pipeline:
     # Default phase configurations
     DEFAULT_PHASE_CONFIGS = {
         PipelinePhase.INGESTION: PhaseConfig(
-            name=PipelinePhase.INGESTION,
-            timeout_ms=3000,
-            required=True
+            name=PipelinePhase.INGESTION, timeout_ms=3000, required=True
         ),
         PipelinePhase.ANALYSIS: PhaseConfig(
             name=PipelinePhase.ANALYSIS,
             timeout_ms=10000,  # ML can be slow
             required=True,
-            parallel=True
+            parallel=True,
         ),
         PipelinePhase.VALIDATION: PhaseConfig(
-            name=PipelinePhase.VALIDATION,
-            timeout_ms=5000,
-            required=True
+            name=PipelinePhase.VALIDATION, timeout_ms=5000, required=True
         ),
         PipelinePhase.CONSENSUS: PhaseConfig(
             name=PipelinePhase.CONSENSUS,
             timeout_ms=5000,
             required=False,  # Not all actions need consensus
-            enabled=True
+            enabled=True,
         ),
         PipelinePhase.EXECUTION: PhaseConfig(
-            name=PipelinePhase.EXECUTION,
-            timeout_ms=10000,
-            required=True,
-            max_retries=1
+            name=PipelinePhase.EXECUTION, timeout_ms=10000, required=True, max_retries=1
         ),
         PipelinePhase.PROPAGATION: PhaseConfig(
-            name=PipelinePhase.PROPAGATION,
-            timeout_ms=5000,
-            required=True,
-            parallel=True
+            name=PipelinePhase.PROPAGATION, timeout_ms=5000, required=True, parallel=True
         ),
         PipelinePhase.SETTLEMENT: PhaseConfig(
-            name=PipelinePhase.SETTLEMENT,
-            timeout_ms=3000,
-            required=True
+            name=PipelinePhase.SETTLEMENT, timeout_ms=3000, required=True
         ),
     }
 
@@ -255,7 +257,7 @@ class Pipeline:
         self,
         overlay_manager: OverlayManager | None = None,
         event_bus: EventBus | None = None,
-        phase_configs: dict[PipelinePhase, PhaseConfig] | None = None
+        phase_configs: dict[PipelinePhase, PhaseConfig] | None = None,
     ):
         """
         Initialize the pipeline.
@@ -307,11 +309,7 @@ class Pipeline:
     # Configuration
     # =========================================================================
 
-    def configure_phase(
-        self,
-        phase: PipelinePhase,
-        config: PhaseConfig
-    ) -> None:
+    def configure_phase(self, phase: PipelinePhase, config: PhaseConfig) -> None:
         """Configure a phase."""
         self._phase_configs[phase] = config
 
@@ -325,11 +323,7 @@ class Pipeline:
         if phase in self._phase_configs:
             self._phase_configs[phase].enabled = True
 
-    def set_phase_handler(
-        self,
-        phase: PipelinePhase,
-        handler: PhaseHandler
-    ) -> None:
+    def set_phase_handler(self, phase: PipelinePhase, handler: PhaseHandler) -> None:
         """Set a custom handler for a phase."""
         self._custom_handlers[phase] = handler
 
@@ -337,24 +331,15 @@ class Pipeline:
     # Hooks
     # =========================================================================
 
-    def add_pre_phase_hook(
-        self,
-        hook: Callable[[PipelineContext, PipelinePhase], None]
-    ) -> None:
+    def add_pre_phase_hook(self, hook: Callable[[PipelineContext, PipelinePhase], None]) -> None:
         """Add a hook called before each phase."""
         self._pre_phase_hooks.append(hook)
 
-    def add_post_phase_hook(
-        self,
-        hook: Callable[[PipelineContext, PhaseResult], None]
-    ) -> None:
+    def add_post_phase_hook(self, hook: Callable[[PipelineContext, PhaseResult], None]) -> None:
         """Add a hook called after each phase."""
         self._post_phase_hooks.append(hook)
 
-    def add_completion_hook(
-        self,
-        hook: Callable[[PipelineResult], None]
-    ) -> None:
+    def add_completion_hook(self, hook: Callable[[PipelineResult], None]) -> None:
         """Add a hook called when pipeline completes."""
         self._pipeline_complete_hooks.append(hook)
 
@@ -374,7 +359,7 @@ class Pipeline:
         capabilities: set[Capability] | None = None,
         fuel_budget: FuelBudget | None = None,
         metadata: dict[str, Any] | None = None,
-        skip_phases: set[PipelinePhase] | None = None
+        skip_phases: set[PipelinePhase] | None = None,
     ) -> PipelineResult:
         """
         Execute the pipeline.
@@ -434,7 +419,7 @@ class Pipeline:
     ) -> PipelineResult:
         """Inner execution logic (called under semaphore)."""
         pipeline_id = str(uuid4())
-        correlation_id = (event.correlation_id if event and event.correlation_id else str(uuid4()))
+        correlation_id = event.correlation_id if event and event.correlation_id else str(uuid4())
 
         # Create context
         context = PipelineContext(
@@ -449,7 +434,7 @@ class Pipeline:
             data=input_data.copy(),
             capabilities=capabilities or set(),
             fuel_budget=fuel_budget,
-            metadata=metadata or {}
+            metadata=metadata or {},
         )
 
         self._active_pipelines[pipeline_id] = context
@@ -458,7 +443,7 @@ class Pipeline:
             "pipeline_started",
             pipeline_id=pipeline_id,
             triggered_by=triggered_by,
-            phases=len(self.PHASE_ORDER)
+            phases=len(self.PHASE_ORDER),
         )
 
         # Execute phases
@@ -521,14 +506,14 @@ class Pipeline:
                             "pipeline_phase_failed",
                             pipeline_id=pipeline_id,
                             phase=phase.value,
-                            errors=phase_result.errors
+                            errors=phase_result.errors,
                         )
                         break
                     else:
                         self._logger.warning(
                             "pipeline_optional_phase_failed",
                             pipeline_id=pipeline_id,
-                            phase=phase.value
+                            phase=phase.value,
                         )
 
         except asyncio.CancelledError:
@@ -550,8 +535,7 @@ class Pipeline:
 
         # Determine final status
         failed_required = any(
-            r.status == PipelineStatus.FAILED and
-            self._phase_configs[p].required
+            r.status == PipelineStatus.FAILED and self._phase_configs[p].required
             for p, r in context.phase_results.items()
         )
 
@@ -569,7 +553,7 @@ class Pipeline:
             errors=errors,
             duration_ms=duration_ms,
             started_at=context.started_at,
-            completed_at=datetime.now(UTC)
+            completed_at=datetime.now(UTC),
         )
 
         # Completion hooks
@@ -591,7 +575,7 @@ class Pipeline:
             pipeline_id=pipeline_id,
             status=status.value,
             duration_ms=round(duration_ms, 2),
-            phases_completed=len(context.phase_results)
+            phases_completed=len(context.phase_results),
         )
 
         # Emit completion event
@@ -600,30 +584,20 @@ class Pipeline:
         return result
 
     async def _execute_phase(
-        self,
-        context: PipelineContext,
-        phase: PipelinePhase,
-        config: PhaseConfig
+        self, context: PipelineContext, phase: PipelinePhase, config: PhaseConfig
     ) -> PhaseResult:
         """Execute a single phase."""
         start_time = asyncio.get_running_loop().time()
         started_at = datetime.now(UTC)
 
-        self._logger.debug(
-            "phase_started",
-            pipeline_id=context.pipeline_id,
-            phase=phase.value
-        )
+        self._logger.debug("phase_started", pipeline_id=context.pipeline_id, phase=phase.value)
 
         # Check for custom handler
         if phase in self._custom_handlers:
             try:
                 result = await asyncio.wait_for(
-                    self._run_handler(
-                        self._custom_handlers[phase],
-                        context
-                    ),
-                    timeout=config.timeout_ms / 1000
+                    self._run_handler(self._custom_handlers[phase], context),
+                    timeout=config.timeout_ms / 1000,
                 )
                 result.started_at = started_at
                 result.completed_at = datetime.now(UTC)
@@ -637,7 +611,7 @@ class Pipeline:
                     errors=[f"Phase timeout after {config.timeout_ms}ms"],
                     duration_ms=config.timeout_ms,
                     started_at=started_at,
-                    completed_at=datetime.now(UTC)
+                    completed_at=datetime.now(UTC),
                 )
 
         # Default: execute registered overlays for this phase
@@ -650,7 +624,7 @@ class Pipeline:
                 data=context.data.copy(),
                 duration_ms=(asyncio.get_running_loop().time() - start_time) * 1000,
                 started_at=started_at,
-                completed_at=datetime.now(UTC)
+                completed_at=datetime.now(UTC),
             )
 
         manager = self._get_overlay_manager()
@@ -659,10 +633,9 @@ class Pipeline:
         overlays = []
         for name in overlay_names:
             found = manager.get_by_name(name)
-            overlays.extend([
-                o for o in found
-                if o.state is not None and o.state == OverlayState.ACTIVE
-            ])
+            overlays.extend(
+                [o for o in found if o.state is not None and o.state == OverlayState.ACTIVE]
+            )
 
         if not overlays:
             # No active overlays, pass through
@@ -672,7 +645,7 @@ class Pipeline:
                 data=context.data.copy(),
                 duration_ms=(asyncio.get_running_loop().time() - start_time) * 1000,
                 started_at=started_at,
-                completed_at=datetime.now(UTC)
+                completed_at=datetime.now(UTC),
             )
 
         # Execute overlays
@@ -698,10 +671,7 @@ class Pipeline:
                         proposal_id=context.proposal_id,
                         capabilities=context.capabilities | overlay.REQUIRED_CAPABILITIES,
                         fuel_budget=context.fuel_budget,
-                        metadata={
-                            "phase": phase.value,
-                            **context.metadata
-                        }
+                        metadata={"phase": phase.value, **context.metadata},
                     )
 
                     task = asyncio.create_task(
@@ -711,8 +681,7 @@ class Pipeline:
 
                 # Wait with timeout
                 done, pending = await asyncio.wait(
-                    [t for _, t in tasks],
-                    timeout=config.timeout_ms / 1000
+                    [t for _, t in tasks], timeout=config.timeout_ms / 1000
                 )
 
                 # Cancel pending
@@ -747,16 +716,13 @@ class Pipeline:
                         proposal_id=context.proposal_id,
                         capabilities=context.capabilities | overlay.REQUIRED_CAPABILITIES,
                         fuel_budget=context.fuel_budget,
-                        metadata={
-                            "phase": phase.value,
-                            **context.metadata
-                        }
+                        metadata={"phase": phase.value, **context.metadata},
                     )
 
                     try:
                         overlay_result = await asyncio.wait_for(
                             overlay.run(overlay_ctx, context.trigger_event, merged_data),
-                            timeout=config.timeout_ms / 1000
+                            timeout=config.timeout_ms / 1000,
                         )
                         results.append(overlay_result)
                         executed.append(overlay.NAME)
@@ -778,7 +744,15 @@ class Pipeline:
                         if config.required:
                             break
 
-        except (OverlayError, PipelineError, RuntimeError, ValueError, TypeError, KeyError, asyncio.CancelledError) as e:
+        except (
+            OverlayError,
+            PipelineError,
+            RuntimeError,
+            ValueError,
+            TypeError,
+            KeyError,
+            asyncio.CancelledError,
+        ) as e:
             errors.append(f"Phase execution error: {str(e)}")
 
         # Determine status
@@ -793,7 +767,7 @@ class Pipeline:
             phase=phase.value,
             status=status.value,
             overlays=len(executed),
-            duration_ms=round(duration_ms, 2)
+            duration_ms=round(duration_ms, 2),
         )
 
         return PhaseResult(
@@ -804,14 +778,10 @@ class Pipeline:
             errors=errors,
             duration_ms=duration_ms,
             started_at=started_at,
-            completed_at=datetime.now(UTC)
+            completed_at=datetime.now(UTC),
         )
 
-    async def _run_handler(
-        self,
-        handler: PhaseHandler,
-        context: PipelineContext
-    ) -> PhaseResult:
+    async def _run_handler(self, handler: PhaseHandler, context: PipelineContext) -> PhaseResult:
         """Run a custom phase handler."""
         if asyncio.iscoroutinefunction(handler):
             phase_result: PhaseResult = await handler(context)
@@ -829,11 +799,7 @@ class Pipeline:
         """Emit a pipeline completion event."""
         event_bus = self._get_event_bus()
 
-        event_type = (
-            EventType.CASCADE_COMPLETE
-            if result.success
-            else EventType.SYSTEM_EVENT
-        )
+        event_type = EventType.CASCADE_COMPLETE if result.success else EventType.SYSTEM_EVENT
 
         await event_bus.publish(
             event_type=event_type,
@@ -842,7 +808,7 @@ class Pipeline:
                 "status": result.status.value,
                 "duration_ms": result.duration_ms,
                 "phases_completed": len(result.phases),
-                "success": result.success
+                "success": result.success,
             },
             source="pipeline",
             correlation_id=result.correlation_id,
@@ -865,10 +831,7 @@ class Pipeline:
         """Get all active pipeline contexts."""
         return list(self._active_pipelines.values())
 
-    def get_pipeline_history(
-        self,
-        limit: int = 10
-    ) -> list[PipelineResult]:
+    def get_pipeline_history(self, limit: int = 10) -> list[PipelineResult]:
         """Get recent pipeline results."""
         history_list = list(self._pipeline_history)
         return history_list[-limit:][::-1]
@@ -881,7 +844,7 @@ class Pipeline:
                 "success": 0,
                 "failure": 0,
                 "success_rate": 0.0,
-                "avg_duration_ms": 0.0
+                "avg_duration_ms": 0.0,
             }
 
         success_count = sum(1 for r in self._pipeline_history if r.success)
@@ -893,7 +856,7 @@ class Pipeline:
             "failure": len(self._pipeline_history) - success_count,
             "success_rate": success_count / len(self._pipeline_history),
             "avg_duration_ms": sum(durations) / len(durations),
-            "active": len(self._active_pipelines)
+            "active": len(self._active_pipelines),
         }
 
 
@@ -915,7 +878,7 @@ def get_pipeline() -> Pipeline:
 def init_pipeline(
     overlay_manager: OverlayManager | None = None,
     event_bus: EventBus | None = None,
-    phase_configs: dict[PipelinePhase, PhaseConfig] | None = None
+    phase_configs: dict[PipelinePhase, PhaseConfig] | None = None,
 ) -> Pipeline:
     """Initialize the global pipeline."""
     global _pipeline

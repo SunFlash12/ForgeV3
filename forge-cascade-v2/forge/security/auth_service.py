@@ -37,6 +37,7 @@ logger = structlog.get_logger(__name__)
 # Try to import redis for distributed rate limiting
 try:
     import redis.asyncio as aioredis
+
     REDIS_AVAILABLE = True
 except ImportError:
     aioredis: types.ModuleType | None = None  # type: ignore[no-redef]
@@ -68,36 +69,43 @@ settings = get_settings()
 
 class AuthenticationError(Exception):
     """Base exception for authentication failures."""
+
     pass
 
 
 class InvalidCredentialsError(AuthenticationError):
     """Username or password is incorrect."""
+
     pass
 
 
 class AccountLockedError(AuthenticationError):
     """Account is locked due to too many failed attempts."""
+
     pass
 
 
 class AccountNotVerifiedError(AuthenticationError):
     """Account email is not verified."""
+
     pass
 
 
 class AccountDeactivatedError(AuthenticationError):
     """Account has been deactivated."""
+
     pass
 
 
 class RegistrationError(AuthenticationError):
     """Error during registration."""
+
     pass
 
 
 class IPRateLimitExceededError(AuthenticationError):
     """Too many login attempts from this IP address."""
+
     pass
 
 
@@ -109,6 +117,7 @@ class MFARequiredError(AuthenticationError):
     logs in successfully with password. Caller should return an MFA pending
     token and prompt for TOTP/backup code verification.
     """
+
     def __init__(self, user_id: str, username: str):
         self.user_id = user_id
         self.username = username
@@ -240,7 +249,7 @@ class IPRateLimiter:
                     logger.warning(
                         "ip_rate_limit_triggered",
                         ip_hash=hashlib.sha256(ip_address.encode()).hexdigest()[:16],
-                        attempts=attempt_count
+                        attempts=attempt_count,
                     )
                     return (False, self.LOCKOUT_SECONDS)
 
@@ -399,7 +408,7 @@ class AuthService:
         email: str,
         password: str,
         display_name: str | None = None,
-        ip_address: str | None = None
+        ip_address: str | None = None,
     ) -> User:
         """
         Register a new user.
@@ -434,7 +443,7 @@ class AuthService:
             username=username,
             email=email,
             password=password,  # Will be hashed in repository
-            display_name=display_name or username
+            display_name=display_name or username,
         )
 
         # SECURITY FIX (Audit 6): Handle TOCTOU race condition with DB constraints
@@ -445,9 +454,13 @@ class AuthService:
             # Intentional broad catch: DB constraint violations surface as various exception
             # types depending on the Neo4j driver version; we inspect the message to classify
             error_msg = str(e).lower()
-            if "username" in error_msg and ("unique" in error_msg or "duplicate" in error_msg or "exists" in error_msg):
+            if "username" in error_msg and (
+                "unique" in error_msg or "duplicate" in error_msg or "exists" in error_msg
+            ):
                 raise RegistrationError(f"Username '{username}' is already taken")
-            if "email" in error_msg and ("unique" in error_msg or "duplicate" in error_msg or "exists" in error_msg):
+            if "email" in error_msg and (
+                "unique" in error_msg or "duplicate" in error_msg or "exists" in error_msg
+            ):
                 raise RegistrationError(f"Email '{email}' is already registered")
             # Re-raise unexpected errors
             raise
@@ -455,13 +468,14 @@ class AuthService:
         # Log registration
         # SECURITY FIX (Audit 3): Hash email in audit logs to prevent PII exposure
         import hashlib
+
         email_hash = hashlib.sha256(email.lower().encode()).hexdigest()[:16]
         await self.audit_repo.log_user_action(
             actor_id=user.id,
             target_user_id=user.id,
             action="created",
             details={"username": username, "email_hash": email_hash},
-            ip_address=ip_address
+            ip_address=ip_address,
         )
 
         return user
@@ -475,7 +489,7 @@ class AuthService:
         username_or_email: str,
         password: str,
         ip_address: str | None = None,
-        user_agent: str | None = None
+        user_agent: str | None = None,
     ) -> tuple[User, Token]:
         """
         Authenticate user and return tokens.
@@ -502,7 +516,9 @@ class AuthService:
         # This prevents credential stuffing across multiple accounts
         # SECURITY FIX (Audit 5): Now uses Redis for distributed rate limiting
         if ip_address:
-            is_allowed, seconds_remaining = await self._ip_rate_limiter.check_rate_limit_async(ip_address)
+            is_allowed, seconds_remaining = await self._ip_rate_limiter.check_rate_limit_async(
+                ip_address
+            )
             if not is_allowed:
                 await self.audit_repo.log_user_action(
                     actor_id="unknown",
@@ -513,7 +529,7 @@ class AuthService:
                         "seconds_remaining": seconds_remaining,
                     },
                     ip_address=ip_address,
-                    user_agent=user_agent
+                    user_agent=user_agent,
                 )
                 raise IPRateLimitExceededError(
                     f"Too many login attempts. Please wait {seconds_remaining} seconds."
@@ -537,7 +553,7 @@ class AuthService:
                 action="login_failed",
                 details={"reason": "user_not_found", "identifier_hash": masked_identifier},
                 ip_address=ip_address,
-                user_agent=user_agent
+                user_agent=user_agent,
             )
             raise InvalidCredentialsError("Invalid username or password")
 
@@ -549,7 +565,7 @@ class AuthService:
                 action="login_failed",
                 details={"reason": "account_locked"},
                 ip_address=ip_address,
-                user_agent=user_agent
+                user_agent=user_agent,
             )
             # SECURITY FIX (Audit 4 - L1): Use generic message to avoid revealing lockout duration
             raise AccountLockedError(
@@ -565,7 +581,7 @@ class AuthService:
                 action="login_failed",
                 details={"reason": "account_deactivated"},
                 ip_address=ip_address,
-                user_agent=user_agent
+                user_agent=user_agent,
             )
             raise AccountDeactivatedError("Account has been deactivated")
 
@@ -581,9 +597,7 @@ class AuthService:
 
             # Check if we should lock the account
             if user.failed_login_attempts >= self.MAX_FAILED_ATTEMPTS - 1:
-                lockout_until = datetime.now(UTC) + timedelta(
-                    minutes=self.LOCKOUT_DURATION_MINUTES
-                )
+                lockout_until = datetime.now(UTC) + timedelta(minutes=self.LOCKOUT_DURATION_MINUTES)
                 await self.user_repo.set_lockout(user.id, lockout_until)
 
                 await self.audit_repo.log_user_action(
@@ -592,10 +606,10 @@ class AuthService:
                     action="locked",
                     details={
                         "reason": "too_many_failed_attempts",
-                        "locked_until": lockout_until.isoformat()
+                        "locked_until": lockout_until.isoformat(),
                     },
                     ip_address=ip_address,
-                    user_agent=user_agent
+                    user_agent=user_agent,
                 )
 
             await self.audit_repo.log_user_action(
@@ -604,7 +618,7 @@ class AuthService:
                 action="login_failed",
                 details={"reason": "invalid_password"},
                 ip_address=ip_address,
-                user_agent=user_agent
+                user_agent=user_agent,
             )
             raise InvalidCredentialsError("Invalid username or password")
 
@@ -628,6 +642,7 @@ class AuthService:
         # return an MFA pending token instead of full authentication tokens.
         # Lazy import to avoid circular dependency
         from .mfa import get_mfa_service
+
         mfa_service = get_mfa_service()
         if await mfa_service.is_enabled(user.id):
             # Log that password was correct but MFA is required
@@ -637,7 +652,7 @@ class AuthService:
                 action="login_mfa_required",
                 details={"method": "password", "mfa_pending": True},
                 ip_address=ip_address,
-                user_agent=user_agent
+                user_agent=user_agent,
             )
             # Raise MFA required - caller handles creating MFA pending token
             raise MFARequiredError(user_id=user.id, username=user.username)
@@ -646,13 +661,13 @@ class AuthService:
         token_version = await self.user_repo.get_token_version(user.id)
 
         # Create tokens with token version for privilege change invalidation
-        role_value = user.role.value if hasattr(user.role, 'value') else user.role
+        role_value = user.role.value if hasattr(user.role, "value") else user.role
         token = create_token_pair(
             user_id=user.id,
             username=user.username,
             role=role_value,
             trust_flame=user.trust_flame,
-            token_version=token_version
+            token_version=token_version,
         )
 
         # Store refresh token for validation
@@ -665,7 +680,11 @@ class AuthService:
                 access_payload = decode_token(token.access_token, verify_exp=False)
                 jti_value = access_payload.jti or ""
                 exp_value = access_payload.exp
-                exp_ts: float = float(exp_value.timestamp()) if isinstance(exp_value, datetime) else (float(exp_value) if exp_value is not None else 0.0)
+                exp_ts: float = (
+                    float(exp_value.timestamp())
+                    if isinstance(exp_value, datetime)
+                    else (float(exp_value) if exp_value is not None else 0.0)
+                )
                 await self._session_service.create_session(
                     user_id=user.id,
                     token_jti=jti_value,
@@ -689,17 +708,13 @@ class AuthService:
             action="login",
             details={"method": "password"},
             ip_address=ip_address,
-            user_agent=user_agent
+            user_agent=user_agent,
         )
 
         return user, token
 
     async def verify_mfa_login(
-        self,
-        user_id: str,
-        code: str,
-        ip_address: str | None = None,
-        user_agent: str | None = None
+        self, user_id: str, code: str, ip_address: str | None = None, user_agent: str | None = None
     ) -> tuple[User, Token]:
         """
         Complete MFA login verification.
@@ -731,7 +746,7 @@ class AuthService:
                 action="login_mfa_failed",
                 details={"reason": "user_not_found"},
                 ip_address=ip_address,
-                user_agent=user_agent
+                user_agent=user_agent,
             )
             raise AuthenticationError("User not found")
 
@@ -742,13 +757,14 @@ class AuthService:
                 action="login_mfa_failed",
                 details={"reason": "account_deactivated"},
                 ip_address=ip_address,
-                user_agent=user_agent
+                user_agent=user_agent,
             )
             raise AccountDeactivatedError("Account has been deactivated")
 
         # Verify MFA code using MFA service
         # Lazy import to avoid circular dependency
         from .mfa import get_mfa_service
+
         mfa_service = get_mfa_service()
 
         # Try TOTP verification first
@@ -766,7 +782,7 @@ class AuthService:
                     action="login_mfa_failed",
                     details={"reason": "invalid_mfa_code"},
                     ip_address=ip_address,
-                    user_agent=user_agent
+                    user_agent=user_agent,
                 )
                 raise InvalidCredentialsError("Invalid MFA code")
 
@@ -779,13 +795,13 @@ class AuthService:
         # MFA verification successful - create full tokens
         token_version = await self.user_repo.get_token_version(user.id)
 
-        role_value = user.role.value if hasattr(user.role, 'value') else user.role
+        role_value = user.role.value if hasattr(user.role, "value") else user.role
         token = create_token_pair(
             user_id=user.id,
             username=user.username,
             role=role_value,
             trust_flame=user.trust_flame,
-            token_version=token_version
+            token_version=token_version,
         )
 
         # Store refresh token
@@ -797,7 +813,11 @@ class AuthService:
                 access_payload = decode_token(token.access_token, verify_exp=False)
                 jti_value = access_payload.jti or ""
                 exp_value = access_payload.exp
-                exp_ts2: float = float(exp_value.timestamp()) if isinstance(exp_value, datetime) else (float(exp_value) if exp_value is not None else 0.0)
+                exp_ts2: float = (
+                    float(exp_value.timestamp())
+                    if isinstance(exp_value, datetime)
+                    else (float(exp_value) if exp_value is not None else 0.0)
+                )
                 await self._session_service.create_session(
                     user_id=user.id,
                     token_jti=jti_value,
@@ -821,7 +841,7 @@ class AuthService:
             action="login",
             details={"method": "password_mfa"},
             ip_address=ip_address,
-            user_agent=user_agent
+            user_agent=user_agent,
         )
 
         return user, token
@@ -830,11 +850,7 @@ class AuthService:
     # Token Operations
     # =========================================================================
 
-    async def refresh_tokens(
-        self,
-        refresh_token: str,
-        ip_address: str | None = None
-    ) -> Token:
+    async def refresh_tokens(self, refresh_token: str, ip_address: str | None = None) -> Token:
         """
         Refresh access token using refresh token.
 
@@ -872,7 +888,7 @@ class AuthService:
                     "reason": "token_not_matching_stored",
                     "user_id": user.id,
                 },
-                ip_address=ip_address
+                ip_address=ip_address,
             )
             # Revoke all tokens for this user as a precaution
             await self.user_repo.update_refresh_token(user.id, None)
@@ -885,12 +901,13 @@ class AuthService:
         # This prevents token replay even if the stored token validation is bypassed
         payload_jti: str = payload.jti or ""
         payload_exp_float: float | None = (
-            float(payload.exp.timestamp()) if isinstance(payload.exp, datetime)
+            float(payload.exp.timestamp())
+            if isinstance(payload.exp, datetime)
             else (float(payload.exp) if payload.exp is not None else None)
         )
         await TokenBlacklist.add_async(
             jti=payload_jti,
-            expires_at=payload_exp_float  # Use original expiry time - FIXED: was 'exp='
+            expires_at=payload_exp_float,  # Use original expiry time - FIXED: was 'exp='
         )
         logger.debug(
             "refresh_token_blacklisted",
@@ -902,13 +919,13 @@ class AuthService:
         token_version = await self.user_repo.get_token_version(user.id)
 
         # Create new token pair (token rotation) with current token version
-        role_value = user.role.value if hasattr(user.role, 'value') else user.role
+        role_value = user.role.value if hasattr(user.role, "value") else user.role
         new_token = create_token_pair(
             user_id=user.id,
             username=user.username,
             role=role_value,
             trust_flame=user.trust_flame,
-            token_version=token_version
+            token_version=token_version,
         )
 
         # Update stored refresh token (old token is now invalid)
@@ -916,10 +933,7 @@ class AuthService:
 
         return new_token
 
-    async def validate_access_token(
-        self,
-        access_token: str
-    ) -> AuthorizationContext:
+    async def validate_access_token(self, access_token: str) -> AuthorizationContext:
         """
         Validate access token and return authorization context.
 
@@ -950,14 +964,11 @@ class AuthService:
             user_id=payload.sub,
             trust_flame=payload.trust_flame,
             role=payload.role,
-            capabilities=None  # Will be auto-populated from trust level
+            capabilities=None,  # Will be auto-populated from trust level
         )
 
     async def logout(
-        self,
-        user_id: str,
-        access_token: str | None = None,
-        ip_address: str | None = None
+        self, user_id: str, access_token: str | None = None, ip_address: str | None = None
     ) -> None:
         """
         Logout user by revoking tokens.
@@ -983,17 +994,10 @@ class AuthService:
 
         # Log logout
         await self.audit_repo.log_user_action(
-            actor_id=user_id,
-            target_user_id=user_id,
-            action="logout",
-            ip_address=ip_address
+            actor_id=user_id, target_user_id=user_id, action="logout", ip_address=ip_address
         )
 
-    async def logout_all_sessions(
-        self,
-        user_id: str,
-        ip_address: str | None = None
-    ) -> None:
+    async def logout_all_sessions(self, user_id: str, ip_address: str | None = None) -> None:
         """
         Logout user from all sessions by revoking all tokens.
 
@@ -1005,7 +1009,7 @@ class AuthService:
             actor_id=user_id,
             event_name="all_sessions_revoked",
             details={"user_id": user_id},
-            ip_address=ip_address
+            ip_address=ip_address,
         )
 
     # =========================================================================
@@ -1013,11 +1017,7 @@ class AuthService:
     # =========================================================================
 
     async def change_password(
-        self,
-        user_id: str,
-        current_password: str,
-        new_password: str,
-        ip_address: str | None = None
+        self, user_id: str, current_password: str, new_password: str, ip_address: str | None = None
     ) -> None:
         """
         Change user's password.
@@ -1046,13 +1046,13 @@ class AuthService:
                 actor_id=user_id,
                 event_name="password_change_failed",
                 details={"reason": "invalid_current_password"},
-                ip_address=ip_address
+                ip_address=ip_address,
             )
             raise InvalidCredentialsError("Current password is incorrect")
 
         # SECURITY FIX (Audit 6): Check password history to prevent reuse
         # Get password history from user (may be empty for older accounts)
-        password_history = getattr(user, 'password_history', []) or []
+        password_history = getattr(user, "password_history", []) or []
         # Also check against current password hash
         all_history = [user_pw_hash] + password_history
         check_password_history(new_password, all_history)
@@ -1072,14 +1072,10 @@ class AuthService:
             actor_id=user_id,
             event_name="password_changed",
             details={"sessions_revoked": True, "history_updated": True},
-            ip_address=ip_address
+            ip_address=ip_address,
         )
 
-    async def request_password_reset(
-        self,
-        email: str,
-        ip_address: str | None = None
-    ) -> str | None:
+    async def request_password_reset(self, email: str, ip_address: str | None = None) -> str | None:
         """
         Request a password reset token.
 
@@ -1105,19 +1101,18 @@ class AuthService:
             expires_at = datetime.now(UTC) + timedelta(hours=1)
 
             await self.user_repo.store_password_reset_token(
-                user_id=user.id,
-                token_hash=token_hash,
-                expires_at=expires_at
+                user_id=user.id, token_hash=token_hash, expires_at=expires_at
             )
 
             # SECURITY FIX (Audit 3): Hash email in audit logs
             import hashlib
+
             email_hash = hashlib.sha256(email.lower().encode()).hexdigest()[:16]
             await self.audit_repo.log_security_event(
                 actor_id=user.id,
                 event_name="password_reset_requested",
                 details={"email_hash": email_hash},
-                ip_address=ip_address
+                ip_address=ip_address,
             )
 
             return plain_token
@@ -1125,22 +1120,19 @@ class AuthService:
         # Log attempt for non-existent email (but don't reveal to caller)
         # SECURITY FIX (Audit 3): Hash email in audit logs
         import hashlib
+
         email_hash = hashlib.sha256(email.lower().encode()).hexdigest()[:16]
         await self.audit_repo.log_security_event(
             actor_id="unknown",
             event_name="password_reset_requested_unknown_email",
             details={"email_hash": email_hash},
-            ip_address=ip_address
+            ip_address=ip_address,
         )
 
         return None
 
     async def reset_password(
-        self,
-        user_id: str,
-        new_password: str,
-        reset_token: str,
-        ip_address: str | None = None
+        self, user_id: str, new_password: str, reset_token: str, ip_address: str | None = None
     ) -> None:
         """
         Reset password using a valid reset token.
@@ -1169,8 +1161,7 @@ class AuthService:
         # Hash the provided token and validate against stored hash
         token_hash = hashlib.sha256(reset_token.encode()).hexdigest()
         is_valid = await self.user_repo.validate_password_reset_token(
-            user_id=user_id,
-            token_hash=token_hash
+            user_id=user_id, token_hash=token_hash
         )
 
         if not is_valid:
@@ -1178,12 +1169,12 @@ class AuthService:
                 actor_id=user_id,
                 event_name="password_reset_failed",
                 details={"reason": "invalid_or_expired_token"},
-                ip_address=ip_address
+                ip_address=ip_address,
             )
             raise AuthenticationError("Invalid or expired reset token")
 
         # SECURITY FIX (Audit 6): Check password history to prevent reuse
-        password_history = getattr(user, 'password_history', []) or []
+        password_history = getattr(user, "password_history", []) or []
         reset_pw_hash: str = getattr(user, "password_hash", "")
         all_history = [reset_pw_hash] + password_history
         check_password_history(new_password, all_history)
@@ -1209,7 +1200,7 @@ class AuthService:
             actor_id=user_id,
             event_name="password_reset",
             details={"method": "reset_token", "history_updated": True},
-            ip_address=ip_address
+            ip_address=ip_address,
         )
 
     # =========================================================================
@@ -1217,10 +1208,7 @@ class AuthService:
     # =========================================================================
 
     async def verify_email(
-        self,
-        user_id: str,
-        verification_token: str,
-        ip_address: str | None = None
+        self, user_id: str, verification_token: str, ip_address: str | None = None
     ) -> None:
         """
         Verify user's email address using a verification token.
@@ -1244,8 +1232,7 @@ class AuthService:
         # SECURITY FIX: Hash the provided token and validate against stored hash
         token_hash = hashlib.sha256(verification_token.encode()).hexdigest()
         is_valid = await self.user_repo.validate_email_verification_token(  # type: ignore[attr-defined]
-            user_id=user_id,
-            token_hash=token_hash
+            user_id=user_id, token_hash=token_hash
         )
 
         if not is_valid:
@@ -1253,7 +1240,7 @@ class AuthService:
                 actor_id=user_id,
                 event_name="email_verification_failed",
                 details={"reason": "invalid_or_expired_token"},
-                ip_address=ip_address
+                ip_address=ip_address,
             )
             raise AuthenticationError("Invalid or expired verification token")
 
@@ -1264,16 +1251,11 @@ class AuthService:
         await self.user_repo.clear_email_verification_token(user_id)  # type: ignore[attr-defined]
 
         await self.audit_repo.log_user_action(
-            actor_id=user_id,
-            target_user_id=user_id,
-            action="email_verified",
-            ip_address=ip_address
+            actor_id=user_id, target_user_id=user_id, action="email_verified", ip_address=ip_address
         )
 
     async def request_email_verification(
-        self,
-        user_id: str,
-        ip_address: str | None = None
+        self, user_id: str, ip_address: str | None = None
     ) -> str | None:
         """
         Generate and store an email verification token.
@@ -1304,26 +1286,20 @@ class AuthService:
         expires_at = datetime.now(UTC) + timedelta(hours=24)
 
         await self.user_repo.store_email_verification_token(  # type: ignore[attr-defined]
-            user_id=user_id,
-            token_hash=token_hash,
-            expires_at=expires_at
+            user_id=user_id, token_hash=token_hash, expires_at=expires_at
         )
 
         await self.audit_repo.log_user_action(
             actor_id=user_id,
             target_user_id=user_id,
             action="email_verification_requested",
-            ip_address=ip_address
+            ip_address=ip_address,
         )
 
         return plain_token
 
     async def deactivate_account(
-        self,
-        user_id: str,
-        deactivated_by: str,
-        reason: str,
-        ip_address: str | None = None
+        self, user_id: str, deactivated_by: str, reason: str, ip_address: str | None = None
     ) -> None:
         """
         Deactivate a user account.
@@ -1343,7 +1319,7 @@ class AuthService:
             actor_id=deactivated_by,
             target_user_id=user_id,
             action="deactivated",
-            details={"reason": reason}
+            details={"reason": reason},
         )
 
         # SECURITY FIX (Audit 6): Handle privilege change side effects
@@ -1354,14 +1330,11 @@ class AuthService:
             new_value=False,
             reason=reason,
             ip_address=ip_address,
-            changed_by=deactivated_by
+            changed_by=deactivated_by,
         )
 
     async def reactivate_account(
-        self,
-        user_id: str,
-        reactivated_by: str,
-        ip_address: str | None = None
+        self, user_id: str, reactivated_by: str, ip_address: str | None = None
     ) -> None:
         """
         Reactivate a deactivated account.
@@ -1375,7 +1348,7 @@ class AuthService:
             actor_id=reactivated_by,
             target_user_id=user_id,
             action="reactivated",
-            ip_address=ip_address
+            ip_address=ip_address,
         )
 
         # SECURITY FIX (Audit 6): Handle privilege change side effects
@@ -1386,7 +1359,7 @@ class AuthService:
             new_value=True,
             reason="account_reactivated",
             ip_address=ip_address,
-            changed_by=reactivated_by
+            changed_by=reactivated_by,
         )
 
     # =========================================================================
@@ -1401,7 +1374,7 @@ class AuthService:
         new_value: str | int | bool | None = None,
         reason: str | None = None,
         ip_address: str | None = None,
-        changed_by: str | None = None
+        changed_by: str | None = None,
     ) -> None:
         """
         Handle privilege change to invalidate tokens and notify clients.
@@ -1440,16 +1413,16 @@ class AuthService:
                 "reason": reason,
                 "tokens_invalidated": True,
             },
-            ip_address=ip_address
+            ip_address=ip_address,
         )
 
         # 4. Force disconnect WebSocket connections
         # Uses lazy import to avoid circular dependency
         try:
             from forge.api.websocket.handlers import connection_manager
+
             await connection_manager.force_disconnect_user(
-                user_id=user_id,
-                reason=f"privilege_change:{change_type}"
+                user_id=user_id, reason=f"privilege_change:{change_type}"
             )
         except ImportError:
             # WebSocket handlers not available (e.g., in tests)
@@ -1480,7 +1453,7 @@ class AuthService:
         adjusted_by: str,
         adjustment: int,
         reason: str,
-        ip_address: str | None = None
+        ip_address: str | None = None,
     ) -> int:
         """
         Adjust a user's trust flame score.
@@ -1504,10 +1477,7 @@ class AuthService:
         old_trust = user.trust_flame
         # Note: adjust_trust_flame already increments token_version
         result = await self.user_repo.adjust_trust_flame(
-            user_id=user_id,
-            adjustment=adjustment,
-            reason=reason,
-            adjusted_by=adjusted_by
+            user_id=user_id, adjustment=adjustment, reason=reason, adjusted_by=adjusted_by
         )
 
         # Handle case where result is TrustFlameAdjustment or int
@@ -1529,9 +1499,9 @@ class AuthService:
                 "adjustment": adjustment,
                 "old_level": old_level.name,
                 "new_level": new_level.name,
-                "reason": reason
+                "reason": reason,
             },
-            ip_address=ip_address
+            ip_address=ip_address,
         )
 
         # SECURITY FIX (Audit 6): Handle privilege change side effects
@@ -1544,7 +1514,7 @@ class AuthService:
                 new_value=new_trust,
                 reason=reason,
                 ip_address=ip_address,
-                changed_by=adjusted_by
+                changed_by=adjusted_by,
             )
 
         return_value: int = int(new_trust) if new_trust else 0
@@ -1565,18 +1535,11 @@ class AuthService:
         if not user:
             return None
 
-        role_value = user.role.value if hasattr(user.role, 'value') else user.role
-        return create_auth_context(
-            user_id=user.id,
-            trust_flame=user.trust_flame,
-            role=role_value
-        )
+        role_value = user.role.value if hasattr(user.role, "value") else user.role
+        return create_auth_context(user_id=user.id, trust_flame=user.trust_flame, role=role_value)
 
 
 # Factory function
-def get_auth_service(
-    user_repo: UserRepository,
-    audit_repo: AuditRepository
-) -> AuthService:
+def get_auth_service(user_repo: UserRepository, audit_repo: AuditRepository) -> AuthService:
     """Create AuthService instance."""
     return AuthService(user_repo, audit_repo)

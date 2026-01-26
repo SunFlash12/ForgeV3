@@ -60,6 +60,7 @@ logger = logging.getLogger(__name__)
 # GAME FUNCTIONS FOR COUNCIL MEMBERS
 # =============================================================================
 
+
 def create_analyze_proposal_function(council_service: GhostCouncilService) -> FunctionDefinition:
     """Create the analyze_proposal function for council workers."""
 
@@ -294,6 +295,7 @@ def create_search_precedents_function() -> FunctionDefinition:
 # COUNCIL MEMBER WORKERS
 # =============================================================================
 
+
 def create_council_member_worker(
     member: GhostCouncilMember,
     council_service: GhostCouncilService,
@@ -342,6 +344,7 @@ def create_council_member_worker(
 # =============================================================================
 # GAME-ENABLED GHOST COUNCIL SERVICE
 # =============================================================================
+
 
 class GAMEGhostCouncilService:
     """
@@ -434,9 +437,7 @@ class GAMEGhostCouncilService:
                     workers=[worker],
                 )
                 self._agent_registry[member.id] = agent
-                logger.info(
-                    f"Registered GAME agent for council member: {member.name}"
-                )
+                logger.info(f"Registered GAME agent for council member: {member.name}")
         except GAMEClientError as e:
             logger.warning(f"Failed to register GAME agent for {member.name}: {e}")
 
@@ -465,15 +466,11 @@ class GAMEGhostCouncilService:
         # Try GAME-based deliberation first
         if use_game_agents and self._game_client and self._agent_registry:
             try:
-                opinion = await self._game_deliberate(
-                    proposal, context, constitutional_review
-                )
+                opinion = await self._game_deliberate(proposal, context, constitutional_review)
                 self._stats["game_deliberations"] += 1
                 return opinion
             except GAMEClientError as e:
-                logger.warning(
-                    f"GAME deliberation failed, falling back to LLM: {e}"
-                )
+                logger.warning(f"GAME deliberation failed, falling back to LLM: {e}")
 
         # Fall back to standard deliberation
         self._stats["fallback_deliberations"] += 1

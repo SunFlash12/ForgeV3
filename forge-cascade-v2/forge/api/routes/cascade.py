@@ -56,8 +56,10 @@ router = APIRouter()
 # Request/Response Models
 # =============================================================================
 
+
 class TriggerCascadeRequest(BaseModel):
     """Request to trigger a cascade."""
+
     source_overlay: str = Field(description="The overlay initiating the cascade")
     insight_type: str = Field(description="Type of insight being cascaded")
     insight_data: dict[str, Any] = Field(description="The insight payload")
@@ -66,6 +68,7 @@ class TriggerCascadeRequest(BaseModel):
 
 class CascadeEventResponse(BaseModel):
     """Response for a cascade event."""
+
     id: str
     source_overlay: str
     insight_type: str
@@ -80,6 +83,7 @@ class CascadeEventResponse(BaseModel):
 
 class CascadeChainResponse(BaseModel):
     """Response for a cascade chain."""
+
     cascade_id: str
     initiated_by: str
     initiated_at: str
@@ -95,6 +99,7 @@ class CascadeChainResponse(BaseModel):
 
 class CascadeMetricsResponse(BaseModel):
     """Response for cascade system metrics."""
+
     total_cascades: int
     active_cascades: int
     completed_cascades: int
@@ -105,6 +110,7 @@ class CascadeMetricsResponse(BaseModel):
 
 class PropagateRequest(BaseModel):
     """Request to propagate an existing cascade."""
+
     cascade_id: str = Field(description="ID of the cascade to propagate")
     target_overlay: str = Field(description="The overlay receiving the propagation")
     insight_type: str = Field(description="Type of insight being propagated")
@@ -115,6 +121,7 @@ class PropagateRequest(BaseModel):
 # =============================================================================
 # Helper Functions
 # =============================================================================
+
 
 def _event_to_response(event: CascadeEvent) -> CascadeEventResponse:
     """Convert CascadeEvent model to response."""
@@ -152,6 +159,7 @@ def _chain_to_response(chain: CascadeChain, is_active: bool = True) -> CascadeCh
 # =============================================================================
 # Cascade Management Endpoints
 # =============================================================================
+
 
 @router.post("/trigger", response_model=CascadeChainResponse)
 async def trigger_cascade(
@@ -288,6 +296,7 @@ async def complete_cascade(
 # Cascade Query Endpoints
 # =============================================================================
 
+
 @router.get("/", response_model=list[CascadeChainResponse])
 async def list_active_cascades(
     user: ActiveUserDep,
@@ -353,6 +362,7 @@ async def get_cascade_metrics(
 # Pipeline Integration
 # =============================================================================
 
+
 @router.post("/execute-pipeline")
 async def execute_cascade_pipeline(
     request: TriggerCascadeRequest,
@@ -385,7 +395,7 @@ async def execute_cascade_pipeline(
         metadata={
             "cascade_trigger": True,
             "max_hops": request.max_hops,
-        }
+        },
     )
 
     # Resilience: Record pipeline execution metric

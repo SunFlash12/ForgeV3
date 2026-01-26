@@ -100,7 +100,7 @@ if _settings.sentry_dsn:
     _sentry_initialized = True
 
 configure_logging(
-    level=_settings.log_level if hasattr(_settings, 'log_level') else "INFO",
+    level=_settings.log_level if hasattr(_settings, "log_level") else "INFO",
     json_output=_settings.app_env == "production",
     include_timestamps=True,
     include_service_info=True,
@@ -172,6 +172,7 @@ class ForgeApp:
             # PERSISTENCE FIX: Initialize CascadeRepository and inject into EventSystem
             # This enables cascade chains to survive server restarts
             from forge.repositories.cascade_repository import CascadeRepository
+
             cascade_repo = CascadeRepository(self.db_client)
 
             self.event_system = EventSystem(cascade_repository=cascade_repo)
@@ -257,6 +258,7 @@ class ForgeApp:
         # Initialize resilience layer (caching, observability, validation)
         try:
             from forge.resilience.integration import get_resilience_state
+
             resilience_state = await get_resilience_state()
             self.resilience_initialized = resilience_state.initialized
             logger.info("resilience_layer_initialized")
@@ -267,6 +269,7 @@ class ForgeApp:
         # Initialize token blacklist with Redis for distributed deployments
         try:
             from forge.security.tokens import TokenBlacklist
+
             redis_connected = await TokenBlacklist.initialize(self.settings.redis_url)
             logger.info("token_blacklist_initialized", redis_enabled=redis_connected)
         except (ConnectionError, TimeoutError, OSError, ImportError) as e:
@@ -275,6 +278,7 @@ class ForgeApp:
         # Initialize query cache (Redis or in-memory fallback)
         try:
             from forge.services.query_cache import init_query_cache
+
             self.query_cache = await init_query_cache()
             logger.info("query_cache_initialized")
         except (ConnectionError, TimeoutError, OSError, ImportError) as e:
@@ -284,6 +288,7 @@ class ForgeApp:
         # Initialize and start background scheduler
         try:
             from forge.services.scheduler import setup_scheduler
+
             self.scheduler = await setup_scheduler()
             await self.scheduler.start()
             logger.info(
@@ -427,14 +432,14 @@ class ForgeApp:
         self.is_ready = False
 
         # Stop diagnosis services
-        if hasattr(self, 'session_controller') and self.session_controller:
+        if hasattr(self, "session_controller") and self.session_controller:
             try:
                 await self.session_controller.stop()
                 logger.info("session_controller_shutdown")
             except (RuntimeError, OSError, asyncio.CancelledError) as e:
                 logger.warning("session_controller_shutdown_failed", error=str(e))
 
-        if hasattr(self, 'diagnostic_coordinator') and self.diagnostic_coordinator:
+        if hasattr(self, "diagnostic_coordinator") and self.diagnostic_coordinator:
             try:
                 await self.diagnostic_coordinator.stop()
                 logger.info("diagnostic_coordinator_shutdown")
@@ -442,7 +447,7 @@ class ForgeApp:
                 logger.warning("diagnostic_coordinator_shutdown_failed", error=str(e))
 
         # Stop scheduler first (prevents new background tasks)
-        if hasattr(self, 'scheduler') and self.scheduler:
+        if hasattr(self, "scheduler") and self.scheduler:
             try:
                 await self.scheduler.stop()
                 logger.info("scheduler_shutdown")
@@ -450,9 +455,10 @@ class ForgeApp:
                 logger.warning("scheduler_shutdown_failed", error=str(e))
 
         # Shutdown query cache
-        if hasattr(self, 'query_cache') and self.query_cache:
+        if hasattr(self, "query_cache") and self.query_cache:
             try:
                 from forge.services.query_cache import close_query_cache
+
                 await close_query_cache()
                 logger.info("query_cache_shutdown")
             except (ConnectionError, TimeoutError, OSError) as e:
@@ -462,6 +468,7 @@ class ForgeApp:
         if self.resilience_initialized:
             try:
                 from forge.resilience.integration import get_resilience_state
+
                 resilience_state = await get_resilience_state()
                 await resilience_state.close()
                 logger.info("resilience_layer_shutdown")
@@ -471,6 +478,7 @@ class ForgeApp:
         # Shutdown Virtuals integration
         try:
             from forge.services.virtuals_integration import shutdown_virtuals_service
+
             await shutdown_virtuals_service()
             logger.info("virtuals_integration_shutdown")
         except (RuntimeError, ConnectionError, OSError, ImportError) as e:
@@ -479,6 +487,7 @@ class ForgeApp:
         # Shutdown Copilot agent
         try:
             from forge.api.routes.copilot import shutdown_agent
+
             await shutdown_agent()  # type: ignore[no-untyped-call]
             logger.info("copilot_agent_shutdown")
         except (RuntimeError, ConnectionError, OSError, ImportError) as e:
@@ -486,6 +495,7 @@ class ForgeApp:
 
         # Shutdown services
         from forge.services.init import shutdown_all_services
+
         shutdown_all_services()
 
         if self.overlay_manager:
@@ -510,13 +520,13 @@ class ForgeApp:
             "status": "ready" if self.is_ready else "starting",
             "started_at": self.started_at.isoformat() if self.started_at else None,
             "uptime_seconds": (
-                (datetime.now(UTC) - self.started_at).total_seconds()
-                if self.started_at else 0
+                (datetime.now(UTC) - self.started_at).total_seconds() if self.started_at else 0
             ),
-            "database": "connected" if self.db_client and self.db_client._driver else "disconnected",
+            "database": "connected"
+            if self.db_client and self.db_client._driver
+            else "disconnected",
             "overlays": (
-                len(self.overlay_manager._registry.instances)
-                if self.overlay_manager else 0
+                len(self.overlay_manager._registry.instances) if self.overlay_manager else 0
             ),
         }
 
@@ -549,7 +559,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             logger.error(
                 "forge_shutdown_timeout",
                 timeout_seconds=shutdown_timeout,
-                detail="Forced shutdown after timeout. Some resources may not be cleaned up."
+                detail="Forced shutdown after timeout. Some resources may not be cleaned up.",
             )
 
 
@@ -672,7 +682,7 @@ def create_app(
         # Config should always provide defaults, but warn if somehow empty
         logger.warning(
             "cors_origins_empty",
-            detail="CORS_ORIGINS not configured, using minimal localhost defaults"
+            detail="CORS_ORIGINS not configured, using minimal localhost defaults",
         )
         # Minimal fallback for development safety only
         cors_origins = ["http://localhost:3000"] if settings.app_env == "development" else []
@@ -683,10 +693,19 @@ def create_app(
             allow_origins=cors_origins,
             allow_credentials=True,
             allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-            allow_headers=["Authorization", "Content-Type", "X-Correlation-ID", "X-Idempotency-Key", "X-CSRF-Token"],
+            allow_headers=[
+                "Authorization",
+                "Content-Type",
+                "X-Correlation-ID",
+                "X-Idempotency-Key",
+                "X-CSRF-Token",
+            ],
         )
     else:
-        logger.error("cors_not_configured", detail="No CORS origins configured for non-development environment")
+        logger.error(
+            "cors_not_configured",
+            detail="No CORS origins configured for non-development environment",
+        )
 
     # Add custom middleware
     from forge.api.middleware import (
@@ -707,7 +726,9 @@ def create_app(
     # SECURITY FIX (Audit 5): Enable HSTS in all environments except development
     # Development may not have HTTPS, but staging/production should always have HSTS
     app.add_middleware(SecurityHeadersMiddleware, enable_hsts=(settings.app_env != "development"))
-    app.add_middleware(RequestTimeoutMiddleware, default_timeout=30.0, extended_timeout=120.0)  # Request timeout (Audit 2)
+    app.add_middleware(
+        RequestTimeoutMiddleware, default_timeout=30.0, extended_timeout=120.0
+    )  # Request timeout (Audit 2)
     app.add_middleware(CorrelationIdMiddleware)
     app.add_middleware(RequestLoggingMiddleware)
 
@@ -717,10 +738,16 @@ def create_app(
     # Prometheus metrics collection middleware
     add_metrics_middleware(app)
 
-    app.add_middleware(RequestSizeLimitMiddleware, max_content_length=10 * 1024 * 1024)  # 10MB limit
+    app.add_middleware(
+        RequestSizeLimitMiddleware, max_content_length=10 * 1024 * 1024
+    )  # 10MB limit
     # SECURITY FIX (Audit 3): Add API limits for JSON depth and query params
-    app.add_middleware(APILimitsMiddleware, max_json_depth=20, max_query_params=50, max_array_length=1000)
-    app.add_middleware(CSRFProtectionMiddleware, enabled=(settings.app_env != "development"))  # CSRF protection
+    app.add_middleware(
+        APILimitsMiddleware, max_json_depth=20, max_query_params=50, max_array_length=1000
+    )
+    app.add_middleware(
+        CSRFProtectionMiddleware, enabled=(settings.app_env != "development")
+    )  # CSRF protection
     app.add_middleware(IdempotencyMiddleware)  # Idempotency support
     app.add_middleware(AuthenticationMiddleware)
     # SECURITY FIX (Audit 6 - Session 2): Session binding validation middleware
@@ -733,7 +760,7 @@ def create_app(
         RateLimitMiddleware,
         redis_url=settings.redis_url,
         auth_requests_per_minute=30 if is_dev else 10,  # Stricter in production
-        auth_requests_per_hour=200 if is_dev else 50,   # Stricter in production
+        auth_requests_per_hour=200 if is_dev else 50,  # Stricter in production
     )
 
     # Exception handlers
@@ -749,7 +776,9 @@ def create_app(
         )
 
     @app.exception_handler(RequestValidationError)
-    async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+    async def validation_exception_handler(
+        request: Request, exc: RequestValidationError
+    ) -> JSONResponse:
         # SECURITY FIX (Audit 2): Sanitize validation errors to not leak schema details
         # Only return field location and generic error type, not attempted values
         sanitized_errors = []
@@ -773,7 +802,9 @@ def create_app(
         )
 
     @app.exception_handler(ServiceUnavailable)
-    async def database_unavailable_handler(request: Request, exc: ServiceUnavailable) -> JSONResponse:
+    async def database_unavailable_handler(
+        request: Request, exc: ServiceUnavailable
+    ) -> JSONResponse:
         logger.error(
             "database_unavailable",
             path=str(request.url.path),
@@ -790,7 +821,9 @@ def create_app(
         )
 
     @app.exception_handler(SessionExpired)
-    async def database_session_expired_handler(request: Request, exc: SessionExpired) -> JSONResponse:
+    async def database_session_expired_handler(
+        request: Request, exc: SessionExpired
+    ) -> JSONResponse:
         logger.warning(
             "database_session_expired",
             path=str(request.url.path),
@@ -807,7 +840,9 @@ def create_app(
         )
 
     @app.exception_handler(TransientError)
-    async def database_transient_error_handler(request: Request, exc: TransientError) -> JSONResponse:
+    async def database_transient_error_handler(
+        request: Request, exc: TransientError
+    ) -> JSONResponse:
         logger.warning(
             "database_transient_error",
             path=str(request.url.path),
@@ -864,11 +899,15 @@ def create_app(
     app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
     app.include_router(capsules.router, prefix="/api/v1/capsules", tags=["capsules"])
     app.include_router(cascade.router, prefix="/api/v1/cascade", tags=["cascade"])
-    app.include_router(chat.router, prefix="/api/v1", tags=["chat"])  # Chat rooms (Audit 6 - Session 4)
+    app.include_router(
+        chat.router, prefix="/api/v1", tags=["chat"]
+    )  # Chat rooms (Audit 6 - Session 4)
     app.include_router(diagnosis.router, prefix="/api/v1/diagnosis", tags=["diagnosis"])
     app.include_router(governance.router, prefix="/api/v1/governance", tags=["governance"])
     app.include_router(overlays.router, prefix="/api/v1/overlays", tags=["overlays"])
-    app.include_router(sessions.router, prefix="/api/v1", tags=["sessions"])  # Session management (Audit 6 - Session 2)
+    app.include_router(
+        sessions.router, prefix="/api/v1", tags=["sessions"]
+    )  # Session management (Audit 6 - Session 2)
     app.include_router(system.router, prefix="/api/v1/system", tags=["system"])
     app.include_router(graph.router, prefix="/api/v1/graph", tags=["graph"])
     app.include_router(primekg.router, prefix="/api/v1/primekg", tags=["primekg"])
@@ -950,7 +989,7 @@ app = create_app()
 
 
 def run_server(
-    host: str = "0.0.0.0",
+    host: str = "0.0.0.0",  # nosec B104 - intentional bind-all for container deployment
     port: int = 8000,
     reload: bool = False,
     workers: int = 1,

@@ -120,9 +120,7 @@ class SessionBindingService:
             - block_reason: Reason if blocked (or None)
         """
         # Get and update session
-        session, changes = await self._repo.update_activity(
-            token_jti, ip_address, user_agent
-        )
+        session, changes = await self._repo.update_activity(token_jti, ip_address, user_agent)
 
         if not session:
             # Session not found - could be pre-existing token without session
@@ -215,7 +213,7 @@ class SessionBindingService:
             if session.ip_change_count >= self._ip_change_threshold:
                 await self._repo.flag_suspicious(
                     session.token_jti,
-                    f"IP changed {session.ip_change_count} times (threshold: {self._ip_change_threshold})"
+                    f"IP changed {session.ip_change_count} times (threshold: {self._ip_change_threshold})",
                 )
 
             return False, None
@@ -232,7 +230,7 @@ class SessionBindingService:
                 )
                 await self._repo.flag_suspicious(
                     session.token_jti,
-                    f"IP changed {session.ip_change_count} times (exceeded threshold)"
+                    f"IP changed {session.ip_change_count} times (exceeded threshold)",
                 )
                 return True, f"Too many IP changes detected ({session.ip_change_count})"
 
@@ -255,8 +253,7 @@ class SessionBindingService:
                 new_ip=new_ip[:16] + "..." if len(new_ip) > 16 else new_ip,
             )
             await self._repo.flag_suspicious(
-                session.token_jti,
-                f"IP changed from {old_ip} to {new_ip} (strict mode)"
+                session.token_jti, f"IP changed from {old_ip} to {new_ip} (strict mode)"
             )
             return True, "IP address change not allowed"
 
@@ -314,8 +311,7 @@ class SessionBindingService:
                     change_count=session.user_agent_change_count,
                 )
                 await self._repo.flag_suspicious(
-                    session.token_jti,
-                    f"User-Agent changed {session.user_agent_change_count} times"
+                    session.token_jti, f"User-Agent changed {session.user_agent_change_count} times"
                 )
             return False, None
 
@@ -326,10 +322,7 @@ class SessionBindingService:
                 session_id=session.id,
                 user_id=session.user_id,
             )
-            await self._repo.flag_suspicious(
-                session.token_jti,
-                "User-Agent changed (strict mode)"
-            )
+            await self._repo.flag_suspicious(session.token_jti, "User-Agent changed (strict mode)")
             return True, "User-Agent change not allowed"
 
         return False, None
@@ -427,9 +420,7 @@ class SessionBindingService:
         Returns:
             Number of sessions revoked
         """
-        result = await self._repo.revoke_user_sessions(
-            user_id, except_current_jti, reason
-        )
+        result = await self._repo.revoke_user_sessions(user_id, except_current_jti, reason)
         count: int = int(result)
 
         if count > 0:

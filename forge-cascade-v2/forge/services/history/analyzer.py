@@ -19,6 +19,7 @@ logger = structlog.get_logger(__name__)
 @dataclass
 class AnalyzerConfig:
     """Configuration for history analysis."""
+
     # Analysis weights
     family_history_weight: float = 0.3
     personal_history_weight: float = 0.5
@@ -130,11 +131,13 @@ class HistoryAnalyzer:
         # Identify conditions with strong family history
         for condition_name, relatives in condition_relatives.items():
             if len(relatives) >= self.config.strong_family_history_threshold:
-                patterns["conditions_with_family_history"].append({
-                    "condition": condition_name,
-                    "affected_relatives": relatives,
-                    "count": len(relatives),
-                })
+                patterns["conditions_with_family_history"].append(
+                    {
+                        "condition": condition_name,
+                        "affected_relatives": relatives,
+                        "count": len(relatives),
+                    }
+                )
                 patterns["strong_family_history"] = True
 
         # Suggest inheritance patterns
@@ -156,30 +159,40 @@ class HistoryAnalyzer:
             relatives_set = set(relatives)
 
             # Check for vertical transmission (parent to child)
-            if any(r in relatives_set for r in ['mother', 'father']):
-                suggestions.append({
-                    "condition": condition,
-                    "pattern": "autosomal_dominant_possible",
-                    "reasoning": "Affected parent suggests dominant inheritance",
-                })
+            if any(r in relatives_set for r in ["mother", "father"]):
+                suggestions.append(
+                    {
+                        "condition": condition,
+                        "pattern": "autosomal_dominant_possible",
+                        "reasoning": "Affected parent suggests dominant inheritance",
+                    }
+                )
 
             # Check for horizontal transmission (siblings)
-            if 'sibling' in relatives_set or 'brother' in relatives_set or 'sister' in relatives_set:
-                if not any(r in relatives_set for r in ['mother', 'father']):
-                    suggestions.append({
-                        "condition": condition,
-                        "pattern": "autosomal_recessive_possible",
-                        "reasoning": "Affected siblings without affected parents suggests recessive",
-                    })
+            if (
+                "sibling" in relatives_set
+                or "brother" in relatives_set
+                or "sister" in relatives_set
+            ):
+                if not any(r in relatives_set for r in ["mother", "father"]):
+                    suggestions.append(
+                        {
+                            "condition": condition,
+                            "pattern": "autosomal_recessive_possible",
+                            "reasoning": "Affected siblings without affected parents suggests recessive",
+                        }
+                    )
 
             # Check maternal line
-            maternal = ['mother', 'maternal_grandmother', 'maternal_grandfather']
+            maternal = ["mother", "maternal_grandmother", "maternal_grandfather"]
             if sum(1 for r in maternal if r in relatives_set) >= 2:
-                suggestions.append({
-                    "condition": condition,
-                    "pattern": "maternal_inheritance_possible",
-                    "reasoning": "Multiple maternal relatives affected",
-                })
+                suggestions.append(
+                    {
+                        "condition": condition,
+                        "pattern": "maternal_inheritance_possible",
+                        "reasoning": "Multiple maternal relatives affected",
+                    }
+                )
 
         return suggestions
 
@@ -208,20 +221,24 @@ class HistoryAnalyzer:
                     current_cluster.append(current)
                 else:
                     if len(current_cluster) >= 2:
-                        clusters.append({
-                            "conditions": [c.description for c in current_cluster],
-                            "onset_period": f"Age {current_cluster[0].age_at_onset}",
-                            "count": len(current_cluster),
-                        })
+                        clusters.append(
+                            {
+                                "conditions": [c.description for c in current_cluster],
+                                "onset_period": f"Age {current_cluster[0].age_at_onset}",
+                                "count": len(current_cluster),
+                            }
+                        )
                     current_cluster = [current]
 
             # Don't forget last cluster
             if len(current_cluster) >= 2:
-                clusters.append({
-                    "conditions": [c.description for c in current_cluster],
-                    "onset_period": f"Age {current_cluster[0].age_at_onset}",
-                    "count": len(current_cluster),
-                })
+                clusters.append(
+                    {
+                        "conditions": [c.description for c in current_cluster],
+                        "onset_period": f"Age {current_cluster[0].age_at_onset}",
+                        "count": len(current_cluster),
+                    }
+                )
 
         return clusters
 
@@ -243,24 +260,23 @@ class HistoryAnalyzer:
             # Simple categorization by name patterns
             name_lower = med.medication_name.lower()
 
-            if any(kw in name_lower for kw in ['metformin', 'insulin', 'glipizide']):
-                cat = 'diabetes'
-            elif any(kw in name_lower for kw in ['lisinopril', 'amlodipine', 'metoprolol']):
-                cat = 'cardiovascular'
-            elif any(kw in name_lower for kw in ['sertraline', 'fluoxetine', 'lexapro']):
-                cat = 'psychiatric'
-            elif any(kw in name_lower for kw in ['levothyroxine', 'synthroid']):
-                cat = 'thyroid'
+            if any(kw in name_lower for kw in ["metformin", "insulin", "glipizide"]):
+                cat = "diabetes"
+            elif any(kw in name_lower for kw in ["lisinopril", "amlodipine", "metoprolol"]):
+                cat = "cardiovascular"
+            elif any(kw in name_lower for kw in ["sertraline", "fluoxetine", "lexapro"]):
+                cat = "psychiatric"
+            elif any(kw in name_lower for kw in ["levothyroxine", "synthroid"]):
+                cat = "thyroid"
             else:
-                cat = 'other'
+                cat = "other"
 
             if cat not in categories:
                 categories[cat] = []
             categories[cat].append(med.medication_name)
 
         insights["medication_categories"] = [
-            {"category": k, "medications": v, "count": len(v)}
-            for k, v in categories.items()
+            {"category": k, "medications": v, "count": len(v)} for k, v in categories.items()
         ]
 
         return insights
@@ -292,8 +308,7 @@ class HistoryAnalyzer:
 
         for period_name, (start, end) in periods.items():
             conditions_in_period = [
-                c for c in timeline.conditions
-                if c.age_at_onset and start <= c.age_at_onset <= end
+                c for c in timeline.conditions if c.age_at_onset and start <= c.age_at_onset <= end
             ]
             if conditions_in_period:
                 patterns["age_periods"][period_name] = {
@@ -313,37 +328,42 @@ class HistoryAnalyzer:
         # Hint from family history
         for fh in timeline.family_history:
             if fh.family_member and not fh.is_negated:
-                hints.append({
-                    "type": "family_history",
-                    "description": f"Family history of condition in {fh.family_member.value}",
-                    "detail": fh.description,
-                    "relevance": "high" if fh.family_member.value in ['mother', 'father', 'sibling'] else "moderate",
-                })
+                hints.append(
+                    {
+                        "type": "family_history",
+                        "description": f"Family history of condition in {fh.family_member.value}",
+                        "detail": fh.description,
+                        "relevance": "high"
+                        if fh.family_member.value in ["mother", "father", "sibling"]
+                        else "moderate",
+                    }
+                )
 
         # Hint from early onset conditions
-        early_onset = [
-            c for c in timeline.conditions
-            if c.age_at_onset and c.age_at_onset < 18
-        ]
+        early_onset = [c for c in timeline.conditions if c.age_at_onset and c.age_at_onset < 18]
         if early_onset:
-            hints.append({
-                "type": "early_onset",
-                "description": "Early onset conditions (before age 18)",
-                "detail": f"{len(early_onset)} conditions with pediatric onset",
-                "relevance": "high",
-            })
+            hints.append(
+                {
+                    "type": "early_onset",
+                    "description": "Early onset conditions (before age 18)",
+                    "detail": f"{len(early_onset)} conditions with pediatric onset",
+                    "relevance": "high",
+                }
+            )
 
         # Hint from condition clustering
         clusters = self._identify_condition_clusters(timeline)
         if clusters:
             for cluster in clusters:
                 if cluster["count"] >= 3:
-                    hints.append({
-                        "type": "condition_cluster",
-                        "description": "Multiple conditions with similar onset",
-                        "detail": f"{cluster['count']} conditions at {cluster['onset_period']}",
-                        "relevance": "moderate",
-                    })
+                    hints.append(
+                        {
+                            "type": "condition_cluster",
+                            "description": "Multiple conditions with similar onset",
+                            "detail": f"{cluster['count']} conditions at {cluster['onset_period']}",
+                            "relevance": "moderate",
+                        }
+                    )
 
         # Query PrimeKG for disease associations if available
         if self._neo4j and timeline.phenotype_codes:
@@ -359,18 +379,23 @@ class HistoryAnalyzer:
                 LIMIT 5
                 """
 
-                results = await self._neo4j.run(query, {
-                    "codes": timeline.phenotype_codes,
-                    "min_matches": max(1, len(timeline.phenotype_codes) // 2),
-                })
+                results = await self._neo4j.run(
+                    query,
+                    {
+                        "codes": timeline.phenotype_codes,
+                        "min_matches": max(1, len(timeline.phenotype_codes) // 2),
+                    },
+                )
 
                 for r in results:
-                    hints.append({
-                        "type": "disease_association",
-                        "description": f"Phenotype profile matches: {r['disease']}",
-                        "detail": f"Matches {r['matches']} phenotypes",
-                        "relevance": "high",
-                    })
+                    hints.append(
+                        {
+                            "type": "disease_association",
+                            "description": f"Phenotype profile matches: {r['disease']}",
+                            "detail": f"Matches {r['matches']} phenotypes",
+                            "relevance": "high",
+                        }
+                    )
 
             except (RuntimeError, ValueError, OSError, ConnectionError) as e:
                 logger.debug("disease_query_failed", error=str(e))
@@ -401,7 +426,7 @@ class HistoryAnalyzer:
             if disease_lower in fh.description.lower():
                 # Strong match in family history
                 score += 0.2
-                if fh.family_member and fh.family_member.value in ['mother', 'father']:
+                if fh.family_member and fh.family_member.value in ["mother", "father"]:
                     score += 0.1  # First-degree relative
 
         # Check personal history
@@ -419,6 +444,7 @@ class HistoryAnalyzer:
 # =============================================================================
 # Factory Function
 # =============================================================================
+
 
 def create_history_analyzer(
     config: AnalyzerConfig | None = None,

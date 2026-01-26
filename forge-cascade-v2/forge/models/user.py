@@ -49,20 +49,20 @@ class Capability(str, Enum):
 class UserRole(str, Enum):
     """User roles for authorization."""
 
-    USER = "user"           # Standard user
+    USER = "user"  # Standard user
     MODERATOR = "moderator"  # Can moderate content
-    ADMIN = "admin"         # Full administrative access
-    SYSTEM = "system"       # System-level access (for overlays)
+    ADMIN = "admin"  # Full administrative access
+    SYSTEM = "system"  # System-level access (for overlays)
 
 
 class AuthProvider(str, Enum):
     """Authentication providers."""
 
-    LOCAL = "local"         # Email/password
-    GOOGLE = "google"       # Google OAuth
-    GITHUB = "github"       # GitHub OAuth
-    DISCORD = "discord"     # Discord OAuth
-    WEB3 = "web3"           # Wallet-based auth
+    LOCAL = "local"  # Email/password
+    GOOGLE = "google"  # Google OAuth
+    GITHUB = "github"  # GitHub OAuth
+    DISCORD = "discord"  # Discord OAuth
+    WEB3 = "web3"  # Wallet-based auth
 
 
 class KeyStorageStrategy(str, Enum):
@@ -76,10 +76,10 @@ class KeyStorageStrategy(str, Enum):
     - NONE: No signing enabled (capsules are unsigned)
     """
 
-    SERVER_CUSTODY = "server_custody"      # Server stores encrypted private key
-    CLIENT_ONLY = "client_only"            # User manages keys externally
+    SERVER_CUSTODY = "server_custody"  # Server stores encrypted private key
+    CLIENT_ONLY = "client_only"  # User manages keys externally
     PASSWORD_DERIVED = "password_derived"  # Keys derived from password
-    NONE = "none"                          # No signing (unsigned capsules)
+    NONE = "none"  # No signing (unsigned capsules)
 
 
 class UserBase(ForgeModel):
@@ -364,7 +364,9 @@ class TokenPayload(ForgeModel):
     jti: str | None = Field(default=None, description="JWT ID for token blacklisting")
     type: str = Field(default="access", description="Token type: access or refresh")
     # SECURITY FIX (Audit 6): Token version for privilege change invalidation
-    tv: int | None = Field(default=None, description="Token version - for privilege change invalidation")
+    tv: int | None = Field(
+        default=None, description="Token version - for privilege change invalidation"
+    )
 
     @model_validator(mode="after")
     def validate_access_token_claims(self) -> "TokenPayload":

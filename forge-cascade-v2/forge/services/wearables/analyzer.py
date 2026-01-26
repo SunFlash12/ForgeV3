@@ -24,6 +24,7 @@ logger = structlog.get_logger(__name__)
 @dataclass
 class AnalyzerConfig:
     """Configuration for wearable analysis."""
+
     # Trend detection
     trend_window_days: int = 7
     significant_change_percent: float = 15.0
@@ -187,12 +188,14 @@ class WearableAnalyzer:
 
             # Check for elevated resting HR
             if avg_resting > 85:
-                abnormalities.append({
-                    "type": "elevated_resting_hr",
-                    "severity": "moderate" if avg_resting > 100 else "mild",
-                    "value": avg_resting,
-                    "message": f"Elevated average resting heart rate: {avg_resting:.0f} bpm",
-                })
+                abnormalities.append(
+                    {
+                        "type": "elevated_resting_hr",
+                        "severity": "moderate" if avg_resting > 100 else "mild",
+                        "value": avg_resting,
+                        "message": f"Elevated average resting heart rate: {avg_resting:.0f} bpm",
+                    }
+                )
 
         # HRV analysis
         if hrv_values:
@@ -204,22 +207,26 @@ class WearableAnalyzer:
             }
 
             if avg_hrv < 20:
-                abnormalities.append({
-                    "type": "low_hrv",
-                    "severity": "moderate",
-                    "value": avg_hrv,
-                    "message": f"Low heart rate variability: {avg_hrv:.1f} ms (may indicate stress or autonomic dysfunction)",
-                })
+                abnormalities.append(
+                    {
+                        "type": "low_hrv",
+                        "severity": "moderate",
+                        "value": avg_hrv,
+                        "message": f"Low heart rate variability: {avg_hrv:.1f} ms (may indicate stress or autonomic dysfunction)",
+                    }
+                )
 
         # Check for arrhythmia indicators
         irregular_count = sum(1 for d in data if d.is_irregular)
         if irregular_count > 0:
-            abnormalities.append({
-                "type": "irregular_rhythm",
-                "severity": "moderate" if irregular_count > 5 else "mild",
-                "count": irregular_count,
-                "message": f"Detected {irregular_count} episodes of irregular heart rhythm",
-            })
+            abnormalities.append(
+                {
+                    "type": "irregular_rhythm",
+                    "severity": "moderate" if irregular_count > 5 else "mild",
+                    "count": irregular_count,
+                    "message": f"Detected {irregular_count} episodes of irregular heart rhythm",
+                }
+            )
 
         # Trend analysis
         if len(hr_values) >= 14:  # At least 2 weeks of data
@@ -261,12 +268,14 @@ class WearableAnalyzer:
         }
 
         if avg_efficiency < 0.75:
-            abnormalities.append({
-                "type": "poor_sleep_efficiency",
-                "severity": "moderate",
-                "value": avg_efficiency,
-                "message": f"Low average sleep efficiency: {avg_efficiency:.0%}",
-            })
+            abnormalities.append(
+                {
+                    "type": "poor_sleep_efficiency",
+                    "severity": "moderate",
+                    "value": avg_efficiency,
+                    "message": f"Low average sleep efficiency: {avg_efficiency:.0%}",
+                }
+            )
 
         # Deep sleep
         deep_pcts = [d.deep_sleep_percentage for d in data]
@@ -276,22 +285,26 @@ class WearableAnalyzer:
         }
 
         if avg_deep < 10:
-            abnormalities.append({
-                "type": "low_deep_sleep",
-                "severity": "mild",
-                "value": avg_deep,
-                "message": f"Low deep sleep: {avg_deep:.1f}% (recommended: 15-20%)",
-            })
+            abnormalities.append(
+                {
+                    "type": "low_deep_sleep",
+                    "severity": "mild",
+                    "value": avg_deep,
+                    "message": f"Low deep sleep: {avg_deep:.1f}% (recommended: 15-20%)",
+                }
+            )
 
         # Sleep apnea indicators
         apnea_nights = sum(1 for d in data if d.possible_apnea or d.spo2_dips_count > 5)
         if apnea_nights > 0:
-            abnormalities.append({
-                "type": "sleep_apnea_indicator",
-                "severity": "moderate" if apnea_nights > len(data) * 0.3 else "mild",
-                "nights_affected": apnea_nights,
-                "message": f"Possible sleep apnea indicators on {apnea_nights} nights",
-            })
+            abnormalities.append(
+                {
+                    "type": "sleep_apnea_indicator",
+                    "severity": "moderate" if apnea_nights > len(data) * 0.3 else "mild",
+                    "nights_affected": apnea_nights,
+                    "message": f"Possible sleep apnea indicators on {apnea_nights} nights",
+                }
+            )
 
         # Wake patterns
         avg_wakes = sum(d.wake_count for d in data) / len(data)
@@ -328,12 +341,14 @@ class WearableAnalyzer:
 
         if avg_steps < 5000:
             severity = "moderate" if avg_steps < 2500 else "mild"
-            abnormalities.append({
-                "type": "low_activity",
-                "severity": severity,
-                "value": avg_steps,
-                "message": f"Low average daily steps: {avg_steps:.0f} (recommended: 7,000-10,000)",
-            })
+            abnormalities.append(
+                {
+                    "type": "low_activity",
+                    "severity": severity,
+                    "value": avg_steps,
+                    "message": f"Low average daily steps: {avg_steps:.0f} (recommended: 7,000-10,000)",
+                }
+            )
 
         # Active minutes
         active_mins = [
@@ -348,12 +363,14 @@ class WearableAnalyzer:
         }
 
         if avg_active < 30:
-            abnormalities.append({
-                "type": "insufficient_active_time",
-                "severity": "moderate",
-                "value": avg_active,
-                "message": f"Low daily active time: {avg_active:.0f} minutes (recommended: 30+ minutes)",
-            })
+            abnormalities.append(
+                {
+                    "type": "insufficient_active_time",
+                    "severity": "moderate",
+                    "value": avg_active,
+                    "message": f"Low daily active time: {avg_active:.0f} minutes (recommended: 30+ minutes)",
+                }
+            )
 
         # Sedentary time
         sedentary = [d.sedentary_minutes for d in data]
@@ -361,12 +378,14 @@ class WearableAnalyzer:
         statistics["sedentary_hours"] = avg_sedentary / 60
 
         if avg_sedentary > 600:  # 10 hours
-            abnormalities.append({
-                "type": "excessive_sedentary",
-                "severity": "mild",
-                "value": avg_sedentary / 60,
-                "message": f"High sedentary time: {avg_sedentary/60:.1f} hours/day",
-            })
+            abnormalities.append(
+                {
+                    "type": "excessive_sedentary",
+                    "severity": "mild",
+                    "value": avg_sedentary / 60,
+                    "message": f"High sedentary time: {avg_sedentary / 60:.1f} hours/day",
+                }
+            )
 
         return {
             "day_count": len(data),
@@ -408,13 +427,15 @@ class WearableAnalyzer:
         low_count = sum(1 for v in spo2_values if v < 94)
         if low_count > 0 or min_spo2 < 92:
             severity = "severe" if min_spo2 < 90 else "moderate" if min_spo2 < 92 else "mild"
-            abnormalities.append({
-                "type": "hypoxemia",
-                "severity": severity,
-                "min_value": min_spo2,
-                "low_reading_count": low_count,
-                "message": f"Low oxygen saturation detected: minimum {min_spo2:.0f}%",
-            })
+            abnormalities.append(
+                {
+                    "type": "hypoxemia",
+                    "severity": severity,
+                    "min_value": min_spo2,
+                    "low_reading_count": low_count,
+                    "message": f"Low oxygen saturation detected: minimum {min_spo2:.0f}%",
+                }
+            )
 
         # Check sleep oxygen separately
         sleep_oxygen = [d for d in data if d.is_sleeping]
@@ -423,12 +444,14 @@ class WearableAnalyzer:
             if sleep_spo2:
                 min_sleep_spo2 = min(sleep_spo2)
                 if min_sleep_spo2 < 94:
-                    abnormalities.append({
-                        "type": "nocturnal_hypoxemia",
-                        "severity": "moderate",
-                        "min_value": min_sleep_spo2,
-                        "message": f"Nocturnal oxygen desaturation: minimum {min_sleep_spo2:.0f}%",
-                    })
+                    abnormalities.append(
+                        {
+                            "type": "nocturnal_hypoxemia",
+                            "severity": "moderate",
+                            "min_value": min_sleep_spo2,
+                            "message": f"Nocturnal oxygen desaturation: minimum {min_sleep_spo2:.0f}%",
+                        }
+                    )
 
         return {
             "reading_count": len(data),
@@ -513,6 +536,7 @@ class WearableAnalyzer:
 # =============================================================================
 # Factory Function
 # =============================================================================
+
 
 def create_wearable_analyzer(
     config: AnalyzerConfig | None = None,

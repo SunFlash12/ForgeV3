@@ -25,11 +25,11 @@ logger = structlog.get_logger(__name__)
 class PartitionStrategy(Enum):
     """Strategies for partitioning capsules."""
 
-    DOMAIN = "domain"           # Partition by domain/topic
-    USER = "user"               # Partition by owner
-    TIME = "time"               # Partition by creation time
-    HASH = "hash"               # Consistent hash partitioning
-    HYBRID = "hybrid"           # Combination of strategies
+    DOMAIN = "domain"  # Partition by domain/topic
+    USER = "user"  # Partition by owner
+    TIME = "time"  # Partition by creation time
+    HASH = "hash"  # Consistent hash partitioning
+    HYBRID = "hybrid"  # Combination of strategies
 
 
 class PartitionState(Enum):
@@ -85,7 +85,9 @@ class Partition:
     @property
     def utilization(self) -> float:
         """Get partition utilization percentage."""
-        return (self.stats.capsule_count / self.max_capsules) * 100 if self.max_capsules > 0 else 0.0
+        return (
+            (self.stats.capsule_count / self.max_capsules) * 100 if self.max_capsules > 0 else 0.0
+        )
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
@@ -179,7 +181,7 @@ class PartitionManager:
         name: str,
         strategy: PartitionStrategy = PartitionStrategy.DOMAIN,
         domain_tags: set[str] | None = None,
-        max_capsules: int | None = None
+        max_capsules: int | None = None,
     ) -> Partition:
         """
         Create a new partition.
@@ -212,10 +214,7 @@ class PartitionManager:
         self._partitions[partition_id] = partition
 
         logger.info(
-            "partition_created",
-            partition_id=partition_id,
-            name=name,
-            strategy=strategy.value
+            "partition_created", partition_id=partition_id, name=name, strategy=strategy.value
         )
 
         return partition
@@ -229,10 +228,7 @@ class PartitionManager:
         return list(self._partitions.values())
 
     def assign_capsule(
-        self,
-        capsule_id: str,
-        domain_tags: set[str] | None = None,
-        owner_id: str | None = None
+        self, capsule_id: str, domain_tags: set[str] | None = None, owner_id: str | None = None
     ) -> str:
         """
         Assign a capsule to a partition.
@@ -258,11 +254,7 @@ class PartitionManager:
         if partition_id in self._partitions:
             self._partitions[partition_id].stats.capsule_count += 1
 
-        logger.debug(
-            "capsule_assigned",
-            capsule_id=capsule_id,
-            partition_id=partition_id
-        )
+        logger.debug("capsule_assigned", capsule_id=capsule_id, partition_id=partition_id)
 
         return partition_id
 
@@ -271,10 +263,7 @@ class PartitionManager:
         return self._capsule_partition_map.get(capsule_id)
 
     def _find_best_partition(
-        self,
-        capsule_id: str,
-        domain_tags: set[str] | None,
-        owner_id: str | None
+        self, capsule_id: str, domain_tags: set[str] | None, owner_id: str | None
     ) -> str:
         """Find the best partition for a capsule."""
         candidates = []
@@ -285,19 +274,14 @@ class PartitionManager:
             if partition.is_full:
                 continue
 
-            score = self._calculate_partition_score(
-                partition,
-                capsule_id,
-                domain_tags,
-                owner_id
-            )
+            score = self._calculate_partition_score(partition, capsule_id, domain_tags, owner_id)
             candidates.append((partition.partition_id, score))
 
         if not candidates:
             # All partitions full - create new one
             new_partition = self.create_partition(
                 name=f"Auto-{datetime.now(UTC).strftime('%Y%m%d-%H%M%S')}",
-                strategy=PartitionStrategy.HASH
+                strategy=PartitionStrategy.HASH,
             )
             return new_partition.partition_id
 
@@ -310,7 +294,7 @@ class PartitionManager:
         partition: Partition,
         capsule_id: str,
         domain_tags: set[str] | None,
-        owner_id: str | None
+        owner_id: str | None,
     ) -> float:
         """Calculate affinity score for a partition."""
         score = 0.0
@@ -326,7 +310,9 @@ class PartitionManager:
 
         # Hash-based score
         if partition.strategy == PartitionStrategy.HASH:
-            hash_val = int(hashlib.md5(capsule_id.encode()).hexdigest(), 16) % 100
+            hash_val = (
+                int(hashlib.md5(capsule_id.encode(), usedforsecurity=False).hexdigest(), 16) % 100
+            )
             if partition.hash_range[0] <= hash_val < partition.hash_range[1]:
                 score += 15
 
@@ -359,11 +345,7 @@ class PartitionManager:
             return None
 
         # Find source (most utilized) and target (least utilized) partitions
-        partitions = sorted(
-            self._partitions.values(),
-            key=lambda p: p.utilization,
-            reverse=True
-        )
+        partitions = sorted(self._partitions.values(), key=lambda p: p.utilization, reverse=True)
 
         source = partitions[0]
         target = partitions[-1]
@@ -383,11 +365,7 @@ class PartitionManager:
                 await self._execute_rebalance(j)
             except (RuntimeError, OSError, ValueError, KeyError) as e:
                 j.status = "failed"
-                logger.error(
-                    "rebalance_execution_error",
-                    job_id=j.job_id,
-                    error=str(e)
-                )
+                logger.error("rebalance_execution_error", job_id=j.job_id, error=str(e))
 
         # Start rebalancing with exception handling
         task = asyncio.create_task(_safe_rebalance(job))
@@ -398,7 +376,7 @@ class PartitionManager:
             job_id=job.job_id,
             source=source.partition_id,
             target=target.partition_id,
-            imbalance=imbalance
+            imbalance=imbalance,
         )
 
         return job
@@ -437,19 +415,11 @@ class PartitionManager:
             job.status = "completed"
             job.completed_at = datetime.now(UTC)
 
-            logger.info(
-                "rebalance_completed",
-                job_id=job.job_id,
-                moved=job.moved_count
-            )
+            logger.info("rebalance_completed", job_id=job.job_id, moved=job.moved_count)
 
         except (RuntimeError, OSError, ValueError, KeyError) as e:
             job.status = "failed"
-            logger.error(
-                "rebalance_failed",
-                job_id=job.job_id,
-                error=str(e)
-            )
+            logger.error("rebalance_failed", job_id=job.job_id, error=str(e))
 
         finally:
             source.state = PartitionState.ACTIVE
@@ -466,15 +436,14 @@ class PartitionManager:
 
             except asyncio.CancelledError:
                 break
-            except Exception as e:  # Intentional broad catch: background rebalance loop must not crash
+            except (
+                Exception
+            ) as e:  # Intentional broad catch: background rebalance loop must not crash
                 logger.error("background_rebalance_error", error=str(e))
 
     def get_partition_stats(self) -> dict[str, Any]:
         """Get statistics for all partitions."""
-        return {
-            p.partition_id: p.to_dict()
-            for p in self._partitions.values()
-        }
+        return {p.partition_id: p.to_dict() for p in self._partitions.values()}
 
     def get_rebalance_status(self) -> list[dict[str, Any]]:
         """Get status of rebalancing jobs."""

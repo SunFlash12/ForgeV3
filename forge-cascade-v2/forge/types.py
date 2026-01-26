@@ -78,6 +78,7 @@ ListingStatus = Literal["draft", "active", "sold", "delisted", "expired"]
 
 class SellerStats(TypedDict):
     """Statistics for a seller in the marketplace."""
+
     seller_id: str
     total_revenue: float
     total_sales: int
@@ -86,6 +87,7 @@ class SellerStats(TypedDict):
 
 class CapsuleSaleStats(TypedDict):
     """Sales statistics for a capsule."""
+
     capsule_id: str
     total_sales: int
     total_revenue: float
@@ -94,6 +96,7 @@ class CapsuleSaleStats(TypedDict):
 
 class MarketplaceAnalytics(TypedDict):
     """Analytics data for the marketplace."""
+
     total_listings: int
     active_listings: int
     total_sales: int
@@ -106,8 +109,10 @@ class MarketplaceAnalytics(TypedDict):
 # LLM & AI Types
 # =============================================================================
 
+
 class LLMResponse(TypedDict):
     """Response from an LLM provider."""
+
     content: str
     model: str
     tokens_used: int
@@ -117,6 +122,7 @@ class LLMResponse(TypedDict):
 
 class GhostCouncilOpinion(TypedDict):
     """Opinion from a Ghost Council member."""
+
     member_id: str
     member_name: str
     recommendation: CouncilRecommendation
@@ -127,6 +133,7 @@ class GhostCouncilOpinion(TypedDict):
 
 class GhostCouncilResult(TypedDict):
     """Result of a Ghost Council deliberation."""
+
     recommendation: CouncilRecommendation
     confidence: float
     reasoning: list[str]
@@ -141,6 +148,7 @@ class GhostCouncilResult(TypedDict):
 
 class EmbeddingResult(TypedDict):
     """Result of an embedding operation."""
+
     embedding: list[float]
     model: str
     dimensions: int
@@ -157,6 +165,7 @@ HealthStatus = Literal["healthy", "degraded", "unhealthy", "unknown"]
 
 class HealthCheckResult(TypedDict):
     """Result of a health check."""
+
     name: str
     status: HealthStatus
     message: str
@@ -190,6 +199,7 @@ CascadeEventType = Literal[
 
 class CascadeEvent(TypedDict):
     """A cascade event in the event system."""
+
     event_id: str
     event_type: CascadeEventType
     timestamp: str
@@ -265,9 +275,11 @@ class HealthCheckProtocol(Protocol):
 # Utility Types
 # =============================================================================
 
+
 # Pagination parameters
 class PaginationParams(TypedDict, total=False):
     """Standard pagination parameters."""
+
     limit: int
     offset: int
     cursor: str | None
@@ -276,9 +288,11 @@ class PaginationParams(TypedDict, total=False):
 # Sort direction
 SortDirection = Literal["asc", "desc"]
 
+
 # Time range for queries
 class TimeRange(TypedDict):
     """Time range for filtering queries."""
+
     start: datetime
     end: datetime
 
@@ -287,8 +301,10 @@ class TimeRange(TypedDict):
 # API Response Types
 # =============================================================================
 
+
 class APIError(TypedDict):
     """Standard API error response."""
+
     error: str
     code: str
     details: JsonDict | None
@@ -296,6 +312,7 @@ class APIError(TypedDict):
 
 class PaginatedResponse(TypedDict):
     """Standard paginated API response."""
+
     items: list[JsonDict]
     total: int
     limit: int

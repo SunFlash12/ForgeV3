@@ -119,15 +119,9 @@ class StarterPack:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> StarterPack:
         """Create from dictionary."""
-        capsules = [
-            PackCapsule(**c) for c in data.get("capsules", [])
-        ]
-        overlays = [
-            PackOverlay(**o) for o in data.get("overlays", [])
-        ]
-        dependencies = [
-            PackDependency(**d) for d in data.get("dependencies", [])
-        ]
+        capsules = [PackCapsule(**c) for c in data.get("capsules", [])]
+        overlays = [PackOverlay(**o) for o in data.get("overlays", [])]
+        dependencies = [PackDependency(**d) for d in data.get("dependencies", [])]
 
         return cls(
             pack_id=data["pack_id"],
@@ -136,8 +130,12 @@ class StarterPack:
             category=PackCategory(data["category"]),
             version=data.get("version", "1.0.0"),
             author=data.get("author", "Unknown"),
-            created_at=datetime.fromisoformat(data["created_at"]) if "created_at" in data else datetime.now(UTC),
-            updated_at=datetime.fromisoformat(data["updated_at"]) if "updated_at" in data else datetime.now(UTC),
+            created_at=datetime.fromisoformat(data["created_at"])
+            if "created_at" in data
+            else datetime.now(UTC),
+            updated_at=datetime.fromisoformat(data["updated_at"])
+            if "updated_at" in data
+            else datetime.now(UTC),
             status=PackStatus(data.get("status", "published")),
             capsules=capsules,
             overlays=overlays,
@@ -197,10 +195,7 @@ class StarterPackManager:
         self._register_default_packs()
 
         self._initialized = True
-        logger.info(
-            "starter_pack_manager_initialized",
-            pack_count=len(self._packs)
-        )
+        logger.info("starter_pack_manager_initialized", pack_count=len(self._packs))
 
     def _register_default_packs(self) -> None:
         """Register default starter packs."""
@@ -216,14 +211,14 @@ class StarterPackManager:
                         title="Welcome to Forge",
                         content="Welcome to Forge - your institutional memory engine. This capsule contains essential information about using the system.",
                         capsule_type="KNOWLEDGE",
-                        tags=["forge", "getting-started"]
+                        tags=["forge", "getting-started"],
                     ),
                     PackCapsule(
                         template_id="best-practices",
                         title="Forge Best Practices",
                         content="Best practices for creating and organizing knowledge capsules in Forge.",
                         capsule_type="KNOWLEDGE",
-                        tags=["forge", "best-practices"]
+                        tags=["forge", "best-practices"],
                     ),
                 ],
                 overlays=[
@@ -231,7 +226,7 @@ class StarterPackManager:
                         overlay_id="governance-basic",
                         name="Basic Governance",
                         overlay_type="GOVERNANCE",
-                        config={"require_approval": False}
+                        config={"require_approval": False},
                     ),
                 ],
                 tags=["essential", "getting-started"],
@@ -247,26 +242,24 @@ class StarterPackManager:
                         title="Architecture Decision Record Template",
                         content="# Architecture Decision Record\n\n## Context\n[Describe the context]\n\n## Decision\n[What was decided]\n\n## Consequences\n[What are the implications]",
                         capsule_type="DECISION",
-                        tags=["architecture", "adr", "decision"]
+                        tags=["architecture", "adr", "decision"],
                     ),
                     PackCapsule(
                         template_id="code-review",
                         title="Code Review Guidelines",
                         content="Guidelines for effective code reviews: focus on logic, readability, and maintainability.",
                         capsule_type="KNOWLEDGE",
-                        tags=["code-review", "guidelines"]
+                        tags=["code-review", "guidelines"],
                     ),
                     PackCapsule(
                         template_id="incident-template",
                         title="Incident Postmortem Template",
                         content="# Incident Postmortem\n\n## Summary\n\n## Timeline\n\n## Root Cause\n\n## Action Items",
                         capsule_type="LESSON",
-                        tags=["incident", "postmortem", "template"]
+                        tags=["incident", "postmortem", "template"],
                     ),
                 ],
-                dependencies=[
-                    PackDependency(pack_id="forge-essentials", version="1.0.0")
-                ],
+                dependencies=[PackDependency(pack_id="forge-essentials", version="1.0.0")],
                 tags=["software", "engineering", "development"],
             ),
             StarterPack(
@@ -280,14 +273,14 @@ class StarterPackManager:
                         title="GDPR Overview",
                         content="Overview of General Data Protection Regulation requirements and principles.",
                         capsule_type="KNOWLEDGE",
-                        tags=["gdpr", "compliance", "privacy"]
+                        tags=["gdpr", "compliance", "privacy"],
                     ),
                     PackCapsule(
                         template_id="data-subject-request",
                         title="Data Subject Request Process",
                         content="Process for handling data subject access requests (DSARs) under GDPR.",
                         capsule_type="KNOWLEDGE",
-                        tags=["gdpr", "dsar", "process"]
+                        tags=["gdpr", "dsar", "process"],
                     ),
                 ],
                 overlays=[
@@ -295,7 +288,7 @@ class StarterPackManager:
                         overlay_id="privacy-compliance",
                         name="Privacy Compliance Overlay",
                         overlay_type="COMPLIANCE",
-                        config={"jurisdiction": "EU", "framework": "GDPR"}
+                        config={"jurisdiction": "EU", "framework": "GDPR"},
                     ),
                 ],
                 tags=["gdpr", "compliance", "privacy", "eu"],
@@ -311,14 +304,14 @@ class StarterPackManager:
                         title="Literature Review Template",
                         content="# Literature Review\n\n## Research Question\n\n## Sources\n\n## Key Findings\n\n## Gaps Identified",
                         capsule_type="KNOWLEDGE",
-                        tags=["research", "literature", "academic"]
+                        tags=["research", "literature", "academic"],
                     ),
                     PackCapsule(
                         template_id="experiment-log",
                         title="Experiment Log Template",
                         content="# Experiment Log\n\n## Hypothesis\n\n## Methodology\n\n## Results\n\n## Conclusions",
                         capsule_type="MEMORY",
-                        tags=["research", "experiment", "science"]
+                        tags=["research", "experiment", "science"],
                     ),
                 ],
                 tags=["research", "academic", "science"],
@@ -339,20 +332,14 @@ class StarterPackManager:
     def register_pack(self, pack: StarterPack) -> None:
         """Register a new starter pack."""
         self._packs[pack.pack_id] = pack
-        logger.info(
-            "starter_pack_registered",
-            pack_id=pack.pack_id,
-            name=pack.name
-        )
+        logger.info("starter_pack_registered", pack_id=pack.pack_id, name=pack.name)
 
     def get_pack(self, pack_id: str) -> StarterPack | None:
         """Get a starter pack by ID."""
         return self._packs.get(pack_id)
 
     def list_packs(
-        self,
-        category: PackCategory | None = None,
-        tags: list[str] | None = None
+        self, category: PackCategory | None = None, tags: list[str] | None = None
     ) -> list[StarterPack]:
         """List available starter packs with optional filtering."""
         packs = list(self._packs.values())
@@ -375,15 +362,13 @@ class StarterPackManager:
         """Search packs by name or description."""
         query_lower = query.lower()
         return [
-            p for p in self._packs.values()
+            p
+            for p in self._packs.values()
             if query_lower in p.name.lower() or query_lower in p.description.lower()
         ]
 
     async def install_pack(
-        self,
-        pack_id: str,
-        user_id: str,
-        skip_dependencies: bool = False
+        self, pack_id: str, user_id: str, skip_dependencies: bool = False
     ) -> PackInstallation:
         """
         Install a starter pack for a user.
@@ -431,9 +416,7 @@ class StarterPackManager:
         # Create capsules
         for capsule_template in pack.capsules:
             capsule_id = await self._create_capsule(
-                capsule_template,
-                user_id,
-                pack.default_trust_level
+                capsule_template, user_id, pack.default_trust_level
             )
             if capsule_id:
                 installation.capsules_created.append(capsule_id)
@@ -455,16 +438,13 @@ class StarterPackManager:
             pack_id=pack_id,
             user_id=user_id,
             capsules=len(installation.capsules_created),
-            overlays=len(installation.overlays_activated)
+            overlays=len(installation.overlays_activated),
         )
 
         return installation
 
     async def _create_capsule(
-        self,
-        template: PackCapsule,
-        user_id: str,
-        trust_level: int
+        self, template: PackCapsule, user_id: str, trust_level: int
     ) -> str | None:
         """
         Create a capsule from template.
@@ -480,7 +460,7 @@ class StarterPackManager:
                     logger.warning(
                         "pack_content_validation_failed",
                         template_id=template.template_id,
-                        reason="Content failed security validation"
+                        reason="Content failed security validation",
                     )
                     return None
 
@@ -490,14 +470,12 @@ class StarterPackManager:
                     tags=template.tags,
                     user_id=user_id,
                     trust_level=trust_level,
-                    metadata={"from_pack_template": template.template_id}
+                    metadata={"from_pack_template": template.template_id},
                 )
                 return result
             except (RuntimeError, OSError, ConnectionError, ValueError, TypeError) as e:
                 logger.warning(
-                    "pack_capsule_creation_failed",
-                    template_id=template.template_id,
-                    error=str(e)
+                    "pack_capsule_creation_failed", template_id=template.template_id, error=str(e)
                 )
         return None
 
@@ -526,24 +504,21 @@ class StarterPackManager:
 
         # Detect XSS patterns
         xss_patterns = [
-            r'<script[^>]*>',
-            r'javascript:',
-            r'on\w+\s*=',  # Event handlers like onclick=
-            r'<iframe[^>]*>',
-            r'<object[^>]*>',
-            r'<embed[^>]*>',
-            r'expression\s*\(',
-            r'vbscript:',
-            r'data:text/html',
+            r"<script[^>]*>",
+            r"javascript:",
+            r"on\w+\s*=",  # Event handlers like onclick=
+            r"<iframe[^>]*>",
+            r"<object[^>]*>",
+            r"<embed[^>]*>",
+            r"expression\s*\(",
+            r"vbscript:",
+            r"data:text/html",
         ]
 
         content_lower = content.lower()
         for pattern in xss_patterns:
             if re.search(pattern, content_lower):
-                logger.warning(
-                    "pack_content_xss_detected",
-                    pattern=pattern[:20]
-                )
+                logger.warning("pack_content_xss_detected", pattern=pattern[:20])
                 return None
 
         # Detect injection patterns
@@ -556,40 +531,33 @@ class StarterPackManager:
 
         for pattern in injection_patterns:
             if re.search(pattern, content, re.IGNORECASE):
-                logger.warning(
-                    "pack_content_injection_detected",
-                    pattern=pattern[:20]
-                )
+                logger.warning("pack_content_injection_detected", pattern=pattern[:20])
                 return None
 
         # Basic HTML entity encoding for special characters
         # This preserves markdown but escapes dangerous HTML
         sanitized = content
         # Don't fully escape - just neutralize script execution
-        sanitized = re.sub(r'<script', '&lt;script', sanitized, flags=re.IGNORECASE)
-        sanitized = re.sub(r'javascript:', 'javascript-disabled:', sanitized, flags=re.IGNORECASE)
+        sanitized = re.sub(r"<script", "&lt;script", sanitized, flags=re.IGNORECASE)
+        sanitized = re.sub(r"javascript:", "javascript-disabled:", sanitized, flags=re.IGNORECASE)
 
         return sanitized
 
-    async def _activate_overlay(
-        self,
-        overlay_config: PackOverlay,
-        user_id: str
-    ) -> str | None:
+    async def _activate_overlay(self, overlay_config: PackOverlay, user_id: str) -> str | None:
         """Activate an overlay from pack configuration."""
         if self._activate_overlay_callback:
             try:
                 overlay_result: str | None = await self._activate_overlay_callback(
                     overlay_type=overlay_config.overlay_type,
                     config=overlay_config.config,
-                    user_id=user_id
+                    user_id=user_id,
                 )
                 return overlay_result
             except (RuntimeError, OSError, ConnectionError, ValueError, TypeError) as e:
                 logger.warning(
                     "pack_overlay_activation_failed",
                     overlay_id=overlay_config.overlay_id,
-                    error=str(e)
+                    error=str(e),
                 )
         return None
 
@@ -598,10 +566,7 @@ class StarterPackManager:
         return self._installations.get(user_id, [])
 
     async def uninstall_pack(
-        self,
-        pack_id: str,
-        user_id: str,
-        delete_capsules: bool = False
+        self, pack_id: str, user_id: str, delete_capsules: bool = False
     ) -> bool:
         """
         Uninstall a starter pack.
@@ -629,11 +594,7 @@ class StarterPackManager:
         # Remove installation record
         self._installations[user_id].remove(installation)
 
-        logger.info(
-            "starter_pack_uninstalled",
-            pack_id=pack_id,
-            user_id=user_id
-        )
+        logger.info("starter_pack_uninstalled", pack_id=pack_id, user_id=user_id)
 
         return True
 

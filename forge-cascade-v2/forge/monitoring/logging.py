@@ -140,7 +140,9 @@ def sanitize_sensitive_data(
 
         if isinstance(obj, dict):
             return {
-                k: "[REDACTED]" if any(s in k.lower() for s in sensitive_keys) else _sanitize(v, depth + 1)
+                k: "[REDACTED]"
+                if any(s in k.lower() for s in sensitive_keys)
+                else _sanitize(v, depth + 1)
                 for k, v in obj.items()
             }
         elif isinstance(obj, list):
@@ -164,7 +166,7 @@ def drop_color_codes(
 
     def _clean(obj: Any) -> Any:
         if isinstance(obj, str):
-            return re.sub(r'\x1b\[[0-9;]*m', '', obj)
+            return re.sub(r"\x1b\[[0-9;]*m", "", obj)
         elif isinstance(obj, dict):
             return {k: _clean(v) for k, v in obj.items()}
         elif isinstance(obj, list):
@@ -178,6 +180,7 @@ def drop_color_codes(
 # =============================================================================
 # Logging Configuration
 # =============================================================================
+
 
 def configure_logging(
     level: str = "INFO",
@@ -273,6 +276,7 @@ def get_logger(name: str | None = None) -> structlog.BoundLogger:
 # Context Management
 # =============================================================================
 
+
 def bind_context(**kwargs: Any) -> None:
     """Bind context variables that will appear in all subsequent logs."""
     structlog.contextvars.bind_contextvars(**kwargs)
@@ -291,6 +295,7 @@ def clear_context() -> None:
 # =============================================================================
 # Request Context Middleware
 # =============================================================================
+
 
 class LoggingContextMiddleware:
     """
@@ -334,6 +339,7 @@ class LoggingContextMiddleware:
 # =============================================================================
 # Log Formatters for External Systems
 # =============================================================================
+
 
 class DatadogFormatter:
     """Format logs for Datadog ingestion."""

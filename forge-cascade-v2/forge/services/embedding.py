@@ -31,6 +31,7 @@ logger = structlog.get_logger(__name__)
 
 class EmbeddingProvider(str, Enum):
     """Supported embedding providers."""
+
     OPENAI = "openai"
     SENTENCE_TRANSFORMERS = "sentence_transformers"
     MOCK = "mock"  # For testing and fallback when no real provider available
@@ -38,6 +39,7 @@ class EmbeddingProvider(str, Enum):
 
 class EmbeddingConfigurationError(Exception):
     """Raised when embedding provider is not properly configured."""
+
     pass
 
 
@@ -49,6 +51,7 @@ class EmbeddingConfig:
     SECURITY FIX (Audit 4 - H24): API keys are loaded from environment
     variables and are redacted in logs/repr to prevent exposure.
     """
+
     provider: EmbeddingProvider = EmbeddingProvider.SENTENCE_TRANSFORMERS
     model: str = "all-MiniLM-L6-v2"  # Default to local model
     dimensions: int = 1536
@@ -73,7 +76,9 @@ class EmbeddingConfig:
     def to_safe_dict(self) -> dict[str, Any]:
         """Return config dict with sensitive values redacted."""
         return {
-            "provider": self.provider.value if hasattr(self.provider, 'value') else str(self.provider),
+            "provider": self.provider.value
+            if hasattr(self.provider, "value")
+            else str(self.provider),
             "model": self.model,
             "dimensions": self.dimensions,
             "api_key": "[REDACTED]" if self.api_key else None,
@@ -86,6 +91,7 @@ class EmbeddingConfig:
 @dataclass
 class EmbeddingResult:
     """Result of embedding generation."""
+
     embedding: list[float]
     model: str
     dimensions: int
@@ -164,6 +170,7 @@ class OpenAIEmbeddingProvider(EmbeddingProviderBase):
     def _get_client(self) -> httpx.AsyncClient:
         """Get or create the HTTP client (lazy initialization)."""
         import httpx
+
         if self._http_client is None:
             self._http_client = httpx.AsyncClient(timeout=self._timeout)
         return self._http_client
@@ -211,13 +218,15 @@ class OpenAIEmbeddingProvider(EmbeddingProviderBase):
             if magnitude > 0:
                 embedding = [x / magnitude for x in embedding]
 
-            results.append(EmbeddingResult(
-                embedding=embedding,
-                model=self._model,
-                dimensions=len(embedding),
-                tokens_used=data.get("usage", {}).get("total_tokens", 0) // len(texts),
-                cached=False,
-            ))
+            results.append(
+                EmbeddingResult(
+                    embedding=embedding,
+                    model=self._model,
+                    dimensions=len(embedding),
+                    tokens_used=data.get("usage", {}).get("total_tokens", 0) // len(texts),
+                    cached=False,
+                )
+            )
 
         return results
 
@@ -247,6 +256,7 @@ class SentenceTransformersProvider(EmbeddingProviderBase):
         if self._model is None:
             try:
                 from sentence_transformers import SentenceTransformer
+
                 self._model = SentenceTransformer(self._model_name)
                 # Get dimensions from a test embedding
                 test = self._model.encode(["test"])
@@ -275,19 +285,20 @@ class SentenceTransformersProvider(EmbeddingProviderBase):
         loop = asyncio.get_running_loop()
         model = self._model
         embeddings = await loop.run_in_executor(
-            None,
-            lambda: model.encode(texts, normalize_embeddings=True)
+            None, lambda: model.encode(texts, normalize_embeddings=True)
         )
 
         results = []
         for embedding in embeddings:
-            results.append(EmbeddingResult(
-                embedding=embedding.tolist(),
-                model=self._model_name,
-                dimensions=len(embedding),
-                tokens_used=0,  # Local, no token counting
-                cached=False,
-            ))
+            results.append(
+                EmbeddingResult(
+                    embedding=embedding.tolist(),
+                    model=self._model_name,
+                    dimensions=len(embedding),
+                    tokens_used=0,  # Local, no token counting
+                    cached=False,
+                )
+            )
 
         return results
 
@@ -320,7 +331,7 @@ class MockEmbeddingProvider(EmbeddingProviderBase):
         import random
 
         # Use text hash as seed for reproducibility
-        text_hash = hashlib.md5(text.encode()).hexdigest()
+        text_hash = hashlib.md5(text.encode(), usedforsecurity=False).hexdigest()
         seed = int(text_hash[:8], 16)
         rng = random.Random(seed)
 
@@ -367,6 +378,7 @@ class EmbeddingCache:
         self._misses = 0
         # SECURITY FIX (Audit 3): Add lock to prevent race conditions in cache operations
         import asyncio
+
         self._lock = asyncio.Lock()
 
     def _make_key(self, text: str, model: str) -> str:
@@ -392,7 +404,7 @@ class EmbeddingCache:
         async with self._lock:
             if len(self._cache) >= self._max_size:
                 # Simple eviction: remove oldest 10%
-                keys_to_remove = list(self._cache.keys())[:self._max_size // 10]
+                keys_to_remove = list(self._cache.keys())[: self._max_size // 10]
                 for key in keys_to_remove:
                     del self._cache[key]
 
@@ -446,7 +458,9 @@ class EmbeddingService:
         self._config = config or EmbeddingConfig()
         self._provider = self._create_provider()
         # Use configurable cache size for cost optimization
-        self._cache = EmbeddingCache(max_size=self._config.cache_size) if self._config.cache_enabled else None
+        self._cache = (
+            EmbeddingCache(max_size=self._config.cache_size) if self._config.cache_enabled else None
+        )
 
         logger.info(
             "embedding_service_initialized",
@@ -552,7 +566,7 @@ class EmbeddingService:
             logger.warning(
                 "embedding_batch_size_exceeded",
                 requested=len(texts),
-                max_allowed=self.MAX_BATCH_SIZE
+                max_allowed=self.MAX_BATCH_SIZE,
             )
             raise ValueError(
                 f"Batch size {len(texts)} exceeds maximum of {self.MAX_BATCH_SIZE}. "
@@ -580,7 +594,7 @@ class EmbeddingService:
             batch_size = self._config.batch_size
 
             for batch_start in range(0, len(texts_to_embed), batch_size):
-                batch = texts_to_embed[batch_start:batch_start + batch_size]
+                batch = texts_to_embed[batch_start : batch_start + batch_size]
                 batch_texts = [t for _, t in batch]
 
                 if show_progress:
@@ -603,7 +617,7 @@ class EmbeddingService:
                             attempt=attempt + 1,
                             error=str(e),
                         )
-                        await asyncio.sleep(2 ** attempt)
+                        await asyncio.sleep(2**attempt)
 
                 # Store results and cache
                 for (original_idx, text), result in zip(batch, batch_results, strict=False):
@@ -638,7 +652,7 @@ class EmbeddingService:
         Close the embedding service and release resources.
         This should be called during application shutdown.
         """
-        if hasattr(self._provider, 'close'):
+        if hasattr(self._provider, "close"):
             await self._provider.close()
         if self._cache:
             await self._cache.clear()
@@ -695,14 +709,15 @@ async def shutdown_embedding_service_async() -> None:
 # Utility Functions
 # =============================================================================
 
+
 def cosine_similarity(a: list[float], b: list[float]) -> float:
     """Calculate cosine similarity between two vectors."""
     if len(a) != len(b):
         raise ValueError("Vectors must have same dimensions")
 
     dot_product: float = sum(x * y for x, y in zip(a, b, strict=False))
-    magnitude_a: float = sum(x ** 2 for x in a) ** 0.5
-    magnitude_b: float = sum(x ** 2 for x in b) ** 0.5
+    magnitude_a: float = sum(x**2 for x in a) ** 0.5
+    magnitude_b: float = sum(x**2 for x in b) ** 0.5
 
     if magnitude_a == 0 or magnitude_b == 0:
         return 0.0

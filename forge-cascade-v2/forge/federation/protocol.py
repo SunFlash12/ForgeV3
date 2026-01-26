@@ -50,16 +50,19 @@ logger = logging.getLogger(__name__)
 
 class SSRFError(Exception):
     """Raised when a potential SSRF attack is detected."""
+
     pass
 
 
 class DNSRebindingError(Exception):
     """Raised when DNS rebinding attack is detected (IP changed between validation and request)."""
+
     pass
 
 
 class CertificatePinningError(Exception):
     """Raised when TLS certificate doesn't match pinned fingerprint."""
+
     pass
 
 
@@ -71,6 +74,7 @@ class PinnedConnection:
     Stores resolved IP addresses at validation time to prevent DNS rebinding attacks
     where an attacker could change DNS resolution between URL validation and request execution.
     """
+
     hostname: str
     pinned_ips: list[str]  # IPs resolved at validation time
     pinned_at: datetime
@@ -91,6 +95,7 @@ class PinnedCertificate:
     Stores the SHA-256 fingerprint of a peer's TLS certificate to prevent
     MitM attacks even with valid certificates from compromised CAs.
     """
+
     peer_id: str
     hostname: str
     fingerprint_sha256: str  # hex-encoded SHA-256 of DER-encoded cert
@@ -119,7 +124,7 @@ class DNSPinStore:
     """
 
     DEFAULT_TTL = 300  # 5 minutes
-    MAX_PINS = 10000   # Prevent memory exhaustion
+    MAX_PINS = 10000  # Prevent memory exhaustion
 
     def __init__(self, ttl_seconds: int | None = None):
         self._pins: dict[str, PinnedConnection] = {}
@@ -245,7 +250,8 @@ class CertificatePinStore:
                     pin_type=pin_data.get("pin_type", "tofu"),
                     next_fingerprint=pin_data.get("next_fingerprint"),
                     next_valid_from=datetime.fromisoformat(pin_data["next_valid_from"])
-                        if pin_data.get("next_valid_from") else None,
+                    if pin_data.get("next_valid_from")
+                    else None,
                 )
             logger.info(f"Loaded {len(self._pins)} certificate pins from {pin_file}")
         except (OSError, json.JSONDecodeError, ValueError, KeyError, TypeError) as e:
@@ -269,20 +275,17 @@ class CertificatePinStore:
                     "pin_type": pin.pin_type,
                     "next_fingerprint": pin.next_fingerprint,
                     "next_valid_from": pin.next_valid_from.isoformat()
-                        if pin.next_valid_from else None,
+                    if pin.next_valid_from
+                    else None,
                 }
-            with open(pin_file, 'w') as f:
+            with open(pin_file, "w") as f:
                 json.dump(data, f, indent=2)
             logger.debug(f"Saved {len(data)} certificate pins to {pin_file}")
         except (OSError, TypeError, ValueError) as e:
             logger.error(f"Failed to save certificate pins: {e}")
 
     def pin_certificate(
-        self,
-        peer_id: str,
-        hostname: str,
-        fingerprint: str,
-        pin_type: str = "tofu"
+        self, peer_id: str, hostname: str, fingerprint: str, pin_type: str = "tofu"
     ) -> PinnedCertificate:
         """
         Pin a certificate fingerprint for a peer.
@@ -312,9 +315,7 @@ class CertificatePinStore:
             existing = self._pins.get(peer_id)
             if existing and existing.pin_type == "explicit" and pin_type == "tofu":
                 # Don't overwrite explicit pins with TOFU
-                logger.warning(
-                    f"Attempted TOFU update of explicitly pinned cert for {peer_id}"
-                )
+                logger.warning(f"Attempted TOFU update of explicitly pinned cert for {peer_id}")
                 return existing
 
             self._pins[peer_id] = pin
@@ -361,11 +362,12 @@ class CertificatePinStore:
             return True
 
         # Check for scheduled certificate rotation
-        if (pin.next_fingerprint and
-            pin.next_fingerprint.lower() == cert_fingerprint and
-            pin.next_valid_from and
-            datetime.now(UTC) >= pin.next_valid_from):
-
+        if (
+            pin.next_fingerprint
+            and pin.next_fingerprint.lower() == cert_fingerprint
+            and pin.next_valid_from
+            and datetime.now(UTC) >= pin.next_valid_from
+        ):
             logger.info(f"Peer {peer_id} rotated to pre-announced certificate")
             # Promote next cert to primary
             with self._lock:
@@ -383,12 +385,7 @@ class CertificatePinStore:
         )
         return False
 
-    def announce_rotation(
-        self,
-        peer_id: str,
-        new_fingerprint: str,
-        valid_from: datetime
-    ) -> bool:
+    def announce_rotation(self, peer_id: str, new_fingerprint: str, valid_from: datetime) -> bool:
         """
         Announce an upcoming certificate rotation.
 
@@ -437,6 +434,7 @@ def get_cert_pin_store(storage_path: str | None = None) -> CertificatePinStore:
 
 class ReplayAttackError(Exception):
     """Raised when a replay attack is detected (nonce reuse)."""
+
     pass
 
 
@@ -593,6 +591,7 @@ class ValidatedURL:
     Contains both the original URL and the resolved/pinned IP addresses
     to prevent DNS rebinding attacks.
     """
+
     url: str
     hostname: str
     port: int
@@ -648,7 +647,7 @@ def validate_url_for_ssrf(
     dangerous_hostnames = {
         "localhost",
         "127.0.0.1",
-        "0.0.0.0",
+        "0.0.0.0",  # nosec B104 - SSRF blocklist entry, not a bind address
         "::1",
         "[::1]",
         "metadata.google.internal",  # GCP metadata
@@ -758,7 +757,7 @@ class FederationProtocol:
     # Configurable via FEDERATION_KEY_PATH env var; fallback supports both Docker and local dev
     DEFAULT_KEY_PATH = os.getenv(
         "FEDERATION_KEY_PATH",
-        "/app/data/federation_keys" if os.path.exists("/app") else "./data/federation_keys"
+        "/app/data/federation_keys" if os.path.exists("/app") else "./data/federation_keys",
     )
 
     def __init__(
@@ -798,7 +797,7 @@ class FederationProtocol:
             headers={
                 "User-Agent": f"Forge-Federation/{self.API_VERSION}",
                 "X-Forge-Instance": self.instance_id,
-            }
+            },
         )
         logger.info(f"Federation protocol initialized for {self.instance_name}")
 
@@ -807,10 +806,7 @@ class FederationProtocol:
         if self._http_client:
             await self._http_client.aclose()
 
-    async def _get_response_cert_fingerprint(
-        self,
-        response: httpx.Response
-    ) -> str | None:
+    async def _get_response_cert_fingerprint(self, response: httpx.Response) -> str | None:
         """
         SECURITY FIX (Audit 4 - H4): Extract TLS certificate fingerprint from response.
 
@@ -826,8 +822,8 @@ class FederationProtocol:
         try:
             # Access the underlying connection stream
             stream = response.stream
-            if hasattr(stream, '_stream') and hasattr(stream._stream, 'get_extra_info'):
-                ssl_object = stream._stream.get_extra_info('ssl_object')
+            if hasattr(stream, "_stream") and hasattr(stream._stream, "get_extra_info"):
+                ssl_object = stream._stream.get_extra_info("ssl_object")
                 if ssl_object:
                     # Get peer certificate in DER format
                     cert_der = ssl_object.getpeercert(binary_form=True)
@@ -835,10 +831,10 @@ class FederationProtocol:
                         return _compute_cert_fingerprint(cert_der)
 
             # Alternative: try via response.extensions (httpx 0.24+)
-            if hasattr(response, 'extensions'):
-                network_stream = response.extensions.get('network_stream')
-                if network_stream and hasattr(network_stream, 'get_extra_info'):
-                    ssl_object = network_stream.get_extra_info('ssl_object')
+            if hasattr(response, "extensions"):
+                network_stream = response.extensions.get("network_stream")
+                if network_stream and hasattr(network_stream, "get_extra_info"):
+                    ssl_object = network_stream.get_extra_info("ssl_object")
                     if ssl_object:
                         cert_der = ssl_object.getpeercert(binary_form=True)
                         if cert_der:
@@ -877,10 +873,9 @@ class FederationProtocol:
 
                 # Export public key as base64
                 public_bytes = self._public_key.public_bytes(
-                    encoding=serialization.Encoding.Raw,
-                    format=serialization.PublicFormat.Raw
+                    encoding=serialization.Encoding.Raw, format=serialization.PublicFormat.Raw
                 )
-                self._public_key_b64 = base64.b64encode(public_bytes).decode('utf-8')
+                self._public_key_b64 = base64.b64encode(public_bytes).decode("utf-8")
                 logger.info("Federation keys loaded successfully")
                 return
             except (OSError, ValueError, TypeError, RuntimeError, UnsupportedAlgorithm) as e:
@@ -893,10 +888,9 @@ class FederationProtocol:
 
         # Export public key as base64
         public_bytes = self._public_key.public_bytes(
-            encoding=serialization.Encoding.Raw,
-            format=serialization.PublicFormat.Raw
+            encoding=serialization.Encoding.Raw, format=serialization.PublicFormat.Raw
         )
-        self._public_key_b64 = base64.b64encode(public_bytes).decode('utf-8')
+        self._public_key_b64 = base64.b64encode(public_bytes).decode("utf-8")
 
         # Persist keys to storage
         await self._save_keys(private_key_path, public_key_path)
@@ -921,9 +915,7 @@ class FederationProtocol:
             encryption_algo: serialization.KeySerializationEncryption
             if passphrase:
                 # Encrypt with provided passphrase
-                encryption_algo = serialization.BestAvailableEncryption(
-                    passphrase.encode('utf-8')
-                )
+                encryption_algo = serialization.BestAvailableEncryption(passphrase.encode("utf-8"))
                 logger.info("Saving federation private key with encryption")
             else:
                 # No passphrase - warn and use no encryption (development only)
@@ -940,7 +932,7 @@ class FederationProtocol:
             private_pem = self._private_key.private_bytes(
                 encoding=serialization.Encoding.PEM,
                 format=serialization.PrivateFormat.PKCS8,
-                encryption_algorithm=encryption_algo
+                encryption_algorithm=encryption_algo,
             )
             with open(private_key_path, "wb") as f:
                 f.write(private_pem)
@@ -955,7 +947,7 @@ class FederationProtocol:
             # Save public key (PEM format)
             public_pem = self._public_key.public_bytes(
                 encoding=serialization.Encoding.PEM,
-                format=serialization.PublicFormat.SubjectPublicKeyInfo
+                format=serialization.PublicFormat.SubjectPublicKeyInfo,
             )
             with open(public_key_path, "wb") as f:
                 f.write(public_pem)
@@ -1043,14 +1035,9 @@ class FederationProtocol:
         if not self._private_key:
             raise RuntimeError("Protocol not initialized")
         signature = self._private_key.sign(message)
-        return base64.b64encode(signature).decode('utf-8')
+        return base64.b64encode(signature).decode("utf-8")
 
-    def verify_signature(
-        self,
-        message: bytes,
-        signature_b64: str,
-        public_key_b64: str
-    ) -> bool:
+    def verify_signature(self, message: bytes, signature_b64: str, public_key_b64: str) -> bool:
         """Verify a signature from a peer."""
         try:
             # Decode public key
@@ -1082,7 +1069,7 @@ class FederationProtocol:
         }
 
         # Sign the handshake
-        message = json.dumps(handshake_data, sort_keys=True).encode('utf-8')
+        message = json.dumps(handshake_data, sort_keys=True).encode("utf-8")
         signature = self.sign_message(message)
 
         return PeerHandshake(
@@ -1114,7 +1101,7 @@ class FederationProtocol:
 
         # SECURITY FIX (Audit 4 - H5): Verify nonce for replay prevention
         # REMOVED backward compatibility - all handshakes MUST have nonces
-        nonce = getattr(handshake, 'nonce', None)
+        nonce = getattr(handshake, "nonce", None)
         if not nonce:
             # SECURITY FIX: Reject handshakes without nonce - no backward compatibility
             logger.error("Handshake rejected: missing nonce (replay protection required)")
@@ -1142,7 +1129,7 @@ class FederationProtocol:
         if nonce:
             handshake_data["nonce"] = nonce
 
-        message = json.dumps(handshake_data, sort_keys=True).encode('utf-8')
+        message = json.dumps(handshake_data, sort_keys=True).encode("utf-8")
         return self.verify_signature(message, handshake.signature, handshake.public_key)
 
     async def initiate_handshake(
@@ -1189,7 +1176,7 @@ class FederationProtocol:
             # Send to peer (using validated URL)
             response = await self._http_client.post(
                 f"{validated.url.rstrip('/')}/api/v1/federation/handshake",
-                json=our_handshake.model_dump(mode='json'),
+                json=our_handshake.model_dump(mode="json"),
                 timeout=self.HANDSHAKE_TIMEOUT,
             )
 
@@ -1344,7 +1331,7 @@ class FederationProtocol:
             params["nonce"] = nonce
 
             # Sign request including nonce
-            request_data = json.dumps(params, sort_keys=True).encode('utf-8')
+            request_data = json.dumps(params, sort_keys=True).encode("utf-8")
             signature = self.sign_message(request_data)
 
             response = await self._http_client.get(
@@ -1415,14 +1402,14 @@ class FederationProtocol:
             payload_json_for_signing = payload_for_signing.model_dump_json()
 
             # Compute signature over payload with empty signature field
-            signature = self.sign_message(payload_json_for_signing.encode('utf-8'))
+            signature = self.sign_message(payload_json_for_signing.encode("utf-8"))
 
             # Update payload with signature
             payload.signature = signature
 
             response = await self._http_client.post(
                 f"{validated.url.rstrip('/')}/api/v1/federation/incoming/capsules",
-                json=payload.model_dump(mode='json'),
+                json=payload.model_dump(mode="json"),
                 headers={
                     "X-Forge-Public-Key": self._public_key_b64,
                 },
@@ -1446,7 +1433,7 @@ class FederationProtocol:
         """Verify a sync payload signature and nonce."""
         # SECURITY FIX (Audit 4 - H5): Verify nonce for replay prevention
         # REMOVED backward compatibility - all payloads MUST have nonces
-        nonce = getattr(payload, 'nonce', None)
+        nonce = getattr(payload, "nonce", None)
         if not nonce:
             # SECURITY FIX: Reject payloads without nonce - no backward compatibility
             logger.error("Sync payload rejected: missing nonce (replay protection required)")
@@ -1467,16 +1454,12 @@ class FederationProtocol:
         payload_copy.signature = ""
 
         payload_json = payload_copy.model_dump_json()
-        return self.verify_signature(
-            payload_json.encode('utf-8'),
-            payload.signature,
-            public_key
-        )
+        return self.verify_signature(payload_json.encode("utf-8"), payload.signature, public_key)
 
     def compute_content_hash(self, content: dict[str, Any]) -> str:
         """Compute a SHA-256 hash of content."""
         content_str = json.dumps(content, sort_keys=True)
-        return hashlib.sha256(content_str.encode('utf-8')).hexdigest()
+        return hashlib.sha256(content_str.encode("utf-8")).hexdigest()
 
     async def create_sync_payload(
         self,
@@ -1518,6 +1501,6 @@ class FederationProtocol:
 
         # Sign the payload with empty signature field
         payload_json = payload.model_dump_json()
-        payload.signature = self.sign_message(payload_json.encode('utf-8'))
+        payload.signature = self.sign_message(payload_json.encode("utf-8"))
 
         return payload

@@ -37,12 +37,14 @@ logger = structlog.get_logger()
 
 class GraphAlgorithmError(OverlayError):
     """Graph algorithm execution error."""
+
     pass
 
 
 @dataclass
 class CachedResult:
     """Cached algorithm result with TTL."""
+
     key: str
     data: dict[str, Any]
     computed_at: datetime
@@ -57,6 +59,7 @@ class CachedResult:
 @dataclass
 class AlgorithmConfig:
     """Configuration for graph algorithms."""
+
     # PageRank
     pagerank_damping: float = 0.85
     pagerank_iterations: int = 20
@@ -103,9 +106,7 @@ class GraphAlgorithmsOverlay(BaseOverlay):
     MAX_CACHE_SIZE = 500  # Max cached algorithm results
 
     def __init__(
-        self,
-        graph_repository: GraphRepository | None = None,
-        config: AlgorithmConfig | None = None
+        self, graph_repository: GraphRepository | None = None, config: AlgorithmConfig | None = None
     ):
         """
         Initialize the graph algorithms overlay.
@@ -132,7 +133,7 @@ class GraphAlgorithmsOverlay(BaseOverlay):
             "community_detections": 0,
             "trust_calculations": 0,
             "cache_hits": 0,
-            "cache_misses": 0
+            "cache_misses": 0,
         }
 
         self._logger = logger.bind(overlay=self.NAME)
@@ -148,7 +149,7 @@ class GraphAlgorithmsOverlay(BaseOverlay):
             self._detected_backend = await provider.detect_backend()
             self._logger.info(
                 "graph_algorithms_initialized",
-                backend=self._detected_backend.value if self._detected_backend else "none"
+                backend=self._detected_backend.value if self._detected_backend else "none",
             )
         return await super().initialize()
 
@@ -156,7 +157,7 @@ class GraphAlgorithmsOverlay(BaseOverlay):
         self,
         context: OverlayContext,
         event: Event | None = None,
-        input_data: dict[str, Any] | None = None
+        input_data: dict[str, Any] | None = None,
     ) -> OverlayResult:
         """
         Execute graph algorithm operations.
@@ -198,8 +199,8 @@ class GraphAlgorithmsOverlay(BaseOverlay):
                         {
                             "type": "analysis_complete",
                             "operation": operation,
-                            "node_count": result.get("count", 0)
-                        }
+                            "node_count": result.get("count", 0),
+                        },
                     )
                 )
 
@@ -207,10 +208,12 @@ class GraphAlgorithmsOverlay(BaseOverlay):
                 data=result,
                 events_to_emit=events_to_emit,
                 metrics={
-                    "backend": self._detected_backend.value if self._detected_backend else "unknown",
+                    "backend": self._detected_backend.value
+                    if self._detected_backend
+                    else "unknown",
                     "cache_hits": self._stats["cache_hits"],
-                    "cache_misses": self._stats["cache_misses"]
-                }
+                    "cache_misses": self._stats["cache_misses"],
+                },
             )
 
         except (OverlayError, RuntimeError, ValueError, TypeError, KeyError, OSError) as e:
@@ -223,9 +226,7 @@ class GraphAlgorithmsOverlay(BaseOverlay):
             return OverlayResult.fail(f"Algorithm error: {str(e)}")
 
     async def _compute_pagerank(
-        self,
-        data: dict[str, Any],
-        context: OverlayContext
+        self, data: dict[str, Any], context: OverlayContext
     ) -> dict[str, Any]:
         """Compute PageRank for nodes."""
         assert self._graph_repository is not None
@@ -241,7 +242,7 @@ class GraphAlgorithmsOverlay(BaseOverlay):
             relationship_type=data.get("relationship_type", "DERIVED_FROM"),
             damping_factor=data.get("damping_factor", self._config.pagerank_damping),
             max_iterations=data.get("max_iterations", self._config.pagerank_iterations),
-            tolerance=data.get("tolerance", self._config.pagerank_tolerance)
+            tolerance=data.get("tolerance", self._config.pagerank_tolerance),
         )
 
         ranking_result = await self._graph_repository.provider.compute_pagerank(request)
@@ -255,20 +256,18 @@ class GraphAlgorithmsOverlay(BaseOverlay):
                     "node_id": r.node_id,
                     "node_type": r.node_type,
                     "score": round(r.score, 6),
-                    "rank": r.rank
+                    "rank": r.rank,
                 }
-                for r in ranking_result.rankings[:data.get("limit", 100)]
+                for r in ranking_result.rankings[: data.get("limit", 100)]
             ],
-            "backend": self._detected_backend.value if self._detected_backend else "unknown"
+            "backend": self._detected_backend.value if self._detected_backend else "unknown",
         }
 
         self._set_cached(cache_key, result)
         return result
 
     async def _compute_centrality(
-        self,
-        data: dict[str, Any],
-        context: OverlayContext
+        self, data: dict[str, Any], context: OverlayContext
     ) -> dict[str, Any]:
         """Compute centrality metrics."""
         assert self._graph_repository is not None
@@ -306,20 +305,18 @@ class GraphAlgorithmsOverlay(BaseOverlay):
                     "node_id": r.node_id,
                     "node_type": r.node_type,
                     "score": round(r.score, 6),
-                    "rank": r.rank
+                    "rank": r.rank,
                 }
-                for r in ranking_result.rankings[:data.get("limit", 100)]
+                for r in ranking_result.rankings[: data.get("limit", 100)]
             ],
-            "backend": self._detected_backend.value if self._detected_backend else "unknown"
+            "backend": self._detected_backend.value if self._detected_backend else "unknown",
         }
 
         self._set_cached(cache_key, result)
         return result
 
     async def _detect_communities(
-        self,
-        data: dict[str, Any],
-        context: OverlayContext
+        self, data: dict[str, Any], context: OverlayContext
     ) -> dict[str, Any]:
         """Detect communities in the graph."""
         assert self._graph_repository is not None
@@ -333,8 +330,10 @@ class GraphAlgorithmsOverlay(BaseOverlay):
         request = CommunityDetectionRequest(
             node_label=data.get("node_label", "Capsule"),
             relationship_type=data.get("relationship_type", "DERIVED_FROM"),
-            algorithm=AlgorithmType.COMMUNITY_LOUVAIN if algorithm == "louvain" else AlgorithmType.COMMUNITY_LABEL_PROPAGATION,
-            min_community_size=data.get("min_size", self._config.community_min_size)
+            algorithm=AlgorithmType.COMMUNITY_LOUVAIN
+            if algorithm == "louvain"
+            else AlgorithmType.COMMUNITY_LABEL_PROPAGATION,
+            min_community_size=data.get("min_size", self._config.community_min_size),
         )
 
         community_result = await self._graph_repository.provider.detect_communities(request)
@@ -352,21 +351,19 @@ class GraphAlgorithmsOverlay(BaseOverlay):
                     "size": c.size,
                     "density": round(c.density, 4),
                     "dominant_type": c.dominant_type,
-                    "node_ids": [m.node_id for m in c.members[:20]]  # Limit for response size
+                    "node_ids": [m.node_id for m in c.members[:20]],  # Limit for response size
                 }
-                for c in communities[:data.get("limit", 50)]
+                for c in communities[: data.get("limit", 50)]
             ],
             "total_nodes": sum(c.size for c in communities),
-            "backend": self._detected_backend.value if self._detected_backend else "unknown"
+            "backend": self._detected_backend.value if self._detected_backend else "unknown",
         }
 
         self._set_cached(cache_key, result)
         return result
 
     async def _compute_trust_transitivity(
-        self,
-        data: dict[str, Any],
-        context: OverlayContext
+        self, data: dict[str, Any], context: OverlayContext
     ) -> dict[str, Any]:
         """Compute transitive trust between two nodes."""
         assert self._graph_repository is not None
@@ -401,9 +398,7 @@ class GraphAlgorithmsOverlay(BaseOverlay):
         }
 
     async def _get_graph_metrics(
-        self,
-        data: dict[str, Any],
-        context: OverlayContext
+        self, data: dict[str, Any], context: OverlayContext
     ) -> dict[str, Any]:
         """Get overall graph metrics."""
         assert self._graph_repository is not None
@@ -430,11 +425,7 @@ class GraphAlgorithmsOverlay(BaseOverlay):
         self._set_cached(cache_key, result)
         return result
 
-    async def _refresh_all(
-        self,
-        data: dict[str, Any],
-        context: OverlayContext
-    ) -> dict[str, Any]:
+    async def _refresh_all(self, data: dict[str, Any], context: OverlayContext) -> dict[str, Any]:
         """Refresh all cached computations."""
         self._cache.clear()
 
@@ -448,7 +439,7 @@ class GraphAlgorithmsOverlay(BaseOverlay):
             "refreshed_at": datetime.now(UTC).isoformat(),
             "metrics": metrics,
             "top_10_pagerank": pagerank.get("rankings", []),
-            "top_5_communities": communities.get("communities", [])
+            "top_5_communities": communities.get("communities", []),
         }
 
     def _get_cached(self, key: str) -> dict[str, Any] | None:
@@ -479,7 +470,7 @@ class GraphAlgorithmsOverlay(BaseOverlay):
             key=key,
             data=data,
             computed_at=datetime.now(UTC),
-            ttl_seconds=self._config.cache_ttl_seconds
+            ttl_seconds=self._config.cache_ttl_seconds,
         )
 
     def clear_cache(self) -> int:
@@ -493,15 +484,13 @@ class GraphAlgorithmsOverlay(BaseOverlay):
         return {
             **self._stats,
             "cache_size": len(self._cache),
-            "backend": self._detected_backend.value if self._detected_backend else "unknown"
+            "backend": self._detected_backend.value if self._detected_backend else "unknown",
         }
 
 
 # Convenience function
 def create_graph_algorithms_overlay(
-    graph_repository: GraphRepository | None = None,
-    cache_ttl: int = 300,
-    **kwargs: Any
+    graph_repository: GraphRepository | None = None, cache_ttl: int = 300, **kwargs: Any
 ) -> GraphAlgorithmsOverlay:
     """
     Create a graph algorithms overlay.

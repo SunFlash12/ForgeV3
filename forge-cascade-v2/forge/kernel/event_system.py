@@ -33,6 +33,7 @@ EventHandler = Callable[[Event], Coroutine[Any, Any, None]]
 @dataclass
 class Subscription:
     """Represents an event subscription."""
+
     id: str
     handler: EventHandler
     event_types: set[EventType]
@@ -64,6 +65,7 @@ class EventMetrics:
     SECURITY FIX (Audit 5): Uses deque with maxlen instead of list slicing
     to prevent memory growth and improve performance.
     """
+
     events_published: int = 0
     events_delivered: int = 0
     events_failed: int = 0
@@ -135,7 +137,7 @@ class EventBus:
         handler: EventHandler,
         event_types: set[EventType],
         min_priority: EventPriority = EventPriority.LOW,
-        filter_func: Callable[[Event], bool] | None = None
+        filter_func: Callable[[Event], bool] | None = None,
     ) -> str:
         """
         Subscribe to events.
@@ -168,7 +170,7 @@ class EventBus:
             handler=handler,
             event_types=event_types,
             min_priority=min_priority,
-            filter_func=filter_func
+            filter_func=filter_func,
         )
 
         self._subscriptions[sub_id] = subscription
@@ -180,21 +182,17 @@ class EventBus:
         logger.info(
             "event_subscription_created",
             subscription_id=sub_id,
-            event_types=[et.value for et in event_types]
+            event_types=[et.value for et in event_types],
         )
 
         return sub_id
 
     def subscribe_all(
-        self,
-        handler: EventHandler,
-        min_priority: EventPriority = EventPriority.NORMAL
+        self, handler: EventHandler, min_priority: EventPriority = EventPriority.NORMAL
     ) -> str:
         """Subscribe to all event types."""
         return self.subscribe(
-            handler=handler,
-            event_types=set(EventType),
-            min_priority=min_priority
+            handler=handler, event_types=set(EventType), min_priority=min_priority
         )
 
     def unsubscribe(self, subscription_id: str) -> bool:
@@ -231,7 +229,7 @@ class EventBus:
         priority: EventPriority = EventPriority.NORMAL,
         target: str | None = None,
         correlation_id: str | None = None,
-        metadata: dict[str, Any] | None = None
+        metadata: dict[str, Any] | None = None,
     ) -> Event:
         """
         Publish an event.
@@ -257,7 +255,7 @@ class EventBus:
             target_overlays=[target] if target else None,
             correlation_id=correlation_id or str(uuid4()),
             metadata=metadata or {},
-            timestamp=datetime.now(UTC)
+            timestamp=datetime.now(UTC),
         )
 
         # SECURITY FIX (Audit 7 - Session 2): Backpressure - timeout if queue full
@@ -290,7 +288,7 @@ class EventBus:
             event_id=event.id,
             event_type=event_type.value,
             source=source,
-            priority=priority.value
+            priority=priority.value,
         )
 
         return event
@@ -300,7 +298,7 @@ class EventBus:
         event_type: EventType,
         payload: dict[str, Any],
         source: str = "system",
-        priority: EventPriority = EventPriority.NORMAL
+        priority: EventPriority = EventPriority.NORMAL,
     ) -> Event:
         """
         Convenience method to emit an event (alias for publish).
@@ -315,10 +313,7 @@ class EventBus:
             Created Event
         """
         return await self.publish(
-            event_type=event_type,
-            payload=payload,
-            source=source,
-            priority=priority
+            event_type=event_type, payload=payload, source=source, priority=priority
         )
 
     async def publish_cascade(
@@ -327,7 +322,7 @@ class EventBus:
         insight_type: str,
         insight_data: dict[str, Any],
         cascade_id: str | None = None,
-        max_hops: int = 5
+        max_hops: int = 5,
     ) -> CascadeChain:
         """
         Publish an event that initiates a cascade chain.
@@ -360,7 +355,7 @@ class EventBus:
                 overlays_affected=[source_overlay],
                 insights_generated=0,
                 actions_triggered=0,
-                errors_encountered=0
+                errors_encountered=0,
             )
             self._metrics.cascade_chains += 1
 
@@ -395,7 +390,7 @@ class EventBus:
             visited_overlays=visited,
             impact_score=0.0,  # Will be calculated by overlays
             timestamp=datetime.now(UTC),
-            correlation_id=cascade_id
+            correlation_id=cascade_id,
         )
 
         # Update chain
@@ -418,7 +413,9 @@ class EventBus:
         # Check if cascade can continue propagating
         if cascade_event.can_propagate:
             # Publish CASCADE_INITIATED for the first event, CASCADE_PROPAGATED for subsequent
-            event_type = EventType.CASCADE_INITIATED if hop_count == 0 else EventType.CASCADE_PROPAGATED
+            event_type = (
+                EventType.CASCADE_INITIATED if hop_count == 0 else EventType.CASCADE_PROPAGATED
+            )
 
             await self.publish(
                 event_type=event_type,
@@ -429,11 +426,11 @@ class EventBus:
                     "hop_count": hop_count,
                     "max_hops": max_hops,
                     "visited_overlays": visited,
-                    "source_overlay": source_overlay
+                    "source_overlay": source_overlay,
                 },
                 source=f"cascade:{source_overlay}",
                 priority=EventPriority.HIGH,
-                correlation_id=cascade_id
+                correlation_id=cascade_id,
             )
 
         return chain
@@ -472,7 +469,7 @@ class EventBus:
             total_hops=chain.total_hops,
             overlays_affected=len(chain.overlays_affected),
             insights_generated=chain.insights_generated,
-            duration_ms=(chain.completed_at - chain.initiated_at).total_seconds() * 1000
+            duration_ms=(chain.completed_at - chain.initiated_at).total_seconds() * 1000,
         )
 
         # Publish CASCADE_COMPLETE event
@@ -484,11 +481,11 @@ class EventBus:
                 "overlays_affected": chain.overlays_affected,
                 "insights_generated": chain.insights_generated,
                 "actions_triggered": chain.actions_triggered,
-                "errors_encountered": chain.errors_encountered
+                "errors_encountered": chain.errors_encountered,
             },
             source="cascade_system",
             priority=EventPriority.NORMAL,
-            correlation_id=cascade_id
+            correlation_id=cascade_id,
         )
 
         return chain
@@ -499,7 +496,7 @@ class EventBus:
         target_overlay: str,
         insight_type: str,
         insight_data: dict[str, Any],
-        impact_score: float = 0.0
+        impact_score: float = 0.0,
     ) -> CascadeEvent | None:
         """
         Propagate an existing cascade to a new overlay.
@@ -527,9 +524,7 @@ class EventBus:
         # Check if target overlay was already visited (prevent cycles)
         if target_overlay in chain.overlays_affected:
             logger.debug(
-                "cascade_cycle_prevented",
-                cascade_id=cascade_id,
-                target_overlay=target_overlay
+                "cascade_cycle_prevented", cascade_id=cascade_id, target_overlay=target_overlay
             )
             return None
 
@@ -537,9 +532,7 @@ class EventBus:
         last_event = chain.events[-1] if chain.events else None
         if last_event and not last_event.can_propagate:
             logger.debug(
-                "cascade_max_hops_reached",
-                cascade_id=cascade_id,
-                max_hops=last_event.max_hops
+                "cascade_max_hops_reached", cascade_id=cascade_id, max_hops=last_event.max_hops
             )
             return None
 
@@ -561,7 +554,7 @@ class EventBus:
             visited_overlays=list(chain.overlays_affected),
             impact_score=impact_score,
             timestamp=datetime.now(UTC),
-            correlation_id=cascade_id
+            correlation_id=cascade_id,
         )
 
         # Update chain
@@ -594,18 +587,18 @@ class EventBus:
                     "max_hops": max_hops,
                     "visited_overlays": cascade_event.visited_overlays,
                     "source_overlay": target_overlay,
-                    "impact_score": impact_score
+                    "impact_score": impact_score,
                 },
                 source=f"cascade:{target_overlay}",
                 priority=EventPriority.HIGH,
-                correlation_id=cascade_id
+                correlation_id=cascade_id,
             )
 
         logger.debug(
             "cascade_propagated",
             cascade_id=cascade_id,
             target_overlay=target_overlay,
-            hop_count=hop_count
+            hop_count=hop_count,
         )
 
         return cascade_event
@@ -650,10 +643,7 @@ class EventBus:
         self._metrics.record_delivery(duration_ms)
 
     async def _deliver_event(
-        self,
-        subscription: Subscription,
-        event: Event,
-        attempt: int = 1
+        self, subscription: Subscription, event: Event, attempt: int = 1
     ) -> None:
         """
         Deliver event to a single subscriber with retry logic.
@@ -666,14 +656,12 @@ class EventBus:
             try:
                 await asyncio.wait_for(
                     subscription.handler(event),
-                    timeout=30.0  # 30 second timeout per handler
+                    timeout=30.0,  # 30 second timeout per handler
                 )
                 return  # Success - exit
             except TimeoutError:
                 logger.warning(
-                    "event_handler_timeout",
-                    subscription_id=subscription.id,
-                    event_id=event.id
+                    "event_handler_timeout", subscription_id=subscription.id, event_id=event.id
                 )
                 raise
             except Exception as e:  # Intentional broad catch: event handlers are user-provided and may raise any exception
@@ -694,7 +682,7 @@ class EventBus:
                     try:
                         await asyncio.wait_for(
                             self._dead_letter_queue.put((event, e)),
-                            timeout=5.0  # 5 second timeout for dead letter queue
+                            timeout=5.0,  # 5 second timeout for dead letter queue
                         )
                     except TimeoutError:
                         logger.error(
@@ -713,10 +701,7 @@ class EventBus:
             try:
                 # Wait for event with timeout to allow checking _running
                 try:
-                    event = await asyncio.wait_for(
-                        self._event_queue.get(),
-                        timeout=1.0
-                    )
+                    event = await asyncio.wait_for(self._event_queue.get(), timeout=1.0)
                 except TimeoutError:
                     continue
 
@@ -773,10 +758,7 @@ class EventBus:
 
         # Wait for queue to drain
         try:
-            await asyncio.wait_for(
-                self._event_queue.join(),
-                timeout=timeout
-            )
+            await asyncio.wait_for(self._event_queue.join(), timeout=timeout)
         except TimeoutError:
             logger.warning("event_bus_stop_timeout", pending_events=self._event_queue.qsize())
 
@@ -794,10 +776,7 @@ class EventBus:
     # Dead Letter Queue
     # =========================================================================
 
-    async def get_dead_letters(
-        self,
-        limit: int = 100
-    ) -> list[tuple[Event, str]]:
+    async def get_dead_letters(self, limit: int = 100) -> list[tuple[Event, str]]:
         """
         Get events from the dead letter queue.
 
@@ -834,7 +813,7 @@ class EventBus:
             "queue_size": self._event_queue.qsize(),
             "dead_letter_size": self._dead_letter_queue.qsize(),
             "active_subscriptions": len(self._subscriptions),
-            "active_cascades": len(self._cascade_chains)
+            "active_cascades": len(self._cascade_chains),
         }
 
     def get_subscription_count(self) -> int:
@@ -880,11 +859,12 @@ async def shutdown_event_bus() -> None:
 # Convenience Functions
 # =============================================================================
 
+
 async def emit(
     event_type: EventType,
     payload: dict[str, Any],
     source: str = "system",
-    priority: EventPriority = EventPriority.NORMAL
+    priority: EventPriority = EventPriority.NORMAL,
 ) -> Event:
     """
     Convenience function to emit an event.
@@ -897,8 +877,7 @@ async def emit(
 
 
 def on(
-    event_types: set[EventType],
-    min_priority: EventPriority = EventPriority.LOW
+    event_types: set[EventType], min_priority: EventPriority = EventPriority.LOW
 ) -> Callable[[EventHandler], EventHandler]:
     """
     Decorator to subscribe a function to events.
@@ -908,10 +887,12 @@ def on(
         async def handle_capsule_created(event: Event):
             print(f"Capsule created: {event.payload}")
     """
+
     def decorator(handler: EventHandler) -> EventHandler:
         bus = get_event_bus()
         bus.subscribe(handler, event_types, min_priority)
         return handler
+
     return decorator
 
 

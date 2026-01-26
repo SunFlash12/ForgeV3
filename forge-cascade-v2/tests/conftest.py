@@ -39,7 +39,9 @@ os.environ["APP_ENV"] = "testing"
 os.environ["NEO4J_URI"] = "bolt://localhost:7687"
 os.environ["NEO4J_USER"] = "neo4j"
 os.environ["NEO4J_PASSWORD"] = "testpassword"  # TEST ONLY - not a real password
-os.environ["JWT_SECRET_KEY"] = "test-secret-key-at-least-32-characters-long-for-testing"  # TEST ONLY
+os.environ["JWT_SECRET_KEY"] = (
+    "test-secret-key-at-least-32-characters-long-for-testing"  # TEST ONLY
+)
 os.environ["LLM_PROVIDER"] = "mock"
 os.environ["EMBEDDING_PROVIDER"] = "mock"
 
@@ -47,6 +49,7 @@ os.environ["EMBEDDING_PROVIDER"] = "mock"
 # =============================================================================
 # Event Loop Fixture
 # =============================================================================
+
 
 @pytest.fixture(scope="session")
 def event_loop():
@@ -59,6 +62,7 @@ def event_loop():
 # =============================================================================
 # Mock Database Client
 # =============================================================================
+
 
 @pytest.fixture
 def mock_db_client():
@@ -75,6 +79,7 @@ def mock_db_client():
 # =============================================================================
 # Mock Services
 # =============================================================================
+
 
 @pytest.fixture
 def mock_embedding_service():
@@ -109,6 +114,7 @@ def mock_search_service(mock_embedding_service, mock_db_client):
 # Mock Event System
 # =============================================================================
 
+
 @pytest.fixture
 def mock_event_system():
     """Create a mock event system."""
@@ -123,9 +129,11 @@ def mock_event_system():
 # Test Data Generators
 # =============================================================================
 
+
 @pytest.fixture
 def user_factory():
     """Factory for creating test users."""
+
     def _create_user(
         user_id: str | None = None,
         username: str | None = None,
@@ -140,12 +148,14 @@ def user_factory():
             "is_active": True,
             "created_at": datetime.now(UTC).isoformat(),
         }
+
     return _create_user
 
 
 @pytest.fixture
 def capsule_factory():
     """Factory for creating test capsules."""
+
     def _create_capsule(
         capsule_id: str | None = None,
         title: str | None = None,
@@ -169,12 +179,14 @@ def capsule_factory():
             "created_at": datetime.now(UTC).isoformat(),
             "updated_at": datetime.now(UTC).isoformat(),
         }
+
     return _create_capsule
 
 
 @pytest.fixture
 def proposal_factory():
     """Factory for creating test proposals."""
+
     def _create_proposal(
         proposal_id: str | None = None,
         title: str | None = None,
@@ -193,12 +205,14 @@ def proposal_factory():
             "created_at": datetime.now(UTC).isoformat(),
             "expires_at": None,
         }
+
     return _create_proposal
 
 
 # =============================================================================
 # JWT Token Fixtures
 # =============================================================================
+
 
 @pytest.fixture
 def auth_headers(user_factory):
@@ -231,6 +245,7 @@ def admin_auth_headers(user_factory):
 # =============================================================================
 # FastAPI Test Client
 # =============================================================================
+
 
 @pytest.fixture
 def app() -> FastAPI:
@@ -266,11 +281,12 @@ async def async_client(app: FastAPI) -> AsyncGenerator[AsyncClient, None]:
 # Database Fixtures (for integration tests)
 # =============================================================================
 
+
 @pytest.fixture
 async def db_client():
     """
     Create a real database client for integration tests.
-    
+
     Requires Neo4j to be running.
     """
     from forge.database.client import Neo4jClient
@@ -288,7 +304,7 @@ async def db_client():
 async def clean_db(db_client):
     """
     Clean the database before and after tests.
-    
+
     WARNING: This deletes all data!
     """
     # Clean before test
@@ -303,6 +319,7 @@ async def clean_db(db_client):
 # =============================================================================
 # Repository Fixtures
 # =============================================================================
+
 
 @pytest.fixture
 def capsule_repository(mock_db_client):
@@ -332,6 +349,7 @@ def governance_repository(mock_db_client):
 # Overlay Fixtures
 # =============================================================================
 
+
 @pytest.fixture
 def overlay_manager(mock_event_system):
     """Create an overlay manager."""
@@ -360,6 +378,7 @@ async def governance_overlay():
 # Immune System Fixtures
 # =============================================================================
 
+
 @pytest.fixture
 def circuit_breaker():
     """Create a circuit breaker."""
@@ -387,6 +406,7 @@ def health_checker(mock_db_client, mock_event_system):
 # =============================================================================
 # Cleanup
 # =============================================================================
+
 
 @pytest.fixture(autouse=True)
 def reset_singletons():

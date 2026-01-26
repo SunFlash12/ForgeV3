@@ -64,8 +64,10 @@ router = APIRouter()
 # Request/Response Models
 # =============================================================================
 
+
 class CreateProposalRequest(BaseModel):
     """Request to create a new proposal."""
+
     title: str = Field(..., min_length=5, max_length=200)
     description: str = Field(..., min_length=20)
     proposal_type: ProposalType = ProposalType.POLICY
@@ -77,12 +79,14 @@ class CreateProposalRequest(BaseModel):
 
 class VoteRequest(BaseModel):
     """Request to cast a vote."""
+
     choice: VoteChoice
     rationale: str | None = None
 
 
 class ProposalResponse(BaseModel):
     """Proposal response model."""
+
     id: str
     title: str
     description: str
@@ -106,8 +110,12 @@ class ProposalResponse(BaseModel):
     @classmethod
     def from_proposal(cls, proposal: Proposal) -> ProposalResponse:
         # Handle both string and enum types for proposal.type and proposal.status
-        proposal_type = proposal.type.value if hasattr(proposal.type, 'value') else str(proposal.type)
-        status = proposal.status.value if hasattr(proposal.status, 'value') else str(proposal.status)
+        proposal_type = (
+            proposal.type.value if hasattr(proposal.type, "value") else str(proposal.type)
+        )
+        status = (
+            proposal.status.value if hasattr(proposal.status, "value") else str(proposal.status)
+        )
         return cls(
             id=proposal.id,
             title=proposal.title,
@@ -126,13 +134,16 @@ class ProposalResponse(BaseModel):
             weight_against=proposal.weight_against,
             weight_abstain=proposal.weight_abstain,
             created_at=proposal.created_at.isoformat() if proposal.created_at else None,
-            voting_starts_at=proposal.voting_starts_at.isoformat() if proposal.voting_starts_at else None,
+            voting_starts_at=proposal.voting_starts_at.isoformat()
+            if proposal.voting_starts_at
+            else None,
             voting_ends_at=proposal.voting_ends_at.isoformat() if proposal.voting_ends_at else None,
         )
 
 
 class VoteResponse(BaseModel):
     """Vote response model."""
+
     id: str
     proposal_id: str
     user_id: str  # Frontend expects user_id, not voter_id
@@ -144,7 +155,7 @@ class VoteResponse(BaseModel):
     @classmethod
     def from_vote(cls, vote: Vote) -> VoteResponse:
         # Handle both string and enum choice
-        choice_str = vote.choice.value if hasattr(vote.choice, 'value') else str(vote.choice)
+        choice_str = vote.choice.value if hasattr(vote.choice, "value") else str(vote.choice)
         return cls(
             id=vote.id,
             proposal_id=vote.proposal_id,
@@ -158,6 +169,7 @@ class VoteResponse(BaseModel):
 
 class ProposalListResponse(BaseModel):
     """Paginated list of proposals."""
+
     items: list[ProposalResponse]
     total: int
     page: int
@@ -166,6 +178,7 @@ class ProposalListResponse(BaseModel):
 
 class GhostCouncilHistoricalPatterns(BaseModel):
     """Historical patterns for Ghost Council recommendation."""
+
     similar_proposals: int
     typical_outcome: str
     participation_rate: float
@@ -173,6 +186,7 @@ class GhostCouncilHistoricalPatterns(BaseModel):
 
 class GhostCouncilResponse(BaseModel):
     """Ghost Council recommendation."""
+
     proposal_id: str
     recommendation: str  # "APPROVE", "REJECT", "ABSTAIN" - matches VoteChoice
     confidence: float
@@ -183,6 +197,7 @@ class GhostCouncilResponse(BaseModel):
 # =============================================================================
 # Proposal Endpoints
 # =============================================================================
+
 
 @router.post("/proposals", response_model=ProposalResponse, status_code=status.HTTP_201_CREATED)
 async def create_proposal(
@@ -218,7 +233,11 @@ async def create_proposal(
     created = await governance_repo.create(proposal_data, proposer_id=user.id)
 
     # Emit event
-    prop_type = request.proposal_type.value if hasattr(request.proposal_type, 'value') else str(request.proposal_type)
+    prop_type = (
+        request.proposal_type.value
+        if hasattr(request.proposal_type, "value")
+        else str(request.proposal_type)
+    )
 
     # Resilience: Record metrics
     record_proposal_created(prop_type)
@@ -349,8 +368,10 @@ async def submit_proposal_for_voting(
         )
 
     # Check current status
-    status_str = proposal.status.value if hasattr(proposal.status, 'value') else str(proposal.status)
-    if status_str.upper() != 'DRAFT':
+    status_str = (
+        proposal.status.value if hasattr(proposal.status, "value") else str(proposal.status)
+    )
+    if status_str.upper() != "DRAFT":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Proposal is already in {status_str} status, cannot submit",
@@ -375,7 +396,9 @@ async def submit_proposal_for_voting(
             "action": "proposal_submitted",
             "proposal_id": proposal_id,
             "proposer_id": user.id,
-            "voting_ends_at": updated.voting_ends_at.isoformat() if updated.voting_ends_at else None,
+            "voting_ends_at": updated.voting_ends_at.isoformat()
+            if updated.voting_ends_at
+            else None,
         },
         source="api",
     )
@@ -434,6 +457,7 @@ async def withdraw_proposal(
 # Voting Endpoints
 # =============================================================================
 
+
 @router.post("/proposals/{proposal_id}/vote", response_model=VoteResponse)
 async def cast_vote(
     proposal_id: str,
@@ -456,8 +480,10 @@ async def cast_vote(
         raise HTTPException(status_code=404, detail="Proposal not found")
 
     # Handle both string and enum status
-    status_str = proposal.status.value if hasattr(proposal.status, 'value') else str(proposal.status)
-    if status_str.upper() not in ('ACTIVE', 'VOTING'):
+    status_str = (
+        proposal.status.value if hasattr(proposal.status, "value") else str(proposal.status)
+    )
+    if status_str.upper() not in ("ACTIVE", "VOTING"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Proposal is not open for voting",
@@ -513,7 +539,9 @@ async def cast_vote(
     created = await governance_repo.record_vote(vote)
 
     # Handle both string and enum choice for event/audit
-    choice_for_log = request.choice.value if hasattr(request.choice, 'value') else str(request.choice)
+    choice_for_log = (
+        request.choice.value if hasattr(request.choice, "value") else str(request.choice)
+    )
 
     # Resilience: Invalidate proposal cache and record metrics
     await invalidate_proposal_cache(proposal_id)
@@ -576,12 +604,15 @@ async def get_my_vote(
 # Ghost Council Endpoints
 # =============================================================================
 
+
 @router.get("/proposals/{proposal_id}/ghost-council", response_model=GhostCouncilResponse)
 async def get_ghost_council_recommendation(
     proposal_id: str,
     user: ActiveUserDep,
     governance_repo: GovernanceRepoDep,
-    use_ai: bool = Query(default=True, description="Use AI deliberation (False for quick heuristic)"),
+    use_ai: bool = Query(
+        default=True, description="Use AI deliberation (False for quick heuristic)"
+    ),
 ) -> GhostCouncilResponse:
     """
     Get Ghost Council's recommendation on a proposal.
@@ -627,7 +658,8 @@ async def get_ghost_council_recommendation(
                 "total_voters": total_votes,
                 "voting_period_remaining": (
                     (proposal.voting_ends_at - datetime.now(UTC)).total_seconds() / 3600
-                    if proposal.voting_ends_at else None
+                    if proposal.voting_ends_at
+                    else None
                 ),
             },
             constitutional_review=constitutional_review,
@@ -636,7 +668,7 @@ async def get_ghost_council_recommendation(
         # Convert to API response format
         # Handle both enum and string consensus_vote values
         consensus_vote = opinion.consensus_vote
-        if hasattr(consensus_vote, 'value'):
+        if hasattr(consensus_vote, "value"):
             recommendation = consensus_vote.value
         else:
             recommendation = str(consensus_vote)
@@ -671,7 +703,11 @@ async def get_ghost_council_recommendation(
             typical_outcome = "rejected"
         else:
             recommendation = "ABSTAIN"
-            confidence = 0.5 + abs(for_weight - against_weight) / (2 * total_weight) if total_weight > 0 else 0.5
+            confidence = (
+                0.5 + abs(for_weight - against_weight) / (2 * total_weight)
+                if total_weight > 0
+                else 0.5
+            )
             reasoning = "Community is divided on this proposal. Recommend further discussion before decision."
             typical_outcome = "contested"
 
@@ -702,8 +738,10 @@ async def get_ghost_council_recommendation(
 # Ghost Council Serious Issues
 # =============================================================================
 
+
 class SeriousIssueResponse(BaseModel):
     """Response for a serious issue."""
+
     id: str
     category: str
     severity: str
@@ -719,6 +757,7 @@ class SeriousIssueResponse(BaseModel):
 
 class GhostCouncilMemberResponse(BaseModel):
     """Ghost Council member info."""
+
     id: str
     name: str
     role: str
@@ -792,7 +831,11 @@ async def get_active_issues(
 
 class ReportIssueRequest(BaseModel):
     """Request to manually report a serious issue."""
-    category: str = Field(..., description="Issue category: security, governance, trust, system, ethical, data_integrity")
+
+    category: str = Field(
+        ...,
+        description="Issue category: security, governance, trust, system, ethical, data_integrity",
+    )
     severity: str = Field(..., description="Issue severity: low, medium, high, critical")
     title: str = Field(..., min_length=5, max_length=200)
     description: str = Field(..., min_length=20)
@@ -889,6 +932,7 @@ async def report_serious_issue(
 
 class ResolveIssueRequest(BaseModel):
     """Request to resolve a serious issue."""
+
     resolution: str = Field(..., min_length=10, description="How the issue was resolved")
 
 
@@ -947,6 +991,7 @@ async def get_ghost_council_stats(
 
 class GovernanceMetricsResponse(BaseModel):
     """Governance system metrics."""
+
     timestamp: str
     total_proposals: int
     active_proposals: int
@@ -991,19 +1036,19 @@ async def get_governance_metrics(
 
     for p in proposals:
         # Count by status
-        status_str = p.status.value if hasattr(p.status, 'value') else str(p.status)
+        status_str = p.status.value if hasattr(p.status, "value") else str(p.status)
         status_counts[status_str] = status_counts.get(status_str, 0) + 1
 
         # Count by type
-        type_str = p.type.value if hasattr(p.type, 'value') else str(p.type)
+        type_str = p.type.value if hasattr(p.type, "value") else str(p.type)
         type_counts[type_str] = type_counts.get(type_str, 0) + 1
 
         # Track pass/reject/active
-        if status_str.upper() == 'PASSED':
+        if status_str.upper() == "PASSED":
             passed += 1
-        elif status_str.upper() == 'REJECTED':
+        elif status_str.upper() == "REJECTED":
             rejected += 1
-        elif status_str.upper() in ('ACTIVE', 'VOTING', 'PENDING'):
+        elif status_str.upper() in ("ACTIVE", "VOTING", "PENDING"):
             active += 1
 
         # Aggregate vote counts
@@ -1041,6 +1086,7 @@ async def get_governance_metrics(
 # Policy Endpoints
 # =============================================================================
 
+
 @router.get("/policies")
 async def get_active_policies(
     user: ActiveUserDep,
@@ -1073,6 +1119,7 @@ async def get_policy(
 # =============================================================================
 # Admin Endpoints
 # =============================================================================
+
 
 @router.post("/proposals/{proposal_id}/finalize", response_model=ProposalResponse)
 async def finalize_proposal(
@@ -1113,7 +1160,7 @@ async def finalize_proposal(
     updated = await governance_repo.update_proposal_status(proposal_id, new_status)
 
     # Handle both string and enum status
-    status_val = new_status.value if hasattr(new_status, 'value') else str(new_status)
+    status_val = new_status.value if hasattr(new_status, "value") else str(new_status)
 
     # Resilience: Invalidate cache and record metrics
     await invalidate_proposal_cache(proposal_id)
@@ -1150,8 +1197,10 @@ async def finalize_proposal(
 # Constitutional AI Analysis
 # =============================================================================
 
+
 class ConstitutionalAnalysisResponse(BaseModel):
     """Constitutional AI analysis response."""
+
     proposal_id: str
     analyzed_at: str
     ethical_score: int
@@ -1165,7 +1214,10 @@ class ConstitutionalAnalysisResponse(BaseModel):
     confidence: float
 
 
-@router.get("/proposals/{proposal_id}/constitutional-analysis", response_model=ConstitutionalAnalysisResponse)
+@router.get(
+    "/proposals/{proposal_id}/constitutional-analysis",
+    response_model=ConstitutionalAnalysisResponse,
+)
 async def get_constitutional_analysis(
     proposal_id: str,
     user: ActiveUserDep,
@@ -1231,31 +1283,37 @@ async def _analyze_proposal_constitutionality(proposal: Proposal) -> dict[str, A
     for flag in ethical_red_flags:
         if flag in combined:
             ethical_score -= 15
-            concerns.append({
-                "category": "ethical",
-                "severity": "medium",
-                "description": f"Proposal may involve {flag} practices",
-            })
+            concerns.append(
+                {
+                    "category": "ethical",
+                    "severity": "medium",
+                    "description": f"Proposal may involve {flag} practices",
+                }
+            )
 
     # Check for safety concerns
     safety_red_flags = ["bypass security", "remove validation", "disable check"]
     for flag in safety_red_flags:
         if flag in combined:
             safety_score -= 20
-            concerns.append({
-                "category": "safety",
-                "severity": "high",
-                "description": "Proposal may compromise system safety",
-            })
+            concerns.append(
+                {
+                    "category": "safety",
+                    "severity": "high",
+                    "description": "Proposal may compromise system safety",
+                }
+            )
 
     # Check for transparency
     if len(description) < 100:
         transparency_score -= 10
-        concerns.append({
-            "category": "transparency",
-            "severity": "low",
-            "description": "Proposal description lacks detail",
-        })
+        concerns.append(
+            {
+                "category": "transparency",
+                "severity": "low",
+                "description": "Proposal description lacks detail",
+            }
+        )
 
     # Positive signals
     positive_terms = ["improve", "enhance", "community", "transparent", "fair"]
@@ -1271,10 +1329,7 @@ async def _analyze_proposal_constitutionality(proposal: Proposal) -> dict[str, A
 
     # Calculate overall score
     overall_score = (
-        ethical_score * 0.3 +
-        fairness_score * 0.25 +
-        safety_score * 0.3 +
-        transparency_score * 0.15
+        ethical_score * 0.3 + fairness_score * 0.25 + safety_score * 0.3 + transparency_score * 0.15
     )
 
     # Determine recommendation
@@ -1309,8 +1364,10 @@ async def _analyze_proposal_constitutionality(proposal: Proposal) -> dict[str, A
 # Delegation Endpoints
 # =============================================================================
 
+
 class CreateDelegationRequest(BaseModel):
     """Request to delegate votes to another user."""
+
     delegate_id: str = Field(..., description="User ID to delegate to")
     proposal_types: list[str] | None = Field(
         None,
@@ -1321,6 +1378,7 @@ class CreateDelegationRequest(BaseModel):
 
 class DelegationResponse(BaseModel):
     """Delegation response."""
+
     id: str
     delegator_id: str
     delegate_id: str
@@ -1374,7 +1432,9 @@ async def create_delegation(
     # A cycle would be: A -> B -> C -> A (or any loop back to the delegator)
     MAX_DELEGATION_DEPTH = 10  # Configurable max depth to prevent infinite recursion
 
-    async def would_create_cycle(target_id: str, visited: set[str], depth: int = 0) -> tuple[bool, str]:
+    async def would_create_cycle(
+        target_id: str, visited: set[str], depth: int = 0
+    ) -> tuple[bool, str]:
         """
         Check if delegating to target_id would create a cycle.
 
@@ -1391,7 +1451,9 @@ async def create_delegation(
         target_delegations = await governance_repo.get_delegates(target_id)
         for delegation in target_delegations:
             if delegation.is_active:
-                is_bad, reason = await would_create_cycle(delegation.delegate_id, visited.copy(), depth + 1)
+                is_bad, reason = await would_create_cycle(
+                    delegation.delegate_id, visited.copy(), depth + 1
+                )
                 if is_bad:
                     return True, reason
         return False, ""
@@ -1419,7 +1481,7 @@ async def create_delegation(
     # Parse expires_at if provided
     expires_at_dt: datetime | None = None
     if request.expires_at:
-        expires_at_dt = datetime.fromisoformat(request.expires_at.replace('Z', '+00:00'))
+        expires_at_dt = datetime.fromisoformat(request.expires_at.replace("Z", "+00:00"))
 
     # Create VoteDelegation object
     delegation = VoteDelegation(
@@ -1467,7 +1529,7 @@ async def get_my_delegations(
     def convert_proposal_types(types: list[ProposalType] | None) -> list[str] | None:
         if types is None:
             return None
-        return [pt.value if hasattr(pt, 'value') else str(pt) for pt in types]
+        return [pt.value if hasattr(pt, "value") else str(pt) for pt in types]
 
     return [
         DelegationResponse(

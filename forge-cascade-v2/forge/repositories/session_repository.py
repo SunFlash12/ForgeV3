@@ -28,6 +28,7 @@ logger = structlog.get_logger(__name__)
 # Try to import redis
 try:
     import redis.asyncio as aioredis
+
     REDIS_AVAILABLE = True
 except ImportError:
     aioredis = None  # type: ignore[assignment]
@@ -64,6 +65,7 @@ class SessionCache:
         """Get Redis client from TokenBlacklist if available."""
         try:
             from forge.security.tokens import TokenBlacklist
+
             return TokenBlacklist._redis_client
         except (ImportError, AttributeError):
             return None
@@ -256,11 +258,7 @@ class SessionRepository:
         """
 
         # Initialize IP history with first entry
-        ip_history = [{
-            "ip": data.ip_address,
-            "timestamp": now.isoformat(),
-            "action": "created"
-        }]
+        ip_history = [{"ip": data.ip_address, "timestamp": now.isoformat(), "action": "created"}]
 
         params = {
             "id": session_id,
@@ -384,11 +382,14 @@ class SessionRepository:
             new_ip_change_count += 1
 
             # Add to IP history (keep max configured entries)
-            new_ip_history.insert(0, {
-                "ip": ip_address,
-                "timestamp": now.isoformat(),
-                "previous_ip": session.last_ip,
-            })
+            new_ip_history.insert(
+                0,
+                {
+                    "ip": ip_address,
+                    "timestamp": now.isoformat(),
+                    "previous_ip": session.last_ip,
+                },
+            )
             max_history = settings.max_ip_history_per_session
             new_ip_history = new_ip_history[:max_history]
 
@@ -524,11 +525,14 @@ class SessionRepository:
         RETURN s.id AS id
         """
 
-        result = await self.client.execute_single(query, {
-            "jti": jti,
-            "now": now.isoformat(),
-            "reason": reason or "User requested revocation",
-        })
+        result = await self.client.execute_single(
+            query,
+            {
+                "jti": jti,
+                "now": now.isoformat(),
+                "reason": reason or "User requested revocation",
+            },
+        )
 
         if result and result.get("id"):
             # Invalidate cache
@@ -638,10 +642,13 @@ class SessionRepository:
         RETURN s.id AS id
         """
 
-        result = await self.client.execute_single(query, {
-            "jti": jti,
-            "now": now.isoformat(),
-        })
+        result = await self.client.execute_single(
+            query,
+            {
+                "jti": jti,
+                "now": now.isoformat(),
+            },
+        )
 
         if result and result.get("id"):
             # Invalidate cache to force refresh
@@ -666,10 +673,13 @@ class SessionRepository:
             s.updated_at = $now
         """
 
-        await self.client.execute(query, {
-            "jti": jti,
-            "now": now.isoformat(),
-        })
+        await self.client.execute(
+            query,
+            {
+                "jti": jti,
+                "now": now.isoformat(),
+            },
+        )
 
         await SessionCache.invalidate(jti)
 
@@ -711,10 +721,13 @@ class SessionRepository:
         RETURN count(s) AS count
         """
 
-        result = await self.client.execute_single(query, {
-            "user_id": user_id,
-            "now": self._now().isoformat(),
-        })
+        result = await self.client.execute_single(
+            query,
+            {
+                "user_id": user_id,
+                "now": self._now().isoformat(),
+            },
+        )
 
         return result.get("count", 0) if result else 0
 

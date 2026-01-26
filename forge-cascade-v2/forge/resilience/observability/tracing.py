@@ -23,7 +23,7 @@ from forge.resilience.config import get_resilience_config
 logger = structlog.get_logger(__name__)
 
 # Type variables for generic decorators
-F = TypeVar('F', bound=Callable[..., Any])
+F = TypeVar("F", bound=Callable[..., Any])
 
 # Try to import OpenTelemetry, but allow graceful degradation
 try:
@@ -34,6 +34,7 @@ try:
     from opentelemetry.sdk.trace.export import BatchSpanProcessor
     from opentelemetry.trace import SpanKind, Status, StatusCode
     from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
+
     OTEL_AVAILABLE = True
 except ImportError:
     OTEL_AVAILABLE = False
@@ -116,18 +117,34 @@ class NoOpTracer:
 
 
 # Sensitive attribute keys that must never be recorded in spans
-_SENSITIVE_ATTRIBUTE_KEYS = frozenset({
-    "password", "secret", "api_key", "api_secret", "token",
-    "private_key", "mnemonic", "seed_phrase", "wallet_key",
-    "jwt", "jwt_secret", "authorization", "cookie",
-    "client_secret", "oauth_token", "access_token", "refresh_token",
-})
+_SENSITIVE_ATTRIBUTE_KEYS = frozenset(
+    {
+        "password",
+        "secret",
+        "api_key",
+        "api_secret",
+        "token",
+        "private_key",
+        "mnemonic",
+        "seed_phrase",
+        "wallet_key",
+        "jwt",
+        "jwt_secret",
+        "authorization",
+        "cookie",
+        "client_secret",
+        "oauth_token",
+        "access_token",
+        "refresh_token",
+    }
+)
 
 
 def _sanitize_attributes(attributes: dict[str, Any]) -> dict[str, Any]:
     """Remove sensitive keys from span attributes."""
     return {
-        k: v for k, v in attributes.items()
+        k: v
+        for k, v in attributes.items()
         if k.lower().replace("-", "_").replace(".", "_") not in _SENSITIVE_ATTRIBUTE_KEYS
     }
 
@@ -159,21 +176,20 @@ class ForgeTracer:
             return
 
         if not OTEL_AVAILABLE:
-            logger.warning(
-                "opentelemetry_not_available",
-                fallback="noop_tracer"
-            )
+            logger.warning("opentelemetry_not_available", fallback="noop_tracer")
             self._tracer = NoOpTracer()
             self._initialized = True
             return
 
         try:
             # Create resource with service information
-            resource = Resource.create({
-                SERVICE_NAME: self._config.service_name,
-                SERVICE_VERSION: self._config.version,
-                "deployment.environment": self._config.environment,
-            })
+            resource = Resource.create(
+                {
+                    SERVICE_NAME: self._config.service_name,
+                    SERVICE_VERSION: self._config.version,
+                    "deployment.environment": self._config.environment,
+                }
+            )
 
             # Create tracer provider
             provider = TracerProvider(resource=resource)
@@ -182,20 +198,15 @@ class ForgeTracer:
             if self._config.otlp_endpoint:
                 exporter = OTLPSpanExporter(
                     endpoint=self._config.otlp_endpoint,
-                    insecure=True  # For local development
+                    insecure=True,  # For local development
                 )
-                provider.add_span_processor(
-                    BatchSpanProcessor(exporter)
-                )
+                provider.add_span_processor(BatchSpanProcessor(exporter))
 
             # Set as global provider
             otel_trace.set_tracer_provider(provider)
 
             # Get tracer
-            self._tracer = otel_trace.get_tracer(
-                self._config.service_name,
-                self._config.version
-            )
+            self._tracer = otel_trace.get_tracer(self._config.service_name, self._config.version)
 
             # Initialize propagator for distributed tracing
             self._propagator = TraceContextTextMapPropagator()
@@ -204,7 +215,7 @@ class ForgeTracer:
             logger.info(
                 "tracing_initialized",
                 endpoint=self._config.otlp_endpoint,
-                service=self._config.service_name
+                service=self._config.service_name,
             )
 
         except (RuntimeError, OSError, ConnectionError, ValueError, TypeError) as e:
@@ -214,10 +225,7 @@ class ForgeTracer:
 
     @contextmanager
     def span(
-        self,
-        operation: str,
-        kind: Any | None = None,
-        attributes: dict[str, Any] | None = None
+        self, operation: str, kind: Any | None = None, attributes: dict[str, Any] | None = None
     ) -> Generator[Any, None, None]:
         """
         Create a trace span for an operation.
@@ -240,14 +248,12 @@ class ForgeTracer:
         assert self._tracer is not None
         safe_attributes = _sanitize_attributes(attributes) if attributes else {}
         with self._tracer.start_as_current_span(
-            operation,
-            kind=span_kind,
-            attributes=safe_attributes
+            operation, kind=span_kind, attributes=safe_attributes
         ) as active_span:
             try:
                 yield active_span
             except Exception as e:  # Intentional broad catch: tracing must record all exception types before re-raising
-                if OTEL_AVAILABLE and hasattr(active_span, 'record_exception'):
+                if OTEL_AVAILABLE and hasattr(active_span, "record_exception"):
                     active_span.record_exception(e)
                     active_span.set_status(Status(StatusCode.ERROR, str(e)))
                 raise
@@ -258,13 +264,10 @@ class ForgeTracer:
         operation_type: OperationType,
         capsule_id: str | None = None,
         capsule_type: str | None = None,
-        **extra_attributes: Any
+        **extra_attributes: Any,
     ) -> Generator[Any, None, None]:
         """Create a span for capsule operations."""
-        attributes: dict[str, Any] = {
-            "forge.operation": operation_type.value,
-            **extra_attributes
-        }
+        attributes: dict[str, Any] = {"forge.operation": operation_type.value, **extra_attributes}
 
         if capsule_id:
             attributes["forge.capsule.id"] = capsule_id
@@ -279,7 +282,7 @@ class ForgeTracer:
         self,
         capsule_id: str,
         depth: int,
-        operation_type: OperationType = OperationType.LINEAGE_QUERY
+        operation_type: OperationType = OperationType.LINEAGE_QUERY,
     ) -> Generator[Any, None, None]:
         """Create a span for lineage operations."""
         attributes: dict[str, Any] = {
@@ -293,16 +296,10 @@ class ForgeTracer:
 
     @contextmanager
     def governance_span(
-        self,
-        operation_type: OperationType,
-        proposal_id: str | None = None,
-        **extra_attributes: Any
+        self, operation_type: OperationType, proposal_id: str | None = None, **extra_attributes: Any
     ) -> Generator[Any, None, None]:
         """Create a span for governance operations."""
-        attributes: dict[str, Any] = {
-            "forge.operation": operation_type.value,
-            **extra_attributes
-        }
+        attributes: dict[str, Any] = {"forge.operation": operation_type.value, **extra_attributes}
 
         if proposal_id:
             attributes["forge.proposal.id"] = proposal_id
@@ -312,17 +309,14 @@ class ForgeTracer:
 
     @contextmanager
     def db_span(
-        self,
-        operation: str,
-        query_type: str = "cypher",
-        **extra_attributes: Any
+        self, operation: str, query_type: str = "cypher", **extra_attributes: Any
     ) -> Generator[Any, None, None]:
         """Create a span for database operations."""
         attributes: dict[str, Any] = {
             "db.system": "neo4j",
             "db.operation": operation,
             "db.query.type": query_type,
-            **extra_attributes
+            **extra_attributes,
         }
 
         span_kind = SpanKind.CLIENT if OTEL_AVAILABLE else None
@@ -354,7 +348,7 @@ class ForgeTracer:
         if span:
             ctx = span.get_span_context()
             if ctx.is_valid:
-                return format(ctx.trace_id, '032x')
+                return format(ctx.trace_id, "032x")
 
         return None
 
@@ -372,10 +366,7 @@ def get_tracer() -> ForgeTracer:
     return _forge_tracer
 
 
-def trace_operation(
-    operation: str,
-    attributes: dict[str, Any] | None = None
-) -> Callable[[F], F]:
+def trace_operation(operation: str, attributes: dict[str, Any] | None = None) -> Callable[[F], F]:
     """
     Decorator to trace a function execution.
 
@@ -386,6 +377,7 @@ def trace_operation(
     Returns:
         Decorated function
     """
+
     def decorator(func: F) -> F:
         @functools.wraps(func)
         async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
@@ -400,6 +392,7 @@ def trace_operation(
                 return func(*args, **kwargs)
 
         import asyncio
+
         if asyncio.iscoroutinefunction(func):
             return async_wrapper  # type: ignore[return-value]
         return sync_wrapper  # type: ignore[return-value]

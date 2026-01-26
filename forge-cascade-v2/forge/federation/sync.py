@@ -166,7 +166,7 @@ class SyncService:
                     key=lambda x: x[1].started_at,
                     reverse=True,
                 )
-                self._sync_states = dict(sorted_states[:self.MAX_SYNC_STATES])
+                self._sync_states = dict(sorted_states[: self.MAX_SYNC_STATES])
 
             try:
                 # Execute sync based on direction
@@ -210,13 +210,28 @@ class SyncService:
     # SECURITY FIX (Audit 9): Whitelist of allowed relationship types to prevent Cypher injection.
     # Remote peers supply relationship_type which is interpolated into Cypher queries;
     # only known-safe identifiers are permitted.
-    ALLOWED_RELATIONSHIP_TYPES = frozenset({
-        "RELATED_TO", "DERIVED_FROM", "CONTRADICTS", "SUPPORTS",
-        "REFERENCES", "DEPENDS_ON", "PARENT_OF", "CHILD_OF",
-        "SIMILAR_TO", "CAUSED_BY", "PRECEDES", "FOLLOWS",
-        "PART_OF", "HAS_PART", "INSTANCE_OF", "TYPE_OF",
-        "ASSOCIATED_WITH", "LINKED_TO",
-    })
+    ALLOWED_RELATIONSHIP_TYPES = frozenset(
+        {
+            "RELATED_TO",
+            "DERIVED_FROM",
+            "CONTRADICTS",
+            "SUPPORTS",
+            "REFERENCES",
+            "DEPENDS_ON",
+            "PARENT_OF",
+            "CHILD_OF",
+            "SIMILAR_TO",
+            "CAUSED_BY",
+            "PRECEDES",
+            "FOLLOWS",
+            "PART_OF",
+            "HAS_PART",
+            "INSTANCE_OF",
+            "TYPE_OF",
+            "ASSOCIATED_WITH",
+            "LINKED_TO",
+        }
+    )
 
     async def _execute_pull(self, peer: FederatedPeer, state: SyncState) -> None:
         """Pull changes from a peer."""
@@ -245,8 +260,10 @@ class SyncService:
                 raise RuntimeError("Failed to fetch changes from peer")
 
             # SECURITY FIX (Audit 4 - H7): Verify content hash against actual content
-            if hasattr(payload, 'content_hash') and payload.content_hash:
-                computed_hash = self._compute_content_hash(payload.capsules, payload.edges, payload.deletions)
+            if hasattr(payload, "content_hash") and payload.content_hash:
+                computed_hash = self._compute_content_hash(
+                    payload.capsules, payload.edges, payload.deletions
+                )
                 if computed_hash != payload.content_hash:
                     logger.error(
                         f"Content hash mismatch from peer {peer.name}: "
@@ -445,7 +462,9 @@ class SyncService:
             return "update"
 
         elif resolution == ConflictResolution.HIGHER_TRUST:
-            local_trust = conflict.local_capsule.get("trust_level", 0) if conflict.local_capsule else 0
+            local_trust = (
+                conflict.local_capsule.get("trust_level", 0) if conflict.local_capsule else 0
+            )
             remote_trust = conflict.remote_capsule.get("trust_level", 0)
 
             if remote_trust > local_trust:
@@ -457,7 +476,9 @@ class SyncService:
                 return "skip"
 
         elif resolution == ConflictResolution.NEWER_TIMESTAMP:
-            local_updated = conflict.local_capsule.get("updated_at") if conflict.local_capsule else None
+            local_updated = (
+                conflict.local_capsule.get("updated_at") if conflict.local_capsule else None
+            )
             remote_updated = conflict.remote_capsule.get("updated_at")
 
             if remote_updated and (not local_updated or remote_updated > local_updated):
@@ -470,10 +491,7 @@ class SyncService:
 
         elif resolution == ConflictResolution.MERGE:
             # Attempt merge (simple strategy: combine unique fields)
-            merged = await self._merge_capsules(
-                conflict.local_capsule,
-                conflict.remote_capsule
-            )
+            merged = await self._merge_capsules(conflict.local_capsule, conflict.remote_capsule)
             conflict.resolution = "merged"
             conflict.resolved_capsule = merged
             return "update"
@@ -603,19 +621,22 @@ class SyncService:
                 })
                 RETURN c.id AS id
                 """
-                result = await session.run(query, {
-                    "id": local_id,
-                    "title": remote_capsule.get("title", ""),
-                    "content": remote_capsule.get("content", ""),
-                    "type": remote_capsule.get("type", "knowledge"),
-                    # SECURITY: Don't trust remote trust level - use UNVERIFIED default
-                    "trust_level": 20,  # UNVERIFIED - will be recalculated locally
-                    "owner_id": peer.id,  # Attribute to the peer
-                    "content_hash": remote_capsule.get("content_hash", ""),
-                    "tags": remote_capsule.get("tags", []),
-                    "peer_id": peer.id,
-                    "remote_id": remote_capsule["id"],
-                })
+                result = await session.run(
+                    query,
+                    {
+                        "id": local_id,
+                        "title": remote_capsule.get("title", ""),
+                        "content": remote_capsule.get("content", ""),
+                        "type": remote_capsule.get("type", "knowledge"),
+                        # SECURITY: Don't trust remote trust level - use UNVERIFIED default
+                        "trust_level": 20,  # UNVERIFIED - will be recalculated locally
+                        "owner_id": peer.id,  # Attribute to the peer
+                        "content_hash": remote_capsule.get("content_hash", ""),
+                        "tags": remote_capsule.get("tags", []),
+                        "peer_id": peer.id,
+                        "remote_id": remote_capsule["id"],
+                    },
+                )
                 await result.single()
                 logger.debug(f"Created local capsule {local_id} from peer {peer.name}")
 
@@ -663,14 +684,17 @@ class SyncService:
                         c.updated_at = datetime()
                     RETURN c.id AS id
                     """
-                    await session.run(query, {
-                        "id": fed_capsule.local_capsule_id,
-                        "title": remote_capsule.get("title", ""),
-                        "content": remote_capsule.get("content", ""),
-                        "content_hash": remote_capsule.get("content_hash", ""),
-                        "tags": remote_capsule.get("tags", []),
-                        # NOTE: Don't update trust_level - must be calculated locally
-                    })
+                    await session.run(
+                        query,
+                        {
+                            "id": fed_capsule.local_capsule_id,
+                            "title": remote_capsule.get("title", ""),
+                            "content": remote_capsule.get("content", ""),
+                            "content_hash": remote_capsule.get("content_hash", ""),
+                            "tags": remote_capsule.get("tags", []),
+                            # NOTE: Don't update trust_level - must be calculated locally
+                        },
+                    )
                     logger.debug(f"Updated local capsule {fed_capsule.local_capsule_id}")
             except (ConnectionError, TimeoutError, OSError, RuntimeError) as e:
                 logger.error(f"Failed to update local capsule: {e}")
@@ -761,14 +785,17 @@ class SyncService:
                     r.properties = $properties
                 RETURN id(r) AS edge_id
                 """
-                await session.run(query, {
-                    "source_id": source_local,
-                    "target_id": target_local,
-                    "peer_id": peer.id,
-                    "remote_edge_id": remote_edge.get("id", ""),
-                    "weight": remote_edge.get("weight", 1.0),
-                    "properties": str(remote_edge.get("properties", {})),
-                })
+                await session.run(
+                    query,
+                    {
+                        "source_id": source_local,
+                        "target_id": target_local,
+                        "peer_id": peer.id,
+                        "remote_edge_id": remote_edge.get("id", ""),
+                        "weight": remote_edge.get("weight", 1.0),
+                        "properties": str(remote_edge.get("properties", {})),
+                    },
+                )
                 logger.debug(
                     f"Created federated edge {relationship_type} "
                     f"from {source_local} to {target_local}"
@@ -940,6 +967,7 @@ class SyncService:
             True if successfully persisted
         """
         import json
+
         try:
             async with self.driver.session() as session:
                 query = """
@@ -957,20 +985,35 @@ class SyncService:
                     p.metadata = $metadata
                 RETURN p.id AS id
                 """
-                result = await session.run(query, {
-                    "id": peer.id,
-                    "name": peer.name,
-                    "endpoint": peer.url,  # FIX: Use 'url' attribute from FederatedPeer model
-                    "public_key": peer.public_key,
-                    "status": peer.status.value if hasattr(peer.status, 'value') else str(peer.status),
-                    "trust_score": peer.trust_score,
-                    "sync_direction": peer.sync_direction.value if hasattr(peer.sync_direction, 'value') else str(peer.sync_direction),
-                    "conflict_resolution": peer.conflict_resolution.value if hasattr(peer.conflict_resolution, 'value') else str(peer.conflict_resolution),
-                    "last_sync_at": peer.last_sync_at.isoformat() if peer.last_sync_at else None,
-                    "created_at": peer.registered_at.isoformat() if peer.registered_at else None,
-                    "updated_at": datetime.now(UTC).isoformat(),
-                    "metadata": json.dumps({"description": peer.description}) if peer.description else None,
-                })
+                result = await session.run(
+                    query,
+                    {
+                        "id": peer.id,
+                        "name": peer.name,
+                        "endpoint": peer.url,  # FIX: Use 'url' attribute from FederatedPeer model
+                        "public_key": peer.public_key,
+                        "status": peer.status.value
+                        if hasattr(peer.status, "value")
+                        else str(peer.status),
+                        "trust_score": peer.trust_score,
+                        "sync_direction": peer.sync_direction.value
+                        if hasattr(peer.sync_direction, "value")
+                        else str(peer.sync_direction),
+                        "conflict_resolution": peer.conflict_resolution.value
+                        if hasattr(peer.conflict_resolution, "value")
+                        else str(peer.conflict_resolution),
+                        "last_sync_at": peer.last_sync_at.isoformat()
+                        if peer.last_sync_at
+                        else None,
+                        "created_at": peer.registered_at.isoformat()
+                        if peer.registered_at
+                        else None,
+                        "updated_at": datetime.now(UTC).isoformat(),
+                        "metadata": json.dumps({"description": peer.description})
+                        if peer.description
+                        else None,
+                    },
+                )
                 record = await result.single()
                 logger.info(f"Persisted peer {peer.name} to database")
                 return record is not None
@@ -988,6 +1031,7 @@ class SyncService:
             List of loaded peers
         """
         import json
+
         try:
             async with self.driver.session() as session:
                 query = """
@@ -1009,7 +1053,9 @@ class SyncService:
                             bounded_trust = 0.3  # Default on invalid value
 
                         metadata_raw = peer_data.get("metadata")
-                        metadata_dict: dict[str, Any] = json.loads(metadata_raw) if metadata_raw else {}
+                        metadata_dict: dict[str, Any] = (
+                            json.loads(metadata_raw) if metadata_raw else {}
+                        )
                         peer = FederatedPeer(
                             id=peer_data["id"],
                             name=peer_data["name"],
@@ -1017,10 +1063,18 @@ class SyncService:
                             public_key=peer_data.get("public_key", ""),
                             status=PeerStatus(peer_data.get("status", "pending")),
                             trust_score=bounded_trust,
-                            sync_direction=SyncDirection(peer_data.get("sync_direction", "bidirectional")),
-                            conflict_resolution=ConflictResolution(peer_data.get("conflict_resolution", "local_wins")),
-                            last_sync_at=datetime.fromisoformat(peer_data["last_sync_at"]) if peer_data.get("last_sync_at") else None,
-                            registered_at=datetime.fromisoformat(peer_data["created_at"]) if peer_data.get("created_at") else datetime.now(UTC),
+                            sync_direction=SyncDirection(
+                                peer_data.get("sync_direction", "bidirectional")
+                            ),
+                            conflict_resolution=ConflictResolution(
+                                peer_data.get("conflict_resolution", "local_wins")
+                            ),
+                            last_sync_at=datetime.fromisoformat(peer_data["last_sync_at"])
+                            if peer_data.get("last_sync_at")
+                            else None,
+                            registered_at=datetime.fromisoformat(peer_data["created_at"])
+                            if peer_data.get("created_at")
+                            else datetime.now(UTC),
                             description=metadata_dict.get("description"),
                         )
                         # Register in memory
@@ -1063,10 +1117,7 @@ class SyncService:
             return False
 
     def _compute_content_hash(
-        self,
-        capsules: list[dict[str, Any]],
-        edges: list[dict[str, Any]],
-        deletions: list[str]
+        self, capsules: list[dict[str, Any]], edges: list[dict[str, Any]], deletions: list[str]
     ) -> str:
         """
         SECURITY FIX (Audit 4 - H7): Compute content hash for verification.
@@ -1094,7 +1145,7 @@ class SyncService:
 
         # Serialize with sorted keys for deterministic output
         content_str = json.dumps(content, sort_keys=True)
-        return hashlib.sha256(content_str.encode('utf-8')).hexdigest()
+        return hashlib.sha256(content_str.encode("utf-8")).hexdigest()
 
     async def persist_trust_score(self, peer_id: str, trust_score: float, reason: str) -> bool:
         """
@@ -1117,12 +1168,15 @@ class SyncService:
                     p.trust_update_reason = $reason
                 RETURN p.id AS id
                 """
-                result = await session.run(query, {
-                    "id": peer_id,
-                    "trust_score": trust_score,
-                    "updated_at": datetime.now(UTC).isoformat(),
-                    "reason": reason,
-                })
+                result = await session.run(
+                    query,
+                    {
+                        "id": peer_id,
+                        "trust_score": trust_score,
+                        "updated_at": datetime.now(UTC).isoformat(),
+                        "reason": reason,
+                    },
+                )
                 record = await result.single()
                 return record is not None
         except (ConnectionError, TimeoutError, OSError, RuntimeError) as e:
@@ -1154,20 +1208,27 @@ class SyncService:
                     fc.conflict_reason = $conflict_reason
                 RETURN fc.peer_id AS peer_id
                 """
-                result = await session.run(query, {
-                    "peer_id": fed_capsule.peer_id,
-                    "remote_capsule_id": fed_capsule.remote_capsule_id,
-                    "local_capsule_id": fed_capsule.local_capsule_id,
-                    "remote_content_hash": fed_capsule.remote_content_hash,
-                    "local_content_hash": fed_capsule.local_content_hash,
-                    "sync_status": fed_capsule.sync_status.value if hasattr(fed_capsule.sync_status, 'value') else str(fed_capsule.sync_status),
-                    "remote_title": fed_capsule.remote_title,
-                    "remote_type": fed_capsule.remote_type,
-                    "remote_trust_level": fed_capsule.remote_trust_level,
-                    "remote_owner_id": fed_capsule.remote_owner_id,
-                    "last_synced_at": fed_capsule.last_synced_at.isoformat() if fed_capsule.last_synced_at else None,
-                    "conflict_reason": fed_capsule.conflict_reason,
-                })
+                result = await session.run(
+                    query,
+                    {
+                        "peer_id": fed_capsule.peer_id,
+                        "remote_capsule_id": fed_capsule.remote_capsule_id,
+                        "local_capsule_id": fed_capsule.local_capsule_id,
+                        "remote_content_hash": fed_capsule.remote_content_hash,
+                        "local_content_hash": fed_capsule.local_content_hash,
+                        "sync_status": fed_capsule.sync_status.value
+                        if hasattr(fed_capsule.sync_status, "value")
+                        else str(fed_capsule.sync_status),
+                        "remote_title": fed_capsule.remote_title,
+                        "remote_type": fed_capsule.remote_type,
+                        "remote_trust_level": fed_capsule.remote_trust_level,
+                        "remote_owner_id": fed_capsule.remote_owner_id,
+                        "last_synced_at": fed_capsule.last_synced_at.isoformat()
+                        if fed_capsule.last_synced_at
+                        else None,
+                        "conflict_reason": fed_capsule.conflict_reason,
+                    },
+                )
                 await result.single()
                 return True
         except (ConnectionError, TimeoutError, OSError, RuntimeError) as e:
@@ -1199,7 +1260,9 @@ class SyncService:
                             remote_type=fc_data.get("remote_type"),
                             remote_trust_level=fc_data.get("remote_trust_level"),
                             remote_owner_id=fc_data.get("remote_owner_id"),
-                            last_synced_at=datetime.fromisoformat(fc_data["last_synced_at"]) if fc_data.get("last_synced_at") else None,
+                            last_synced_at=datetime.fromisoformat(fc_data["last_synced_at"])
+                            if fc_data.get("last_synced_at")
+                            else None,
                             conflict_reason=fc_data.get("conflict_reason"),
                         )
                         key = f"{fed_capsule.peer_id}:{fed_capsule.remote_capsule_id}"
@@ -1232,18 +1295,25 @@ class SyncService:
                     fe.last_synced_at = $last_synced_at
                 RETURN fe.id AS id
                 """
-                result = await session.run(query, {
-                    "id": fed_edge.id,
-                    "peer_id": fed_edge.peer_id,
-                    "remote_edge_id": fed_edge.remote_edge_id,
-                    "source_capsule_id": fed_edge.source_capsule_id,
-                    "target_capsule_id": fed_edge.target_capsule_id,
-                    "relationship_type": fed_edge.relationship_type,
-                    "source_is_local": fed_edge.source_is_local,
-                    "target_is_local": fed_edge.target_is_local,
-                    "sync_status": fed_edge.sync_status.value if hasattr(fed_edge.sync_status, 'value') else str(fed_edge.sync_status),
-                    "last_synced_at": fed_edge.last_synced_at.isoformat() if fed_edge.last_synced_at else None,
-                })
+                result = await session.run(
+                    query,
+                    {
+                        "id": fed_edge.id,
+                        "peer_id": fed_edge.peer_id,
+                        "remote_edge_id": fed_edge.remote_edge_id,
+                        "source_capsule_id": fed_edge.source_capsule_id,
+                        "target_capsule_id": fed_edge.target_capsule_id,
+                        "relationship_type": fed_edge.relationship_type,
+                        "source_is_local": fed_edge.source_is_local,
+                        "target_is_local": fed_edge.target_is_local,
+                        "sync_status": fed_edge.sync_status.value
+                        if hasattr(fed_edge.sync_status, "value")
+                        else str(fed_edge.sync_status),
+                        "last_synced_at": fed_edge.last_synced_at.isoformat()
+                        if fed_edge.last_synced_at
+                        else None,
+                    },
+                )
                 await result.single()
                 return True
         except (ConnectionError, TimeoutError, OSError, RuntimeError) as e:
@@ -1274,7 +1344,9 @@ class SyncService:
                             source_is_local=fe_data.get("source_is_local", True),
                             target_is_local=fe_data.get("target_is_local", True),
                             sync_status=FederatedSyncStatus(fe_data.get("sync_status", "pending")),
-                            last_synced_at=datetime.fromisoformat(fe_data["last_synced_at"]) if fe_data.get("last_synced_at") else None,
+                            last_synced_at=datetime.fromisoformat(fe_data["last_synced_at"])
+                            if fe_data.get("last_synced_at")
+                            else None,
                         )
                         self._federated_edges[fed_edge.id] = fed_edge
                     except (ValueError, KeyError, TypeError) as e:

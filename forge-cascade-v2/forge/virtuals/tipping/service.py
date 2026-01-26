@@ -30,6 +30,7 @@ logger = logging.getLogger(__name__)
 
 class TipStatus(str, Enum):
     """Status of a tip transaction."""
+
     PENDING = "pending"
     CONFIRMED = "confirmed"
     FAILED = "failed"
@@ -37,16 +38,18 @@ class TipStatus(str, Enum):
 
 class TipCategory(str, Enum):
     """Categories for tip allocation and analytics."""
-    AGENT_REWARD = "agent_reward"           # Tip to an AI agent
+
+    AGENT_REWARD = "agent_reward"  # Tip to an AI agent
     CAPSULE_CONTRIBUTION = "capsule_contribution"  # Reward for capsule creation
-    GOVERNANCE_VOTE = "governance_vote"     # Reward for governance participation
-    KNOWLEDGE_QUERY = "knowledge_query"     # Tip for valuable query response
-    SERVICE_PAYMENT = "service_payment"     # Payment for ACP service
-    COMMUNITY_GIFT = "community_gift"       # General community tip
+    GOVERNANCE_VOTE = "governance_vote"  # Reward for governance participation
+    KNOWLEDGE_QUERY = "knowledge_query"  # Tip for valuable query response
+    SERVICE_PAYMENT = "service_payment"  # Payment for ACP service
+    COMMUNITY_GIFT = "community_gift"  # General community tip
 
 
 class TipRecord(BaseModel):
     """Record of a tip transaction."""
+
     id: str = Field(default_factory=lambda: str(uuid4()))
     sender_address: str = Field(description="Sender's Solana wallet address")
     recipient_address: str = Field(description="Recipient's Solana wallet address")
@@ -58,8 +61,7 @@ class TipRecord(BaseModel):
     confirmed_at: datetime | None = Field(default=None)
     memo: str | None = Field(default=None, description="Optional memo/message")
     related_entity_id: str | None = Field(
-        default=None,
-        description="ID of related entity (agent, capsule, etc.)"
+        default=None, description="ID of related entity (agent, capsule, etc.)"
     )
     metadata: dict[str, Any] = Field(default_factory=dict)
 
@@ -91,9 +93,12 @@ class FrowgTippingService:
     """
 
     # FROWG token address on Solana
-    FROWG_TOKEN_ADDRESS: str = ContractAddresses.SOLANA_MAINNET.get(
-        "frowg_token",
-    ) or "uogFxqx5SPdL7CMWTTttz4KZ2WctR4RjgZwmGcwpump"
+    FROWG_TOKEN_ADDRESS: str = (
+        ContractAddresses.SOLANA_MAINNET.get(
+            "frowg_token",
+        )
+        or "uogFxqx5SPdL7CMWTTttz4KZ2WctR4RjgZwmGcwpump"
+    )
 
     # Minimum and maximum tip amounts
     MIN_TIP_AMOUNT = Decimal("0.001")
@@ -212,10 +217,7 @@ class FrowgTippingService:
             tip.status = TipStatus.PENDING
 
             # Wait for confirmation
-            confirmed_tx = await client.wait_for_transaction(
-                tx_record.tx_hash,
-                timeout_seconds=60
-            )
+            confirmed_tx = await client.wait_for_transaction(tx_record.tx_hash, timeout_seconds=60)
 
             if confirmed_tx.status == "success":
                 tip.status = TipStatus.CONFIRMED
@@ -252,8 +254,7 @@ class FrowgTippingService:
 
         client = self._get_chain_manager().get_client(ChainNetwork.SOLANA)
         balance = await client.get_wallet_balance(
-            address=address,
-            token_address=self.FROWG_TOKEN_ADDRESS
+            address=address, token_address=self.FROWG_TOKEN_ADDRESS
         )
         return Decimal(str(balance))
 
@@ -303,18 +304,13 @@ class FrowgTippingService:
 
         if address:
             filtered = [
-                t for t in filtered
-                if t.sender_address == address or t.recipient_address == address
+                t for t in filtered if t.sender_address == address or t.recipient_address == address
             ]
 
         if category:
             filtered = [t for t in filtered if t.category == category]
 
-        return sorted(
-            filtered,
-            key=lambda t: t.created_at,
-            reverse=True
-        )[:limit]
+        return sorted(filtered, key=lambda t: t.created_at, reverse=True)[:limit]
 
     async def get_tip_statistics(
         self,
@@ -331,13 +327,9 @@ class FrowgTippingService:
         """
         tips = self.get_tip_history(address=address, limit=10000)
 
-        total_sent = sum(
-            t.amount for t in tips
-            if address is None or t.sender_address == address
-        )
+        total_sent = sum(t.amount for t in tips if address is None or t.sender_address == address)
         total_received = sum(
-            t.amount for t in tips
-            if address is None or t.recipient_address == address
+            t.amount for t in tips if address is None or t.recipient_address == address
         )
 
         by_category = {}
@@ -360,4 +352,5 @@ class FrowgTippingService:
 
 class TipError(Exception):
     """Error raised when a tip operation fails."""
+
     pass

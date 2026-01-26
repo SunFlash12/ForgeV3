@@ -23,16 +23,17 @@ class PrimeKGNodeType(str, Enum):
 
     Each node type represents a distinct biological/clinical entity class.
     """
-    DISEASE = "disease"              # MONDO ontology
-    GENE_PROTEIN = "gene/protein"    # Entrez Gene / UniProt
-    DRUG = "drug"                    # DrugBank
-    PHENOTYPE = "effect/phenotype"   # HPO / SIDER
-    ANATOMY = "anatomy"              # UBERON
-    PATHWAY = "pathway"              # Reactome
+
+    DISEASE = "disease"  # MONDO ontology
+    GENE_PROTEIN = "gene/protein"  # Entrez Gene / UniProt
+    DRUG = "drug"  # DrugBank
+    PHENOTYPE = "effect/phenotype"  # HPO / SIDER
+    ANATOMY = "anatomy"  # UBERON
+    PATHWAY = "pathway"  # Reactome
     BIOLOGICAL_PROCESS = "biological_process"  # GO:BP
     MOLECULAR_FUNCTION = "molecular_function"  # GO:MF
     CELLULAR_COMPONENT = "cellular_component"  # GO:CC
-    EXPOSURE = "exposure"            # Environmental/clinical
+    EXPOSURE = "exposure"  # Environmental/clinical
 
 
 class PrimeKGEdgeType(str, Enum):
@@ -41,6 +42,7 @@ class PrimeKGEdgeType(str, Enum):
 
     Represents relationships between nodes in the knowledge graph.
     """
+
     # Drug-Disease relationships
     INDICATION = "indication"
     CONTRAINDICATION = "contraindication"
@@ -101,6 +103,7 @@ class PrimeKGNode(ForgeModel):
 
     CSV columns: node_index, node_id, node_type, node_name, node_source
     """
+
     node_index: int = Field(description="Unique integer index in PrimeKG")
     node_id: str = Field(description="Ontology ID (e.g., MONDO:0005015, HP:0001945)")
     node_type: PrimeKGNodeType = Field(description="Type of node")
@@ -123,6 +126,7 @@ class PrimeKGEdge(ForgeModel):
     CSV columns: relation, x_index, y_index, x_id, x_type, x_name, x_source,
                  y_id, y_type, y_name, y_source
     """
+
     relation: str = Field(description="Relationship type")
     x_index: int = Field(description="Source node index")
     y_index: int = Field(description="Target node index")
@@ -149,8 +153,10 @@ class PrimeKGEdge(ForgeModel):
 # Specialized Node Models
 # =============================================================================
 
+
 class PrimeKGDisease(PrimeKGNode):
     """Disease node with MONDO ontology ID."""
+
     mondo_id: str = Field(description="MONDO disease ID")
     icd10_codes: list[str] = Field(default_factory=list, description="ICD-10 codes")
     omim_ids: list[str] = Field(default_factory=list, description="OMIM IDs")
@@ -171,6 +177,7 @@ class PrimeKGDisease(PrimeKGNode):
 
 class PrimeKGGene(PrimeKGNode):
     """Gene/Protein node with Entrez Gene ID."""
+
     entrez_id: str = Field(description="NCBI Entrez Gene ID")
     symbol: str = Field(description="Gene symbol (e.g., BRCA1)")
     uniprot_ids: list[str] = Field(default_factory=list, description="UniProt accessions")
@@ -191,6 +198,7 @@ class PrimeKGGene(PrimeKGNode):
 
 class PrimeKGDrug(PrimeKGNode):
     """Drug node with DrugBank ID."""
+
     drugbank_id: str = Field(description="DrugBank ID")
     rxnorm_id: str | None = Field(default=None, description="RxNorm ID")
     chembl_id: str | None = Field(default=None, description="ChEMBL ID")
@@ -211,6 +219,7 @@ class PrimeKGDrug(PrimeKGNode):
 
 class PrimeKGPhenotype(PrimeKGNode):
     """Phenotype node with HPO ID."""
+
     hpo_id: str = Field(description="Human Phenotype Ontology ID")
 
     # HPO hierarchy
@@ -230,6 +239,7 @@ class PrimeKGPhenotype(PrimeKGNode):
 
 class PrimeKGAnatomy(PrimeKGNode):
     """Anatomy node with UBERON ID."""
+
     uberon_id: str = Field(description="UBERON anatomy ID")
 
     # Anatomy hierarchy
@@ -245,6 +255,7 @@ class PrimeKGAnatomy(PrimeKGNode):
 
 class PrimeKGPathway(PrimeKGNode):
     """Pathway node with Reactome ID."""
+
     reactome_id: str = Field(description="Reactome pathway ID")
 
     # Pathway info
@@ -262,8 +273,10 @@ class PrimeKGPathway(PrimeKGNode):
 # Import/Export Statistics
 # =============================================================================
 
+
 class PrimeKGStats(ForgeModel):
     """Statistics about loaded PrimeKG data."""
+
     total_nodes: int = 0
     total_edges: int = 0
 

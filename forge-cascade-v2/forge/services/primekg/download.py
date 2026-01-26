@@ -22,6 +22,7 @@ logger = structlog.get_logger(__name__)
 
 class DownloadStatus(str, Enum):
     """Status of a download operation."""
+
     PENDING = "pending"
     DOWNLOADING = "downloading"
     VERIFYING = "verifying"
@@ -37,10 +38,11 @@ class PrimeKGDataFiles:
 
     PrimeKG is distributed as CSV files from Harvard Dataverse.
     """
+
     # Primary data files
-    kg_csv: Path | None = None          # Full knowledge graph (triplets)
-    nodes_csv: Path | None = None       # Node definitions
-    edges_csv: Path | None = None       # Edge definitions
+    kg_csv: Path | None = None  # Full knowledge graph (triplets)
+    nodes_csv: Path | None = None  # Node definitions
+    edges_csv: Path | None = None  # Edge definitions
 
     # Optional supplementary files
     disease_features_csv: Path | None = None
@@ -56,15 +58,22 @@ class PrimeKGDataFiles:
         if self.kg_csv and self.kg_csv.exists():
             return True
         return (
-            self.nodes_csv is not None and self.nodes_csv.exists() and
-            self.edges_csv is not None and self.edges_csv.exists()
+            self.nodes_csv is not None
+            and self.nodes_csv.exists()
+            and self.edges_csv is not None
+            and self.edges_csv.exists()
         )
 
     def get_total_size(self) -> int:
         """Get total size of all downloaded files in bytes."""
         total = 0
-        for path in [self.kg_csv, self.nodes_csv, self.edges_csv,
-                     self.disease_features_csv, self.drug_features_csv]:
+        for path in [
+            self.kg_csv,
+            self.nodes_csv,
+            self.edges_csv,
+            self.disease_features_csv,
+            self.drug_features_csv,
+        ]:
             if path and path.exists():
                 total += path.stat().st_size
         return total
@@ -73,6 +82,7 @@ class PrimeKGDataFiles:
 @dataclass
 class DownloadProgress:
     """Progress information for a download operation."""
+
     file_name: str
     status: DownloadStatus = DownloadStatus.PENDING
     total_bytes: int = 0
@@ -112,18 +122,18 @@ class PrimeKGDownloader:
 
     # File IDs from Harvard Dataverse (DOI: 10.7910/DVN/IXA7BM)
     FILE_IDS = {
-        "kg.csv": "6180620",           # Full KG (~400MB)
-        "nodes.csv": "6180617",        # Nodes (~7.5MB)
-        "edges.csv": "6180616",        # Edges (~370MB)
+        "kg.csv": "6180620",  # Full KG (~400MB)
+        "nodes.csv": "6180617",  # Nodes (~7.5MB)
+        "edges.csv": "6180616",  # Edges (~370MB)
         "disease_features.csv": "6180618",
         "drug_features.csv": "6180619",
     }
 
     # Expected file sizes for validation (approximate)
     EXPECTED_SIZES = {
-        "kg.csv": 400_000_000,         # ~400MB
-        "nodes.csv": 7_500_000,        # ~7.5MB
-        "edges.csv": 370_000_000,      # ~370MB
+        "kg.csv": 400_000_000,  # ~400MB
+        "nodes.csv": 7_500_000,  # ~7.5MB
+        "edges.csv": 370_000_000,  # ~370MB
     }
 
     def __init__(
@@ -151,10 +161,7 @@ class PrimeKGDownloader:
         # Cancellation flag
         self._cancelled = False
 
-    def add_progress_callback(
-        self,
-        callback: Callable[[DownloadProgress], None]
-    ) -> None:
+    def add_progress_callback(self, callback: Callable[[DownloadProgress], None]) -> None:
         """Add a callback to receive progress updates."""
         self._progress_callbacks.append(callback)
 
@@ -163,7 +170,9 @@ class PrimeKGDownloader:
         for callback in self._progress_callbacks:
             try:
                 callback(progress)
-            except Exception as e:  # Intentional broad catch: callback error must not crash download
+            except (
+                Exception
+            ) as e:  # Intentional broad catch: callback error must not crash download
                 logger.warning("progress_callback_error", error=str(e))
 
     async def download_all(
@@ -191,7 +200,7 @@ class PrimeKGDownloader:
         logger.info(
             "primekg_download_starting",
             files=files_to_download,
-            download_dir=str(self.download_dir)
+            download_dir=str(self.download_dir),
         )
 
         results = {}
@@ -278,11 +287,7 @@ class PrimeKGDownloader:
                 if temp_path.exists():
                     start_byte = temp_path.stat().st_size
                     progress.downloaded_bytes = start_byte
-                    logger.info(
-                        "primekg_resuming_download",
-                        file=file_name,
-                        resume_from=start_byte
-                    )
+                    logger.info("primekg_resuming_download", file=file_name, resume_from=start_byte)
 
                 # Set up headers for range request
                 headers = {}
@@ -291,10 +296,7 @@ class PrimeKGDownloader:
 
                 # Stream download
                 async with client.stream(
-                    "GET",
-                    url,
-                    headers=headers,
-                    follow_redirects=True
+                    "GET", url, headers=headers, follow_redirects=True
                 ) as response:
                     if response.status_code not in (200, 206):
                         progress.status = DownloadStatus.FAILED
@@ -350,7 +352,7 @@ class PrimeKGDownloader:
                     "primekg_download_complete",
                     file=file_name,
                     size_bytes=progress.downloaded_bytes,
-                    path=str(file_path)
+                    path=str(file_path),
                 )
 
                 return file_path
@@ -418,10 +420,7 @@ class PrimeKGDownloader:
 
             if size < min_expected:
                 logger.warning(
-                    "primekg_file_too_small",
-                    file=name,
-                    size=size,
-                    min_expected=min_expected
+                    "primekg_file_too_small", file=name, size=size, min_expected=min_expected
                 )
                 results[name] = False
                 continue
@@ -433,7 +432,13 @@ class PrimeKGDownloader:
 
                     if name == "nodes.csv":
                         # Expected columns: node_index,node_id,node_type,node_name,node_source
-                        expected_cols = ["node_index", "node_id", "node_type", "node_name", "node_source"]
+                        expected_cols = [
+                            "node_index",
+                            "node_id",
+                            "node_type",
+                            "node_name",
+                            "node_source",
+                        ]
                         if not all(col in header.lower() for col in expected_cols):
                             logger.warning("primekg_invalid_nodes_header", header=header)
                             results[name] = False
@@ -461,6 +466,7 @@ class PrimeKGDownloader:
 # CLI Support
 # =============================================================================
 
+
 async def download_primekg_cli(
     output_dir: str = "./data/primekg",
     include_features: bool = False,
@@ -472,6 +478,7 @@ async def download_primekg_cli(
     Usage:
         python -m forge.services.primekg.download --output-dir ./data/primekg
     """
+
     def progress_callback(progress: DownloadProgress) -> None:
         """Print progress to console."""
         if progress.total_bytes > 0:
@@ -483,12 +490,14 @@ async def download_primekg_cli(
                 f"({progress.downloaded_bytes / 1024 / 1024:.1f}MB / "
                 f"{progress.total_bytes / 1024 / 1024:.1f}MB) "
                 f"@ {speed_mb:.1f} MB/s ETA: {eta}",
-                end="", flush=True
+                end="",
+                flush=True,
             )
         else:
             print(
                 f"\r{progress.file_name}: {progress.downloaded_bytes / 1024 / 1024:.1f}MB downloaded",
-                end="", flush=True
+                end="",
+                flush=True,
             )
 
         if progress.is_complete:
@@ -501,10 +510,7 @@ async def download_primekg_cli(
     print("This may take several minutes depending on your connection speed.")
     print()
 
-    data_files = await downloader.download_all(
-        include_features=include_features,
-        force=force
-    )
+    data_files = await downloader.download_all(include_features=include_features, force=force)
 
     print()
     print("Verifying downloaded files...")
@@ -526,25 +532,19 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Download PrimeKG data")
     parser.add_argument(
-        "--output-dir",
-        default="./data/primekg",
-        help="Output directory for downloaded files"
+        "--output-dir", default="./data/primekg", help="Output directory for downloaded files"
     )
     parser.add_argument(
-        "--include-features",
-        action="store_true",
-        help="Also download feature files"
+        "--include-features", action="store_true", help="Also download feature files"
     )
     parser.add_argument(
-        "--force",
-        action="store_true",
-        help="Force re-download even if files exist"
+        "--force", action="store_true", help="Force re-download even if files exist"
     )
 
     args = parser.parse_args()
 
-    asyncio.run(download_primekg_cli(
-        output_dir=args.output_dir,
-        include_features=args.include_features,
-        force=args.force
-    ))
+    asyncio.run(
+        download_primekg_cli(
+            output_dir=args.output_dir, include_features=args.include_features, force=args.force
+        )
+    )

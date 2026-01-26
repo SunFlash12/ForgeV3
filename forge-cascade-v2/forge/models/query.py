@@ -54,10 +54,10 @@ class SortDirection(str, Enum):
 class QueryComplexity(str, Enum):
     """Estimated query complexity."""
 
-    SIMPLE = "simple"          # Single node lookup
-    MODERATE = "moderate"      # Single relationship traversal
-    COMPLEX = "complex"        # Multi-hop traversal
-    EXPENSIVE = "expensive"    # Graph-wide operations
+    SIMPLE = "simple"  # Single node lookup
+    MODERATE = "moderate"  # Single relationship traversal
+    COMPLEX = "complex"  # Multi-hop traversal
+    EXPENSIVE = "expensive"  # Graph-wide operations
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -481,12 +481,18 @@ def get_default_schema() -> GraphSchema:
                 description="Knowledge unit containing insights, decisions, lessons, etc.",
                 properties=[
                     SchemaProperty(name="id", type="string", description="Unique identifier"),
-                    SchemaProperty(name="type", type="string", description="INSIGHT, DECISION, LESSON, WARNING, PRINCIPLE, MEMORY, KNOWLEDGE, CODE, CONFIG, TEMPLATE, DOCUMENT"),
+                    SchemaProperty(
+                        name="type",
+                        type="string",
+                        description="INSIGHT, DECISION, LESSON, WARNING, PRINCIPLE, MEMORY, KNOWLEDGE, CODE, CONFIG, TEMPLATE, DOCUMENT",
+                    ),
                     SchemaProperty(name="title", type="string", description="Optional title"),
                     SchemaProperty(name="content", type="string", description="Main content"),
                     SchemaProperty(name="trust_level", type="int", description="0-100 trust score"),
                     SchemaProperty(name="owner_id", type="string", description="Creator user ID"),
-                    SchemaProperty(name="tags", type="list[string]", description="Categorization tags"),
+                    SchemaProperty(
+                        name="tags", type="list[string]", description="Categorization tags"
+                    ),
                     SchemaProperty(name="created_at", type="datetime", indexed=True),
                 ],
             ),
@@ -497,7 +503,9 @@ def get_default_schema() -> GraphSchema:
                     SchemaProperty(name="id", type="string"),
                     SchemaProperty(name="username", type="string"),
                     SchemaProperty(name="trust_flame", type="int", description="0-100 trust score"),
-                    SchemaProperty(name="role", type="string", description="USER, ADMIN, MODERATOR"),
+                    SchemaProperty(
+                        name="role", type="string", description="USER, ADMIN, MODERATOR"
+                    ),
                 ],
             ),
             SchemaNodeLabel(
@@ -506,7 +514,11 @@ def get_default_schema() -> GraphSchema:
                 properties=[
                     SchemaProperty(name="id", type="string"),
                     SchemaProperty(name="title", type="string"),
-                    SchemaProperty(name="status", type="string", description="DRAFT, ACTIVE, VOTING, PASSED, REJECTED"),
+                    SchemaProperty(
+                        name="status",
+                        type="string",
+                        description="DRAFT, ACTIVE, VOTING, PASSED, REJECTED",
+                    ),
                     SchemaProperty(name="created_by", type="string"),
                 ],
             ),
@@ -515,7 +527,9 @@ def get_default_schema() -> GraphSchema:
                 description="Vote on a proposal",
                 properties=[
                     SchemaProperty(name="id", type="string"),
-                    SchemaProperty(name="choice", type="string", description="for, against, abstain"),
+                    SchemaProperty(
+                        name="choice", type="string", description="for, against, abstain"
+                    ),
                     SchemaProperty(name="weight", type="float"),
                 ],
             ),

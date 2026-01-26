@@ -50,7 +50,9 @@ async def create_tip(
     request: TipCreate,
     sender_wallet: str = Query(..., description="Your Solana wallet address"),
     recipient_wallet: str = Query(..., description="Recipient's Solana wallet address"),
-    tx_signature: str | None = Query(None, description="Solana transaction signature if already sent"),
+    tx_signature: str | None = Query(
+        None, description="Solana transaction signature if already sent"
+    ),
 ) -> TipResponse:
     """
     Record a FROWG tip.

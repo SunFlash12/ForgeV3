@@ -25,6 +25,7 @@ logger = structlog.get_logger(__name__)
 @dataclass
 class NormalizationConfig:
     """Configuration for phenotype normalization."""
+
     min_similarity: float = 0.7
     max_candidates: int = 5
     prefer_specific: bool = True  # Prefer more specific terms
@@ -87,13 +88,15 @@ class PhenotypeNormalizer:
         # Strategy 1: Exact match
         exact_match = self.ontology.get_term_by_name(text_lower)
         if exact_match:
-            return [PhenotypeMatch(
-                hpo_id=exact_match.hpo_id,
-                hpo_name=exact_match.name,
-                match_type="exact",
-                confidence=1.0,
-                original_text=text,
-            )]
+            return [
+                PhenotypeMatch(
+                    hpo_id=exact_match.hpo_id,
+                    hpo_name=exact_match.name,
+                    match_type="exact",
+                    confidence=1.0,
+                    original_text=text,
+                )
+            ]
 
         # Strategy 2: Search with synonyms
         search_results = self.ontology.search_terms(
@@ -113,13 +116,15 @@ class PhenotypeNormalizer:
                     confidence = syn_conf
 
             if confidence >= self.config.min_similarity:
-                candidates.append(PhenotypeMatch(
-                    hpo_id=term.hpo_id,
-                    hpo_name=term.name,
-                    match_type="search",
-                    confidence=confidence,
-                    original_text=text,
-                ))
+                candidates.append(
+                    PhenotypeMatch(
+                        hpo_id=term.hpo_id,
+                        hpo_name=term.name,
+                        match_type="search",
+                        confidence=confidence,
+                        original_text=text,
+                    )
+                )
 
         # Strategy 3: Embedding-based matching (if enabled)
         if self.config.use_embeddings and self.embedding_service:
@@ -133,7 +138,7 @@ class PhenotypeNormalizer:
         if self.config.prefer_specific:
             candidates = self._prefer_specific_terms(candidates)
 
-        return candidates[:self.config.max_candidates]
+        return candidates[: self.config.max_candidates]
 
     async def normalize_extraction(
         self,
@@ -168,10 +173,7 @@ class PhenotypeNormalizer:
         extractions: list[ExtractedPhenotype],
     ) -> list[ExtractedPhenotype]:
         """Normalize a batch of extracted phenotypes."""
-        return [
-            await self.normalize_extraction(ext)
-            for ext in extractions
-        ]
+        return [await self.normalize_extraction(ext) for ext in extractions]
 
     def _calculate_text_similarity(self, text1: str, text2: str) -> float:
         """
@@ -206,7 +208,7 @@ class PhenotypeNormalizer:
         lev_ratio = self._levenshtein_ratio(text1, text2)
 
         # Weighted combination
-        return (jaccard * 0.3 + substring * 0.3 + lev_ratio * 0.4)
+        return jaccard * 0.3 + substring * 0.3 + lev_ratio * 0.4
 
     def _levenshtein_ratio(self, s1: str, s2: str) -> float:
         """Calculate Levenshtein similarity ratio."""
@@ -229,7 +231,7 @@ class PhenotypeNormalizer:
                 add, delete, change = (
                     previous_row[j] + 1,
                     current_row[j - 1] + 1,
-                    previous_row[j - 1]
+                    previous_row[j - 1],
                 )
                 if s1[j - 1] != s2[i - 1]:
                     change += 1
@@ -262,13 +264,15 @@ class PhenotypeNormalizer:
                 if hpo_id.startswith("HP:"):
                     term = self.ontology.get_term(hpo_id)
                     if term:
-                        candidates.append(PhenotypeMatch(
-                            hpo_id=hpo_id,
-                            hpo_name=term.name,
-                            match_type="embedding",
-                            confidence=result.get("score", 0.0),
-                            original_text=text,
-                        ))
+                        candidates.append(
+                            PhenotypeMatch(
+                                hpo_id=hpo_id,
+                                hpo_name=term.name,
+                                match_type="embedding",
+                                confidence=result.get("score", 0.0),
+                                original_text=text,
+                            )
+                        )
 
             return candidates
 
@@ -294,8 +298,8 @@ class PhenotypeNormalizer:
                 # Combine scores
                 existing = merged[cand.hpo_id]
                 combined_conf = (
-                    existing.confidence * (1 - self.config.embedding_weight) +
-                    cand.confidence * self.config.embedding_weight
+                    existing.confidence * (1 - self.config.embedding_weight)
+                    + cand.confidence * self.config.embedding_weight
                 )
                 existing.confidence = combined_conf
                 existing.match_type = "combined"
@@ -422,6 +426,7 @@ class PhenotypeNormalizer:
 # =============================================================================
 # Factory Function
 # =============================================================================
+
 
 def create_phenotype_normalizer(
     ontology: HPOOntologyService,

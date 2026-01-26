@@ -17,6 +17,7 @@ logger = structlog.get_logger(__name__)
 @dataclass
 class DifferentialAgentConfig(AgentConfig):
     """Configuration for differential diagnosis agent."""
+
     # Scoring weights
     phenotype_weight: float = 0.40
     genetic_weight: float = 0.35
@@ -157,7 +158,7 @@ class DifferentialAgent(DiagnosticAgent):
         }
 
         result: dict[str, Any] = {
-            "differential": differential[:self.config.max_differential],
+            "differential": differential[: self.config.max_differential],
             "primary_diagnosis": differential[0] if differential else None,
             "confidence_assessment": confidence_assessment,
             "explanations": explanations,
@@ -250,9 +251,9 @@ class DifferentialAgent(DiagnosticAgent):
 
         # Combined score
         combined = (
-            phenotype_score * self.config.phenotype_weight +
-            genetic_score * self.config.genetic_weight +
-            history_score * self.config.history_weight
+            phenotype_score * self.config.phenotype_weight
+            + genetic_score * self.config.genetic_weight
+            + history_score * self.config.history_weight
         )
 
         # Identify supporting and refuting evidence
@@ -262,17 +263,21 @@ class DifferentialAgent(DiagnosticAgent):
         for e in evidence:
             relevance = self._assess_evidence_relevance(hypothesis, e)
             if relevance > 0.5:
-                supporting.append({
-                    "evidence": e.get("value"),
-                    "type": e.get("evidence_type"),
-                    "relevance": relevance,
-                })
+                supporting.append(
+                    {
+                        "evidence": e.get("value"),
+                        "type": e.get("evidence_type"),
+                        "relevance": relevance,
+                    }
+                )
             elif relevance < -0.5:
-                refuting.append({
-                    "evidence": e.get("value"),
-                    "type": e.get("evidence_type"),
-                    "relevance": relevance,
-                })
+                refuting.append(
+                    {
+                        "evidence": e.get("value"),
+                        "type": e.get("evidence_type"),
+                        "relevance": relevance,
+                    }
+                )
 
         return {
             "combined_score": combined,
@@ -303,12 +308,14 @@ class DifferentialAgent(DiagnosticAgent):
             for assoc in phenotype_analysis.get("disease_associations", []):
                 disease_id = assoc.get("disease_id")
                 if disease_id and disease_id not in seen_ids:
-                    candidates.append({
-                        "disease_id": disease_id,
-                        "disease_name": assoc.get("disease_name"),
-                        "source": "phenotype",
-                        "initial_score": assoc.get("phenotype_matches", 0) / 10,
-                    })
+                    candidates.append(
+                        {
+                            "disease_id": disease_id,
+                            "disease_name": assoc.get("disease_name"),
+                            "source": "phenotype",
+                            "initial_score": assoc.get("phenotype_matches", 0) / 10,
+                        }
+                    )
                     seen_ids.add(disease_id)
 
         # From genetic analysis
@@ -321,25 +328,30 @@ class DifferentialAgent(DiagnosticAgent):
                     # Query by name if ID not available
                     if disease_name and not disease_id and self._neo4j:
                         try:
-                            results = await self._neo4j.run("""
+                            results = await self._neo4j.run(
+                                """
                                 MATCH (d:PrimeKGDisease)
                                 WHERE toLower(d.name) = toLower($name)
                                 RETURN d.mondo_id as disease_id, d.name as disease_name
                                 LIMIT 1
-                            """, {"name": disease_name})
+                            """,
+                                {"name": disease_name},
+                            )
                             if results:
                                 disease_id = results[0].get("disease_id")
                         except (RuntimeError, OSError, ConnectionError, ValueError) as e:
                             logger.warning("disease_lookup_failed", name=disease_name, error=str(e))
 
                     if disease_id and disease_id not in seen_ids:
-                        candidates.append({
-                            "disease_id": disease_id,
-                            "disease_name": disease_name,
-                            "source": "genetic",
-                            "gene_symbol": gene_info.get("gene_symbol"),
-                            "initial_score": gene_info.get("pathogenicity_score", 0.5),
-                        })
+                        candidates.append(
+                            {
+                                "disease_id": disease_id,
+                                "disease_name": disease_name,
+                                "source": "genetic",
+                                "gene_symbol": gene_info.get("gene_symbol"),
+                                "initial_score": gene_info.get("pathogenicity_score", 0.5),
+                            }
+                        )
                         seen_ids.add(disease_id)
 
         # Direct query if we have phenotypes
@@ -368,23 +380,28 @@ class DifferentialAgent(DiagnosticAgent):
                 """
 
                 try:
-                    results = await self._neo4j.run(query, {
-                        "phenotypes": hpo_codes,
-                        "min_matches": max(1, len(hpo_codes) // 4),
-                        "limit": self.config.max_hypotheses * 2,
-                    })
+                    results = await self._neo4j.run(
+                        query,
+                        {
+                            "phenotypes": hpo_codes,
+                            "min_matches": max(1, len(hpo_codes) // 4),
+                            "limit": self.config.max_hypotheses * 2,
+                        },
+                    )
 
-                    for r in (results or []):
+                    for r in results or []:
                         disease_id = r.get("disease_id")
                         if disease_id and disease_id not in seen_ids:
-                            candidates.append({
-                                "disease_id": disease_id,
-                                "disease_name": r.get("disease_name"),
-                                "matched_phenotypes_count": r.get("matches"),
-                                "associated_genes": r.get("genes", []),
-                                "prevalence": r.get("prevalence"),
-                                "source": "direct_query",
-                            })
+                            candidates.append(
+                                {
+                                    "disease_id": disease_id,
+                                    "disease_name": r.get("disease_name"),
+                                    "matched_phenotypes_count": r.get("matches"),
+                                    "associated_genes": r.get("genes", []),
+                                    "prevalence": r.get("prevalence"),
+                                    "source": "direct_query",
+                                }
+                            )
                             seen_ids.add(disease_id)
 
                 except (RuntimeError, OSError, ConnectionError, ValueError) as e:
@@ -413,34 +430,32 @@ class DifferentialAgent(DiagnosticAgent):
             )
 
             # Genetic score
-            genetic_score = await self._score_genetic_match(
-                h, genetic or [], genetic_analysis
-            )
+            genetic_score = await self._score_genetic_match(h, genetic or [], genetic_analysis)
 
             # History score
-            history_score = self._score_history_match(
-                h, history or [], family_history or []
-            )
+            history_score = self._score_history_match(h, history or [], family_history or [])
 
             # Wearable score (bonus)
             wearable_score = self._score_wearable_match(h, wearable or [])
 
             # Combined weighted score
             combined = (
-                phenotype_score * self.config.phenotype_weight +
-                genetic_score * self.config.genetic_weight +
-                history_score * self.config.history_weight +
-                wearable_score * self.config.wearable_weight
+                phenotype_score * self.config.phenotype_weight
+                + genetic_score * self.config.genetic_weight
+                + history_score * self.config.history_weight
+                + wearable_score * self.config.wearable_weight
             )
 
             h_scored = dict(h)
-            h_scored.update({
-                "phenotype_score": phenotype_score,
-                "genetic_score": genetic_score,
-                "history_score": history_score,
-                "wearable_score": wearable_score,
-                "combined_score": combined,
-            })
+            h_scored.update(
+                {
+                    "phenotype_score": phenotype_score,
+                    "genetic_score": genetic_score,
+                    "history_score": history_score,
+                    "wearable_score": wearable_score,
+                    "combined_score": combined,
+                }
+            )
 
             scored.append(h_scored)
 
@@ -516,11 +531,14 @@ class DifferentialAgent(DiagnosticAgent):
         disease_genes = hypothesis.get("associated_genes", [])
         if not disease_genes and self._neo4j:
             try:
-                results = await self._neo4j.run("""
+                results = await self._neo4j.run(
+                    """
                     MATCH (g:PrimeKGGene)-[:ASSOCIATED_WITH|`associated with`]-(d:PrimeKGDisease)
                     WHERE d.mondo_id = $disease_id
                     RETURN collect(g.symbol) as genes
-                """, {"disease_id": disease_id})
+                """,
+                    {"disease_id": disease_id},
+                )
                 if results:
                     disease_genes = results[0].get("genes", [])
             except (RuntimeError, OSError, ConnectionError, ValueError) as e:
@@ -606,8 +624,7 @@ class DifferentialAgent(DiagnosticAgent):
         """Rank hypotheses into differential diagnosis."""
         # Filter by minimum score
         filtered = [
-            h for h in scored
-            if h.get("combined_score", 0) >= self.config.min_score_threshold
+            h for h in scored if h.get("combined_score", 0) >= self.config.min_score_threshold
         ]
 
         # Sort by combined score
@@ -621,7 +638,7 @@ class DifferentialAgent(DiagnosticAgent):
         for i, h in enumerate(ranked):
             h["rank"] = i + 1
 
-        return ranked[:self.config.max_differential]
+        return ranked[: self.config.max_differential]
 
     def _assess_confidence(
         self,
@@ -640,7 +657,10 @@ class DifferentialAgent(DiagnosticAgent):
 
         gap = top_score - second_score
 
-        if top_score >= self.config.confidence_required_for_primary and gap >= self.config.uncertainty_threshold:
+        if (
+            top_score >= self.config.confidence_required_for_primary
+            and gap >= self.config.uncertainty_threshold
+        ):
             level = "high"
             message = "Strong evidence supporting primary diagnosis"
         elif top_score >= 0.5 and gap >= 0.1:
@@ -793,6 +813,7 @@ class DifferentialAgent(DiagnosticAgent):
 # =============================================================================
 # Factory Function
 # =============================================================================
+
 
 def create_differential_agent(
     config: DifferentialAgentConfig | None = None,

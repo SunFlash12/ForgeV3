@@ -39,6 +39,7 @@ from forge.models.user import (
 # UserBase Tests
 # =============================================================================
 
+
 class TestUserBase:
     """Tests for UserBase model."""
 
@@ -138,6 +139,7 @@ class TestUserBase:
 # UserCreate Tests
 # =============================================================================
 
+
 class TestUserCreate:
     """Tests for UserCreate model."""
 
@@ -199,6 +201,7 @@ class TestUserCreate:
 # =============================================================================
 # User Model Tests
 # =============================================================================
+
 
 class TestUser:
     """Tests for User model."""
@@ -273,6 +276,7 @@ class TestUser:
 # UserInDB Tests
 # =============================================================================
 
+
 class TestUserInDB:
     """Tests for UserInDB model."""
 
@@ -315,6 +319,7 @@ class TestUserInDB:
 # =============================================================================
 # TokenPayload Tests
 # =============================================================================
+
 
 class TestTokenPayload:
     """Tests for TokenPayload model."""
@@ -368,6 +373,7 @@ class TestTokenPayload:
 # Enum Tests
 # =============================================================================
 
+
 class TestEnums:
     """Tests for user-related enums."""
 
@@ -403,6 +409,7 @@ class TestEnums:
 # UserPublic Tests
 # =============================================================================
 
+
 class TestUserPublic:
     """Tests for UserPublic model (no sensitive data)."""
 
@@ -428,6 +435,7 @@ class TestUserPublic:
 # TrustFlameAdjustment Tests
 # =============================================================================
 
+
 class TestTrustFlameAdjustment:
     """Tests for TrustFlameAdjustment model."""
 
@@ -450,6 +458,7 @@ class TestTrustFlameAdjustment:
 # UserUpdate Tests
 # =============================================================================
 
+
 class TestUserUpdate:
     """Tests for UserUpdate model."""
 
@@ -471,6 +480,7 @@ class TestUserUpdate:
 # =============================================================================
 # UserPasswordChange Tests
 # =============================================================================
+
 
 class TestUserPasswordChange:
     """Tests for UserPasswordChange model."""

@@ -133,9 +133,7 @@ class NonceStore:
         )
         return True
 
-    async def verify_and_consume_nonce(
-        self, sender_address: str, nonce: int
-    ) -> tuple[bool, str]:
+    async def verify_and_consume_nonce(self, sender_address: str, nonce: int) -> tuple[bool, str]:
         """
         Verify a nonce is valid and consume it atomically.
 
@@ -232,9 +230,7 @@ class NonceStore:
                 total_keys = 0
 
                 while True:
-                    cursor, batch = await self._redis.scan(
-                        cursor, match=pattern, count=100
-                    )
+                    cursor, batch = await self._redis.scan(cursor, match=pattern, count=100)
                     total_keys += len(batch)
                     if cursor == 0:
                         break

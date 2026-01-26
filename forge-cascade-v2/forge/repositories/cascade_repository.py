@@ -69,7 +69,9 @@ class CascadeRepository:
             if isinstance(timestamp, str):
                 timestamp = datetime.fromisoformat(timestamp)
 
-            parsed_timestamp: datetime = timestamp if isinstance(timestamp, datetime) else self._now()
+            parsed_timestamp: datetime = (
+                timestamp if isinstance(timestamp, datetime) else self._now()
+            )
 
             return CascadeEvent(
                 id=data["id"],
@@ -97,7 +99,9 @@ class CascadeRepository:
             raw_initiated_at = data.get("initiated_at")
             if isinstance(raw_initiated_at, str):
                 raw_initiated_at = datetime.fromisoformat(raw_initiated_at)
-            parsed_initiated_at: datetime = raw_initiated_at if isinstance(raw_initiated_at, datetime) else self._now()
+            parsed_initiated_at: datetime = (
+                raw_initiated_at if isinstance(raw_initiated_at, datetime) else self._now()
+            )
 
             completed_at = data.get("completed_at")
             if isinstance(completed_at, str):
@@ -155,7 +159,9 @@ class CascadeRepository:
         params = {
             "cascade_id": chain.cascade_id,
             "initiated_by": chain.initiated_by,
-            "initiated_at": chain.initiated_at.isoformat() if chain.initiated_at else self._now().isoformat(),
+            "initiated_at": chain.initiated_at.isoformat()
+            if chain.initiated_at
+            else self._now().isoformat(),
             "total_hops": chain.total_hops,
             "overlays_affected": chain.overlays_affected,
             "insights_generated": chain.insights_generated,
@@ -358,9 +364,7 @@ class CascadeRepository:
 
         return chains
 
-    async def get_completed_chains(
-        self, limit: int = 100, skip: int = 0
-    ) -> list[CascadeChain]:
+    async def get_completed_chains(self, limit: int = 100, skip: int = 0) -> list[CascadeChain]:
         """
         Get completed cascade chains.
 
