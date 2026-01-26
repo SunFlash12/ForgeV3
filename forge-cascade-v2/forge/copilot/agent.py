@@ -232,8 +232,8 @@ When creating capsules, ensure they are well-structured with appropriate tags an
             # Try to import Copilot SDK
             try:
                 from copilot import CopilotClient  # type: ignore[import-not-found,unused-ignore]
-                from copilot.types import (
-                    CopilotClientOptions,  # type: ignore[import-not-found,unused-ignore]
+                from copilot.types import (  # type: ignore[import-not-found,unused-ignore]
+                    CopilotClientOptions,
                 )
             except ImportError:
                 raise RuntimeError(

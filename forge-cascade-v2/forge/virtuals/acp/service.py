@@ -735,8 +735,8 @@ class ACPService:
         """Sign using EVM ECDSA (secp256k1)."""
         try:
             from eth_account import Account
-            from eth_account.messages import (
-                encode_defunct,  # type: ignore[import-not-found,unused-ignore]
+            from eth_account.messages import (  # type: ignore[import-not-found,unused-ignore]
+                encode_defunct,
             )
 
             # Create signable message

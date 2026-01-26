@@ -73,8 +73,8 @@ class SolanaChainClient(BaseChainClient):
         """
         try:
             # Import Solana libraries (lazy import to handle optional dependency)
-            from solana.rpc.async_api import (
-                AsyncClient,  # type: ignore[import-not-found,unused-ignore]
+            from solana.rpc.async_api import (  # type: ignore[import-not-found,unused-ignore]
+                AsyncClient,
             )
             from solders.keypair import Keypair  # type: ignore[import-not-found,unused-ignore]
 
@@ -444,8 +444,8 @@ class SolanaChainClient(BaseChainClient):
 
         from solana.transaction import Transaction
         from solders.pubkey import Pubkey
-        from spl.token.constants import (
-            TOKEN_PROGRAM_ID,  # type: ignore[import-not-found,unused-ignore]
+        from spl.token.constants import (  # type: ignore[import-not-found,unused-ignore]
+            TOKEN_PROGRAM_ID,
         )
         from spl.token.instructions import (  # type: ignore[import-not-found,unused-ignore]
             TransferCheckedParams,
