@@ -5,8 +5,9 @@ import * as dotenv from "dotenv";
 
 dotenv.config();
 
-// Default values for local development
-const PRIVATE_KEY = process.env.DEPLOYER_PRIVATE_KEY || "0x0000000000000000000000000000000000000000000000000000000000000001";
+// DEPLOYER_PRIVATE_KEY must be set via env or .env for real deployments.
+// The fallback is a well-known Hardhat test key (account #0) that holds no real funds.
+const PRIVATE_KEY = process.env.DEPLOYER_PRIVATE_KEY || "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
 const BASESCAN_API_KEY = process.env.BASESCAN_API_KEY || "";
 
 const config: HardhatUserConfig = {
