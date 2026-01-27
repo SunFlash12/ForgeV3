@@ -9,17 +9,17 @@ Implements accessibility requirements:
 """
 
 from forge.compliance.accessibility.service import (
+    VPAT,
+    AccessibilityAudit,
     AccessibilityComplianceService,
-    get_accessibility_service,
-    WCAGLevel,
-    WCAGPrinciple,
+    AccessibilityIssue,
     AccessibilityStandard,
     IssueImpact,
-    WCAGCriterion,
-    AccessibilityIssue,
-    AccessibilityAudit,
     VPATEntry,
-    VPAT,
+    WCAGCriterion,
+    WCAGLevel,
+    WCAGPrinciple,
+    get_accessibility_service,
 )
 
 __all__ = [

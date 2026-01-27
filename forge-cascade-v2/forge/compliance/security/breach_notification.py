@@ -27,9 +27,9 @@ from uuid import uuid4
 import structlog
 
 from forge.compliance.core.enums import (
-    Jurisdiction,
-    DataClassification,
     BreachSeverity,
+    DataClassification,
+    Jurisdiction,
 )
 
 logger = structlog.get_logger(__name__)
@@ -37,6 +37,7 @@ logger = structlog.get_logger(__name__)
 
 class BreachType(str, Enum):
     """Types of data breaches."""
+
     UNAUTHORIZED_ACCESS = "unauthorized_access"
     UNAUTHORIZED_DISCLOSURE = "unauthorized_disclosure"
     DATA_THEFT = "data_theft"
@@ -53,6 +54,7 @@ class BreachType(str, Enum):
 
 class BreachStatus(str, Enum):
     """Breach incident status."""
+
     DETECTED = "detected"
     INVESTIGATING = "investigating"
     CONTAINED = "contained"
@@ -64,6 +66,7 @@ class BreachStatus(str, Enum):
 
 class NotificationStatus(str, Enum):
     """Notification delivery status."""
+
     PENDING = "pending"
     SENT = "sent"
     DELIVERED = "delivered"
@@ -73,6 +76,7 @@ class NotificationStatus(str, Enum):
 
 class NotificationRecipient(str, Enum):
     """Types of breach notification recipients."""
+
     SUPERVISORY_AUTHORITY = "supervisory_authority"
     DATA_SUBJECTS = "data_subjects"
     MEDIA = "media"
@@ -85,44 +89,45 @@ class NotificationRecipient(str, Enum):
 @dataclass
 class BreachIncident:
     """Data breach incident record."""
+
     incident_id: str = field(default_factory=lambda: str(uuid4()))
-    
+
     # Discovery
     discovered_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     discovered_by: str = ""
     discovery_method: str = ""  # automated, employee_report, external_report, audit
-    
+
     # Classification
     breach_type: BreachType = BreachType.UNAUTHORIZED_ACCESS
     severity: BreachSeverity = BreachSeverity.MEDIUM
     status: BreachStatus = BreachStatus.DETECTED
-    
+
     # Scope
     data_categories: list[DataClassification] = field(default_factory=list)
     data_elements: list[str] = field(default_factory=list)
     # e.g., ["name", "email", "ssn", "credit_card"]
-    
+
     jurisdictions: list[Jurisdiction] = field(default_factory=list)
     record_count: int = 0
     affected_systems: list[str] = field(default_factory=list)
-    
+
     # Timeline
     breach_occurred_at: datetime | None = None  # When breach actually happened
     contained_at: datetime | None = None
     remediated_at: datetime | None = None
     closed_at: datetime | None = None
-    
+
     # Assessment
     risk_assessment: str = ""
     likely_harm: bool = False
     encryption_in_place: bool = False
-    
+
     # Notifications
     dpa_notification_required: bool = False
     dpa_notification_deadline: datetime | None = None
     individual_notification_required: bool = False
     individual_notification_deadline: datetime | None = None
-    
+
     # Response
     response_lead: str = ""
     investigation_notes: str = ""
@@ -133,26 +138,27 @@ class BreachIncident:
 @dataclass
 class NotificationRecord:
     """Record of breach notification sent."""
+
     notification_id: str = field(default_factory=lambda: str(uuid4()))
     incident_id: str = ""
-    
+
     # Recipient
     recipient_type: str = ""  # dpa, individual, media, hhs
     recipient_id: str = ""
     recipient_email: str = ""
     jurisdiction: Jurisdiction = Jurisdiction.GLOBAL
-    
+
     # Content
     notification_type: str = ""  # initial, supplemental, final
     subject: str = ""
     content_hash: str = ""
-    
+
     # Status
     status: NotificationStatus = NotificationStatus.PENDING
     sent_at: datetime | None = None
     delivered_at: datetime | None = None
     acknowledged_at: datetime | None = None
-    
+
     # Tracking
     deadline: datetime | None = None
     is_overdue: bool = False
@@ -161,6 +167,7 @@ class NotificationRecord:
 @dataclass
 class JurisdictionDeadline:
     """Notification deadline for a specific jurisdiction."""
+
     jurisdiction: Jurisdiction
     deadline: datetime
     deadline_hours: int
@@ -171,6 +178,7 @@ class JurisdictionDeadline:
 @dataclass
 class DeadlineAlert:
     """Alert for an approaching or missed deadline."""
+
     incident_id: str
     jurisdiction: Jurisdiction
     deadline: datetime
@@ -182,21 +190,21 @@ class DeadlineAlert:
 
 # Alert thresholds in hours before deadline
 DEADLINE_ALERT_THRESHOLDS = {
-    "warning": 24,    # 24 hours before
-    "urgent": 12,     # 12 hours before
-    "critical": 6,    # 6 hours before
-    "imminent": 1,    # 1 hour before
+    "warning": 24,  # 24 hours before
+    "urgent": 12,  # 12 hours before
+    "critical": 6,  # 6 hours before
+    "imminent": 1,  # 1 hour before
 }
 
 
 class BreachNotificationService:
     """
     Breach detection, assessment, and notification service.
-    
+
     Manages the complete incident response lifecycle with
     automated deadline tracking and notification generation.
     """
-    
+
     def __init__(self, alert_callback: callable | None = None):
         """
         Initialize breach notification service.
@@ -228,18 +236,18 @@ class BreachNotificationService:
             Jurisdiction.US_COLORADO: {"dpa": 0, "individuals": 720},  # 30 days
             Jurisdiction.US_VIRGINIA: {"dpa": 0, "individuals": 1440},  # 60 days
         }
-        
+
         # HIPAA specific (for PHI breaches)
         self._hipaa_deadlines = {
             "hhs": 1440,  # 60 days for <500 records, immediate for 500+
             "individuals": 1440,  # 60 days
             "media": 1440,  # 60 days (if 500+ in state)
         }
-    
+
     # ───────────────────────────────────────────────────────────────
     # INCIDENT MANAGEMENT
     # ───────────────────────────────────────────────────────────────
-    
+
     async def report_breach(
         self,
         discovered_by: str,
@@ -256,7 +264,7 @@ class BreachNotificationService:
     ) -> BreachIncident:
         """
         Report a new data breach incident.
-        
+
         Automatically calculates notification deadlines.
         """
         incident = BreachIncident(
@@ -272,34 +280,36 @@ class BreachNotificationService:
             breach_occurred_at=breach_occurred_at or datetime.now(UTC),
             encryption_in_place=encryption_in_place,
         )
-        
+
         # Assess notification requirements
         incident = self._assess_notification_requirements(incident)
-        
+
         # Calculate deadlines
         deadlines = self._calculate_deadlines(incident)
         if deadlines:
             # Use most urgent deadline
             urgent = min(deadlines, key=lambda d: d.deadline)
             incident.dpa_notification_deadline = urgent.deadline
-        
+
         # Check if individual notification required
         incident.individual_notification_required = self._requires_individual_notification(incident)
-        
+
         # Store incident
         self._incidents[incident.incident_id] = incident
         self._notifications[incident.incident_id] = []
-        
+
         logger.critical(
             "breach_reported",
             incident_id=incident.incident_id,
             severity=severity.value,
             record_count=record_count,
-            dpa_deadline=incident.dpa_notification_deadline.isoformat() if incident.dpa_notification_deadline else None,
+            dpa_deadline=incident.dpa_notification_deadline.isoformat()
+            if incident.dpa_notification_deadline
+            else None,
         )
-        
+
         return incident
-    
+
     def _assess_notification_requirements(
         self,
         incident: BreachIncident,
@@ -307,41 +317,49 @@ class BreachNotificationService:
         """Assess if breach requires notification."""
         # GDPR: Risk to rights and freedoms
         # Default to requiring notification unless clearly no risk
-        
+
         high_risk_data = {
             DataClassification.SENSITIVE_PERSONAL,
             DataClassification.PHI,
             DataClassification.PCI,
             DataClassification.FINANCIAL,
         }
-        
+
         # High risk categories always require notification
         if any(cat in high_risk_data for cat in incident.data_categories):
             incident.dpa_notification_required = True
             incident.likely_harm = True
-        
+
         # Check for sensitive data elements
         sensitive_elements = {
-            "ssn", "social_security", "passport", "drivers_license",
-            "credit_card", "bank_account", "health_record", "medical",
-            "biometric", "password", "credentials",
+            "ssn",
+            "social_security",
+            "passport",
+            "drivers_license",
+            "credit_card",
+            "bank_account",
+            "health_record",
+            "medical",
+            "biometric",
+            "password",
+            "credentials",
         }
-        
+
         if any(elem.lower() in sensitive_elements for elem in incident.data_elements):
             incident.dpa_notification_required = True
             incident.likely_harm = True
-        
+
         # Large scale breaches always require notification
         if incident.record_count >= 500:
             incident.dpa_notification_required = True
-        
+
         # Encryption may exempt from notification in some jurisdictions
         if incident.encryption_in_place:
             incident.risk_assessment = "Data was encrypted - reduced risk"
             # But still assess based on other factors
-        
+
         return incident
-    
+
     def _requires_individual_notification(
         self,
         incident: BreachIncident,
@@ -350,23 +368,23 @@ class BreachNotificationService:
         # High risk to individuals
         if incident.likely_harm:
             return True
-        
+
         # Large scale
         if incident.record_count >= 500:
             return True
-        
+
         # Sensitive data types
         sensitive = {
             DataClassification.SENSITIVE_PERSONAL,
             DataClassification.PHI,
             DataClassification.PCI,
         }
-        
+
         if any(cat in sensitive for cat in incident.data_categories):
             return True
-        
+
         return False
-    
+
     def _calculate_deadlines(
         self,
         incident: BreachIncident,
@@ -374,10 +392,10 @@ class BreachNotificationService:
         """Calculate notification deadlines for all affected jurisdictions."""
         deadlines = []
         discovery = incident.discovered_at
-        
+
         for jurisdiction in incident.jurisdictions:
             hours = self._jurisdiction_deadlines.get(jurisdiction, {}).get("dpa", 72)
-            
+
             deadline = JurisdictionDeadline(
                 jurisdiction=jurisdiction,
                 deadline=discovery + timedelta(hours=hours),
@@ -385,33 +403,37 @@ class BreachNotificationService:
                 notification_to="dpa",
             )
             deadlines.append(deadline)
-        
+
         # Add HIPAA deadlines if PHI involved
         if DataClassification.PHI in incident.data_categories:
             if incident.record_count >= 500:
                 # Immediate notification required
-                deadlines.append(JurisdictionDeadline(
-                    jurisdiction=Jurisdiction.US_FEDERAL,
-                    deadline=discovery + timedelta(hours=72),
-                    deadline_hours=72,
-                    notification_to="hhs",
-                    notes="500+ records - immediate HHS notification",
-                ))
+                deadlines.append(
+                    JurisdictionDeadline(
+                        jurisdiction=Jurisdiction.US_FEDERAL,
+                        deadline=discovery + timedelta(hours=72),
+                        deadline_hours=72,
+                        notification_to="hhs",
+                        notes="500+ records - immediate HHS notification",
+                    )
+                )
             else:
                 # Annual batch notification acceptable
-                deadlines.append(JurisdictionDeadline(
-                    jurisdiction=Jurisdiction.US_FEDERAL,
-                    deadline=discovery + timedelta(hours=self._hipaa_deadlines["hhs"]),
-                    deadline_hours=self._hipaa_deadlines["hhs"],
-                    notification_to="hhs",
-                ))
-        
+                deadlines.append(
+                    JurisdictionDeadline(
+                        jurisdiction=Jurisdiction.US_FEDERAL,
+                        deadline=discovery + timedelta(hours=self._hipaa_deadlines["hhs"]),
+                        deadline_hours=self._hipaa_deadlines["hhs"],
+                        notification_to="hhs",
+                    )
+                )
+
         return deadlines
-    
+
     # ───────────────────────────────────────────────────────────────
     # INCIDENT RESPONSE WORKFLOW
     # ───────────────────────────────────────────────────────────────
-    
+
     async def update_status(
         self,
         incident_id: str,
@@ -423,10 +445,10 @@ class BreachNotificationService:
         incident = self._incidents.get(incident_id)
         if not incident:
             raise ValueError(f"Incident not found: {incident_id}")
-        
+
         old_status = incident.status
         incident.status = status
-        
+
         # Update timestamps
         if status == BreachStatus.CONTAINED:
             incident.contained_at = datetime.now(UTC)
@@ -434,10 +456,10 @@ class BreachNotificationService:
             incident.remediated_at = datetime.now(UTC)
         elif status == BreachStatus.CLOSED:
             incident.closed_at = datetime.now(UTC)
-        
+
         if notes:
             incident.investigation_notes += f"\n[{datetime.now(UTC).isoformat()}] {notes}"
-        
+
         logger.info(
             "breach_status_updated",
             incident_id=incident_id,
@@ -445,9 +467,9 @@ class BreachNotificationService:
             new_status=status.value,
             updated_by=updated_by,
         )
-        
+
         return incident
-    
+
     async def record_root_cause(
         self,
         incident_id: str,
@@ -458,21 +480,21 @@ class BreachNotificationService:
         incident = self._incidents.get(incident_id)
         if not incident:
             raise ValueError(f"Incident not found: {incident_id}")
-        
+
         incident.root_cause = root_cause
         incident.remediation_actions = remediation_actions
-        
+
         logger.info(
             "breach_root_cause_recorded",
             incident_id=incident_id,
         )
-        
+
         return incident
-    
+
     # ───────────────────────────────────────────────────────────────
     # NOTIFICATIONS
     # ───────────────────────────────────────────────────────────────
-    
+
     async def send_dpa_notification(
         self,
         incident_id: str,
@@ -481,16 +503,16 @@ class BreachNotificationService:
     ) -> NotificationRecord:
         """
         Send notification to Data Protection Authority.
-        
+
         Per GDPR Article 33.
         """
         incident = self._incidents.get(incident_id)
         if not incident:
             raise ValueError(f"Incident not found: {incident_id}")
-        
+
         # Generate notification content
         self._generate_dpa_notification(incident, jurisdiction)
-        
+
         notification = NotificationRecord(
             incident_id=incident_id,
             recipient_type="dpa",
@@ -501,21 +523,21 @@ class BreachNotificationService:
             status=NotificationStatus.PENDING,
             deadline=incident.dpa_notification_deadline,
         )
-        
+
         # In production, actually send the notification
         notification.sent_at = datetime.now(UTC)
         notification.status = NotificationStatus.SENT
-        
+
         self._notifications[incident_id].append(notification)
-        
+
         logger.info(
             "dpa_notification_sent",
             incident_id=incident_id,
             jurisdiction=jurisdiction.value,
         )
-        
+
         return notification
-    
+
     def _generate_dpa_notification(
         self,
         incident: BreachIncident,
@@ -526,18 +548,18 @@ class BreachNotificationService:
 DATA BREACH NOTIFICATION
 
 Incident Reference: {incident.incident_id}
-Date of Discovery: {incident.discovered_at.strftime('%Y-%m-%d %H:%M UTC')}
-Date Breach Occurred: {incident.breach_occurred_at.strftime('%Y-%m-%d %H:%M UTC') if incident.breach_occurred_at else 'Under investigation'}
+Date of Discovery: {incident.discovered_at.strftime("%Y-%m-%d %H:%M UTC")}
+Date Breach Occurred: {incident.breach_occurred_at.strftime("%Y-%m-%d %H:%M UTC") if incident.breach_occurred_at else "Under investigation"}
 
 1. NATURE OF THE BREACH
 Type: {incident.breach_type.value}
-Description: {incident.investigation_notes or 'Under investigation'}
+Description: {incident.investigation_notes or "Under investigation"}
 
 2. DATA CATEGORIES AFFECTED
-{', '.join(cat.value for cat in incident.data_categories)}
+{", ".join(cat.value for cat in incident.data_categories)}
 
 3. DATA ELEMENTS AFFECTED
-{', '.join(incident.data_elements)}
+{", ".join(incident.data_elements)}
 
 4. APPROXIMATE NUMBER OF DATA SUBJECTS
 {incident.record_count:,}
@@ -546,21 +568,21 @@ Description: {incident.investigation_notes or 'Under investigation'}
 [DPO Contact Information]
 
 6. LIKELY CONSEQUENCES
-{'High risk to rights and freedoms of data subjects' if incident.likely_harm else 'Assessment ongoing'}
+{"High risk to rights and freedoms of data subjects" if incident.likely_harm else "Assessment ongoing"}
 
 7. MEASURES TAKEN
 Status: {incident.status.value}
-Containment: {'Yes' if incident.contained_at else 'In progress'}
+Containment: {"Yes" if incident.contained_at else "In progress"}
 Remediation Actions:
-{chr(10).join('- ' + action for action in incident.remediation_actions) if incident.remediation_actions else '- Under development'}
+{chr(10).join("- " + action for action in incident.remediation_actions) if incident.remediation_actions else "- Under development"}
 
 8. ADDITIONAL INFORMATION
-{incident.risk_assessment or 'To be provided'}
+{incident.risk_assessment or "To be provided"}
 
 This notification is made in accordance with Article 33 of the GDPR.
 We will provide supplementary information as our investigation progresses.
 """
-    
+
     async def send_individual_notifications(
         self,
         incident_id: str,
@@ -568,21 +590,21 @@ We will provide supplementary information as our investigation progresses.
     ) -> list[NotificationRecord]:
         """
         Send notifications to affected individuals.
-        
+
         Per GDPR Article 34.
         """
         incident = self._incidents.get(incident_id)
         if not incident:
             raise ValueError(f"Incident not found: {incident_id}")
-        
+
         notifications = []
-        
+
         for individual in affected_individuals:
             self._generate_individual_notification(
                 incident,
                 individual.get("name", ""),
             )
-            
+
             notification = NotificationRecord(
                 incident_id=incident_id,
                 recipient_type="individual",
@@ -592,22 +614,22 @@ We will provide supplementary information as our investigation progresses.
                 subject="Important: Security Incident Notification",
                 status=NotificationStatus.PENDING,
             )
-            
+
             # In production, send via email service
             notification.sent_at = datetime.now(UTC)
             notification.status = NotificationStatus.SENT
-            
+
             notifications.append(notification)
             self._notifications[incident_id].append(notification)
-        
+
         logger.info(
             "individual_notifications_sent",
             incident_id=incident_id,
             count=len(notifications),
         )
-        
+
         return notifications
-    
+
     def _generate_individual_notification(
         self,
         incident: BreachIncident,
@@ -615,23 +637,23 @@ We will provide supplementary information as our investigation progresses.
     ) -> str:
         """Generate individual notification content."""
         return f"""
-Dear {recipient_name or 'Valued Customer'},
+Dear {recipient_name or "Valued Customer"},
 
-We are writing to inform you of a security incident that may have affected 
+We are writing to inform you of a security incident that may have affected
 your personal information.
 
 WHAT HAPPENED
-On {incident.discovered_at.strftime('%B %d, %Y')}, we discovered that 
-{incident.breach_type.value.replace('_', ' ')} occurred, which may have 
+On {incident.discovered_at.strftime("%B %d, %Y")}, we discovered that
+{incident.breach_type.value.replace("_", " ")} occurred, which may have
 resulted in unauthorized access to some of your personal information.
 
 WHAT INFORMATION WAS INVOLVED
 The following types of information may have been affected:
-{', '.join(incident.data_elements)}
+{", ".join(incident.data_elements)}
 
 WHAT WE ARE DOING
 We have taken immediate steps to address this incident:
-{chr(10).join('• ' + action for action in incident.remediation_actions) if incident.remediation_actions else '• Investigation ongoing'}
+{chr(10).join("• " + action for action in incident.remediation_actions) if incident.remediation_actions else "• Investigation ongoing"}
 
 WHAT YOU CAN DO
 We recommend that you:
@@ -644,61 +666,70 @@ FOR MORE INFORMATION
 If you have questions, please contact our dedicated response team:
 [Contact Information]
 
-We sincerely apologize for any inconvenience this may cause and are 
+We sincerely apologize for any inconvenience this may cause and are
 committed to protecting your information.
 
 Sincerely,
 [Organization Name]
 """
-    
+
     # ───────────────────────────────────────────────────────────────
     # MONITORING / REPORTING
     # ───────────────────────────────────────────────────────────────
-    
+
     def get_overdue_notifications(self) -> list[dict[str, Any]]:
         """Get list of overdue notifications."""
         overdue = []
         now = datetime.now(UTC)
-        
+
         for incident_id, incident in self._incidents.items():
             if incident.status in {BreachStatus.CLOSED, BreachStatus.REMEDIATED}:
                 continue
-            
+
             notifications = self._notifications.get(incident_id, [])
             dpa_sent = any(
                 n.recipient_type == "dpa" and n.status == NotificationStatus.SENT
                 for n in notifications
             )
-            
+
             if incident.dpa_notification_required and not dpa_sent:
                 if incident.dpa_notification_deadline and now > incident.dpa_notification_deadline:
-                    overdue.append({
-                        "incident_id": incident_id,
-                        "type": "dpa",
-                        "deadline": incident.dpa_notification_deadline.isoformat(),
-                        "hours_overdue": (now - incident.dpa_notification_deadline).total_seconds() / 3600,
-                    })
-        
+                    overdue.append(
+                        {
+                            "incident_id": incident_id,
+                            "type": "dpa",
+                            "deadline": incident.dpa_notification_deadline.isoformat(),
+                            "hours_overdue": (
+                                now - incident.dpa_notification_deadline
+                            ).total_seconds()
+                            / 3600,
+                        }
+                    )
+
         return overdue
-    
+
     def get_incident_summary(self, incident_id: str) -> dict[str, Any]:
         """Get comprehensive incident summary for reporting."""
         incident = self._incidents.get(incident_id)
         if not incident:
             return {}
-        
+
         notifications = self._notifications.get(incident_id, [])
-        
+
         return {
             "incident_id": incident.incident_id,
             "status": incident.status.value,
             "severity": incident.severity.value,
             "breach_type": incident.breach_type.value,
             "timeline": {
-                "occurred": incident.breach_occurred_at.isoformat() if incident.breach_occurred_at else None,
+                "occurred": incident.breach_occurred_at.isoformat()
+                if incident.breach_occurred_at
+                else None,
                 "discovered": incident.discovered_at.isoformat(),
                 "contained": incident.contained_at.isoformat() if incident.contained_at else None,
-                "remediated": incident.remediated_at.isoformat() if incident.remediated_at else None,
+                "remediated": incident.remediated_at.isoformat()
+                if incident.remediated_at
+                else None,
                 "closed": incident.closed_at.isoformat() if incident.closed_at else None,
             },
             "scope": {
@@ -710,10 +741,17 @@ Sincerely,
             },
             "notifications": {
                 "dpa_required": incident.dpa_notification_required,
-                "dpa_deadline": incident.dpa_notification_deadline.isoformat() if incident.dpa_notification_deadline else None,
-                "dpa_sent": any(n.recipient_type == "dpa" and n.status == NotificationStatus.SENT for n in notifications),
+                "dpa_deadline": incident.dpa_notification_deadline.isoformat()
+                if incident.dpa_notification_deadline
+                else None,
+                "dpa_sent": any(
+                    n.recipient_type == "dpa" and n.status == NotificationStatus.SENT
+                    for n in notifications
+                ),
                 "individual_required": incident.individual_notification_required,
-                "individuals_notified": len([n for n in notifications if n.recipient_type == "individual"]),
+                "individuals_notified": len(
+                    [n for n in notifications if n.recipient_type == "individual"]
+                ),
             },
             "assessment": {
                 "likely_harm": incident.likely_harm,
@@ -722,7 +760,7 @@ Sincerely,
             },
             "remediation": incident.remediation_actions,
         }
-    
+
     def get_metrics(self) -> dict[str, Any]:
         """Get breach metrics for compliance dashboard."""
         incidents = list(self._incidents.values())
@@ -739,8 +777,7 @@ Sincerely,
             },
             "total_records_affected": sum(i.record_count for i in incidents),
             "notifications_sent": sum(
-                len(self._notifications.get(i.incident_id, []))
-                for i in incidents
+                len(self._notifications.get(i.incident_id, [])) for i in incidents
             ),
             "overdue_notifications": len(self.get_overdue_notifications()),
         }
@@ -800,14 +837,16 @@ Sincerely,
 
             # Create alert for each affected jurisdiction
             for jurisdiction in incident.jurisdictions:
-                alerts.append(DeadlineAlert(
-                    incident_id=incident_id,
-                    jurisdiction=jurisdiction,
-                    deadline=deadline,
-                    deadline_type="dpa",
-                    alert_level=alert_level,
-                    hours_remaining=time_remaining,
-                ))
+                alerts.append(
+                    DeadlineAlert(
+                        incident_id=incident_id,
+                        jurisdiction=jurisdiction,
+                        deadline=deadline,
+                        deadline_type="dpa",
+                        alert_level=alert_level,
+                        hours_remaining=time_remaining,
+                    )
+                )
 
         return alerts
 

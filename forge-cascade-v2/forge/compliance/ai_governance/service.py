@@ -19,16 +19,17 @@ Key capabilities:
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from enum import Enum
-from typing import Any, Callable, Awaitable
+from typing import Any
 from uuid import uuid4
 
 import structlog
 
 from forge.compliance.core.enums import AIRiskClassification
-from forge.compliance.core.models import AISystemRegistration, AIDecisionLog
+from forge.compliance.core.models import AIDecisionLog, AISystemRegistration
 
 logger = structlog.get_logger(__name__)
 
@@ -40,12 +41,13 @@ logger = structlog.get_logger(__name__)
 
 class AIUseCase(str, Enum):
     """AI use case categories per EU AI Act Annex III."""
+
     # Prohibited (Article 5)
     SOCIAL_SCORING = "social_scoring"
     SUBLIMINAL_MANIPULATION = "subliminal_manipulation"
     EXPLOITATION_VULNERABILITY = "exploitation_vulnerability"
     REAL_TIME_BIOMETRIC_PUBLIC = "real_time_biometric_public"
-    
+
     # High-Risk (Annex III)
     BIOMETRIC_IDENTIFICATION = "biometric_identification"
     CRITICAL_INFRASTRUCTURE = "critical_infrastructure"
@@ -57,16 +59,16 @@ class AIUseCase(str, Enum):
     LAW_ENFORCEMENT = "law_enforcement"
     MIGRATION_ASYLUM = "migration_asylum"
     JUSTICE_DEMOCRACY = "justice_democracy"
-    
+
     # GPAI
     GENERAL_PURPOSE = "general_purpose"
     GENERAL_PURPOSE_SYSTEMIC = "general_purpose_systemic"
-    
+
     # Limited Risk
     CHATBOT = "chatbot"
     EMOTION_RECOGNITION = "emotion_recognition"
     DEEPFAKE_GENERATION = "deepfake_generation"
-    
+
     # Minimal Risk
     RECOMMENDATION = "recommendation"
     CONTENT_GENERATION = "content_generation"
@@ -76,6 +78,7 @@ class AIUseCase(str, Enum):
 
 class BiasMetric(str, Enum):
     """Fairness metrics for bias detection."""
+
     DEMOGRAPHIC_PARITY = "demographic_parity"
     EQUALIZED_ODDS = "equalized_odds"
     EQUAL_OPPORTUNITY = "equal_opportunity"
@@ -87,6 +90,7 @@ class BiasMetric(str, Enum):
 
 class ExplainabilityMethod(str, Enum):
     """Explainability methods for AI decisions."""
+
     FEATURE_IMPORTANCE = "feature_importance"
     SHAP = "shap"
     LIME = "lime"
@@ -105,39 +109,42 @@ class ExplainabilityMethod(str, Enum):
 @dataclass
 class BiasAssessment:
     """Bias assessment results for an AI system."""
+
     assessment_id: str = field(default_factory=lambda: str(uuid4()))
     ai_system_id: str = ""
-    
+
     # Assessment details
     assessed_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     assessed_by: str = ""
     assessment_type: str = "automated"  # automated, manual, third_party
-    
+
     # Protected attributes evaluated
     protected_attributes: list[str] = field(default_factory=list)
     # e.g., ["race", "gender", "age", "disability"]
-    
+
     # Metrics per attribute
     metrics: dict[str, dict[str, float]] = field(default_factory=dict)
     # e.g., {"gender": {"demographic_parity": 0.95, "equalized_odds": 0.87}}
-    
+
     # Thresholds
-    thresholds: dict[str, float] = field(default_factory=lambda: {
-        "demographic_parity": 0.8,
-        "equalized_odds": 0.8,
-        "equal_opportunity": 0.8,
-    })
-    
+    thresholds: dict[str, float] = field(
+        default_factory=lambda: {
+            "demographic_parity": 0.8,
+            "equalized_odds": 0.8,
+            "equal_opportunity": 0.8,
+        }
+    )
+
     # Results
     bias_detected: bool = False
     affected_groups: list[str] = field(default_factory=list)
     recommendations: list[str] = field(default_factory=list)
-    
+
     # Remediation
     remediation_required: bool = False
     remediation_deadline: datetime | None = None
     remediation_completed: bool = False
-    
+
     def check_thresholds(self) -> list[str]:
         """Check which metrics fail thresholds."""
         failures = []
@@ -152,15 +159,16 @@ class BiasAssessment:
 @dataclass
 class ConformityAssessment:
     """EU AI Act conformity assessment record."""
+
     assessment_id: str = field(default_factory=lambda: str(uuid4()))
     ai_system_id: str = ""
-    
+
     # Assessment metadata
     initiated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     completed_at: datetime | None = None
     assessor: str = ""  # Self, notified body, or third party
     notified_body_id: str | None = None
-    
+
     # Requirements checklist (per EU AI Act Article 9-15)
     risk_management_system: bool = False  # Article 9
     data_governance: bool = False  # Article 10
@@ -170,96 +178,100 @@ class ConformityAssessment:
     human_oversight: bool = False  # Article 14
     accuracy_robustness: bool = False  # Article 15
     cybersecurity: bool = False  # Article 15
-    
+
     # Documentation references
     technical_doc_reference: str | None = None
     risk_assessment_reference: str | None = None
     test_results_reference: str | None = None
-    
+
     # Declaration
     eu_declaration_issued: bool = False
     eu_declaration_reference: str | None = None
     ce_marking_affixed: bool = False
-    
+
     # Database registration
     eu_database_registered: bool = False
     eu_database_reference: str | None = None
-    
+
     @property
     def is_complete(self) -> bool:
         """Check if all requirements are met."""
-        return all([
-            self.risk_management_system,
-            self.data_governance,
-            self.technical_documentation,
-            self.record_keeping,
-            self.transparency,
-            self.human_oversight,
-            self.accuracy_robustness,
-            self.cybersecurity,
-        ])
+        return all(
+            [
+                self.risk_management_system,
+                self.data_governance,
+                self.technical_documentation,
+                self.record_keeping,
+                self.transparency,
+                self.human_oversight,
+                self.accuracy_robustness,
+                self.cybersecurity,
+            ]
+        )
 
 
 @dataclass
 class HumanOversightMechanism:
     """Human oversight mechanism for AI system."""
+
     mechanism_id: str = field(default_factory=lambda: str(uuid4()))
     ai_system_id: str = ""
-    
+
     # Oversight type
     mechanism_type: str = ""  # override, review, intervention, shutdown
     description: str = ""
-    
+
     # Trigger conditions
     automatic_trigger: bool = False
     trigger_conditions: list[str] = field(default_factory=list)
     # e.g., ["confidence < 0.7", "high_risk_decision", "user_request"]
-    
+
     # Reviewer requirements
     required_role: str | None = None
     required_training: list[str] = field(default_factory=list)
-    
+
     # SLA
     response_time_hours: int = 24
     escalation_path: list[str] = field(default_factory=list)
-    
+
     # Statistics
     total_invocations: int = 0
     average_response_time: float = 0.0
     override_rate: float = 0.0
 
 
-@dataclass 
+@dataclass
 class ImpactAssessment:
     """Algorithmic Impact Assessment per Colorado AI Act."""
+
     assessment_id: str = field(default_factory=lambda: str(uuid4()))
     ai_system_id: str = ""
-    
+
     # Assessment metadata
     conducted_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     conducted_by: str = ""
     review_frequency: str = "annual"  # annual, semi_annual, quarterly
     next_review: datetime | None = None
-    
+
     # System description
     system_purpose: str = ""
     decision_types: list[str] = field(default_factory=list)
     affected_populations: list[str] = field(default_factory=list)
-    
+
     # Data assessment
     training_data_sources: list[str] = field(default_factory=list)
     data_quality_measures: list[str] = field(default_factory=list)
     data_bias_assessment: str | None = None
-    
+
     # Impact analysis
     potential_harms: list[str] = field(default_factory=list)
     mitigation_measures: list[str] = field(default_factory=list)
     residual_risks: list[str] = field(default_factory=list)
-    
+
     # Stakeholder engagement
     stakeholders_consulted: list[str] = field(default_factory=list)
     public_input_received: bool = False
-    
+
     # Conclusions
     risk_level: str = "low"  # low, medium, high, unacceptable
     deployment_recommendation: str = "proceed"  # proceed, modify, halt
@@ -274,52 +286,61 @@ class ImpactAssessment:
 class AIGovernanceService:
     """
     Comprehensive AI governance service.
-    
+
     Manages AI system lifecycle, risk assessment, bias detection,
     explainability, and regulatory compliance.
     """
-    
+
     def __init__(self):
         # AI system inventory
         self._systems: dict[str, AISystemRegistration] = {}
-        
+
         # Decision logs (with retention)
         self._decisions: dict[str, AIDecisionLog] = {}
-        
+
         # Assessments
         self._bias_assessments: dict[str, BiasAssessment] = {}
         self._conformity_assessments: dict[str, ConformityAssessment] = {}
         self._impact_assessments: dict[str, ImpactAssessment] = {}
-        
+
         # Human oversight mechanisms
         self._oversight_mechanisms: dict[str, list[HumanOversightMechanism]] = {}
-        
+
         # Explainability handlers
         self._explainers: dict[str, Callable[[AIDecisionLog], Awaitable[dict]]] = {}
-        
+
         # Prohibited use case patterns
         self._prohibited_patterns = self._initialize_prohibited_patterns()
-    
+
     def _initialize_prohibited_patterns(self) -> dict[str, list[str]]:
         """Initialize patterns for prohibited AI uses."""
         return {
             AIUseCase.SOCIAL_SCORING.value: [
-                "social_credit", "citizen_score", "trustworthiness_rating",
-                "behavior_scoring", "social_ranking",
+                "social_credit",
+                "citizen_score",
+                "trustworthiness_rating",
+                "behavior_scoring",
+                "social_ranking",
             ],
             AIUseCase.SUBLIMINAL_MANIPULATION.value: [
-                "subliminal", "manipulation", "dark_pattern", "unconscious_influence",
+                "subliminal",
+                "manipulation",
+                "dark_pattern",
+                "unconscious_influence",
             ],
             AIUseCase.EXPLOITATION_VULNERABILITY.value: [
-                "target_vulnerable", "exploit_disability", "exploit_minor",
-                "exploit_economic", "predatory",
+                "target_vulnerable",
+                "exploit_disability",
+                "exploit_minor",
+                "exploit_economic",
+                "predatory",
             ],
         }
-    
+
     # ───────────────────────────────────────────────────────────────
     # AI SYSTEM REGISTRATION
     # ───────────────────────────────────────────────────────────────
-    
+
     async def register_system(
         self,
         system_name: str,
@@ -334,13 +355,13 @@ class AIGovernanceService:
     ) -> AISystemRegistration:
         """
         Register an AI system in the inventory.
-        
+
         Per EU AI Act Article 49 - Registration requirements.
         """
         # Auto-classify risk if not provided
         if risk_classification is None:
             risk_classification = self._classify_risk(use_cases, intended_purpose)
-        
+
         # Check for prohibited uses
         prohibited_check = self._check_prohibited_uses(use_cases, intended_purpose)
         if prohibited_check:
@@ -350,7 +371,7 @@ class AIGovernanceService:
                 prohibited_uses=prohibited_check,
             )
             raise ValueError(f"Prohibited AI use detected: {prohibited_check}")
-        
+
         registration = AISystemRegistration(
             system_name=system_name,
             system_version=system_version,
@@ -362,22 +383,25 @@ class AIGovernanceService:
             human_oversight_measures=human_oversight_measures,
             training_data_description=training_data_description,
         )
-        
+
         self._systems[registration.id] = registration
-        
+
         # Initialize oversight mechanisms for high-risk systems
-        if risk_classification in {AIRiskClassification.HIGH_RISK, AIRiskClassification.GPAI_SYSTEMIC}:
+        if risk_classification in {
+            AIRiskClassification.HIGH_RISK,
+            AIRiskClassification.GPAI_SYSTEMIC,
+        }:
             await self._initialize_oversight_mechanisms(registration)
-        
+
         logger.info(
             "ai_system_registered",
             system_id=registration.id,
             system_name=system_name,
             risk_classification=risk_classification.value,
         )
-        
+
         return registration
-    
+
     def _classify_risk(
         self,
         use_cases: list[str],
@@ -387,7 +411,7 @@ class AIGovernanceService:
         Classify AI system risk per EU AI Act Annex III.
         """
         purpose_lower = intended_purpose.lower()
-        
+
         # Check for prohibited uses
         for prohibited_case in [
             AIUseCase.SOCIAL_SCORING,
@@ -397,7 +421,7 @@ class AIGovernanceService:
         ]:
             if prohibited_case.value in use_cases:
                 return AIRiskClassification.UNACCEPTABLE
-        
+
         # Check for high-risk (Annex III)
         high_risk_cases = {
             AIUseCase.BIOMETRIC_IDENTIFICATION,
@@ -411,40 +435,48 @@ class AIGovernanceService:
             AIUseCase.MIGRATION_ASYLUM,
             AIUseCase.JUSTICE_DEMOCRACY,
         }
-        
+
         for case in use_cases:
             if case in {c.value for c in high_risk_cases}:
                 return AIRiskClassification.HIGH_RISK
-        
+
         # Check keywords in purpose
         high_risk_keywords = [
-            "employment", "hiring", "recruitment", "credit", "loan",
-            "education", "grading", "biometric", "law enforcement",
-            "critical infrastructure", "healthcare diagnosis",
+            "employment",
+            "hiring",
+            "recruitment",
+            "credit",
+            "loan",
+            "education",
+            "grading",
+            "biometric",
+            "law enforcement",
+            "critical infrastructure",
+            "healthcare diagnosis",
         ]
-        
+
         if any(kw in purpose_lower for kw in high_risk_keywords):
             return AIRiskClassification.HIGH_RISK
-        
+
         # Check for GPAI
         if AIUseCase.GENERAL_PURPOSE_SYSTEMIC.value in use_cases:
             return AIRiskClassification.GPAI_SYSTEMIC
         if AIUseCase.GENERAL_PURPOSE.value in use_cases:
             return AIRiskClassification.GPAI
-        
+
         # Check for limited risk
         limited_risk_cases = {
             AIUseCase.CHATBOT,
             AIUseCase.EMOTION_RECOGNITION,
             AIUseCase.DEEPFAKE_GENERATION,
         }
-        
+
         for case in use_cases:
             if case in {c.value for c in limited_risk_cases}:
                 return AIRiskClassification.LIMITED_RISK
-        
+
         return AIRiskClassification.MINIMAL_RISK
-    
+
     def _check_prohibited_uses(
         self,
         use_cases: list[str],
@@ -453,15 +485,15 @@ class AIGovernanceService:
         """Check for prohibited AI uses."""
         prohibited = []
         purpose_lower = intended_purpose.lower()
-        
+
         for category, patterns in self._prohibited_patterns.items():
             if category in use_cases:
                 prohibited.append(category)
             elif any(p in purpose_lower for p in patterns):
                 prohibited.append(category)
-        
+
         return prohibited
-    
+
     async def _initialize_oversight_mechanisms(
         self,
         registration: AISystemRegistration,
@@ -496,13 +528,13 @@ class AIGovernanceService:
                 response_time_hours=1,
             ),
         ]
-        
+
         self._oversight_mechanisms[registration.id] = mechanisms
-    
+
     # ───────────────────────────────────────────────────────────────
     # DECISION LOGGING
     # ───────────────────────────────────────────────────────────────
-    
+
     async def log_decision(
         self,
         ai_system_id: str,
@@ -519,13 +551,13 @@ class AIGovernanceService:
     ) -> AIDecisionLog:
         """
         Log an AI decision for transparency and accountability.
-        
+
         Per EU AI Act Article 12 - Record-keeping.
         """
         system = self._systems.get(ai_system_id)
         if not system:
             raise ValueError(f"AI system not registered: {ai_system_id}")
-        
+
         decision = AIDecisionLog(
             ai_system_id=ai_system_id,
             model_version=model_version,
@@ -539,29 +571,29 @@ class AIGovernanceService:
             has_legal_effect=has_legal_effect,
             has_significant_effect=has_significant_effect,
         )
-        
+
         self._decisions[decision.id] = decision
-        
+
         # Check if human review required
         if self._requires_human_review(decision, system):
             decision.human_review_requested = True
             decision.human_review_requested_at = datetime.now(UTC)
-            
+
             logger.info(
                 "ai_decision_review_required",
                 decision_id=decision.id,
                 reason="policy_trigger",
             )
-        
+
         logger.info(
             "ai_decision_logged",
             decision_id=decision.id,
             system_id=ai_system_id,
             decision_type=decision_type,
         )
-        
+
         return decision
-    
+
     def _requires_human_review(
         self,
         decision: AIDecisionLog,
@@ -575,11 +607,11 @@ class AIGovernanceService:
         }:
             if decision.has_legal_effect or decision.has_significant_effect:
                 return True
-        
+
         # Low confidence requires review
         if decision.confidence_score < 0.7:
             return True
-        
+
         # Check oversight mechanism triggers
         mechanisms = self._oversight_mechanisms.get(system.id, [])
         for mechanism in mechanisms:
@@ -593,9 +625,9 @@ class AIGovernanceService:
                         threshold = float(condition.split("<")[1].strip())
                         if decision.confidence_score < threshold:
                             return True
-        
+
         return False
-    
+
     async def complete_human_review(
         self,
         decision_id: str,
@@ -606,36 +638,36 @@ class AIGovernanceService:
     ) -> AIDecisionLog | None:
         """
         Complete human review of an AI decision.
-        
+
         Per GDPR Article 22 - Right to human intervention.
         """
         decision = self._decisions.get(decision_id)
         if not decision:
             return None
-        
+
         decision.human_reviewed = True
         decision.human_reviewer_id = reviewer_id
         decision.human_review_completed_at = datetime.now(UTC)
         decision.human_override = override
-        
+
         if override:
             decision.human_override_reason = override_reason
             if new_outcome:
                 decision.decision_outcome = new_outcome
-            
+
             logger.info(
                 "ai_decision_overridden",
                 decision_id=decision_id,
                 reviewer_id=reviewer_id,
                 reason=override_reason,
             )
-        
+
         return decision
-    
+
     # ───────────────────────────────────────────────────────────────
     # EXPLAINABILITY
     # ───────────────────────────────────────────────────────────────
-    
+
     async def generate_explanation(
         self,
         decision_id: str,
@@ -644,25 +676,25 @@ class AIGovernanceService:
     ) -> dict[str, Any]:
         """
         Generate explanation for an AI decision.
-        
+
         Per EU AI Act Article 13 - Transparency requirements.
-        
+
         Args:
             decision_id: ID of the decision to explain
             method: Explanation method to use
             audience: Target audience (end_user, technical, regulatory)
-        
+
         Returns:
             Explanation with appropriate detail level
         """
         decision = self._decisions.get(decision_id)
         if not decision:
             return {"error": "Decision not found"}
-        
+
         system = self._systems.get(decision.ai_system_id)
         if not system:
             return {"error": "System not found"}
-        
+
         # Build explanation based on audience
         if audience == "end_user":
             explanation = self._generate_user_explanation(decision, system)
@@ -670,9 +702,9 @@ class AIGovernanceService:
             explanation = self._generate_technical_explanation(decision, system)
         else:
             explanation = self._generate_regulatory_explanation(decision, system)
-        
+
         return explanation
-    
+
     def _generate_user_explanation(
         self,
         decision: AIDecisionLog,
@@ -685,7 +717,7 @@ class AIGovernanceService:
             factor_explanations.append(
                 f"• {factor.get('factor', 'Factor')}: {factor.get('explanation', 'Contributed to the decision')}"
             )
-        
+
         return {
             "summary": f"The {system.system_name} made this decision based on the information provided.",
             "outcome": decision.decision_outcome,
@@ -699,7 +731,7 @@ class AIGovernanceService:
             ],
             "how_to_contest": "Contact support to request a human review",
         }
-    
+
     def _generate_technical_explanation(
         self,
         decision: AIDecisionLog,
@@ -728,7 +760,7 @@ class AIGovernanceService:
             "input_summary": decision.input_summary,
             "model_version": decision.model_version,
         }
-    
+
     def _generate_regulatory_explanation(
         self,
         decision: AIDecisionLog,
@@ -769,11 +801,11 @@ class AIGovernanceService:
                 "subject_id": decision.subject_id,
             },
         }
-    
+
     # ───────────────────────────────────────────────────────────────
     # BIAS ASSESSMENT
     # ───────────────────────────────────────────────────────────────
-    
+
     async def assess_bias(
         self,
         ai_system_id: str,
@@ -815,7 +847,9 @@ class AIGovernanceService:
             positive_rates = {}
             for group, values in groups.items():
                 positive_count = sum(1 for p in values["predictions"] if p)
-                positive_rates[group] = positive_count / len(values["predictions"]) if values["predictions"] else 0
+                positive_rates[group] = (
+                    positive_count / len(values["predictions"]) if values["predictions"] else 0
+                )
 
             if positive_rates:
                 min_rate = min(positive_rates.values())
@@ -832,10 +866,10 @@ class AIGovernanceService:
                     truths = values["ground_truth"]
 
                     # Count true positives, false positives, etc.
-                    tp = sum(1 for p, t in zip(preds, truths) if p and t)
-                    fp = sum(1 for p, t in zip(preds, truths) if p and not t)
-                    tn = sum(1 for p, t in zip(preds, truths) if not p and not t)
-                    fn = sum(1 for p, t in zip(preds, truths) if not p and t)
+                    tp = sum(1 for p, t in zip(preds, truths, strict=False) if p and t)
+                    fp = sum(1 for p, t in zip(preds, truths, strict=False) if p and not t)
+                    tn = sum(1 for p, t in zip(preds, truths, strict=False) if not p and not t)
+                    fn = sum(1 for p, t in zip(preds, truths, strict=False) if not p and t)
 
                     # True Positive Rate (Recall/Sensitivity): TP / (TP + FN)
                     positives = tp + fn
@@ -878,10 +912,12 @@ class AIGovernanceService:
         failures = assessment.check_thresholds()
         if failures:
             assessment.bias_detected = True
-            assessment.affected_groups = list(set(f.split(":")[0] for f in failures))
+            assessment.affected_groups = list({f.split(":")[0] for f in failures})
             assessment.remediation_required = True
             assessment.remediation_deadline = datetime.now(UTC) + timedelta(days=30)
-            assessment.recommendations = self._generate_bias_recommendations(failures, assessment.metrics)
+            assessment.recommendations = self._generate_bias_recommendations(
+                failures, assessment.metrics
+            )
 
         self._bias_assessments[assessment.assessment_id] = assessment
 
@@ -909,38 +945,46 @@ class AIGovernanceService:
         has_equalized_odds_issue = any("equalized_odds" in f for f in failures)
 
         if has_demographic_parity_issue:
-            recommendations.extend([
-                "Review training data distribution across protected groups",
-                "Consider resampling or reweighting to balance representation",
-                "Evaluate whether demographic parity is the appropriate fairness criterion for this use case",
-            ])
+            recommendations.extend(
+                [
+                    "Review training data distribution across protected groups",
+                    "Consider resampling or reweighting to balance representation",
+                    "Evaluate whether demographic parity is the appropriate fairness criterion for this use case",
+                ]
+            )
 
         if has_equal_opportunity_issue:
-            recommendations.extend([
-                "Investigate why true positive rates differ across groups",
-                "Check for label quality issues in underperforming groups",
-                "Consider threshold adjustment per group (with appropriate documentation)",
-            ])
+            recommendations.extend(
+                [
+                    "Investigate why true positive rates differ across groups",
+                    "Check for label quality issues in underperforming groups",
+                    "Consider threshold adjustment per group (with appropriate documentation)",
+                ]
+            )
 
         if has_equalized_odds_issue:
-            recommendations.extend([
-                "Review both true positive and false positive rates across groups",
-                "Implement fairness constraints during model training",
-                "Consider post-processing calibration methods",
-            ])
+            recommendations.extend(
+                [
+                    "Review both true positive and false positive rates across groups",
+                    "Implement fairness constraints during model training",
+                    "Consider post-processing calibration methods",
+                ]
+            )
 
         # General recommendations
-        recommendations.extend([
-            "Conduct disparate impact analysis with domain experts",
-            "Document bias findings and mitigation efforts for compliance",
-        ])
+        recommendations.extend(
+            [
+                "Conduct disparate impact analysis with domain experts",
+                "Document bias findings and mitigation efforts for compliance",
+            ]
+        )
 
         return recommendations
-    
+
     # ───────────────────────────────────────────────────────────────
     # CONFORMITY ASSESSMENT
     # ───────────────────────────────────────────────────────────────
-    
+
     async def initiate_conformity_assessment(
         self,
         ai_system_id: str,
@@ -949,36 +993,36 @@ class AIGovernanceService:
     ) -> ConformityAssessment:
         """
         Initiate EU AI Act conformity assessment.
-        
+
         Per EU AI Act Article 43.
         """
         system = self._systems.get(ai_system_id)
         if not system:
             raise ValueError(f"AI system not registered: {ai_system_id}")
-        
+
         if not system.risk_classification.requires_conformity_assessment:
             logger.warning(
                 "conformity_assessment_not_required",
                 system_id=ai_system_id,
                 risk_classification=system.risk_classification.value,
             )
-        
+
         assessment = ConformityAssessment(
             ai_system_id=ai_system_id,
             assessor=assessor,
             notified_body_id=notified_body_id,
         )
-        
+
         self._conformity_assessments[assessment.assessment_id] = assessment
-        
+
         logger.info(
             "conformity_assessment_initiated",
             assessment_id=assessment.assessment_id,
             system_id=ai_system_id,
         )
-        
+
         return assessment
-    
+
     async def update_conformity_requirement(
         self,
         assessment_id: str,
@@ -990,19 +1034,19 @@ class AIGovernanceService:
         assessment = self._conformity_assessments.get(assessment_id)
         if not assessment:
             return None
-        
+
         if hasattr(assessment, requirement):
             setattr(assessment, requirement, met)
-        
+
         # Check if complete
         if assessment.is_complete and not assessment.completed_at:
             assessment.completed_at = datetime.now(UTC)
-            
+
             # Update system registration
             system = self._systems.get(assessment.ai_system_id)
             if system:
                 system.conformity_assessment_completed = True
-        
+
         return assessment
 
 

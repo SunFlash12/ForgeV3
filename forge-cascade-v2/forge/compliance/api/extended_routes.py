@@ -12,34 +12,35 @@ Additional REST API endpoints for:
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query, Body
+from fastapi import APIRouter, Body, HTTPException, Query
 from pydantic import BaseModel
 
+from forge.compliance.accessibility import (
+    AccessibilityStandard,
+    IssueImpact,
+    WCAGLevel,
+    get_accessibility_service,
+)
+from forge.compliance.ai_governance import get_ai_governance_service
+from forge.compliance.core.enums import (
+    BreachSeverity,
+    ComplianceFramework,
+    DataClassification,
+    Jurisdiction,
+)
+
 # Import services
-from forge.compliance.privacy import get_consent_service, ConsentPurpose
+from forge.compliance.privacy import ConsentPurpose, get_consent_service
+from forge.compliance.reporting import ReportFormat, ReportType, get_compliance_reporting_service
 from forge.compliance.security import (
+    BreachType,
+    MFAMethod,
+    NotificationRecipient,
+    Permission,
+    ResourceType,
     get_access_control_service,
     get_authentication_service,
     get_breach_notification_service,
-    Permission,
-    ResourceType,
-    MFAMethod,
-    BreachType,
-    NotificationRecipient,
-)
-from forge.compliance.ai_governance import get_ai_governance_service
-from forge.compliance.reporting import get_compliance_reporting_service, ReportType, ReportFormat
-from forge.compliance.accessibility import (
-    get_accessibility_service,
-    WCAGLevel,
-    AccessibilityStandard,
-    IssueImpact,
-)
-from forge.compliance.core.enums import (
-    Jurisdiction,
-    ComplianceFramework,
-    DataClassification,
-    BreachSeverity,
 )
 
 extended_router = APIRouter()
@@ -52,6 +53,7 @@ extended_router = APIRouter()
 
 class ConsentCollectionRequest(BaseModel):
     """Request to collect consent."""
+
     user_id: str
     user_email: str = ""
     purposes: dict[str, bool]  # purpose_name -> granted
@@ -63,12 +65,14 @@ class ConsentCollectionRequest(BaseModel):
 
 class GPCSignalRequest(BaseModel):
     """GPC signal processing request."""
+
     user_id: str
     gpc_enabled: bool
 
 
 class ConsentCheckRequest(BaseModel):
     """Check consent for a specific purpose."""
+
     user_id: str
     purpose: str
 
@@ -77,7 +81,7 @@ class ConsentCheckRequest(BaseModel):
 async def collect_consent(request: ConsentCollectionRequest):
     """Collect consent from user with granular purposes."""
     service = get_consent_service()
-    
+
     # Convert string purposes to enum
     purposes = {}
     for purpose_str, granted in request.purposes.items():
@@ -86,18 +90,19 @@ async def collect_consent(request: ConsentCollectionRequest):
             purposes[purpose] = granted
         except ValueError:
             pass  # Skip invalid purposes
-    
+
     try:
         jurisdiction = Jurisdiction(request.jurisdiction)
     except ValueError:
         jurisdiction = Jurisdiction.GLOBAL
-    
+
     from forge.compliance.privacy.consent_service import ConsentCollectionMethod
+
     try:
         method = ConsentCollectionMethod(request.collection_method)
     except ValueError:
         method = ConsentCollectionMethod.EXPLICIT_OPT_IN
-    
+
     record = await service.collect_consent(
         user_id=request.user_id,
         purposes=purposes,
@@ -107,7 +112,7 @@ async def collect_consent(request: ConsentCollectionRequest):
         consent_text_version=request.consent_text_version,
         tcf_string=request.tcf_string,
     )
-    
+
     return {
         "record_id": record.record_id,
         "user_id": record.user_id,
@@ -121,12 +126,12 @@ async def collect_consent(request: ConsentCollectionRequest):
 async def process_gpc_signal(request: GPCSignalRequest):
     """Process Global Privacy Control signal."""
     service = get_consent_service()
-    
+
     await service.process_gpc_signal(
         user_id=request.user_id,
         gpc_enabled=request.gpc_enabled,
     )
-    
+
     return {
         "user_id": request.user_id,
         "gpc_processed": True,
@@ -135,7 +140,9 @@ async def process_gpc_signal(request: GPCSignalRequest):
             "data_sale",
             "third_party_sharing",
             "cross_context_advertising",
-        ] if request.gpc_enabled else [],
+        ]
+        if request.gpc_enabled
+        else [],
     }
 
 
@@ -144,10 +151,10 @@ async def get_user_consent(user_id: str):
     """Get user's consent preferences."""
     service = get_consent_service()
     consents = await service.get_user_consents(user_id)
-    
+
     if not consents:
         raise HTTPException(status_code=404, detail="No consent record found")
-    
+
     return consents
 
 
@@ -155,14 +162,14 @@ async def get_user_consent(user_id: str):
 async def check_consent(user_id: str, request: ConsentCheckRequest):
     """Check if user has consented to a specific purpose."""
     service = get_consent_service()
-    
+
     try:
         purpose = ConsentPurpose(request.purpose)
     except ValueError:
         raise HTTPException(status_code=400, detail=f"Invalid purpose: {request.purpose}")
-    
+
     has_consent, reason = await service.check_consent(user_id, purpose)
-    
+
     return {
         "user_id": user_id,
         "purpose": request.purpose,
@@ -179,7 +186,7 @@ async def withdraw_consent(
 ):
     """Withdraw consent for specified purposes."""
     service = get_consent_service()
-    
+
     purpose_enums = []
     if purposes:
         for p in purposes:
@@ -187,16 +194,16 @@ async def withdraw_consent(
                 purpose_enums.append(ConsentPurpose(p))
             except ValueError:
                 pass
-    
+
     record = await service.withdraw_consent(
         user_id=user_id,
         purposes=purpose_enums if purpose_enums else None,
         withdraw_all=withdraw_all,
     )
-    
+
     if not record:
         raise HTTPException(status_code=404, detail="No consent record found")
-    
+
     return {"user_id": user_id, "consent_withdrawn": True}
 
 
@@ -205,10 +212,10 @@ async def get_consent_receipt(user_id: str):
     """Generate consent receipt for user."""
     service = get_consent_service()
     receipt = await service.generate_receipt(user_id)
-    
+
     if not receipt:
         raise HTTPException(status_code=404, detail="No consent record found")
-    
+
     return {
         "receipt_id": receipt.receipt_id,
         "data_controller": receipt.data_controller,
@@ -226,6 +233,7 @@ async def get_consent_receipt(user_id: str):
 
 class AccessCheckRequest(BaseModel):
     """Access control check request."""
+
     user_id: str
     permission: str
     resource_type: str
@@ -235,6 +243,7 @@ class AccessCheckRequest(BaseModel):
 
 class RoleAssignmentRequest(BaseModel):
     """Role assignment request."""
+
     user_id: str
     role_id: str
     assigned_by: str
@@ -242,12 +251,14 @@ class RoleAssignmentRequest(BaseModel):
 
 class MFAChallengeRequest(BaseModel):
     """MFA challenge creation request."""
+
     user_id: str
     method: str = "totp"
 
 
 class MFAVerifyRequest(BaseModel):
     """MFA verification request."""
+
     challenge_id: str
     code: str
 
@@ -256,20 +267,20 @@ class MFAVerifyRequest(BaseModel):
 async def check_access(request: AccessCheckRequest):
     """Check if user has access to a resource."""
     service = get_access_control_service()
-    
+
     try:
         permission = Permission(request.permission)
         resource_type = ResourceType(request.resource_type)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    
+
     classification = None
     if request.data_classification:
         try:
             classification = DataClassification(request.data_classification)
         except ValueError:
             pass
-    
+
     decision = service.check_access(
         user_id=request.user_id,
         permission=permission,
@@ -277,7 +288,7 @@ async def check_access(request: AccessCheckRequest):
         resource_id=request.resource_id or None,
         data_classification=classification,
     )
-    
+
     return {
         "allowed": decision.allowed,
         "reason": decision.reason,
@@ -290,16 +301,16 @@ async def check_access(request: AccessCheckRequest):
 async def assign_role(request: RoleAssignmentRequest):
     """Assign a role to a user."""
     service = get_access_control_service()
-    
+
     success = service.assign_role(
         user_id=request.user_id,
         role_id=request.role_id,
         assigned_by=request.assigned_by,
     )
-    
+
     if not success:
         raise HTTPException(status_code=400, detail="Role assignment failed")
-    
+
     return {
         "user_id": request.user_id,
         "role_id": request.role_id,
@@ -312,7 +323,7 @@ async def get_user_roles(user_id: str):
     """Get roles assigned to a user."""
     service = get_access_control_service()
     roles = service.get_user_roles(user_id)
-    
+
     return {
         "user_id": user_id,
         "roles": [
@@ -331,17 +342,17 @@ async def get_user_roles(user_id: str):
 async def create_mfa_challenge(request: MFAChallengeRequest):
     """Create an MFA challenge for a user."""
     service = get_authentication_service()
-    
+
     try:
         method = MFAMethod(request.method)
     except ValueError:
         method = MFAMethod.TOTP
-    
+
     challenge = service.create_mfa_challenge(
         user_id=request.user_id,
         method=method,
     )
-    
+
     return {
         "challenge_id": challenge.challenge_id,
         "method": challenge.method.value,
@@ -353,12 +364,12 @@ async def create_mfa_challenge(request: MFAChallengeRequest):
 async def verify_mfa(request: MFAVerifyRequest):
     """Verify MFA response."""
     service = get_authentication_service()
-    
+
     success = service.verify_mfa(
         challenge_id=request.challenge_id,
         code=request.code,
     )
-    
+
     return {"verified": success}
 
 
@@ -369,6 +380,7 @@ async def verify_mfa(request: MFAVerifyRequest):
 
 class BreachReportRequest(BaseModel):
     """Breach report request."""
+
     discovered_by: str
     discovery_method: str
     breach_type: str
@@ -382,6 +394,7 @@ class BreachReportRequest(BaseModel):
 
 class NotificationCreateRequest(BaseModel):
     """Notification creation request."""
+
     breach_id: str
     recipient_type: str
     jurisdiction: str
@@ -393,27 +406,27 @@ class NotificationCreateRequest(BaseModel):
 async def report_breach(request: BreachReportRequest):
     """Report a new security breach."""
     service = get_breach_notification_service()
-    
+
     try:
         breach_type = BreachType(request.breach_type)
         severity = BreachSeverity(request.severity)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    
+
     data_categories = []
     for cat in request.data_categories:
         try:
             data_categories.append(DataClassification(cat))
         except ValueError:
             pass
-    
+
     jurisdictions = []
     for j in request.affected_jurisdictions:
         try:
             jurisdictions.append(Jurisdiction(j))
         except ValueError:
             pass
-    
+
     incident = await service.report_breach(
         discovered_by=request.discovered_by,
         discovery_method=request.discovery_method,
@@ -425,12 +438,14 @@ async def report_breach(request: BreachReportRequest):
         affected_jurisdictions=jurisdictions,
         description=request.description,
     )
-    
+
     return {
         "breach_id": incident.breach_id,
         "status": incident.status.value,
         "requires_notification": incident.requires_notification,
-        "most_urgent_deadline": incident.most_urgent_deadline.isoformat() if incident.most_urgent_deadline else None,
+        "most_urgent_deadline": incident.most_urgent_deadline.isoformat()
+        if incident.most_urgent_deadline
+        else None,
         "notification_deadlines": [
             {
                 "jurisdiction": d.jurisdiction.value,
@@ -447,10 +462,10 @@ async def get_breach(breach_id: str):
     """Get breach incident details."""
     service = get_breach_notification_service()
     summary = await service.get_incident_summary(breach_id)
-    
+
     if not summary:
         raise HTTPException(status_code=404, detail="Breach not found")
-    
+
     return summary
 
 
@@ -458,13 +473,13 @@ async def get_breach(breach_id: str):
 async def create_notification(breach_id: str, request: NotificationCreateRequest):
     """Create a notification for a breach."""
     service = get_breach_notification_service()
-    
+
     try:
         recipient_type = NotificationRecipient(request.recipient_type)
         jurisdiction = Jurisdiction(request.jurisdiction)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    
+
     notification = await service.create_notification(
         breach_id=breach_id,
         recipient_type=recipient_type,
@@ -472,10 +487,10 @@ async def create_notification(breach_id: str, request: NotificationCreateRequest
         recipient_name=request.recipient_name,
         recipient_contact=request.recipient_contact,
     )
-    
+
     if not notification:
         raise HTTPException(status_code=404, detail="Breach not found")
-    
+
     return {
         "notification_id": notification.notification_id,
         "status": notification.status.value,
@@ -498,6 +513,7 @@ async def get_overdue_notifications():
 
 class AISystemRegisterRequest(BaseModel):
     """AI system registration request."""
+
     system_name: str
     system_version: str
     provider: str
@@ -510,6 +526,7 @@ class AISystemRegisterRequest(BaseModel):
 
 class AIDecisionLogRequest(BaseModel):
     """AI decision logging request."""
+
     ai_system_id: str
     model_version: str
     decision_type: str
@@ -525,6 +542,7 @@ class AIDecisionLogRequest(BaseModel):
 
 class HumanReviewRequest(BaseModel):
     """Human review request."""
+
     decision_id: str
     reviewer_id: str
     override: bool = False
@@ -536,7 +554,7 @@ class HumanReviewRequest(BaseModel):
 async def register_ai_system(request: AISystemRegisterRequest):
     """Register an AI system in the inventory."""
     service = get_ai_governance_service()
-    
+
     registration = await service.register_system(
         system_name=request.system_name,
         system_version=request.system_version,
@@ -547,7 +565,7 @@ async def register_ai_system(request: AISystemRegisterRequest):
         human_oversight_measures=request.human_oversight_measures,
         training_data_description=request.training_data_description,
     )
-    
+
     return {
         "system_id": registration.id,
         "system_name": registration.system_name,
@@ -560,7 +578,7 @@ async def register_ai_system(request: AISystemRegisterRequest):
 async def log_ai_decision(request: AIDecisionLogRequest):
     """Log an AI decision for transparency."""
     service = get_ai_governance_service()
-    
+
     decision = await service.log_decision(
         ai_system_id=request.ai_system_id,
         model_version=request.model_version,
@@ -574,7 +592,7 @@ async def log_ai_decision(request: AIDecisionLogRequest):
         has_legal_effect=request.has_legal_effect,
         has_significant_effect=request.has_significant_effect,
     )
-    
+
     return {
         "decision_id": decision.id,
         "human_review_requested": decision.human_review_requested,
@@ -586,7 +604,7 @@ async def log_ai_decision(request: AIDecisionLogRequest):
 async def complete_human_review(request: HumanReviewRequest):
     """Complete human review of an AI decision."""
     service = get_ai_governance_service()
-    
+
     decision = await service.complete_human_review(
         decision_id=request.decision_id,
         reviewer_id=request.reviewer_id,
@@ -594,10 +612,10 @@ async def complete_human_review(request: HumanReviewRequest):
         override_reason=request.override_reason or None,
         new_outcome=request.new_outcome or None,
     )
-    
+
     if not decision:
         raise HTTPException(status_code=404, detail="Decision not found")
-    
+
     return {
         "decision_id": decision.id,
         "human_reviewed": decision.human_reviewed,
@@ -612,12 +630,12 @@ async def get_decision_explanation(
 ):
     """Get explanation for an AI decision."""
     service = get_ai_governance_service()
-    
+
     explanation = await service.generate_explanation(
         decision_id=decision_id,
         audience=audience,
     )
-    
+
     return explanation
 
 
@@ -628,6 +646,7 @@ async def get_decision_explanation(
 
 class ReportGenerateRequest(BaseModel):
     """Report generation request."""
+
     report_type: str = "executive_summary"
     frameworks: list[str] = []
     jurisdictions: list[str] = []
@@ -638,33 +657,33 @@ class ReportGenerateRequest(BaseModel):
 async def generate_report(request: ReportGenerateRequest):
     """Generate a compliance report."""
     service = get_compliance_reporting_service()
-    
+
     try:
         report_type = ReportType(request.report_type)
     except ValueError:
         report_type = ReportType.EXECUTIVE_SUMMARY
-    
+
     frameworks = []
     for f in request.frameworks:
         try:
             frameworks.append(ComplianceFramework(f))
         except ValueError:
             pass
-    
+
     jurisdictions = []
     for j in request.jurisdictions:
         try:
             jurisdictions.append(Jurisdiction(j))
         except ValueError:
             pass
-    
+
     report = await service.generate_report(
         report_type=report_type,
         frameworks=frameworks or None,
         jurisdictions=jurisdictions or None,
         generated_by=request.generated_by,
     )
-    
+
     return {
         "report_id": report.report_id,
         "title": report.title,
@@ -688,12 +707,12 @@ async def export_report(
 ):
     """Export a report in specified format."""
     service = get_compliance_reporting_service()
-    
+
     try:
         report_format = ReportFormat(format)
     except ValueError:
         report_format = ReportFormat.JSON
-    
+
     try:
         content = await service.export_report(report_id, report_format)
         return {"content": content.decode("utf-8")}
@@ -708,6 +727,7 @@ async def export_report(
 
 class AccessibilityAuditRequest(BaseModel):
     """Accessibility audit creation request."""
+
     audit_name: str
     target_url: str
     standard: str = "wcag_2_2"
@@ -717,6 +737,7 @@ class AccessibilityAuditRequest(BaseModel):
 
 class AccessibilityIssueRequest(BaseModel):
     """Accessibility issue logging request."""
+
     audit_id: str
     url: str
     criterion_id: str
@@ -729,6 +750,7 @@ class AccessibilityIssueRequest(BaseModel):
 
 class VPATGenerateRequest(BaseModel):
     """VPAT generation request."""
+
     product_name: str
     product_version: str
     vendor_name: str
@@ -739,14 +761,14 @@ class VPATGenerateRequest(BaseModel):
 async def create_accessibility_audit(request: AccessibilityAuditRequest):
     """Create an accessibility audit."""
     service = get_accessibility_service()
-    
+
     try:
         standard = AccessibilityStandard(request.standard)
         level = WCAGLevel(request.target_level)
     except ValueError:
         standard = AccessibilityStandard.WCAG_22
         level = WCAGLevel.AA
-    
+
     audit = await service.create_audit(
         audit_name=request.audit_name,
         target_url=request.target_url,
@@ -754,7 +776,7 @@ async def create_accessibility_audit(request: AccessibilityAuditRequest):
         target_level=level,
         auditor=request.auditor,
     )
-    
+
     return {
         "audit_id": audit.audit_id,
         "audit_name": audit.audit_name,
@@ -768,12 +790,12 @@ async def create_accessibility_audit(request: AccessibilityAuditRequest):
 async def log_accessibility_issue(request: AccessibilityIssueRequest):
     """Log an accessibility issue."""
     service = get_accessibility_service()
-    
+
     try:
         impact = IssueImpact(request.impact)
     except ValueError:
         impact = IssueImpact.MODERATE
-    
+
     issue = await service.log_issue(
         audit_id=request.audit_id,
         url=request.url,
@@ -784,7 +806,7 @@ async def log_accessibility_issue(request: AccessibilityIssueRequest):
         element_selector=request.element_selector,
         component=request.component,
     )
-    
+
     return {
         "issue_id": issue.issue_id,
         "criterion_id": issue.criterion_id,
@@ -797,14 +819,14 @@ async def log_accessibility_issue(request: AccessibilityIssueRequest):
 async def generate_vpat(request: VPATGenerateRequest):
     """Generate a VPAT document."""
     service = get_accessibility_service()
-    
+
     vpat = await service.generate_vpat(
         product_name=request.product_name,
         product_version=request.product_version,
         vendor_name=request.vendor_name,
         audit_id=request.audit_id or None,
     )
-    
+
     return {
         "vpat_id": vpat.vpat_id,
         "product_name": vpat.product_name,

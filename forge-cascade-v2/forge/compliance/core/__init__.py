@@ -10,43 +10,43 @@ Core components for the compliance framework including:
 """
 
 from forge.compliance.core.config import ComplianceConfig, get_compliance_config
-from forge.compliance.core.enums import (
-    Jurisdiction,
-    ComplianceFramework,
-    DataClassification,
-    RiskLevel,
-    ConsentType,
-    DSARType,
-    BreachSeverity,
-    AIRiskClassification,
-    AuditEventCategory,
-    EncryptionStandard,
-    KeyRotationPolicy,
-    AccessControlModel,
-)
-from forge.compliance.core.models import (
-    ComplianceStatus,
-    ControlStatus,
-    AuditEvent,
-    AuditChain,
-    DataSubjectRequest,
-    DSARVerification,
-    ConsentRecord,
-    BreachNotification,
-    AffectedIndividual,
-    RegulatoryNotification,
-    AISystemRegistration,
-    AIDecisionLog,
-    ComplianceReport,
-)
-from forge.compliance.core.registry import (
-    ControlDefinition,
-    ComplianceRegistry,
-    get_compliance_registry,
-)
 from forge.compliance.core.engine import (
     ComplianceEngine,
     get_compliance_engine,
+)
+from forge.compliance.core.enums import (
+    AccessControlModel,
+    AIRiskClassification,
+    AuditEventCategory,
+    BreachSeverity,
+    ComplianceFramework,
+    ConsentType,
+    DataClassification,
+    DSARType,
+    EncryptionStandard,
+    Jurisdiction,
+    KeyRotationPolicy,
+    RiskLevel,
+)
+from forge.compliance.core.models import (
+    AffectedIndividual,
+    AIDecisionLog,
+    AISystemRegistration,
+    AuditChain,
+    AuditEvent,
+    BreachNotification,
+    ComplianceReport,
+    ComplianceStatus,
+    ConsentRecord,
+    ControlStatus,
+    DataSubjectRequest,
+    DSARVerification,
+    RegulatoryNotification,
+)
+from forge.compliance.core.registry import (
+    ComplianceRegistry,
+    ControlDefinition,
+    get_compliance_registry,
 )
 from forge.compliance.core.repository import (
     ComplianceRepository,

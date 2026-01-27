@@ -11,14 +11,14 @@ Implements AI governance requirements per:
 
 from forge.compliance.ai_governance.service import (
     AIGovernanceService,
-    get_ai_governance_service,
     AIUseCase,
-    BiasMetric,
-    ExplainabilityMethod,
     BiasAssessment,
+    BiasMetric,
     ConformityAssessment,
+    ExplainabilityMethod,
     HumanOversightMechanism,
     ImpactAssessment,
+    get_ai_governance_service,
 )
 
 __all__ = [

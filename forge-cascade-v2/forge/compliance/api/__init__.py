@@ -6,8 +6,8 @@ REST API endpoints for all compliance services.
 
 from fastapi import APIRouter
 
-from forge.compliance.api.routes import router as compliance_router
 from forge.compliance.api.extended_routes import extended_router
+from forge.compliance.api.routes import router as compliance_router
 
 # Combine all routers
 api_router = APIRouter()

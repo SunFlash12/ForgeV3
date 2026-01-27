@@ -10,12 +10,12 @@ Automated compliance report generation:
 
 from forge.compliance.reporting.service import (
     ComplianceReportingService,
-    get_compliance_reporting_service,
-    ReportType,
+    GeneratedReport,
     ReportFormat,
     ReportSection,
     ReportTemplate,
-    GeneratedReport,
+    ReportType,
+    get_compliance_reporting_service,
 )
 
 __all__ = [

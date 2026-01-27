@@ -32,6 +32,7 @@ logger = structlog.get_logger(__name__)
 
 class ReportType(str, Enum):
     """Types of compliance reports."""
+
     EXECUTIVE_SUMMARY = "executive_summary"
     FULL_ASSESSMENT = "full_assessment"
     GAP_ANALYSIS = "gap_analysis"
@@ -46,6 +47,7 @@ class ReportType(str, Enum):
 
 class ReportFormat(str, Enum):
     """Output formats for reports."""
+
     PDF = "pdf"
     HTML = "html"
     JSON = "json"
@@ -56,6 +58,7 @@ class ReportFormat(str, Enum):
 @dataclass
 class ReportSection:
     """Section of a compliance report."""
+
     section_id: str
     title: str
     order: int
@@ -69,6 +72,7 @@ class ReportSection:
 @dataclass
 class ReportTemplate:
     """Template for compliance reports."""
+
     template_id: str
     name: str
     report_type: ReportType
@@ -81,22 +85,23 @@ class ReportTemplate:
 @dataclass
 class GeneratedReport:
     """Generated compliance report."""
+
     report_id: str = field(default_factory=lambda: str(uuid4()))
     report_type: ReportType = ReportType.FULL_ASSESSMENT
     title: str = ""
     generated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     generated_by: str = ""
-    
+
     # Scope
     frameworks: list[ComplianceFramework] = field(default_factory=list)
     jurisdictions: list[Jurisdiction] = field(default_factory=list)
     period_start: datetime | None = None
     period_end: datetime | None = None
-    
+
     # Content
     executive_summary: str = ""
     sections: list[ReportSection] = field(default_factory=list)
-    
+
     # Metrics
     overall_score: float = 0.0
     total_controls: int = 0
@@ -105,7 +110,7 @@ class GeneratedReport:
     gaps_high: int = 0
     gaps_medium: int = 0
     gaps_low: int = 0
-    
+
     # Status
     status: str = "draft"  # draft, final, archived
     approved_by: str | None = None
@@ -115,15 +120,15 @@ class GeneratedReport:
 class ComplianceReportingService:
     """
     Automated compliance reporting service.
-    
+
     Generates comprehensive compliance reports for various frameworks
     and regulatory requirements.
     """
-    
+
     def __init__(self):
         self._templates = self._initialize_templates()
         self._generated_reports: dict[str, GeneratedReport] = {}
-    
+
     def _initialize_templates(self) -> dict[str, ReportTemplate]:
         """Initialize report templates."""
         return {
@@ -230,7 +235,7 @@ class ComplianceReportingService:
                 output_formats=[ReportFormat.PDF, ReportFormat.EXCEL],
             ),
         }
-    
+
     async def generate_report(
         self,
         report_type: ReportType,
@@ -243,7 +248,7 @@ class ComplianceReportingService:
     ) -> GeneratedReport:
         """
         Generate a compliance report.
-        
+
         Args:
             report_type: Type of report to generate
             frameworks: Frameworks to include (None = all active)
@@ -252,7 +257,7 @@ class ComplianceReportingService:
             period_end: Reporting period end
             generated_by: User/system generating the report
             data_sources: Additional data sources for the report
-        
+
         Returns:
             Generated report
         """
@@ -264,10 +269,10 @@ class ComplianceReportingService:
             period_start=period_start or (datetime.now(UTC) - timedelta(days=365)),
             period_end=period_end or datetime.now(UTC),
         )
-        
+
         # Set title based on type
         report.title = self._generate_title(report_type, frameworks)
-        
+
         # Generate sections based on report type
         if report_type == ReportType.EXECUTIVE_SUMMARY:
             report = await self._generate_executive_summary(report, data_sources)
@@ -279,18 +284,18 @@ class ComplianceReportingService:
             report = await self._generate_dsar_summary(report, data_sources)
         elif report_type == ReportType.AI_GOVERNANCE:
             report = await self._generate_ai_governance_report(report, data_sources)
-        
+
         # Store report
         self._generated_reports[report.report_id] = report
-        
+
         logger.info(
             "compliance_report_generated",
             report_id=report.report_id,
             report_type=report_type.value,
         )
-        
+
         return report
-    
+
     def _generate_title(
         self,
         report_type: ReportType,
@@ -309,14 +314,14 @@ class ComplianceReportingService:
             ReportType.PRIVACY_IMPACT: "Privacy Impact Assessment",
             ReportType.VENDOR_DUE_DILIGENCE: "Vendor Due Diligence Report",
         }
-        
+
         title = type_titles.get(report_type, "Compliance Report")
-        
+
         if frameworks and len(frameworks) == 1:
             title = f"{frameworks[0].value.upper()} {title}"
-        
+
         return title
-    
+
     async def _generate_executive_summary(
         self,
         report: GeneratedReport,
@@ -324,7 +329,7 @@ class ComplianceReportingService:
     ) -> GeneratedReport:
         """Generate executive summary report."""
         data = data_sources or {}
-        
+
         # Overall status section
         overall_section = ReportSection(
             section_id="overall_status",
@@ -343,7 +348,7 @@ class ComplianceReportingService:
                 },
             ],
         )
-        
+
         # Key metrics section
         metrics_section = ReportSection(
             section_id="key_metrics",
@@ -365,7 +370,7 @@ class ComplianceReportingService:
                 },
             ],
         )
-        
+
         # Critical gaps section
         gaps_section = ReportSection(
             section_id="critical_gaps",
@@ -379,7 +384,7 @@ class ComplianceReportingService:
                 "Implement compensating controls",
             ],
         )
-        
+
         # Deadlines section
         deadlines_section = ReportSection(
             section_id="upcoming_deadlines",
@@ -394,26 +399,30 @@ class ComplianceReportingService:
                 },
             ],
         )
-        
+
         report.sections = [
             overall_section,
             metrics_section,
             gaps_section,
             deadlines_section,
         ]
-        
+
         # Calculate metrics
         report.overall_score = data.get("overall_score", 0)
         report.total_controls = data.get("total_controls", 0)
         report.compliant_controls = data.get("compliant_controls", 0)
-        report.gaps_critical = len([g for g in data.get("critical_gaps", []) if g.get("risk") == "critical"])
-        report.gaps_high = len([g for g in data.get("critical_gaps", []) if g.get("risk") == "high"])
-        
+        report.gaps_critical = len(
+            [g for g in data.get("critical_gaps", []) if g.get("risk") == "critical"]
+        )
+        report.gaps_high = len(
+            [g for g in data.get("critical_gaps", []) if g.get("risk") == "high"]
+        )
+
         # Generate executive summary text
         report.executive_summary = self._generate_executive_text(report)
-        
+
         return report
-    
+
     async def _generate_full_assessment(
         self,
         report: GeneratedReport,
@@ -421,7 +430,7 @@ class ComplianceReportingService:
     ) -> GeneratedReport:
         """Generate full compliance assessment report."""
         data = data_sources or {}
-        
+
         # Methodology section
         methodology = ReportSection(
             section_id="methodology",
@@ -433,7 +442,7 @@ class ComplianceReportingService:
                 "period": f"{report.period_start.strftime('%Y-%m-%d')} to {report.period_end.strftime('%Y-%m-%d')}",
             },
         )
-        
+
         # Control assessment sections (one per framework)
         control_sections = []
         for i, framework in enumerate(report.frameworks):
@@ -450,14 +459,20 @@ class ComplianceReportingService:
                 tables=[
                     {
                         "title": f"{framework.value.upper()} Control Status",
-                        "headers": ["Control ID", "Description", "Status", "Evidence", "Last Verified"],
+                        "headers": [
+                            "Control ID",
+                            "Description",
+                            "Status",
+                            "Evidence",
+                            "Last Verified",
+                        ],
                         "rows": data.get(f"{framework.value}_controls", []),
                     },
                 ],
                 findings=data.get(f"{framework.value}_findings", []),
             )
             control_sections.append(section)
-        
+
         # Risk assessment section
         risk_section = ReportSection(
             section_id="risk_assessment",
@@ -475,25 +490,28 @@ class ComplianceReportingService:
                 },
             ],
         )
-        
+
         # Recommendations section
         recommendations_section = ReportSection(
             section_id="recommendations",
             title="Recommendations",
             order=200,
             content={},
-            recommendations=data.get("recommendations", [
-                "Implement automated control monitoring",
-                "Conduct quarterly access reviews",
-                "Enhance encryption key management",
-                "Update incident response procedures",
-            ]),
+            recommendations=data.get(
+                "recommendations",
+                [
+                    "Implement automated control monitoring",
+                    "Conduct quarterly access reviews",
+                    "Enhance encryption key management",
+                    "Update incident response procedures",
+                ],
+            ),
         )
-        
+
         report.sections = [methodology] + control_sections + [risk_section, recommendations_section]
-        
+
         return report
-    
+
     async def _generate_gap_analysis(
         self,
         report: GeneratedReport,
@@ -501,7 +519,7 @@ class ComplianceReportingService:
     ) -> GeneratedReport:
         """Generate compliance gap analysis report."""
         data = data_sources or {}
-        
+
         # Current state
         current_state = ReportSection(
             section_id="current_state",
@@ -513,7 +531,7 @@ class ComplianceReportingService:
                 "automation_level": data.get("automation_level", "low"),
             },
         )
-        
+
         # Target state
         target_state = ReportSection(
             section_id="target_state",
@@ -525,7 +543,7 @@ class ComplianceReportingService:
                 "target_automation": "high",
             },
         )
-        
+
         # Gap identification
         gap_section = ReportSection(
             section_id="gaps",
@@ -541,7 +559,7 @@ class ComplianceReportingService:
             ],
             findings=[
                 {
-                    "id": f"GAP-{i+1}",
+                    "id": f"GAP-{i + 1}",
                     "description": gap.get("description", ""),
                     "risk_level": gap.get("risk", "medium"),
                     "remediation": gap.get("remediation", ""),
@@ -549,7 +567,7 @@ class ComplianceReportingService:
                 for i, gap in enumerate(data.get("gaps", []))
             ],
         )
-        
+
         # Remediation plan
         remediation = ReportSection(
             section_id="remediation",
@@ -568,15 +586,15 @@ class ComplianceReportingService:
                 },
             ],
         )
-        
+
         report.sections = [current_state, target_state, gap_section, remediation]
         report.gaps_critical = len([g for g in data.get("gaps", []) if g.get("risk") == "critical"])
         report.gaps_high = len([g for g in data.get("gaps", []) if g.get("risk") == "high"])
         report.gaps_medium = len([g for g in data.get("gaps", []) if g.get("risk") == "medium"])
         report.gaps_low = len([g for g in data.get("gaps", []) if g.get("risk") == "low"])
-        
+
         return report
-    
+
     async def _generate_dsar_summary(
         self,
         report: GeneratedReport,
@@ -584,7 +602,7 @@ class ComplianceReportingService:
     ) -> GeneratedReport:
         """Generate DSAR summary report."""
         data = data_sources or {}
-        
+
         # Overview
         overview = ReportSection(
             section_id="overview",
@@ -605,7 +623,7 @@ class ComplianceReportingService:
                 },
             ],
         )
-        
+
         # By type
         by_type = ReportSection(
             section_id="by_type",
@@ -620,7 +638,7 @@ class ComplianceReportingService:
                 },
             ],
         )
-        
+
         # Trends
         trends = ReportSection(
             section_id="trends",
@@ -638,11 +656,11 @@ class ComplianceReportingService:
                 },
             ],
         )
-        
+
         report.sections = [overview, by_type, trends]
-        
+
         return report
-    
+
     async def _generate_ai_governance_report(
         self,
         report: GeneratedReport,
@@ -650,7 +668,7 @@ class ComplianceReportingService:
     ) -> GeneratedReport:
         """Generate AI governance report."""
         data = data_sources or {}
-        
+
         # AI inventory
         inventory = ReportSection(
             section_id="inventory",
@@ -669,7 +687,7 @@ class ComplianceReportingService:
                 },
             ],
         )
-        
+
         # Decisions
         decisions = ReportSection(
             section_id="decisions",
@@ -688,7 +706,7 @@ class ComplianceReportingService:
                 },
             ],
         )
-        
+
         # Bias assessments
         bias = ReportSection(
             section_id="bias",
@@ -700,11 +718,11 @@ class ComplianceReportingService:
             },
             findings=data.get("bias_findings", []),
         )
-        
+
         report.sections = [inventory, decisions, bias]
-        
+
         return report
-    
+
     def _score_to_status(self, score: float) -> str:
         """Convert compliance score to status label."""
         if score >= 90:
@@ -717,18 +735,18 @@ class ComplianceReportingService:
             return "Needs Improvement"
         else:
             return "Critical"
-    
+
     def _generate_executive_text(self, report: GeneratedReport) -> str:
         """Generate executive summary text."""
         status = self._score_to_status(report.overall_score)
-        
+
         return f"""
-This report provides an executive summary of the organization's compliance status 
-for the period {report.period_start.strftime('%B %Y')} to {report.period_end.strftime('%B %Y')}.
+This report provides an executive summary of the organization's compliance status
+for the period {report.period_start.strftime("%B %Y")} to {report.period_end.strftime("%B %Y")}.
 
 **Overall Status: {status}** (Score: {report.overall_score:.1f}%)
 
-The organization has implemented {report.compliant_controls} of {report.total_controls} 
+The organization has implemented {report.compliant_controls} of {report.total_controls}
 required controls across the assessed frameworks.
 
 **Critical Findings:**
@@ -740,7 +758,7 @@ required controls across the assessed frameworks.
 2. Conduct regular control effectiveness reviews
 3. Enhance automation for continuous compliance monitoring
 """
-    
+
     async def export_report(
         self,
         report_id: str,
@@ -750,7 +768,7 @@ required controls across the assessed frameworks.
         report = self._generated_reports.get(report_id)
         if not report:
             raise ValueError(f"Report not found: {report_id}")
-        
+
         if format == ReportFormat.JSON:
             return self._export_json(report)
         elif format == ReportFormat.MARKDOWN:
@@ -760,7 +778,7 @@ required controls across the assessed frameworks.
         else:
             # Default to JSON
             return self._export_json(report)
-    
+
     def _export_json(self, report: GeneratedReport) -> bytes:
         """Export report as JSON."""
         data = {
@@ -797,7 +815,7 @@ required controls across the assessed frameworks.
             ],
         }
         return json.dumps(data, indent=2, default=str).encode("utf-8")
-    
+
     def _export_markdown(self, report: GeneratedReport) -> bytes:
         """Export report as Markdown."""
         lines = [
@@ -816,33 +834,33 @@ required controls across the assessed frameworks.
             "---",
             "",
         ]
-        
+
         for section in sorted(report.sections, key=lambda s: s.order):
             lines.append(f"## {section.title}")
             lines.append("")
-            
+
             if section.content:
                 for key, value in section.content.items():
                     lines.append(f"- **{key.replace('_', ' ').title()}:** {value}")
                 lines.append("")
-            
+
             if section.findings:
                 lines.append("### Findings")
                 for finding in section.findings:
                     lines.append(f"- {finding.get('description', finding)}")
                 lines.append("")
-            
+
             if section.recommendations:
                 lines.append("### Recommendations")
                 for rec in section.recommendations:
                     lines.append(f"- {rec}")
                 lines.append("")
-            
+
             lines.append("---")
             lines.append("")
-        
+
         return "\n".join(lines).encode("utf-8")
-    
+
     def _export_html(self, report: GeneratedReport) -> bytes:
         """Export report as HTML."""
         html = f"""<!DOCTYPE html>
@@ -861,8 +879,8 @@ required controls across the assessed frameworks.
 </head>
 <body>
     <h1>{report.title}</h1>
-    <p><strong>Generated:</strong> {report.generated_at.strftime('%Y-%m-%d %H:%M UTC')}</p>
-    
+    <p><strong>Generated:</strong> {report.generated_at.strftime("%Y-%m-%d %H:%M UTC")}</p>
+
     <h2>Key Metrics</h2>
     <div class="metric">
         <div class="metric-value">{report.overall_score:.1f}%</div>
@@ -876,27 +894,27 @@ required controls across the assessed frameworks.
         <div class="metric-value">{report.gaps_critical}</div>
         <div>Critical Gaps</div>
     </div>
-    
+
     <h2>Executive Summary</h2>
-    <p>{report.executive_summary.replace(chr(10), '<br>')}</p>
+    <p>{report.executive_summary.replace(chr(10), "<br>")}</p>
 """
-        
+
         for section in sorted(report.sections, key=lambda s: s.order):
             html += f"<h2>{section.title}</h2>"
-            
+
             if section.findings:
                 html += "<h3>Findings</h3>"
                 for finding in section.findings:
-                    desc = finding.get('description', str(finding))
+                    desc = finding.get("description", str(finding))
                     html += f'<div class="finding">{desc}</div>'
-            
+
             if section.recommendations:
                 html += "<h3>Recommendations</h3>"
                 for rec in section.recommendations:
                     html += f'<div class="recommendation">{rec}</div>'
-        
+
         html += "</body></html>"
-        
+
         return html.encode("utf-8")
 
 

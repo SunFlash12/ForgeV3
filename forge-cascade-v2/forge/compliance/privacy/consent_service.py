@@ -22,7 +22,7 @@ import base64
 import hashlib
 import json
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 from uuid import uuid4
@@ -36,6 +36,7 @@ logger = structlog.get_logger(__name__)
 
 class ConsentPurpose(str, Enum):
     """Standard consent purposes (IAB TCF 2.2 aligned)."""
+
     # TCF Standard Purposes
     STORE_ACCESS = "store_access"  # Purpose 1
     BASIC_ADS = "basic_ads"  # Purpose 2
@@ -47,11 +48,11 @@ class ConsentPurpose(str, Enum):
     PRODUCT_DEVELOPMENT = "product_development"  # Purpose 8
     PERSONALIZED_CONTENT = "personalized_content"  # Purpose 9
     AD_PERFORMANCE = "ad_performance"  # Purpose 10
-    
+
     # Special Purposes (no consent needed, legitimate interest)
     SECURITY = "security"
     DELIVERY = "delivery"
-    
+
     # Custom Forge purposes
     AI_TRAINING = "ai_training"
     AI_PROCESSING = "ai_processing"
@@ -68,6 +69,7 @@ class ConsentPurpose(str, Enum):
 
 class ConsentStatus(str, Enum):
     """Consent status values."""
+
     GRANTED = "granted"
     DENIED = "denied"
     WITHDRAWN = "withdrawn"
@@ -77,6 +79,7 @@ class ConsentStatus(str, Enum):
 
 class ConsentSource(str, Enum):
     """Source of consent collection."""
+
     CONSENT_BANNER = "consent_banner"
     PREFERENCE_CENTER = "preference_center"
     SIGNUP_FORM = "signup_form"
@@ -90,6 +93,7 @@ class ConsentSource(str, Enum):
 
 class LegalBasis(str, Enum):
     """Legal basis for processing (GDPR Article 6)."""
+
     CONSENT = "consent"
     CONTRACT = "contract"
     LEGAL_OBLIGATION = "legal_obligation"
@@ -101,39 +105,40 @@ class LegalBasis(str, Enum):
 @dataclass
 class ConsentRecord:
     """Individual consent record for a specific purpose."""
+
     record_id: str = field(default_factory=lambda: str(uuid4()))
     user_id: str = ""
     purpose: ConsentPurpose = ConsentPurpose.ANALYTICS
-    
+
     # Status
     status: ConsentStatus = ConsentStatus.PENDING
     granted_at: datetime | None = None
     denied_at: datetime | None = None
     withdrawn_at: datetime | None = None
-    
+
     # Collection context
     source: ConsentSource = ConsentSource.CONSENT_BANNER
     jurisdiction: Jurisdiction = Jurisdiction.GLOBAL
     legal_basis: LegalBasis = LegalBasis.CONSENT
-    
+
     # Consent details
     consent_text_version: str = ""
     consent_text_hash: str = ""
     collected_via: str = ""  # Banner version, form ID, etc.
-    
+
     # IAB TCF
     tcf_purpose_id: int | None = None
     tcf_vendor_consents: list[int] = field(default_factory=list)
-    
+
     # Audit
     ip_address: str = ""
     user_agent: str = ""
-    
+
     @property
     def is_valid(self) -> bool:
         """Check if consent is currently valid."""
         return self.status == ConsentStatus.GRANTED
-    
+
     @property
     def timestamp(self) -> datetime | None:
         """Get the timestamp when consent was recorded (granted, denied, or withdrawn)."""
@@ -149,26 +154,27 @@ class ConsentRecord:
 @dataclass
 class ConsentPreferences:
     """User's complete consent preferences."""
+
     preferences_id: str = field(default_factory=lambda: str(uuid4()))
     user_id: str = ""
-    
+
     # Purpose consents
     purposes: dict[str, ConsentStatus] = field(default_factory=dict)
-    
+
     # Global flags
     gpc_enabled: bool = False  # Global Privacy Control
     do_not_sell: bool = False  # CCPA opt-out
     do_not_share: bool = False  # CPRA opt-out
     limit_sensitive_data: bool = False  # CPRA sensitive PI
-    
+
     # TCF String
     tcf_string: str | None = None
     tcf_version: int = 2
-    
+
     # Metadata
     last_updated: datetime = field(default_factory=lambda: datetime.now(UTC))
     update_count: int = 0
-    
+
     # Version tracking
     policy_version: str = ""
     preferences_version: int = 1
@@ -177,16 +183,17 @@ class ConsentPreferences:
 @dataclass
 class ConsentTransaction:
     """Audit record of consent change."""
+
     transaction_id: str = field(default_factory=lambda: str(uuid4()))
     user_id: str = ""
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
-    
+
     # Change details
     action: str = ""  # grant, deny, withdraw, update
     purposes_affected: list[str] = field(default_factory=list)
     previous_status: dict[str, str] = field(default_factory=dict)
     new_status: dict[str, str] = field(default_factory=dict)
-    
+
     # Context
     source: ConsentSource = ConsentSource.CONSENT_BANNER
     ip_address: str = ""
@@ -196,22 +203,23 @@ class ConsentTransaction:
 @dataclass
 class ConsentPolicy:
     """Consent policy configuration."""
+
     policy_id: str = field(default_factory=lambda: str(uuid4()))
     version: str = "1.0"
     effective_date: datetime = field(default_factory=lambda: datetime.now(UTC))
-    
+
     # Required purposes (cannot be opted out)
     required_purposes: list[ConsentPurpose] = field(default_factory=list)
-    
+
     # Optional purposes (require consent)
     optional_purposes: list[ConsentPurpose] = field(default_factory=list)
-    
+
     # Legitimate interest purposes
     legitimate_interest_purposes: list[ConsentPurpose] = field(default_factory=list)
-    
+
     # Jurisdiction-specific rules
     jurisdiction_rules: dict[str, dict] = field(default_factory=dict)
-    
+
     # Consent text
     consent_texts: dict[str, str] = field(default_factory=dict)
 
@@ -219,20 +227,20 @@ class ConsentPolicy:
 class ConsentManagementService:
     """
     Comprehensive consent management platform.
-    
+
     Implements GDPR, CCPA/CPRA, and IAB TCF 2.2 requirements.
     """
-    
+
     def __init__(self):
         self._preferences: dict[str, ConsentPreferences] = {}
         self._records: dict[str, list[ConsentRecord]] = {}  # user_id -> records
         self._transactions: list[ConsentTransaction] = []
         self._policies: dict[str, ConsentPolicy] = {}
-        
+
         # Initialize default policy
         self._active_policy = self._create_default_policy()
         self._policies[self._active_policy.policy_id] = self._active_policy
-    
+
     def _create_default_policy(self) -> ConsentPolicy:
         """Create default consent policy."""
         return ConsentPolicy(
@@ -271,11 +279,11 @@ class ConsentManagementService:
                 },
             },
         )
-    
+
     # ───────────────────────────────────────────────────────────────
     # CONSENT COLLECTION
     # ───────────────────────────────────────────────────────────────
-    
+
     async def record_consent(
         self,
         user_id: str,
@@ -290,7 +298,7 @@ class ConsentManagementService:
     ) -> ConsentRecord:
         """
         Record a consent decision.
-        
+
         Per GDPR Article 7 - requires demonstrable consent.
         """
         # Determine legal basis
@@ -300,9 +308,9 @@ class ConsentManagementService:
             legal_basis = LegalBasis.LEGITIMATE_INTEREST
         else:
             legal_basis = LegalBasis.CONSENT
-        
+
         # Create consent record
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         record = ConsentRecord(
             user_id=user_id,
             purpose=purpose,
@@ -317,15 +325,15 @@ class ConsentManagementService:
             ip_address=ip_address,
             user_agent=user_agent,
         )
-        
+
         # Store record
         if user_id not in self._records:
             self._records[user_id] = []
         self._records[user_id].append(record)
-        
+
         # Update preferences
         await self._update_preferences(user_id, purpose, record.status)
-        
+
         # Log transaction
         self._log_transaction(
             user_id=user_id,
@@ -335,16 +343,16 @@ class ConsentManagementService:
             ip_address=ip_address,
             user_agent=user_agent,
         )
-        
+
         logger.info(
             "consent_recorded",
             user_id=user_id,
             purpose=purpose.value,
             granted=granted,
         )
-        
+
         return record
-    
+
     async def record_bulk_consent(
         self,
         user_id: str,
@@ -358,7 +366,7 @@ class ConsentManagementService:
     ) -> list[ConsentRecord]:
         """Record multiple consent decisions at once."""
         records = []
-        
+
         for purpose, granted in consents.items():
             record = await self.record_consent(
                 user_id=user_id,
@@ -372,14 +380,14 @@ class ConsentManagementService:
                 tcf_string=tcf_string,
             )
             records.append(record)
-        
+
         # Store TCF string if provided
         if tcf_string:
             prefs = await self.get_preferences(user_id)
             prefs.tcf_string = tcf_string
-        
+
         return records
-    
+
     async def withdraw_consent(
         self,
         user_id: str,
@@ -390,7 +398,7 @@ class ConsentManagementService:
     ) -> ConsentRecord:
         """
         Withdraw previously granted consent.
-        
+
         Per GDPR Article 7(3) - withdrawal must be as easy as giving consent.
         """
         # Create withdrawal record
@@ -403,15 +411,15 @@ class ConsentManagementService:
             ip_address=ip_address,
             user_agent=user_agent,
         )
-        
+
         # Store record
         if user_id not in self._records:
             self._records[user_id] = []
         self._records[user_id].append(record)
-        
+
         # Update preferences
         await self._update_preferences(user_id, purpose, ConsentStatus.WITHDRAWN)
-        
+
         # Log transaction
         self._log_transaction(
             user_id=user_id,
@@ -421,19 +429,19 @@ class ConsentManagementService:
             ip_address=ip_address,
             user_agent=user_agent,
         )
-        
+
         logger.info(
             "consent_withdrawn",
             user_id=user_id,
             purpose=purpose.value,
         )
-        
+
         return record
-    
+
     # ───────────────────────────────────────────────────────────────
     # GPC / DO NOT SELL HANDLING
     # ───────────────────────────────────────────────────────────────
-    
+
     async def process_gpc_signal(
         self,
         user_id: str,
@@ -443,17 +451,17 @@ class ConsentManagementService:
     ) -> ConsentPreferences:
         """
         Process Global Privacy Control (GPC) signal.
-        
+
         Per CCPA regulations, GPC is a valid opt-out signal.
         """
         prefs = await self.get_preferences(user_id)
         prefs.gpc_enabled = gpc_enabled
-        
+
         if gpc_enabled:
             # GPC implies opt-out of sale/sharing
             prefs.do_not_sell = True
             prefs.do_not_share = True
-            
+
             # Opt out of relevant purposes
             opt_out_purposes = [
                 ConsentPurpose.DATA_SALE,
@@ -461,10 +469,10 @@ class ConsentManagementService:
                 ConsentPurpose.CROSS_CONTEXT_ADVERTISING,
                 ConsentPurpose.PERSONALIZED_ADS,
             ]
-            
+
             for purpose in opt_out_purposes:
                 prefs.purposes[purpose.value] = ConsentStatus.DENIED.value
-                
+
                 # Record the opt-out
                 await self.record_consent(
                     user_id=user_id,
@@ -475,18 +483,18 @@ class ConsentManagementService:
                     ip_address=ip_address,
                     user_agent=user_agent,
                 )
-        
+
         prefs.last_updated = datetime.now(UTC)
         prefs.update_count += 1
-        
+
         logger.info(
             "gpc_signal_processed",
             user_id=user_id,
             gpc_enabled=gpc_enabled,
         )
-        
+
         return prefs
-    
+
     async def process_do_not_sell(
         self,
         user_id: str,
@@ -496,12 +504,12 @@ class ConsentManagementService:
     ) -> ConsentPreferences:
         """
         Process "Do Not Sell My Personal Information" request.
-        
+
         Per CCPA §1798.120.
         """
         prefs = await self.get_preferences(user_id)
         prefs.do_not_sell = opt_out
-        
+
         if opt_out:
             # Record opt-out
             await self.record_consent(
@@ -513,17 +521,17 @@ class ConsentManagementService:
                 ip_address=ip_address,
                 user_agent=user_agent,
             )
-        
+
         prefs.last_updated = datetime.now(UTC)
-        
+
         logger.info(
             "do_not_sell_processed",
             user_id=user_id,
             opt_out=opt_out,
         )
-        
+
         return prefs
-    
+
     async def process_limit_sensitive_data(
         self,
         user_id: str,
@@ -533,12 +541,12 @@ class ConsentManagementService:
     ) -> ConsentPreferences:
         """
         Process "Limit the Use of My Sensitive Personal Information" request.
-        
+
         Per CPRA §1798.121.
         """
         prefs = await self.get_preferences(user_id)
         prefs.limit_sensitive_data = limit
-        
+
         if limit:
             await self.record_consent(
                 user_id=user_id,
@@ -549,21 +557,21 @@ class ConsentManagementService:
                 ip_address=ip_address,
                 user_agent=user_agent,
             )
-        
+
         prefs.last_updated = datetime.now(UTC)
-        
+
         logger.info(
             "limit_sensitive_processed",
             user_id=user_id,
             limit=limit,
         )
-        
+
         return prefs
-    
+
     # ───────────────────────────────────────────────────────────────
     # CONSENT CHECKING
     # ───────────────────────────────────────────────────────────────
-    
+
     async def check_consent(
         self,
         user_id: str,
@@ -572,15 +580,15 @@ class ConsentManagementService:
     ) -> tuple[bool, str]:
         """
         Check if user has consented to a specific purpose.
-        
+
         Returns (has_consent, reason).
         """
         prefs = await self.get_preferences(user_id)
-        
+
         # Check if purpose requires consent
         if purpose in self._active_policy.required_purposes:
             return True, "Required for service delivery"
-        
+
         # Check GPC/Do Not Sell for relevant purposes
         if purpose in {
             ConsentPurpose.DATA_SALE,
@@ -589,36 +597,36 @@ class ConsentManagementService:
         }:
             if prefs.gpc_enabled or prefs.do_not_sell:
                 return False, "Opted out via GPC/Do Not Sell"
-        
+
         if purpose == ConsentPurpose.SENSITIVE_DATA_PROCESSING:
             if prefs.limit_sensitive_data:
                 return False, "Opted out of sensitive data processing"
-        
+
         # Check purpose-specific consent
         status = prefs.purposes.get(purpose.value)
-        
+
         if status == ConsentStatus.GRANTED.value:
             return True, "Consent granted"
         elif status == ConsentStatus.DENIED.value:
             return False, "Consent denied"
         elif status == ConsentStatus.WITHDRAWN.value:
             return False, "Consent withdrawn"
-        
+
         # Check legitimate interest
         if purpose in self._active_policy.legitimate_interest_purposes:
             # Check for objection
             if status != ConsentStatus.DENIED.value:
                 return True, "Legitimate interest (no objection)"
-        
+
         # Default based on jurisdiction
         if jurisdiction:
             rules = self._active_policy.jurisdiction_rules.get(jurisdiction.value, {})
             default = rules.get("default_consent", False)
             if default:
                 return True, "Default consent (opt-out jurisdiction)"
-        
+
         return False, "No consent recorded"
-    
+
     async def check_multiple_consents(
         self,
         user_id: str,
@@ -630,11 +638,11 @@ class ConsentManagementService:
             has_consent, reason = await self.check_consent(user_id, purpose)
             results[purpose.value] = (has_consent, reason)
         return results
-    
+
     # ───────────────────────────────────────────────────────────────
     # PREFERENCES MANAGEMENT
     # ───────────────────────────────────────────────────────────────
-    
+
     async def get_preferences(self, user_id: str) -> ConsentPreferences:
         """Get user's consent preferences."""
         if user_id not in self._preferences:
@@ -643,7 +651,7 @@ class ConsentManagementService:
                 policy_version=self._active_policy.version,
             )
         return self._preferences[user_id]
-    
+
     async def _update_preferences(
         self,
         user_id: str,
@@ -655,7 +663,7 @@ class ConsentManagementService:
         prefs.purposes[purpose.value] = status.value
         prefs.last_updated = datetime.now(UTC)
         prefs.update_count += 1
-    
+
     async def get_consent_history(
         self,
         user_id: str,
@@ -663,21 +671,23 @@ class ConsentManagementService:
     ) -> list[ConsentRecord]:
         """Get consent history for a user."""
         records = self._records.get(user_id, [])
-        
+
         if purpose:
             records = [r for r in records if r.purpose == purpose]
-        
-        return sorted(records, key=lambda r: r.granted_at or r.denied_at or datetime.min, reverse=True)
-    
+
+        return sorted(
+            records, key=lambda r: r.granted_at or r.denied_at or datetime.min, reverse=True
+        )
+
     # ───────────────────────────────────────────────────────────────
     # TCF STRING HANDLING
     # ───────────────────────────────────────────────────────────────
-    
+
     def decode_tcf_string(self, tcf_string: str) -> dict[str, Any]:
         """
         Decode IAB TCF 2.2 consent string.
-        
-        Note: Simplified implementation. Production should use 
+
+        Note: Simplified implementation. Production should use
         official TCF SDK.
         """
         try:
@@ -700,16 +710,16 @@ class ConsentManagementService:
                 "vendor_consents": {},
                 "vendor_legitimate_interests": {},
             }
-            
+
             # Parse the actual TCF string here
             # For now, return placeholder structure
-            
+
             return decoded
-            
+
         except Exception as e:
             logger.error("tcf_decode_error", error=str(e))
             return {}
-    
+
     def encode_tcf_string(
         self,
         purpose_consents: dict[int, bool],
@@ -718,7 +728,7 @@ class ConsentManagementService:
     ) -> str:
         """
         Encode consent choices as IAB TCF 2.2 string.
-        
+
         Note: Simplified implementation.
         """
         # Production implementation would use official TCF encoder
@@ -730,17 +740,17 @@ class ConsentManagementService:
             "cmp": cmp_id,
             "ts": int(datetime.now(UTC).timestamp()),
         }
-        
+
         # Base64url encode
         json_str = json.dumps(data)
         encoded = base64.urlsafe_b64encode(json_str.encode()).decode()
-        
+
         return f"CP{encoded}"
-    
+
     # ───────────────────────────────────────────────────────────────
     # AUDIT / REPORTING
     # ───────────────────────────────────────────────────────────────
-    
+
     def _log_transaction(
         self,
         user_id: str,
@@ -759,15 +769,15 @@ class ConsentManagementService:
             ip_address=ip_address,
             user_agent=user_agent,
         )
-        
+
         self._transactions.append(transaction)
-        
+
         return transaction
-    
+
     def get_consent_metrics(self) -> dict[str, Any]:
         """Get consent metrics for reporting."""
         total_users = len(self._preferences)
-        
+
         # Count by purpose
         purpose_counts = {}
         for prefs in self._preferences.values():
@@ -780,11 +790,11 @@ class ConsentManagementService:
                     purpose_counts[purpose]["denied"] += 1
                 elif status == ConsentStatus.WITHDRAWN.value:
                     purpose_counts[purpose]["withdrawn"] += 1
-        
+
         # GPC / Do Not Sell counts
         gpc_count = sum(1 for p in self._preferences.values() if p.gpc_enabled)
         dns_count = sum(1 for p in self._preferences.values() if p.do_not_sell)
-        
+
         return {
             "total_users_with_preferences": total_users,
             "gpc_enabled_count": gpc_count,
@@ -792,19 +802,19 @@ class ConsentManagementService:
             "purpose_breakdown": purpose_counts,
             "transactions_total": len(self._transactions),
         }
-    
+
     async def export_consent_proof(
         self,
         user_id: str,
     ) -> dict[str, Any]:
         """
         Export consent proof for regulatory compliance.
-        
+
         Per GDPR requirement to demonstrate consent.
         """
         prefs = await self.get_preferences(user_id)
         records = self._records.get(user_id, [])
-        
+
         return {
             "user_id": user_id,
             "exported_at": datetime.now(UTC).isoformat(),
@@ -823,7 +833,9 @@ class ConsentManagementService:
                     "record_id": r.record_id,
                     "purpose": r.purpose.value,
                     "status": r.status.value,
-                    "timestamp": (r.granted_at or r.denied_at or r.withdrawn_at).isoformat() if (r.granted_at or r.denied_at or r.withdrawn_at) else None,
+                    "timestamp": (r.granted_at or r.denied_at or r.withdrawn_at).isoformat()
+                    if (r.granted_at or r.denied_at or r.withdrawn_at)
+                    else None,
                     "source": r.source.value,
                     "jurisdiction": r.jurisdiction.value,
                     "legal_basis": r.legal_basis.value,

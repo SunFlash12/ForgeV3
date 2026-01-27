@@ -54,28 +54,23 @@ class ComplianceRepository:
             "CREATE CONSTRAINT dsar_id IF NOT EXISTS FOR (d:DSAR) REQUIRE d.id IS UNIQUE",
             "CREATE INDEX dsar_status IF NOT EXISTS FOR (d:DSAR) ON (d.status)",
             "CREATE INDEX dsar_subject IF NOT EXISTS FOR (d:DSAR) ON (d.subject_email)",
-
             # Consent constraints
             "CREATE CONSTRAINT consent_id IF NOT EXISTS FOR (c:ConsentRecord) REQUIRE c.id IS UNIQUE",
             "CREATE INDEX consent_user IF NOT EXISTS FOR (c:ConsentRecord) ON (c.user_id)",
             "CREATE INDEX consent_type IF NOT EXISTS FOR (c:ConsentRecord) ON (c.consent_type)",
-
             # Breach constraints
             "CREATE CONSTRAINT breach_id IF NOT EXISTS FOR (b:BreachNotification) REQUIRE b.id IS UNIQUE",
             "CREATE INDEX breach_status IF NOT EXISTS FOR (b:BreachNotification) ON (b.status)",
             "CREATE INDEX breach_severity IF NOT EXISTS FOR (b:BreachNotification) ON (b.severity)",
-
             # Audit event constraints - append-only with hash chain
             "CREATE CONSTRAINT audit_id IF NOT EXISTS FOR (a:AuditEvent) REQUIRE a.id IS UNIQUE",
             "CREATE INDEX audit_category IF NOT EXISTS FOR (a:AuditEvent) ON (a.category)",
             "CREATE INDEX audit_actor IF NOT EXISTS FOR (a:AuditEvent) ON (a.actor_id)",
             "CREATE INDEX audit_entity IF NOT EXISTS FOR (a:AuditEvent) ON (a.entity_type, a.entity_id)",
             "CREATE INDEX audit_timestamp IF NOT EXISTS FOR (a:AuditEvent) ON (a.created_at)",
-
             # AI system constraints
             "CREATE CONSTRAINT ai_system_id IF NOT EXISTS FOR (s:AISystemRegistration) REQUIRE s.id IS UNIQUE",
             "CREATE INDEX ai_system_name IF NOT EXISTS FOR (s:AISystemRegistration) ON (s.system_name)",
-
             # AI decision constraints
             "CREATE CONSTRAINT ai_decision_id IF NOT EXISTS FOR (d:AIDecisionLog) REQUIRE d.id IS UNIQUE",
             "CREATE INDEX ai_decision_system IF NOT EXISTS FOR (d:AIDecisionLog) ON (d.ai_system_id)",
@@ -88,7 +83,9 @@ class ComplianceRepository:
             except Exception as e:
                 # Ignore if constraint already exists
                 if "already exists" not in str(e).lower():
-                    logger.warning("constraint_creation_warning", query=constraint[:50], error=str(e))
+                    logger.warning(
+                        "constraint_creation_warning", query=constraint[:50], error=str(e)
+                    )
 
         self._initialized = True
         logger.info("compliance_repository_initialized")
@@ -154,7 +151,7 @@ class ComplianceRepository:
                 params[key] = json.dumps(value)
             elif key == "deadline" and value:
                 set_clauses.append(f"d.{key} = ${key}")
-                params[key] = value.isoformat() if hasattr(value, 'isoformat') else value
+                params[key] = value.isoformat() if hasattr(value, "isoformat") else value
             else:
                 set_clauses.append(f"d.{key} = ${key}")
                 params[key] = value
@@ -239,8 +236,12 @@ class ComplianceRepository:
             "consent_type": consent.get("consent_type"),
             "purpose": consent.get("purpose"),
             "granted": consent.get("granted", False),
-            "granted_at": consent.get("granted_at").isoformat() if consent.get("granted_at") else None,
-            "withdrawn_at": consent.get("withdrawn_at").isoformat() if consent.get("withdrawn_at") else None,
+            "granted_at": consent.get("granted_at").isoformat()
+            if consent.get("granted_at")
+            else None,
+            "withdrawn_at": consent.get("withdrawn_at").isoformat()
+            if consent.get("withdrawn_at")
+            else None,
             "collected_via": consent.get("collected_via"),
             "ip_address": consent.get("ip_address"),
             "user_agent": consent.get("user_agent"),
@@ -251,7 +252,9 @@ class ComplianceRepository:
             "transfer_safeguards": json.dumps(consent.get("transfer_safeguards", [])),
             "tcf_string": consent.get("tcf_string"),
             "gpp_string": consent.get("gpp_string"),
-            "expires_at": consent.get("expires_at").isoformat() if consent.get("expires_at") else None,
+            "expires_at": consent.get("expires_at").isoformat()
+            if consent.get("expires_at")
+            else None,
         }
 
         result = await self._db.execute_single(query, params)
@@ -288,10 +291,9 @@ class ComplianceRepository:
         AND (c.expires_at IS NULL OR datetime(c.expires_at) > datetime())
         RETURN count(c) > 0 AS has_consent
         """
-        result = await self._db.execute_single(query, {
-            "user_id": user_id,
-            "consent_type": consent_type
-        })
+        result = await self._db.execute_single(
+            query, {"user_id": user_id, "consent_type": consent_type}
+        )
         return result["has_consent"] if result else False
 
     # ═══════════════════════════════════════════════════════════════
@@ -342,15 +344,21 @@ class ComplianceRepository:
             "root_cause": breach.get("root_cause"),
             "attack_vector": breach.get("attack_vector"),
             "contained": breach.get("contained", False),
-            "contained_at": breach.get("contained_at").isoformat() if breach.get("contained_at") else None,
+            "contained_at": breach.get("contained_at").isoformat()
+            if breach.get("contained_at")
+            else None,
             "containment_actions": json.dumps(breach.get("containment_actions", [])),
-            "individual_notification_required": breach.get("individual_notification_required", False),
+            "individual_notification_required": breach.get(
+                "individual_notification_required", False
+            ),
             "authority_notifications": json.dumps(breach.get("authority_notifications", [])),
             "notification_deadlines": json.dumps(breach.get("notification_deadlines", {})),
         }
 
         result = await self._db.execute_single(query, params)
-        logger.critical("breach_created", breach_id=breach.get("id"), severity=breach.get("severity"))
+        logger.critical(
+            "breach_created", breach_id=breach.get("id"), severity=breach.get("severity")
+        )
         return result["b"] if result else breach
 
     async def update_breach(self, breach_id: str, updates: dict[str, Any]) -> dict[str, Any] | None:
@@ -358,8 +366,14 @@ class ComplianceRepository:
         set_clauses = []
         params = {"id": breach_id}
 
-        json_fields = ["data_categories", "data_elements", "jurisdictions",
-                       "containment_actions", "authority_notifications", "notification_deadlines"]
+        json_fields = [
+            "data_categories",
+            "data_elements",
+            "jurisdictions",
+            "containment_actions",
+            "authority_notifications",
+            "notification_deadlines",
+        ]
 
         for key, value in updates.items():
             if key in json_fields:
@@ -367,7 +381,7 @@ class ComplianceRepository:
                 params[key] = json.dumps(value)
             elif key.endswith("_at") and value:
                 set_clauses.append(f"b.{key} = ${key}")
-                params[key] = value.isoformat() if hasattr(value, 'isoformat') else value
+                params[key] = value.isoformat() if hasattr(value, "isoformat") else value
             else:
                 set_clauses.append(f"b.{key} = ${key}")
                 params[key] = value
@@ -390,8 +404,14 @@ class ComplianceRepository:
         if result:
             breach = dict(result["b"])
             # Parse JSON fields
-            for field in ["data_categories", "data_elements", "jurisdictions",
-                          "containment_actions", "authority_notifications", "notification_deadlines"]:
+            for field in [
+                "data_categories",
+                "data_elements",
+                "jurisdictions",
+                "containment_actions",
+                "authority_notifications",
+                "notification_deadlines",
+            ]:
                 if breach.get(field):
                     breach[field] = json.loads(breach[field])
             return breach
@@ -459,7 +479,9 @@ class ComplianceRepository:
             "success": event.get("success", True),
             "error_message": event.get("error_message"),
             "risk_level": str(event.get("risk_level")),
-            "data_classification": str(event.get("data_classification")) if event.get("data_classification") else None,
+            "data_classification": str(event.get("data_classification"))
+            if event.get("data_classification")
+            else None,
             "previous_hash": event.get("previous_hash"),
             "hash": event.get("hash"),
         }
@@ -547,14 +569,19 @@ class ComplianceRepository:
                 return False, f"Chain broken at event {event['id']}"
 
             # Verify hash calculation
-            event_data = json.dumps({
-                "id": event["id"],
-                "category": event["category"],
-                "event_type": event["event_type"],
-                "action": event["action"],
-                "timestamp": event["created_at"].isoformat() if hasattr(event["created_at"], 'isoformat') else event["created_at"],
-                "previous_hash": event["previous_hash"],
-            }, sort_keys=True)
+            event_data = json.dumps(
+                {
+                    "id": event["id"],
+                    "category": event["category"],
+                    "event_type": event["event_type"],
+                    "action": event["action"],
+                    "timestamp": event["created_at"].isoformat()
+                    if hasattr(event["created_at"], "isoformat")
+                    else event["created_at"],
+                    "previous_hash": event["previous_hash"],
+                },
+                sort_keys=True,
+            )
             calculated_hash = hashlib.sha256(event_data.encode()).hexdigest()
 
             if event.get("hash") and event["hash"] != calculated_hash:
@@ -604,7 +631,9 @@ class ComplianceRepository:
         }
 
         result = await self._db.execute_single(query, params)
-        logger.info("ai_system_registered", system_id=system.get("id"), name=system.get("system_name"))
+        logger.info(
+            "ai_system_registered", system_id=system.get("id"), name=system.get("system_name")
+        )
         return result["s"] if result else system
 
     async def get_ai_system(self, system_id: str) -> dict[str, Any] | None:
@@ -680,7 +709,9 @@ class ComplianceRepository:
         result = await self._db.execute_single(query, params)
         return result["d"] if result else decision
 
-    async def update_ai_decision(self, decision_id: str, updates: dict[str, Any]) -> dict[str, Any] | None:
+    async def update_ai_decision(
+        self, decision_id: str, updates: dict[str, Any]
+    ) -> dict[str, Any] | None:
         """Update an AI decision (for human review)."""
         set_clauses = []
         params = {"id": decision_id}

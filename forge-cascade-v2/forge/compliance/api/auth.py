@@ -17,11 +17,10 @@ from datetime import datetime
 from functools import lru_cache
 from typing import Annotated, Any
 
+import jwt
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
-import jwt
-
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +30,7 @@ security = HTTPBearer(auto_error=False)
 # Try to import redis for distributed blacklist
 try:
     import redis.asyncio as aioredis
+
     REDIS_AVAILABLE = True
 except ImportError:
     aioredis = None  # type: ignore
@@ -173,7 +173,7 @@ class ComplianceTokenBlacklist:
             return
 
         # Remove 10% of oldest entries
-        to_remove = list(cls._expiry_times.keys())[:len(cls._blacklist) // 10]
+        to_remove = list(cls._expiry_times.keys())[: len(cls._blacklist) // 10]
         for jti in to_remove:
             cls._blacklist.discard(jti)
             cls._expiry_times.pop(jti, None)
@@ -192,6 +192,7 @@ class ComplianceTokenBlacklist:
 
 class TokenPayload(BaseModel):
     """JWT token payload."""
+
     sub: str  # User ID
     exp: datetime
     iat: datetime
@@ -202,6 +203,7 @@ class TokenPayload(BaseModel):
 
 class ComplianceUser(BaseModel):
     """Authenticated user context for compliance operations."""
+
     id: str
     roles: list[str] = []
     permissions: list[str] = []
@@ -256,9 +258,7 @@ async def verify_token_async(token: str) -> TokenPayload | None:
 
     # SECURITY FIX: Check token blacklist
     if payload.jti and await ComplianceTokenBlacklist.is_blacklisted(payload.jti):
-        logger.warning(
-            f"compliance_blacklisted_token_rejected: jti={payload.jti[:8]}..."
-        )
+        logger.warning(f"compliance_blacklisted_token_rejected: jti={payload.jti[:8]}...")
         return None
 
     return payload
@@ -369,9 +369,9 @@ def require_permission(permission_name: str, resource_type: str | None = None):
     Uses the AccessControlService for fine-grained access control.
     """
     from forge.compliance.security.access_control import (
-        get_access_control_service,
         Permission,
         ResourceType,
+        get_access_control_service,
     )
 
     async def dependency(user: CurrentUserDep) -> ComplianceUser:

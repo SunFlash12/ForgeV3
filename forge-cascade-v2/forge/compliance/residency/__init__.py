@@ -9,12 +9,12 @@ Handles data residency requirements per:
 """
 
 from forge.compliance.residency.service import (
-    TransferMechanism,
     DataRegion,
-    RegionMapping,
-    TransferRequest,
-    TransferImpactAssessment,
     DataResidencyService,
+    RegionMapping,
+    TransferImpactAssessment,
+    TransferMechanism,
+    TransferRequest,
     get_data_residency_service,
 )
 

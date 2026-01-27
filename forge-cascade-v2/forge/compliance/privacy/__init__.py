@@ -7,24 +7,23 @@ Implements privacy rights and consent management:
 - GPC/Do Not Sell signal handling
 """
 
-from forge.compliance.privacy.dsar_processor import (
-    DSARProcessor,
-    get_dsar_processor,
-    VerificationMethod,
-    ExportFormat,
-    DataSource,
-    DiscoveredData,
-    ErasureResult,
-)
-
 from forge.compliance.privacy.consent_service import (
     ConsentManagementService,
-    get_consent_service,
-    ConsentPurpose,
-    ConsentStatus,
-    ConsentSource,
-    ConsentRecord,
     ConsentPreferences,
+    ConsentPurpose,
+    ConsentRecord,
+    ConsentSource,
+    ConsentStatus,
+    get_consent_service,
+)
+from forge.compliance.privacy.dsar_processor import (
+    DataSource,
+    DiscoveredData,
+    DSARProcessor,
+    ErasureResult,
+    ExportFormat,
+    VerificationMethod,
+    get_dsar_processor,
 )
 
 __all__ = [

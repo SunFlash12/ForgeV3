@@ -30,6 +30,7 @@ logger = structlog.get_logger(__name__)
 
 class WCAGLevel(str, Enum):
     """WCAG conformance levels."""
+
     A = "A"
     AA = "AA"
     AAA = "AAA"
@@ -37,6 +38,7 @@ class WCAGLevel(str, Enum):
 
 class WCAGPrinciple(str, Enum):
     """WCAG POUR principles."""
+
     PERCEIVABLE = "perceivable"
     OPERABLE = "operable"
     UNDERSTANDABLE = "understandable"
@@ -45,6 +47,7 @@ class WCAGPrinciple(str, Enum):
 
 class AccessibilityStandard(str, Enum):
     """Accessibility standards."""
+
     WCAG_21 = "wcag_2_1"
     WCAG_22 = "wcag_2_2"
     EN_301_549 = "en_301_549"
@@ -54,15 +57,17 @@ class AccessibilityStandard(str, Enum):
 
 class IssueImpact(str, Enum):
     """Accessibility issue impact levels."""
+
     CRITICAL = "critical"  # Blocks access entirely
-    SERIOUS = "serious"    # Significantly impacts
+    SERIOUS = "serious"  # Significantly impacts
     MODERATE = "moderate"  # Some impact
-    MINOR = "minor"        # Minimal impact
+    MINOR = "minor"  # Minimal impact
 
 
 @dataclass
 class WCAGCriterion:
     """WCAG success criterion definition."""
+
     criterion_id: str  # e.g., "1.1.1"
     name: str
     level: WCAGLevel
@@ -75,28 +80,29 @@ class WCAGCriterion:
 @dataclass
 class AccessibilityIssue:
     """Accessibility issue found during testing."""
+
     issue_id: str = field(default_factory=lambda: str(uuid4()))
-    
+
     # Location
     url: str = ""
     component: str = ""
     element_selector: str = ""
-    
+
     # Classification
     criterion_id: str = ""
     standard: AccessibilityStandard = AccessibilityStandard.WCAG_22
     impact: IssueImpact = IssueImpact.MODERATE
-    
+
     # Details
     description: str = ""
     remediation: str = ""
     code_snippet: str = ""
-    
+
     # Status
     status: str = "open"  # open, in_progress, resolved, wont_fix
     found_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     resolved_at: datetime | None = None
-    
+
     # Testing
     test_method: str = ""  # automated, manual, user_testing
     tester: str = ""
@@ -105,19 +111,20 @@ class AccessibilityIssue:
 @dataclass
 class AccessibilityAudit:
     """Accessibility audit results."""
+
     audit_id: str = field(default_factory=lambda: str(uuid4()))
-    
+
     # Scope
     audit_name: str = ""
     target_url: str = ""
     standard: AccessibilityStandard = AccessibilityStandard.WCAG_22
     target_level: WCAGLevel = WCAGLevel.AA
-    
+
     # Metadata
     audited_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     auditor: str = ""
     methodology: str = ""
-    
+
     # Results
     pages_tested: int = 0
     issues_found: int = 0
@@ -125,11 +132,11 @@ class AccessibilityAudit:
     issues_serious: int = 0
     issues_moderate: int = 0
     issues_minor: int = 0
-    
+
     # Conformance
     conformance_level: WCAGLevel | None = None
     partial_conformance: bool = False
-    
+
     # Issues
     issues: list[AccessibilityIssue] = field(default_factory=list)
 
@@ -137,6 +144,7 @@ class AccessibilityAudit:
 @dataclass
 class VPATEntry:
     """VPAT (Voluntary Product Accessibility Template) entry."""
+
     criterion: str
     conformance_level: str  # Supports, Partially Supports, Does Not Support, Not Applicable
     remarks: str
@@ -145,24 +153,25 @@ class VPATEntry:
 @dataclass
 class VPAT:
     """VPAT document for product accessibility."""
+
     vpat_id: str = field(default_factory=lambda: str(uuid4()))
-    
+
     # Product info
     product_name: str = ""
     product_version: str = ""
     vendor_name: str = ""
-    
+
     # Document info
     report_date: datetime = field(default_factory=lambda: datetime.now(UTC))
     standard: AccessibilityStandard = AccessibilityStandard.WCAG_22
     target_level: WCAGLevel = WCAGLevel.AA
-    
+
     # Evaluation
     evaluation_methods: list[str] = field(default_factory=list)
-    
+
     # Entries
     entries: list[VPATEntry] = field(default_factory=list)
-    
+
     # Summary
     notes: str = ""
 
@@ -170,17 +179,17 @@ class VPAT:
 class AccessibilityComplianceService:
     """
     Accessibility compliance service.
-    
+
     Manages accessibility testing, issue tracking, and documentation
     for WCAG 2.2, EAA, and Section 508 compliance.
     """
-    
+
     def __init__(self):
         self._criteria = self._initialize_wcag_criteria()
         self._audits: dict[str, AccessibilityAudit] = {}
         self._issues: dict[str, AccessibilityIssue] = {}
         self._vpats: dict[str, VPAT] = {}
-    
+
     def _initialize_wcag_criteria(self) -> dict[str, WCAGCriterion]:
         """Initialize WCAG 2.2 success criteria."""
         criteria = {
@@ -243,7 +252,6 @@ class AccessibilityComplianceService:
                 principle=WCAGPrinciple.PERCEIVABLE,
                 description="UI components have 3:1 contrast ratio",
             ),
-            
             # Principle 2: Operable
             "2.1.1": WCAGCriterion(
                 criterion_id="2.1.1",
@@ -294,7 +302,6 @@ class AccessibilityComplianceService:
                 principle=WCAGPrinciple.OPERABLE,
                 description="Visible label is part of accessible name",
             ),
-            
             # WCAG 2.2 New criteria
             "2.4.11": WCAGCriterion(
                 criterion_id="2.4.11",
@@ -317,7 +324,6 @@ class AccessibilityComplianceService:
                 principle=WCAGPrinciple.OPERABLE,
                 description="Target size is at least 24x24 CSS pixels",
             ),
-            
             # Principle 3: Understandable
             "3.1.1": WCAGCriterion(
                 criterion_id="3.1.1",
@@ -368,7 +374,6 @@ class AccessibilityComplianceService:
                 principle=WCAGPrinciple.UNDERSTANDABLE,
                 description="No cognitive function test required for authentication",
             ),
-            
             # Principle 4: Robust
             "4.1.2": WCAGCriterion(
                 criterion_id="4.1.2",
@@ -385,9 +390,9 @@ class AccessibilityComplianceService:
                 description="Status messages can be presented via assistive technology",
             ),
         }
-        
+
         return criteria
-    
+
     async def create_audit(
         self,
         audit_name: str,
@@ -404,17 +409,17 @@ class AccessibilityComplianceService:
             target_level=target_level,
             auditor=auditor,
         )
-        
+
         self._audits[audit.audit_id] = audit
-        
+
         logger.info(
             "accessibility_audit_created",
             audit_id=audit.audit_id,
             target_url=target_url,
         )
-        
+
         return audit
-    
+
     async def log_issue(
         self,
         audit_id: str,
@@ -432,7 +437,7 @@ class AccessibilityComplianceService:
         audit = self._audits.get(audit_id)
         if not audit:
             raise ValueError(f"Audit not found: {audit_id}")
-        
+
         issue = AccessibilityIssue(
             url=url,
             component=component,
@@ -445,10 +450,10 @@ class AccessibilityComplianceService:
             test_method=test_method,
             tester=tester,
         )
-        
+
         self._issues[issue.issue_id] = issue
         audit.issues.append(issue)
-        
+
         # Update audit counts
         audit.issues_found += 1
         if impact == IssueImpact.CRITICAL:
@@ -459,16 +464,16 @@ class AccessibilityComplianceService:
             audit.issues_moderate += 1
         else:
             audit.issues_minor += 1
-        
+
         logger.info(
             "accessibility_issue_logged",
             issue_id=issue.issue_id,
             criterion=criterion_id,
             impact=impact.value,
         )
-        
+
         return issue
-    
+
     async def resolve_issue(
         self,
         issue_id: str,
@@ -478,63 +483,61 @@ class AccessibilityComplianceService:
         issue = self._issues.get(issue_id)
         if not issue:
             raise ValueError(f"Issue not found: {issue_id}")
-        
+
         issue.status = "resolved"
         issue.resolved_at = datetime.now(UTC)
-        
+
         logger.info(
             "accessibility_issue_resolved",
             issue_id=issue_id,
         )
-        
+
         return issue
-    
+
     def determine_conformance(
         self,
         audit_id: str,
     ) -> tuple[WCAGLevel | None, bool]:
         """
         Determine WCAG conformance level for an audit.
-        
+
         Returns (conformance_level, is_partial).
         """
         audit = self._audits.get(audit_id)
         if not audit:
             return None, False
-        
+
         open_issues = [i for i in audit.issues if i.status == "open"]
-        
+
         # Check Level A issues
         level_a_criteria = {
-            c.criterion_id for c in self._criteria.values()
-            if c.level == WCAGLevel.A
+            c.criterion_id for c in self._criteria.values() if c.level == WCAGLevel.A
         }
         level_a_failures = {
-            i.criterion_id for i in open_issues
-            if i.criterion_id in level_a_criteria
+            i.criterion_id for i in open_issues if i.criterion_id in level_a_criteria
         }
-        
+
         if level_a_failures:
             # Does not conform to Level A
             return None, True
-        
+
         # Check Level AA issues
         level_aa_criteria = {
-            c.criterion_id for c in self._criteria.values()
+            c.criterion_id
+            for c in self._criteria.values()
             if c.level in {WCAGLevel.A, WCAGLevel.AA}
         }
         level_aa_failures = {
-            i.criterion_id for i in open_issues
-            if i.criterion_id in level_aa_criteria
+            i.criterion_id for i in open_issues if i.criterion_id in level_aa_criteria
         }
-        
+
         if not level_aa_failures:
             return WCAGLevel.AA, False
         elif not level_a_failures:
             return WCAGLevel.A, True
-        
+
         return None, True
-    
+
     async def generate_vpat(
         self,
         product_name: str,
@@ -546,7 +549,7 @@ class AccessibilityComplianceService:
     ) -> VPAT:
         """
         Generate a VPAT document.
-        
+
         Per Section 508/EN 301 549 requirements.
         """
         vpat = VPAT(
@@ -557,22 +560,23 @@ class AccessibilityComplianceService:
             target_level=target_level,
             evaluation_methods=["Automated testing", "Manual testing", "Screen reader testing"],
         )
-        
+
         # Get issues from audit if provided
         issue_criteria = set()
         if audit_id:
             audit = self._audits.get(audit_id)
             if audit:
                 issue_criteria = {i.criterion_id for i in audit.issues if i.status == "open"}
-        
+
         # Generate entries for relevant criteria
         criteria_for_level = {
-            c for c in self._criteria.values()
-            if (target_level == WCAGLevel.A and c.level == WCAGLevel.A) or
-               (target_level == WCAGLevel.AA and c.level in {WCAGLevel.A, WCAGLevel.AA}) or
-               (target_level == WCAGLevel.AAA)
+            c
+            for c in self._criteria.values()
+            if (target_level == WCAGLevel.A and c.level == WCAGLevel.A)
+            or (target_level == WCAGLevel.AA and c.level in {WCAGLevel.A, WCAGLevel.AA})
+            or (target_level == WCAGLevel.AAA)
         }
-        
+
         for criterion in sorted(criteria_for_level, key=lambda c: c.criterion_id):
             if criterion.criterion_id in issue_criteria:
                 conformance = "Does Not Support"
@@ -580,23 +584,25 @@ class AccessibilityComplianceService:
             else:
                 conformance = "Supports"
                 remarks = "No issues identified"
-            
-            vpat.entries.append(VPATEntry(
-                criterion=f"{criterion.criterion_id} {criterion.name}",
-                conformance_level=conformance,
-                remarks=remarks,
-            ))
-        
+
+            vpat.entries.append(
+                VPATEntry(
+                    criterion=f"{criterion.criterion_id} {criterion.name}",
+                    conformance_level=conformance,
+                    remarks=remarks,
+                )
+            )
+
         self._vpats[vpat.vpat_id] = vpat
-        
+
         logger.info(
             "vpat_generated",
             vpat_id=vpat.vpat_id,
             product=product_name,
         )
-        
+
         return vpat
-    
+
     def generate_accessibility_statement(
         self,
         organization_name: str,
@@ -608,54 +614,54 @@ class AccessibilityComplianceService:
     ) -> str:
         """
         Generate an accessibility statement.
-        
+
         Per EAA/WCAG requirements.
         """
         known_issues = known_issues or []
-        
+
         statement = f"""
 # Accessibility Statement for {organization_name}
 
 **Website:** {website_url}
-**Standard:** {standard.value.replace('_', ' ').upper()}
+**Standard:** {standard.value.replace("_", " ").upper()}
 **Conformance Level:** {conformance_level.value}
-**Statement Date:** {datetime.now(UTC).strftime('%Y-%m-%d')}
+**Statement Date:** {datetime.now(UTC).strftime("%Y-%m-%d")}
 
 ## Our Commitment
 
-{organization_name} is committed to ensuring digital accessibility for people with 
-disabilities. We are continually improving the user experience for everyone and 
+{organization_name} is committed to ensuring digital accessibility for people with
+disabilities. We are continually improving the user experience for everyone and
 applying the relevant accessibility standards.
 
 ## Conformance Status
 
-This website conforms to {standard.value.replace('_', ' ').upper()} Level {conformance_level.value}.
+This website conforms to {standard.value.replace("_", " ").upper()} Level {conformance_level.value}.
 
 ## Known Accessibility Issues
 
 """
-        
+
         if known_issues:
             for issue in known_issues:
                 statement += f"- {issue}\n"
         else:
             statement += "No known issues at this time.\n"
-        
+
         statement += f"""
 ## Feedback
 
-We welcome your feedback on the accessibility of this website. 
+We welcome your feedback on the accessibility of this website.
 Please contact us at: {contact_email}
 
 ## Enforcement Procedure
 
-In case of unsatisfactory response, you may contact the relevant 
+In case of unsatisfactory response, you may contact the relevant
 regulatory authority in your jurisdiction.
 
 ## Technical Specifications
 
-This website relies on the following technologies to work with the 
-particular combination of web browser and any assistive technologies 
+This website relies on the following technologies to work with the
+particular combination of web browser and any assistive technologies
 or plugins installed on your computer:
 
 - HTML5
@@ -663,20 +669,20 @@ or plugins installed on your computer:
 - CSS
 - JavaScript
 
-These technologies are relied upon for conformance with the accessibility 
+These technologies are relied upon for conformance with the accessibility
 standards used.
 
 ## Limitations
 
-Despite our best efforts to ensure accessibility, there may be some 
+Despite our best efforts to ensure accessibility, there may be some
 limitations. Please contact us if you encounter issues.
 
 ---
-*This statement was last updated on {datetime.now(UTC).strftime('%Y-%m-%d')}.*
+*This statement was last updated on {datetime.now(UTC).strftime("%Y-%m-%d")}.*
 """
-        
+
         return statement
-    
+
     def get_compliance_summary(
         self,
         target_level: WCAGLevel = WCAGLevel.AA,
@@ -684,7 +690,7 @@ limitations. Please contact us if you encounter issues.
         """Get accessibility compliance summary."""
         all_issues = list(self._issues.values())
         open_issues = [i for i in all_issues if i.status == "open"]
-        
+
         return {
             "target_level": target_level.value,
             "total_issues": len(all_issues),

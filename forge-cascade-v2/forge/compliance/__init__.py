@@ -13,21 +13,21 @@ Frameworks Covered:
 
 Usage:
     from forge.compliance import get_compliance_engine
-    
+
     engine = get_compliance_engine()
     await engine.initialize()
-    
+
 Services:
     # Core
     from forge.compliance import get_compliance_engine, get_compliance_config
-    
+
     # Encryption & Data
     from forge.compliance.encryption import get_encryption_service
     from forge.compliance.residency import get_data_residency_service
-    
+
     # Privacy
     from forge.compliance.privacy import get_consent_service, get_dsar_processor
-    
+
     # Security
     from forge.compliance.security import (
         get_access_control_service,
@@ -35,59 +35,59 @@ Services:
         get_breach_notification_service,
         get_vendor_management_service,
     )
-    
+
     # AI Governance
     from forge.compliance.ai_governance import get_ai_governance_service
-    
+
     # Industry
     from forge.compliance.industry import get_hipaa_service, get_pci_service, get_coppa_service
-    
+
     # Reporting & Accessibility
     from forge.compliance.reporting import get_compliance_reporting_service
     from forge.compliance.accessibility import get_accessibility_service
 """
 
+from forge.compliance.accessibility import get_accessibility_service
+from forge.compliance.ai_governance import get_ai_governance_service
 from forge.compliance.core.config import ComplianceConfig, get_compliance_config
+from forge.compliance.core.engine import ComplianceEngine, get_compliance_engine
 from forge.compliance.core.enums import (
-    Jurisdiction,
-    ComplianceFramework,
-    DataClassification,
-    RiskLevel,
-    ConsentType,
-    DSARType,
-    BreachSeverity,
+    AccessControlModel,
     AIRiskClassification,
     AuditEventCategory,
-    AccessControlModel,
+    BreachSeverity,
+    ComplianceFramework,
+    ConsentType,
+    DataClassification,
+    DSARType,
+    Jurisdiction,
+    RiskLevel,
 )
 from forge.compliance.core.models import (
-    ComplianceStatus,
-    ControlStatus,
+    AIDecisionLog,
+    AISystemRegistration,
     AuditEvent,
-    DataSubjectRequest,
-    ConsentRecord,
     BreachNotification,
     ComplianceReport,
-    AISystemRegistration,
-    AIDecisionLog,
+    ComplianceStatus,
+    ConsentRecord,
+    ControlStatus,
+    DataSubjectRequest,
 )
 from forge.compliance.core.registry import ComplianceRegistry, get_compliance_registry
-from forge.compliance.core.engine import ComplianceEngine, get_compliance_engine
 
 # Service imports
 from forge.compliance.encryption import get_encryption_service
-from forge.compliance.residency import get_data_residency_service
+from forge.compliance.industry import get_coppa_service, get_hipaa_service, get_pci_service
 from forge.compliance.privacy import get_consent_service, get_dsar_processor
+from forge.compliance.reporting import get_compliance_reporting_service
+from forge.compliance.residency import get_data_residency_service
 from forge.compliance.security import (
     get_access_control_service,
     get_authentication_service,
     get_breach_notification_service,
     get_vendor_management_service,
 )
-from forge.compliance.ai_governance import get_ai_governance_service
-from forge.compliance.industry import get_hipaa_service, get_pci_service, get_coppa_service
-from forge.compliance.reporting import get_compliance_reporting_service
-from forge.compliance.accessibility import get_accessibility_service
 
 __all__ = [
     # Configuration
@@ -95,7 +95,7 @@ __all__ = [
     "get_compliance_config",
     # Enums
     "Jurisdiction",
-    "ComplianceFramework", 
+    "ComplianceFramework",
     "DataClassification",
     "RiskLevel",
     "ConsentType",

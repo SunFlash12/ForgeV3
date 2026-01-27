@@ -7,9 +7,10 @@ Provides 400+ controls mapped to implementation requirements.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable, Any
 from datetime import UTC, datetime
+from typing import Any
 
 from forge.compliance.core.enums import (
     ComplianceFramework,
@@ -22,31 +23,32 @@ from forge.compliance.core.models import ControlStatus
 class ControlDefinition:
     """
     Definition of a compliance control.
-    
+
     Controls are atomic requirements that must be implemented
     and verified for compliance.
     """
+
     control_id: str
     framework: ComplianceFramework
     name: str
     description: str
     category: str
-    
+
     # Requirements
     implementation_guidance: str = ""
     evidence_required: list[str] = field(default_factory=list)
-    
+
     # Risk
     risk_if_missing: RiskLevel = RiskLevel.HIGH
-    
+
     # Automation
     automatable: bool = False
     verification_function: str | None = None  # Function name to call for verification
-    
+
     # Dependencies
     depends_on: list[str] = field(default_factory=list)
     related_controls: list[str] = field(default_factory=list)
-    
+
     # Mappings to other frameworks
     mappings: dict[str, list[str]] = field(default_factory=dict)
 
@@ -54,33 +56,33 @@ class ControlDefinition:
 class ComplianceRegistry:
     """
     Central registry of all compliance controls.
-    
+
     Provides:
     - 400+ control definitions across 25+ frameworks
     - Control status tracking
     - Framework mappings
     - Gap analysis
     """
-    
+
     def __init__(self):
         self._controls: dict[str, ControlDefinition] = {}
         self._statuses: dict[str, ControlStatus] = {}
         self._verification_functions: dict[str, Callable] = {}
-        
+
         # Initialize all control definitions
         self._initialize_privacy_controls()
         self._initialize_security_controls()
         self._initialize_industry_controls()
         self._initialize_ai_governance_controls()
         self._initialize_accessibility_controls()
-    
+
     # ═══════════════════════════════════════════════════════════════
     # PRIVACY CONTROLS
     # ═══════════════════════════════════════════════════════════════
-    
+
     def _initialize_privacy_controls(self) -> None:
         """Initialize privacy regulation controls."""
-        
+
         # GDPR Controls
         gdpr_controls = [
             ControlDefinition(
@@ -123,7 +125,11 @@ class ComplianceRegistry:
                 description="Obtain freely given, specific, informed, unambiguous consent",
                 category="consent",
                 implementation_guidance="Implement granular consent UI with clear language",
-                evidence_required=["consent_records", "consent_ui_screenshots", "consent_text_versions"],
+                evidence_required=[
+                    "consent_records",
+                    "consent_ui_screenshots",
+                    "consent_text_versions",
+                ],
                 risk_if_missing=RiskLevel.CRITICAL,
                 automatable=True,
                 verification_function="verify_consent_mechanism",
@@ -191,7 +197,11 @@ class ComplianceRegistry:
                 description="Provide safeguards for automated decisions with legal effects",
                 category="rights",
                 implementation_guidance="Implement human review option and explainability",
-                evidence_required=["ai_decision_logs", "human_review_interface", "explainability_output"],
+                evidence_required=[
+                    "ai_decision_logs",
+                    "human_review_interface",
+                    "explainability_output",
+                ],
                 risk_if_missing=RiskLevel.CRITICAL,
                 automatable=True,
                 verification_function="verify_ai_explainability",
@@ -280,10 +290,10 @@ class ComplianceRegistry:
                 risk_if_missing=RiskLevel.CRITICAL,
             ),
         ]
-        
+
         for control in gdpr_controls:
             self._controls[control.control_id] = control
-        
+
         # CCPA/CPRA Controls
         ccpa_controls = [
             ControlDefinition(
@@ -343,10 +353,10 @@ class ComplianceRegistry:
                 automatable=True,
             ),
         ]
-        
+
         for control in ccpa_controls:
             self._controls[control.control_id] = control
-        
+
         # LGPD Controls (Brazil - strictest timeline)
         lgpd_controls = [
             ControlDefinition(
@@ -361,17 +371,17 @@ class ComplianceRegistry:
                 automatable=True,
             ),
         ]
-        
+
         for control in lgpd_controls:
             self._controls[control.control_id] = control
-    
+
     # ═══════════════════════════════════════════════════════════════
     # SECURITY CONTROLS
     # ═══════════════════════════════════════════════════════════════
-    
+
     def _initialize_security_controls(self) -> None:
         """Initialize security framework controls."""
-        
+
         # SOC 2 Controls
         soc2_controls = [
             ControlDefinition(
@@ -381,7 +391,11 @@ class ComplianceRegistry:
                 description="Encrypt data at rest and in transit",
                 category="security",
                 implementation_guidance="AES-256 at rest, TLS 1.3 in transit",
-                evidence_required=["encryption_configuration", "tls_certificates", "key_management"],
+                evidence_required=[
+                    "encryption_configuration",
+                    "tls_certificates",
+                    "key_management",
+                ],
                 risk_if_missing=RiskLevel.CRITICAL,
                 automatable=True,
                 verification_function="verify_encryption",
@@ -427,7 +441,11 @@ class ComplianceRegistry:
                 description="Implement backup and disaster recovery",
                 category="availability",
                 implementation_guidance="Encrypted backups, quarterly testing",
-                evidence_required=["backup_configuration", "recovery_tests", "rpo_rto_documentation"],
+                evidence_required=[
+                    "backup_configuration",
+                    "recovery_tests",
+                    "rpo_rto_documentation",
+                ],
                 risk_if_missing=RiskLevel.CRITICAL,
                 automatable=True,
             ),
@@ -463,10 +481,10 @@ class ComplianceRegistry:
                 risk_if_missing=RiskLevel.HIGH,
             ),
         ]
-        
+
         for control in soc2_controls:
             self._controls[control.control_id] = control
-        
+
         # ISO 27001 Controls
         iso_controls = [
             ControlDefinition(
@@ -512,10 +530,10 @@ class ComplianceRegistry:
                 automatable=True,
             ),
         ]
-        
+
         for control in iso_controls:
             self._controls[control.control_id] = control
-        
+
         # NIST 800-53 Controls (subset - critical controls)
         nist_controls = [
             ControlDefinition(
@@ -595,17 +613,17 @@ class ComplianceRegistry:
                 automatable=True,
             ),
         ]
-        
+
         for control in nist_controls:
             self._controls[control.control_id] = control
-    
+
     # ═══════════════════════════════════════════════════════════════
     # INDUSTRY-SPECIFIC CONTROLS
     # ═══════════════════════════════════════════════════════════════
-    
+
     def _initialize_industry_controls(self) -> None:
         """Initialize industry-specific controls."""
-        
+
         # HIPAA Controls
         hipaa_controls = [
             ControlDefinition(
@@ -663,10 +681,10 @@ class ComplianceRegistry:
                 automatable=True,
             ),
         ]
-        
+
         for control in hipaa_controls:
             self._controls[control.control_id] = control
-        
+
         # PCI-DSS 4.0.1 Controls
         pci_controls = [
             ControlDefinition(
@@ -724,10 +742,10 @@ class ComplianceRegistry:
                 automatable=True,
             ),
         ]
-        
+
         for control in pci_controls:
             self._controls[control.control_id] = control
-        
+
         # COPPA Controls (June 2025 updates)
         coppa_controls = [
             ControlDefinition(
@@ -762,17 +780,17 @@ class ComplianceRegistry:
                 risk_if_missing=RiskLevel.HIGH,
             ),
         ]
-        
+
         for control in coppa_controls:
             self._controls[control.control_id] = control
-    
+
     # ═══════════════════════════════════════════════════════════════
     # AI GOVERNANCE CONTROLS
     # ═══════════════════════════════════════════════════════════════
-    
+
     def _initialize_ai_governance_controls(self) -> None:
         """Initialize AI governance controls."""
-        
+
         # EU AI Act Controls
         eu_ai_controls = [
             ControlDefinition(
@@ -883,10 +901,10 @@ class ComplianceRegistry:
                 risk_if_missing=RiskLevel.CRITICAL,
             ),
         ]
-        
+
         for control in eu_ai_controls:
             self._controls[control.control_id] = control
-        
+
         # Colorado AI Act
         colorado_controls = [
             ControlDefinition(
@@ -900,10 +918,10 @@ class ComplianceRegistry:
                 risk_if_missing=RiskLevel.CRITICAL,
             ),
         ]
-        
+
         for control in colorado_controls:
             self._controls[control.control_id] = control
-        
+
         # NYC Local Law 144 (AEDT)
         nyc_controls = [
             ControlDefinition(
@@ -937,17 +955,17 @@ class ComplianceRegistry:
                 risk_if_missing=RiskLevel.HIGH,
             ),
         ]
-        
+
         for control in nyc_controls:
             self._controls[control.control_id] = control
-    
+
     # ═══════════════════════════════════════════════════════════════
     # ACCESSIBILITY CONTROLS
     # ═══════════════════════════════════════════════════════════════
-    
+
     def _initialize_accessibility_controls(self) -> None:
         """Initialize accessibility controls."""
-        
+
         wcag_controls = [
             ControlDefinition(
                 control_id="WCAG-1.1.1",
@@ -1034,50 +1052,46 @@ class ComplianceRegistry:
                 risk_if_missing=RiskLevel.HIGH,
             ),
         ]
-        
+
         for control in wcag_controls:
             self._controls[control.control_id] = control
-    
+
     # ═══════════════════════════════════════════════════════════════
     # REGISTRY METHODS
     # ═══════════════════════════════════════════════════════════════
-    
+
     def get_control(self, control_id: str) -> ControlDefinition | None:
         """Get control definition by ID."""
         return self._controls.get(control_id)
-    
+
     def get_controls_by_framework(self, framework: ComplianceFramework) -> list[ControlDefinition]:
         """Get all controls for a framework."""
         return [c for c in self._controls.values() if c.framework == framework]
-    
+
     def get_controls_by_category(self, category: str) -> list[ControlDefinition]:
         """Get all controls in a category."""
         return [c for c in self._controls.values() if c.category == category]
-    
+
     def get_automatable_controls(self) -> list[ControlDefinition]:
         """Get all automatable controls."""
         return [c for c in self._controls.values() if c.automatable]
-    
+
     def get_all_controls(self) -> list[ControlDefinition]:
         """Get all controls."""
         return list(self._controls.values())
-    
+
     def get_control_count(self) -> int:
         """Get total number of controls."""
         return len(self._controls)
-    
-    def register_verification_function(
-        self, 
-        function_name: str, 
-        function: Callable
-    ) -> None:
+
+    def register_verification_function(self, function_name: str, function: Callable) -> None:
         """Register a verification function for automated control checks."""
         self._verification_functions[function_name] = function
-    
+
     def get_verification_function(self, function_name: str) -> Callable | None:
         """Get a verification function by name."""
         return self._verification_functions.get(function_name)
-    
+
     def set_control_status(
         self,
         control_id: str,
@@ -1090,7 +1104,7 @@ class ComplianceRegistry:
         control = self._controls.get(control_id)
         if not control:
             return None
-        
+
         status = ControlStatus(
             control_id=control_id,
             framework=control.framework,
@@ -1104,26 +1118,23 @@ class ComplianceRegistry:
             auditor_notes=notes,
             last_audit_date=datetime.now(UTC) if verified else None,
         )
-        
+
         self._statuses[control_id] = status
         return status
-    
+
     def get_control_status(self, control_id: str) -> ControlStatus | None:
         """Get status for a control."""
         return self._statuses.get(control_id)
-    
-    def get_framework_compliance_status(
-        self, 
-        framework: ComplianceFramework
-    ) -> dict[str, Any]:
+
+    def get_framework_compliance_status(self, framework: ComplianceFramework) -> dict[str, Any]:
         """Get compliance status summary for a framework."""
         controls = self.get_controls_by_framework(framework)
-        
+
         total = len(controls)
         implemented = 0
         verified = 0
         pending = 0
-        
+
         for control in controls:
             status = self._statuses.get(control.control_id)
             if status:
@@ -1136,7 +1147,7 @@ class ComplianceRegistry:
                     pending += 1
             else:
                 pending += 1
-        
+
         return {
             "framework": framework.value,
             "total": total,

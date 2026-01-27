@@ -25,10 +25,10 @@ from typing import Any, TypeVar
 from uuid import uuid4
 
 import structlog
+from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-from cryptography.hazmat.backends import default_backend
 
 from forge.compliance.core.config import get_compliance_config
 from forge.compliance.core.enums import (
@@ -50,6 +50,7 @@ T = TypeVar("T")
 @dataclass
 class EncryptionKey:
     """Represents an encryption key with metadata."""
+
     key_id: str
     key_material: bytes
     algorithm: EncryptionStandard
@@ -58,14 +59,14 @@ class EncryptionKey:
     purpose: str  # "data", "dek", "kek", "signing"
     version: int = 1
     is_active: bool = True
-    
+
     @property
     def is_expired(self) -> bool:
         """Check if key is expired."""
         if not self.expires_at:
             return False
         return datetime.now(UTC) > self.expires_at
-    
+
     def to_dict(self) -> dict[str, Any]:
         """Serialize key metadata (without material)."""
         return {
@@ -81,27 +82,27 @@ class EncryptionKey:
 
 class KeyStore(ABC):
     """Abstract key store interface."""
-    
+
     @abstractmethod
     async def store_key(self, key: EncryptionKey) -> None:
         """Store an encryption key."""
         pass
-    
+
     @abstractmethod
     async def get_key(self, key_id: str) -> EncryptionKey | None:
         """Retrieve a key by ID."""
         pass
-    
+
     @abstractmethod
     async def get_active_key(self, purpose: str) -> EncryptionKey | None:
         """Get the current active key for a purpose."""
         pass
-    
+
     @abstractmethod
     async def rotate_key(self, purpose: str) -> EncryptionKey:
         """Create a new key and deactivate the old one."""
         pass
-    
+
     @abstractmethod
     async def list_keys(self, purpose: str | None = None) -> list[EncryptionKey]:
         """List all keys, optionally filtered by purpose."""
@@ -221,6 +222,7 @@ class DatabaseKeyStore(KeyStore):
             self._master_key = master_key
         else:
             import os
+
             master_key_b64 = os.environ.get("ENCRYPTION_MASTER_KEY")
             if master_key_b64:
                 self._master_key = base64.b64decode(master_key_b64)
@@ -229,7 +231,7 @@ class DatabaseKeyStore(KeyStore):
                 # WARNING: This defeats the purpose of persistence - keys will be unrecoverable after restart
                 logger.warning(
                     "database_keystore_no_master_key",
-                    message="No ENCRYPTION_MASTER_KEY set - using ephemeral key (keys will be lost on restart)"
+                    message="No ENCRYPTION_MASTER_KEY set - using ephemeral key (keys will be lost on restart)",
                 )
                 self._master_key = secrets.token_bytes(32)
 
@@ -299,8 +301,12 @@ class DatabaseKeyStore(KeyStore):
                     key_id=key_data["key_id"],
                     key_material=key_material,
                     algorithm=EncryptionStandard(key_data["algorithm"]),
-                    created_at=datetime.fromisoformat(key_data["created_at"]) if isinstance(key_data["created_at"], str) else key_data["created_at"],
-                    expires_at=datetime.fromisoformat(key_data["expires_at"]) if key_data.get("expires_at") and isinstance(key_data["expires_at"], str) else key_data.get("expires_at"),
+                    created_at=datetime.fromisoformat(key_data["created_at"])
+                    if isinstance(key_data["created_at"], str)
+                    else key_data["created_at"],
+                    expires_at=datetime.fromisoformat(key_data["expires_at"])
+                    if key_data.get("expires_at") and isinstance(key_data["expires_at"], str)
+                    else key_data.get("expires_at"),
                     purpose=key_data["purpose"],
                     version=key_data["version"],
                     is_active=key_data["is_active"],
@@ -329,16 +335,19 @@ class DatabaseKeyStore(KeyStore):
             k.is_active = $is_active
         """
 
-        await self._db.execute(query, {
-            "key_id": key.key_id,
-            "encrypted_key_material": base64.b64encode(encrypted_material).decode(),
-            "algorithm": key.algorithm.value,
-            "created_at": key.created_at.isoformat(),
-            "expires_at": key.expires_at.isoformat() if key.expires_at else None,
-            "purpose": key.purpose,
-            "version": key.version,
-            "is_active": key.is_active,
-        })
+        await self._db.execute(
+            query,
+            {
+                "key_id": key.key_id,
+                "encrypted_key_material": base64.b64encode(encrypted_material).decode(),
+                "algorithm": key.algorithm.value,
+                "created_at": key.created_at.isoformat(),
+                "expires_at": key.expires_at.isoformat() if key.expires_at else None,
+                "purpose": key.purpose,
+                "version": key.version,
+                "is_active": key.is_active,
+            },
+        )
 
         # Update cache
         self._keys_cache[key.key_id] = key
@@ -369,7 +378,7 @@ class DatabaseKeyStore(KeyStore):
             # Update database
             await self._db.execute(
                 "MATCH (k:EncryptionKey {key_id: $key_id}) SET k.is_active = false",
-                {"key_id": old_key_id}
+                {"key_id": old_key_id},
             )
 
         # Generate new key
@@ -424,24 +433,27 @@ class DatabaseKeyStore(KeyStore):
 @dataclass
 class EncryptedData:
     """Container for encrypted data with metadata."""
+
     ciphertext: bytes
     nonce: bytes
     key_id: str
     algorithm: str
     encrypted_at: datetime = field(default_factory=lambda: datetime.now(UTC))
-    
+
     def to_bytes(self) -> bytes:
         """Serialize to bytes for storage."""
-        return json.dumps({
-            "ciphertext": base64.b64encode(self.ciphertext).decode(),
-            "nonce": base64.b64encode(self.nonce).decode(),
-            "key_id": self.key_id,
-            "algorithm": self.algorithm,
-            "encrypted_at": self.encrypted_at.isoformat(),
-        }).encode()
-    
+        return json.dumps(
+            {
+                "ciphertext": base64.b64encode(self.ciphertext).decode(),
+                "nonce": base64.b64encode(self.nonce).decode(),
+                "key_id": self.key_id,
+                "algorithm": self.algorithm,
+                "encrypted_at": self.encrypted_at.isoformat(),
+            }
+        ).encode()
+
     @classmethod
-    def from_bytes(cls, data: bytes) -> "EncryptedData":
+    def from_bytes(cls, data: bytes) -> EncryptedData:
         """Deserialize from bytes."""
         parsed = json.loads(data.decode())
         return cls(
@@ -451,13 +463,13 @@ class EncryptedData:
             algorithm=parsed["algorithm"],
             encrypted_at=datetime.fromisoformat(parsed["encrypted_at"]),
         )
-    
+
     def to_base64(self) -> str:
         """Encode to base64 string for database storage."""
         return base64.b64encode(self.to_bytes()).decode()
-    
+
     @classmethod
-    def from_base64(cls, data: str) -> "EncryptedData":
+    def from_base64(cls, data: str) -> EncryptedData:
         """Decode from base64 string."""
         return cls.from_bytes(base64.b64decode(data))
 
@@ -465,7 +477,7 @@ class EncryptedData:
 class EncryptionService:
     """
     Comprehensive encryption service for Forge compliance.
-    
+
     Provides:
     - AES-256-GCM authenticated encryption
     - Envelope encryption (data keys encrypted by master key)
@@ -473,32 +485,32 @@ class EncryptionService:
     - Field-level encryption for sensitive data
     - Tokenization for PCI/PHI data
     """
-    
+
     def __init__(
         self,
         key_store: KeyStore | None = None,
     ):
         self.key_store = key_store or InMemoryKeyStore()
         self._initialized = False
-    
+
     async def initialize(self) -> None:
         """Initialize encryption service with default keys."""
         if self._initialized:
             return
-        
+
         # Create default keys for each purpose
         for purpose in ["data", "dek", "token", "signing"]:
             existing = await self.key_store.get_active_key(purpose)
             if not existing:
                 await self.key_store.rotate_key(purpose)
-        
+
         self._initialized = True
         logger.info("encryption_service_initialized")
-    
+
     # ───────────────────────────────────────────────────────────────
     # CORE ENCRYPTION
     # ───────────────────────────────────────────────────────────────
-    
+
     async def encrypt(
         self,
         plaintext: bytes,
@@ -507,35 +519,35 @@ class EncryptionService:
     ) -> EncryptedData:
         """
         Encrypt data using AES-256-GCM.
-        
+
         Args:
             plaintext: Data to encrypt
             purpose: Key purpose (determines which key to use)
             aad: Additional authenticated data (optional)
-        
+
         Returns:
             EncryptedData container with ciphertext and metadata
         """
         await self.initialize()
-        
+
         key = await self.key_store.get_active_key(purpose)
         if not key:
             raise ValueError(f"No active key for purpose: {purpose}")
-        
+
         # Generate random nonce (12 bytes for GCM)
         nonce = secrets.token_bytes(12)
-        
+
         # Encrypt using AES-256-GCM
         aesgcm = AESGCM(key.key_material)
         ciphertext = aesgcm.encrypt(nonce, plaintext, aad)
-        
+
         return EncryptedData(
             ciphertext=ciphertext,
             nonce=nonce,
             key_id=key.key_id,
             algorithm="AES-256-GCM",
         )
-    
+
     async def decrypt(
         self,
         encrypted: EncryptedData,
@@ -543,21 +555,21 @@ class EncryptionService:
     ) -> bytes:
         """
         Decrypt data using AES-256-GCM.
-        
+
         Args:
             encrypted: EncryptedData container
             aad: Additional authenticated data (must match encryption)
-        
+
         Returns:
             Decrypted plaintext
         """
         key = await self.key_store.get_key(encrypted.key_id)
         if not key:
             raise ValueError(f"Key not found: {encrypted.key_id}")
-        
+
         aesgcm = AESGCM(key.key_material)
         return aesgcm.decrypt(encrypted.nonce, encrypted.ciphertext, aad)
-    
+
     async def encrypt_string(
         self,
         plaintext: str,
@@ -566,7 +578,7 @@ class EncryptionService:
         """Encrypt a string and return base64-encoded result."""
         encrypted = await self.encrypt(plaintext.encode("utf-8"), purpose)
         return encrypted.to_base64()
-    
+
     async def decrypt_string(
         self,
         encrypted_b64: str,
@@ -575,11 +587,11 @@ class EncryptionService:
         encrypted = EncryptedData.from_base64(encrypted_b64)
         plaintext = await self.decrypt(encrypted)
         return plaintext.decode("utf-8")
-    
+
     # ───────────────────────────────────────────────────────────────
     # ENVELOPE ENCRYPTION
     # ───────────────────────────────────────────────────────────────
-    
+
     async def envelope_encrypt(
         self,
         plaintext: bytes,
@@ -587,28 +599,28 @@ class EncryptionService:
     ) -> dict[str, Any]:
         """
         Envelope encryption: generate DEK, encrypt data, encrypt DEK with KEK.
-        
+
         This is the recommended pattern for large data encryption.
         """
         await self.initialize()
-        
+
         # Generate Data Encryption Key (DEK)
         dek = secrets.token_bytes(32)
         dek_nonce = secrets.token_bytes(12)
-        
+
         # Encrypt data with DEK
         aesgcm = AESGCM(dek)
         ciphertext = aesgcm.encrypt(dek_nonce, plaintext, aad)
-        
+
         # Encrypt DEK with Key Encryption Key (KEK)
         kek = await self.key_store.get_active_key("dek")
         if not kek:
             kek = await self.key_store.rotate_key("dek")
-        
+
         kek_nonce = secrets.token_bytes(12)
         kek_aesgcm = AESGCM(kek.key_material)
         encrypted_dek = kek_aesgcm.encrypt(kek_nonce, dek, None)
-        
+
         return {
             "ciphertext": base64.b64encode(ciphertext).decode(),
             "nonce": base64.b64encode(dek_nonce).decode(),
@@ -618,7 +630,7 @@ class EncryptionService:
             "algorithm": "AES-256-GCM-ENVELOPE",
             "encrypted_at": datetime.now(UTC).isoformat(),
         }
-    
+
     async def envelope_decrypt(
         self,
         envelope: dict[str, Any],
@@ -631,7 +643,7 @@ class EncryptionService:
         kek = await self.key_store.get_key(envelope["kek_id"])
         if not kek:
             raise ValueError(f"KEK not found: {envelope['kek_id']}")
-        
+
         # Decrypt DEK
         kek_aesgcm = AESGCM(kek.key_material)
         dek = kek_aesgcm.decrypt(
@@ -639,7 +651,7 @@ class EncryptionService:
             base64.b64decode(envelope["encrypted_dek"]),
             None,
         )
-        
+
         # Decrypt data with DEK
         aesgcm = AESGCM(dek)
         return aesgcm.decrypt(
@@ -647,11 +659,11 @@ class EncryptionService:
             base64.b64decode(envelope["ciphertext"]),
             aad,
         )
-    
+
     # ───────────────────────────────────────────────────────────────
     # FIELD-LEVEL ENCRYPTION
     # ───────────────────────────────────────────────────────────────
-    
+
     async def encrypt_field(
         self,
         value: Any,
@@ -660,22 +672,22 @@ class EncryptionService:
     ) -> str:
         """
         Encrypt a single field value with context binding.
-        
+
         The field name and entity ID are included as AAD to prevent
         ciphertext from being moved between fields/records.
         """
         # Create AAD from context
         aad = f"{field_name}:{entity_id}".encode()
-        
+
         # Serialize value
         if isinstance(value, str):
             plaintext = value.encode()
         else:
             plaintext = json.dumps(value).encode()
-        
+
         encrypted = await self.encrypt(plaintext, purpose="data", aad=aad)
         return encrypted.to_base64()
-    
+
     async def decrypt_field(
         self,
         encrypted_value: str,
@@ -688,17 +700,17 @@ class EncryptionService:
         aad = f"{field_name}:{entity_id}".encode()
         encrypted = EncryptedData.from_base64(encrypted_value)
         plaintext = await self.decrypt(encrypted, aad=aad)
-        
+
         # Try to deserialize as JSON
         try:
             return json.loads(plaintext.decode())
         except json.JSONDecodeError:
             return plaintext.decode()
-    
+
     # ───────────────────────────────────────────────────────────────
     # TOKENIZATION
     # ───────────────────────────────────────────────────────────────
-    
+
     async def tokenize(
         self,
         value: str,
@@ -706,17 +718,17 @@ class EncryptionService:
     ) -> str:
         """
         Tokenize sensitive data (PCI, PHI) with format-preserving token.
-        
+
         Returns a token that can be used in place of the original value.
         The original value can only be retrieved with the token.
         """
         await self.initialize()
-        
+
         # Get token key
         token_key = await self.key_store.get_active_key("token")
         if not token_key:
             token_key = await self.key_store.rotate_key("token")
-        
+
         # Generate deterministic token using HMAC
         # This allows the same value to produce the same token
         token_hmac = hmac.new(
@@ -724,7 +736,7 @@ class EncryptionService:
             value.encode(),
             hashlib.sha256,
         ).hexdigest()[:24]
-        
+
         # Prefix based on classification
         prefix = {
             DataClassification.PCI: "PCI",
@@ -732,25 +744,25 @@ class EncryptionService:
             DataClassification.BIOMETRIC: "BIO",
             DataClassification.FINANCIAL: "FIN",
         }.get(classification, "TOK")
-        
+
         token = f"{prefix}_{token_hmac}"
-        
+
         # Store mapping (in production, use secure vault)
         # For this implementation, we encrypt the original value
         encrypted = await self.encrypt_string(value, purpose="token")
-        
+
         # Store in a token vault (simulated here)
         self._token_vault = getattr(self, "_token_vault", {})
         self._token_vault[token] = encrypted
-        
+
         logger.debug(
             "data_tokenized",
             classification=classification.value,
             token_prefix=prefix,
         )
-        
+
         return token
-    
+
     async def detokenize(
         self,
         token: str,
@@ -762,13 +774,13 @@ class EncryptionService:
         encrypted = vault.get(token)
         if not encrypted:
             raise ValueError(f"Token not found: {token}")
-        
+
         return await self.decrypt_string(encrypted)
-    
+
     # ───────────────────────────────────────────────────────────────
     # HASHING
     # ───────────────────────────────────────────────────────────────
-    
+
     def hash_password(
         self,
         password: str,
@@ -776,12 +788,12 @@ class EncryptionService:
     ) -> tuple[bytes, bytes]:
         """
         Hash a password using PBKDF2-SHA256.
-        
+
         Returns (hash, salt) tuple.
         """
         if salt is None:
             salt = secrets.token_bytes(16)
-        
+
         kdf = PBKDF2HMAC(
             algorithm=hashes.SHA256(),
             length=32,
@@ -789,10 +801,10 @@ class EncryptionService:
             iterations=600000,  # OWASP recommendation
             backend=default_backend(),
         )
-        
+
         password_hash = kdf.derive(password.encode())
         return password_hash, salt
-    
+
     def verify_password(
         self,
         password: str,
@@ -807,13 +819,13 @@ class EncryptionService:
             iterations=600000,
             backend=default_backend(),
         )
-        
+
         try:
             kdf.verify(password.encode(), password_hash)
             return True
         except Exception:
             return False
-    
+
     def hash_data(
         self,
         data: bytes,
@@ -821,7 +833,7 @@ class EncryptionService:
     ) -> str:
         """
         Hash data for integrity verification.
-        
+
         Returns hex-encoded hash.
         """
         if algorithm == "sha256":
@@ -832,27 +844,27 @@ class EncryptionService:
             return hashlib.sha512(data).hexdigest()
         else:
             raise ValueError(f"Unsupported algorithm: {algorithm}")
-    
+
     # ───────────────────────────────────────────────────────────────
     # KEY ROTATION
     # ───────────────────────────────────────────────────────────────
-    
+
     async def rotate_keys(
         self,
         purpose: str | None = None,
     ) -> list[EncryptionKey]:
         """
         Rotate encryption keys.
-        
+
         If purpose is None, rotates all key types.
         """
         purposes = [purpose] if purpose else ["data", "dek", "token", "signing"]
         rotated = []
-        
+
         for p in purposes:
             new_key = await self.key_store.rotate_key(p)
             rotated.append(new_key)
-            
+
             logger.info(
                 "key_rotated",
                 purpose=p,
@@ -860,18 +872,18 @@ class EncryptionService:
                 version=new_key.version,
                 expires_at=new_key.expires_at.isoformat() if new_key.expires_at else None,
             )
-        
+
         return rotated
-    
+
     async def check_key_expiration(self) -> list[EncryptionKey]:
         """
         Check for expiring/expired keys.
-        
+
         Returns list of keys that need rotation.
         """
         all_keys = await self.key_store.list_keys()
         expiring = []
-        
+
         for key in all_keys:
             if key.is_active and key.expires_at:
                 days_until_expiry = (key.expires_at - datetime.now(UTC)).days
@@ -883,7 +895,7 @@ class EncryptionService:
                         purpose=key.purpose,
                         days_remaining=days_until_expiry,
                     )
-        
+
         return expiring
 
 
@@ -895,14 +907,14 @@ class EncryptionService:
 class SensitiveDataHandler:
     """
     High-level handler for sensitive data encryption based on classification.
-    
+
     Automatically applies appropriate encryption/tokenization based on
     data classification per compliance requirements.
     """
-    
+
     def __init__(self, encryption_service: EncryptionService):
         self.encryption = encryption_service
-    
+
     async def protect(
         self,
         data: dict[str, Any],
@@ -912,22 +924,22 @@ class SensitiveDataHandler:
     ) -> dict[str, Any]:
         """
         Protect sensitive data based on classification.
-        
+
         Args:
             data: Data dictionary to protect
             classification: Data classification level
             entity_id: Entity ID for context binding
             sensitive_fields: List of field names to encrypt (if None, uses defaults)
-        
+
         Returns:
             Data with sensitive fields encrypted/tokenized
         """
         result = data.copy()
-        
+
         # Determine fields to protect based on classification
         if sensitive_fields is None:
             sensitive_fields = self._get_default_sensitive_fields(classification)
-        
+
         for field_name in sensitive_fields:
             if field_name in result and result[field_name]:
                 # Use tokenization for PCI/PHI, encryption for others
@@ -942,9 +954,9 @@ class SensitiveDataHandler:
                         field_name,
                         entity_id,
                     )
-        
+
         return result
-    
+
     async def unprotect(
         self,
         data: dict[str, Any],
@@ -956,16 +968,18 @@ class SensitiveDataHandler:
         Unprotect (decrypt/detokenize) sensitive data.
         """
         result = data.copy()
-        
+
         if sensitive_fields is None:
             sensitive_fields = self._get_default_sensitive_fields(classification)
-        
+
         for field_name in sensitive_fields:
             if field_name in result and result[field_name]:
                 value = result[field_name]
-                
+
                 # Detect token vs encrypted field
-                if isinstance(value, str) and value.startswith(("PCI_", "PHI_", "BIO_", "FIN_", "TOK_")):
+                if isinstance(value, str) and value.startswith(
+                    ("PCI_", "PHI_", "BIO_", "FIN_", "TOK_")
+                ):
                     result[field_name] = await self.encryption.detokenize(value)
                 elif isinstance(value, str):
                     try:
@@ -976,9 +990,9 @@ class SensitiveDataHandler:
                         )
                     except Exception:
                         pass  # Not encrypted, keep as-is
-        
+
         return result
-    
+
     def _get_default_sensitive_fields(
         self,
         classification: DataClassification,
@@ -986,24 +1000,47 @@ class SensitiveDataHandler:
         """Get default sensitive fields for a classification."""
         defaults = {
             DataClassification.PCI: [
-                "card_number", "cvv", "expiry_date", "cardholder_name",
+                "card_number",
+                "cvv",
+                "expiry_date",
+                "cardholder_name",
             ],
             DataClassification.PHI: [
-                "ssn", "medical_record", "diagnosis", "treatment",
-                "date_of_birth", "address", "phone", "email",
+                "ssn",
+                "medical_record",
+                "diagnosis",
+                "treatment",
+                "date_of_birth",
+                "address",
+                "phone",
+                "email",
             ],
             DataClassification.BIOMETRIC: [
-                "fingerprint", "face_data", "voice_print", "iris_scan",
+                "fingerprint",
+                "face_data",
+                "voice_print",
+                "iris_scan",
             ],
             DataClassification.FINANCIAL: [
-                "account_number", "routing_number", "balance", "transactions",
+                "account_number",
+                "routing_number",
+                "balance",
+                "transactions",
             ],
             DataClassification.SENSITIVE_PERSONAL: [
-                "race", "ethnicity", "religion", "political_affiliation",
-                "sexual_orientation", "health_data", "genetic_data",
+                "race",
+                "ethnicity",
+                "religion",
+                "political_affiliation",
+                "sexual_orientation",
+                "health_data",
+                "genetic_data",
             ],
             DataClassification.PERSONAL_DATA: [
-                "email", "phone", "address", "date_of_birth",
+                "email",
+                "phone",
+                "address",
+                "date_of_birth",
             ],
         }
         return defaults.get(classification, [])

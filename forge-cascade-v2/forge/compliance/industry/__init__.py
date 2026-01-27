@@ -9,21 +9,21 @@ Implements industry-specific compliance:
 """
 
 from forge.compliance.industry.services import (
-    HIPAAComplianceService,
-    get_hipaa_service,
-    PHIIdentifier,
-    HIPAAAuthorizationPurpose,
-    HIPAAAuthorization,
-    PHIAccessLog,
-    PCIDSSComplianceService,
-    get_pci_service,
     CardDataElement,
-    PCIScope,
-    PCIScanResult,
-    COPPAComplianceService,
-    get_coppa_service,
-    ParentalConsentMethod,
     ChildProfile,
+    COPPAComplianceService,
+    HIPAAAuthorization,
+    HIPAAAuthorizationPurpose,
+    HIPAAComplianceService,
+    ParentalConsentMethod,
+    PCIDSSComplianceService,
+    PCIScanResult,
+    PCIScope,
+    PHIAccessLog,
+    PHIIdentifier,
+    get_coppa_service,
+    get_hipaa_service,
+    get_pci_service,
 )
 
 __all__ = [

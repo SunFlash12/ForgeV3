@@ -21,7 +21,9 @@ app = FastAPI(
 
 # CORS middleware - SECURITY FIX: Restrict origins instead of allowing all
 # Configure allowed origins via environment variable in production
-ALLOWED_ORIGINS = os.getenv("COMPLIANCE_CORS_ORIGINS", "http://localhost:3000,http://localhost:5173").split(",")
+ALLOWED_ORIGINS = os.getenv(
+    "COMPLIANCE_CORS_ORIGINS", "http://localhost:3000,http://localhost:5173"
+).split(",")
 
 app.add_middleware(
     CORSMiddleware,

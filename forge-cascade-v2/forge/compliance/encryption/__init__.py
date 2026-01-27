@@ -10,12 +10,12 @@ Provides encryption services for data protection per:
 """
 
 from forge.compliance.encryption.service import (
-    EncryptionKey,
-    EncryptedData,
-    KeyStore,
-    InMemoryKeyStore,
     DatabaseKeyStore,
+    EncryptedData,
+    EncryptionKey,
     EncryptionService,
+    InMemoryKeyStore,
+    KeyStore,
     SensitiveDataHandler,
     get_encryption_service,
 )

@@ -21,21 +21,21 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
-from forge.compliance.core.enums import (
-    Jurisdiction,
-    ComplianceFramework,
-    DataClassification,
-    ConsentType,
-    DSARType,
-    BreachSeverity,
-    AIRiskClassification,
-    AuditEventCategory,
+from forge.compliance.api.auth import (
+    AdminUserDep,
+    ComplianceOfficerDep,
+    CurrentUserDep,
 )
 from forge.compliance.core.engine import ComplianceEngine, get_compliance_engine
-from forge.compliance.api.auth import (
-    CurrentUserDep,
-    ComplianceOfficerDep,
-    AdminUserDep,
+from forge.compliance.core.enums import (
+    AIRiskClassification,
+    AuditEventCategory,
+    BreachSeverity,
+    ComplianceFramework,
+    ConsentType,
+    DataClassification,
+    DSARType,
+    Jurisdiction,
 )
 
 router = APIRouter(prefix="/compliance", tags=["compliance"])
@@ -48,6 +48,7 @@ router = APIRouter(prefix="/compliance", tags=["compliance"])
 
 class DSARCreateRequest(BaseModel):
     """Request to create a DSAR."""
+
     request_type: DSARType
     subject_email: str
     request_text: str
@@ -58,11 +59,13 @@ class DSARCreateRequest(BaseModel):
 
 class DSARProcessRequest(BaseModel):
     """Request to process a DSAR."""
+
     actor_id: str
 
 
 class DSARCompleteRequest(BaseModel):
     """Request to complete a DSAR."""
+
     actor_id: str
     export_location: str | None = None
     export_format: str = "JSON"
@@ -71,6 +74,7 @@ class DSARCompleteRequest(BaseModel):
 
 class ConsentCreateRequest(BaseModel):
     """Request to record consent."""
+
     user_id: str
     consent_type: ConsentType
     purpose: str
@@ -88,18 +92,21 @@ class ConsentCreateRequest(BaseModel):
 
 class ConsentWithdrawRequest(BaseModel):
     """Request to withdraw consent."""
+
     user_id: str
     consent_type: ConsentType
 
 
 class GPCSignalRequest(BaseModel):
     """Request to process GPC signal."""
+
     user_id: str
     gpc_enabled: bool
 
 
 class BreachReportRequest(BaseModel):
     """Request to report a breach."""
+
     discovered_by: str
     discovery_method: str
     severity: BreachSeverity
@@ -114,12 +121,14 @@ class BreachReportRequest(BaseModel):
 
 class BreachContainRequest(BaseModel):
     """Request to mark breach as contained."""
+
     containment_actions: list[str]
     actor_id: str
 
 
 class AuthorityNotificationRequest(BaseModel):
     """Request to record authority notification."""
+
     jurisdiction: Jurisdiction
     reference_number: str | None = None
     actor_id: str | None = None
@@ -127,6 +136,7 @@ class AuthorityNotificationRequest(BaseModel):
 
 class AISystemRegisterRequest(BaseModel):
     """Request to register an AI system."""
+
     system_name: str
     system_version: str
     provider: str
@@ -140,6 +150,7 @@ class AISystemRegisterRequest(BaseModel):
 
 class AIDecisionLogRequest(BaseModel):
     """Request to log an AI decision."""
+
     ai_system_id: str
     model_version: str
     decision_type: str
@@ -155,6 +166,7 @@ class AIDecisionLogRequest(BaseModel):
 
 class HumanReviewRequest(BaseModel):
     """Request to record human review of AI decision."""
+
     decision_id: str
     reviewer_id: str
     override: bool = False
@@ -163,6 +175,7 @@ class HumanReviewRequest(BaseModel):
 
 class ComplianceReportRequest(BaseModel):
     """Request to generate a compliance report."""
+
     report_type: str = "full"
     start_date: datetime | None = None
     end_date: datetime | None = None
@@ -173,6 +186,7 @@ class ComplianceReportRequest(BaseModel):
 
 class ControlVerifyRequest(BaseModel):
     """Request to verify a control."""
+
     control_id: str
     verifier_id: str
     evidence: list[str] | None = None
@@ -472,7 +486,9 @@ async def report_breach(
         "id": breach.id,
         "severity": breach.severity.value,
         "record_count": breach.record_count,
-        "most_urgent_deadline": breach.most_urgent_deadline.isoformat() if breach.most_urgent_deadline else None,
+        "most_urgent_deadline": breach.most_urgent_deadline.isoformat()
+        if breach.most_urgent_deadline
+        else None,
         "notification_deadlines": {
             k: v.isoformat() for k, v in breach.notification_deadlines.items()
         },
@@ -706,10 +722,14 @@ async def list_ai_systems(
 
     return {
         "total": len(systems),
-        "high_risk_count": len([
-            s for s in systems
-            if s.risk_classification in {AIRiskClassification.HIGH_RISK, AIRiskClassification.GPAI_SYSTEMIC}
-        ]),
+        "high_risk_count": len(
+            [
+                s
+                for s in systems
+                if s.risk_classification
+                in {AIRiskClassification.HIGH_RISK, AIRiskClassification.GPAI_SYSTEMIC}
+            ]
+        ),
         "systems": [
             {
                 "id": s.id,
@@ -756,7 +776,7 @@ async def get_audit_events(
         "events": [
             {
                 "id": e.id,
-                "category": e.category.value if hasattr(e.category, 'value') else e.category,
+                "category": e.category.value if hasattr(e.category, "value") else e.category,
                 "event_type": e.event_type,
                 "action": e.action,
                 "actor_id": e.actor_id,
@@ -878,7 +898,9 @@ async def get_compliance_status(
         total_compliant += framework_status["verified"]
 
     return {
-        "overall_compliance_percentage": (total_compliant / total_controls * 100) if total_controls > 0 else 0,
+        "overall_compliance_percentage": (total_compliant / total_controls * 100)
+        if total_controls > 0
+        else 0,
         "total_controls": total_controls,
         "compliant_controls": total_compliant,
         "frameworks": status_by_framework,
