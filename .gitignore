@@ -25,6 +25,7 @@ secrets/
 *.pfx
 *password*.txt
 *secret*.txt
+cookies_*.txt
 
 # SECURITY FIX (Audit 4): Credential files - NEVER COMMIT
 .seed_credentials
