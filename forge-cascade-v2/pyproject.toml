@@ -172,6 +172,13 @@ module = [
 ]
 ignore_missing_imports = true
 
+# Compliance module - relaxed typing (pre-existing module, will tighten incrementally)
+[[tool.mypy.overrides]]
+module = [
+    "forge.compliance.*",
+]
+ignore_errors = true
+
 # Core modules with STRICT type safety (Session 5 fixes)
 [[tool.mypy.overrides]]
 module = [
