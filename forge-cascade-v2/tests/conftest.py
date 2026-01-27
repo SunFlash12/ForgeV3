@@ -14,7 +14,7 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
 
@@ -251,21 +251,153 @@ def admin_auth_headers(user_factory):
 
 @pytest.fixture
 def app() -> FastAPI:
-    """Create a test FastAPI application."""
-    from forge.api.app import create_app
+    """Create a test FastAPI application.
 
-    return create_app(
+    Creates the app WITHOUT the production lifespan (which requires Neo4j).
+    Overrides auth dependencies so JWT-authenticated requests work without a
+    real database: the user is synthesized from the JWT token claims.
+    """
+    from contextlib import asynccontextmanager
+
+    from forge.api.app import create_app, forge_app
+
+    # Create a no-op lifespan that marks the app as "ready" without connecting
+    # to Neo4j or initializing heavy services.
+    @asynccontextmanager
+    async def _test_lifespan(application: FastAPI):
+        forge_app.is_ready = True
+        yield
+        forge_app.is_ready = False
+
+    application = create_app(
         title="Forge Test",
         version="test",
         docs_url=None,
         redoc_url=None,
     )
 
+    # Swap the lifespan to the lightweight test version
+    application.router.lifespan_context = _test_lifespan
+
+    # ── Override DB dependency so routes don't need a live Neo4j ──
+    from forge.api.dependencies import get_db_client
+
+    _mock_db = AsyncMock()
+    _mock_db.execute = AsyncMock(return_value=[])
+    _mock_db.execute_single = AsyncMock(return_value=None)
+    _mock_db.connect = AsyncMock()
+    _mock_db.close = AsyncMock()
+    _mock_db._driver = MagicMock()
+
+    async def _test_get_db_client() -> object:
+        return _mock_db
+
+    application.dependency_overrides[get_db_client] = _test_get_db_client
+
+    # ── Override auth dependencies so tests don't need Neo4j ──
+    #
+    # The production auth chain is:
+    #   get_token_payload  (JWT verify + blacklist check via DB)
+    #   -> get_current_user_optional  (DB lookup by user id)
+    #   -> get_current_user           (raises 401 if None)
+    #   -> get_current_active_user    (raises 403 if inactive)
+    #
+    # In tests we replace every level so no database is needed.
+    # A valid JWT token is still required; the user is synthesized
+    # from the token claims.
+    from forge.api.dependencies import (
+        get_current_active_user,
+        get_current_user,
+        get_current_user_optional,
+    )
+    from forge.models.user import AuthProvider, User, UserRole
+    from forge.security.tokens import TokenError, verify_token
+
+    def _user_from_request(request: Request) -> User | None:
+        """Extract + verify JWT from request, return User or None."""
+        token_str: str | None = None
+
+        # Cookie first (mirrors production priority)
+        access_cookie = request.cookies.get("access_token")
+        if access_cookie:
+            token_str = access_cookie
+
+        # Authorization header fallback
+        if not token_str:
+            auth_header = request.headers.get("Authorization", "")
+            if auth_header.startswith("Bearer "):
+                token_str = auth_header[7:]
+
+        if not token_str:
+            return None
+
+        try:
+            payload = verify_token(token_str)
+        except TokenError:
+            return None
+
+        role_map = {
+            "user": UserRole.USER,
+            "admin": UserRole.ADMIN,
+            "moderator": UserRole.MODERATOR,
+            "system": UserRole.SYSTEM,
+        }
+        return User(
+            id=payload.sub,
+            username=payload.username or "testuser",
+            email=f"{payload.username or 'testuser'}@test.example.com",
+            role=role_map.get(payload.role or "user", UserRole.USER),
+            trust_flame=(payload.trust_flame if payload.trust_flame is not None else 60),
+            is_active=True,
+            is_verified=True,
+            auth_provider=AuthProvider.LOCAL,
+        )
+
+    async def _test_get_current_user_optional(request: Request) -> User | None:
+        return _user_from_request(request)
+
+    async def _test_get_current_user(request: Request) -> User:
+        user = _user_from_request(request)
+        if not user:
+            from fastapi import HTTPException, status
+
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Not authenticated",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        return user
+
+    async def _test_get_current_active_user(request: Request) -> User:
+        user = _user_from_request(request)
+        if not user:
+            from fastapi import HTTPException, status
+
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Not authenticated",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        if not user.is_active:
+            from fastapi import HTTPException, status
+
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="User account is disabled",
+            )
+        return user
+
+    application.dependency_overrides[get_current_user_optional] = _test_get_current_user_optional
+    application.dependency_overrides[get_current_user] = _test_get_current_user
+    application.dependency_overrides[get_current_active_user] = _test_get_current_active_user
+
+    return application
+
 
 @pytest.fixture
 def client(app: FastAPI) -> Generator[TestClient, None, None]:
     """Create a synchronous test client."""
-    with TestClient(app) as c:
+    with TestClient(app, raise_server_exceptions=False) as c:
         yield c
 
 

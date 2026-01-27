@@ -469,7 +469,7 @@ class ForgeToolRegistry:
         """Create an error result for tool invocation."""
         return ToolResult(
             textResultForLlm=f"Error: {message}",
-            resultType="failure",
+            resultType="error",
             sessionLog=f"Tool error: {message}",
         )
 

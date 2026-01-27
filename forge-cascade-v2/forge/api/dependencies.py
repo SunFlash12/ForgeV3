@@ -318,6 +318,9 @@ async def get_token_payload(
         return payload
     except (ValueError, KeyError, OSError, RuntimeError):
         return None
+    except Exception:
+        # Catch token-specific errors (TokenExpiredError, TokenInvalidError)
+        return None
 
 
 async def get_current_user_optional(

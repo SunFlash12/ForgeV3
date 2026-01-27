@@ -300,6 +300,16 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
                     error_type=type(e).__name__,
                     error=str(e)[:100],  # Truncate to avoid log bloat
                 )
+            except Exception as e:
+                # Catch token-specific errors (TokenExpiredError, TokenInvalidError, etc.)
+                # that are not subclasses of the standard exception types above.
+                logger.warning(
+                    "auth_token_rejected",
+                    path=request.url.path,
+                    client_ip=self._get_client_ip(request),
+                    error_type=type(e).__name__,
+                    error=str(e)[:100],
+                )
 
         response = await call_next(request)
         return response

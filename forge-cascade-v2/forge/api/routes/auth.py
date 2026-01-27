@@ -682,6 +682,19 @@ async def refresh_token(
             detail="Invalid refresh token",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    except Exception as e:
+        # Catch token-specific errors (TokenInvalidError, TokenExpiredError)
+        # that are not subclasses of ValueError.
+        from forge.security.tokens import TokenError
+
+        if isinstance(e, TokenError):
+            record_token_refresh(success=False)
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid refresh token",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        raise
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
