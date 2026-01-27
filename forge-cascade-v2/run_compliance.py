@@ -56,9 +56,9 @@ app.include_router(extended_router, prefix="/api/v1/compliance")
 
 @app.on_event("startup")
 async def startup():
-    """Initialize compliance engine on startup."""
+    """Initialize compliance engine persistence on startup."""
     engine = get_compliance_engine()
-    await engine.initialize()
+    await engine.initialize_persistence()
 
 
 @app.get("/health")
