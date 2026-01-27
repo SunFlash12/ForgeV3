@@ -120,8 +120,23 @@ async function main() {
     fs.mkdirSync(deploymentsDir, { recursive: true });
   }
 
+  // Merge with existing deployment data (preserve CapsuleRegistry, SimpleEscrow, etc.)
   const deploymentFile = path.join(deploymentsDir, `${networkName}.json`);
-  fs.writeFileSync(deploymentFile, JSON.stringify(deploymentInfo, null, 2));
+  let existingData: any = {};
+  if (fs.existsSync(deploymentFile)) {
+    existingData = JSON.parse(fs.readFileSync(deploymentFile, "utf-8"));
+  }
+
+  const mergedInfo = {
+    ...existingData,
+    ...deploymentInfo,
+    contracts: {
+      ...(existingData.contracts || {}),
+      ...deploymentInfo.contracts,
+    },
+  };
+
+  fs.writeFileSync(deploymentFile, JSON.stringify(mergedInfo, null, 2));
   console.log(`\nDeployment info saved to: ${deploymentFile}`);
 
   // Verify on Basescan (if not local)
