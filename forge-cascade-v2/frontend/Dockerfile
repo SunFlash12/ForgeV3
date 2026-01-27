@@ -29,6 +29,9 @@ RUN npm run build
 # Stage 2: Production
 FROM nginx:alpine
 
+# SECURITY FIX: Patch all OS-level vulnerabilities (libpng CVE-2026-22695, CVE-2026-22801)
+RUN apk update && apk upgrade --no-cache && rm -rf /var/cache/apk/*
+
 # SECURITY FIX (Audit 3): Create non-root user
 RUN addgroup -g 101 -S nginx || true && \
     adduser -S -D -H -u 101 -h /var/cache/nginx -s /sbin/nologin -G nginx -g nginx nginx || true
