@@ -60,11 +60,13 @@ export function Sidebar({ isMobileOpen, onMobileClose, isPhone, isTablet }: Side
   const { user, logout } = useAuthStore();
   const cartItemCount = useCartStore((s) => s.itemCount);
 
-  // Auto-collapse on tablet
+  // Auto-collapse on tablet - intentional UI behavior
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (isTablet) setCollapsed(true);
     if (!isTablet && !isPhone) setCollapsed(false);
   }, [isTablet, isPhone]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const canAccess = (item: NavItem) => {
     if (!item.requiredTrust) return true;

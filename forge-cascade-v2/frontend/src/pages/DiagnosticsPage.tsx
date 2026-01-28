@@ -189,6 +189,8 @@ export default function DiagnosticsPage() {
 
   const isBackendReachable = !basicError;
   const overallStatus = health?.status ?? (isBackendReachable ? 'unknown' : 'unhealthy');
+  // Dynamic component selection based on status - intentional pattern
+  // eslint-disable-next-line react-hooks/static-components
   const StatusIcon = getStatusIcon(overallStatus);
 
   return (

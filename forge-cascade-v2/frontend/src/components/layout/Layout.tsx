@@ -27,9 +27,12 @@ export default function Layout() {
   }, []);
 
   // Auto-close mobile drawer when leaving phone breakpoint
+  // This is intentional UI behavior - close drawer when screen becomes larger
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (screenSize !== 'phone') setIsMobileSidebarOpen(false);
   }, [screenSize]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const openMobileSidebar = useCallback(() => setIsMobileSidebarOpen(true), []);
   const closeMobileSidebar = useCallback(() => setIsMobileSidebarOpen(false), []);
