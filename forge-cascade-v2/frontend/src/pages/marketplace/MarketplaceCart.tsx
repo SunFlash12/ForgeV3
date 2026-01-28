@@ -100,7 +100,6 @@ export default function MarketplaceCart() {
   // Watch for transaction confirmation and submit to backend
   useEffect(() => {
     if (isConfirmed && txHash && purchaseStep === 'confirming') {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- respond to on-chain confirmation
       setPurchaseStep('submitting');
 
       const purchaseItems = items.map(item => ({
@@ -129,6 +128,16 @@ export default function MarketplaceCart() {
         });
     }
   }, [isConfirmed, txHash, purchaseStep]);
+
+  const fetchVirtualPrice = async () => {
+    try {
+      const { price_usd } = await api.getVirtualPrice();
+      setVirtualPrice(price_usd);
+    } catch (error) {
+      console.error('Failed to fetch $VIRTUAL price:', error);
+      setVirtualPrice(0.10); // Fallback
+    }
+  };
 
   const handlePurchase = async () => {
     if (!isAuthenticated) {
