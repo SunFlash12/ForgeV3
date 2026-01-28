@@ -316,29 +316,41 @@ class TestExecuteQueryRoute:
 
         assert response.status_code in [401, 500]
 
-    def test_query_text_too_long(self, client: TestClient):
+    def test_query_text_too_long(self, client: TestClient, mock_gateway_service, sample_session):
         """Query with text exceeding max length fails validation."""
-        response = client.post(
-            "/api/v1/agent-gateway/query",
-            params={"api_key": "test_key"},
-            json={
-                "query_type": "natural_language",
-                "query_text": "A" * 5000,  # Over 4096 max
-            },
-        )
+        mock_gateway_service.authenticate = AsyncMock(return_value=sample_session)
+
+        with patch(
+            "forge.api.routes.agent_gateway.get_gateway_service",
+            return_value=mock_gateway_service,
+        ):
+            response = client.post(
+                "/api/v1/agent-gateway/query",
+                params={"api_key": "test_key"},
+                json={
+                    "query_type": "natural_language",
+                    "query_text": "A" * 5000,  # Over 4096 max
+                },
+            )
         assert response.status_code == 422
 
-    def test_query_invalid_max_results(self, client: TestClient):
+    def test_query_invalid_max_results(self, client: TestClient, mock_gateway_service, sample_session):
         """Query with invalid max_results fails validation."""
-        response = client.post(
-            "/api/v1/agent-gateway/query",
-            params={"api_key": "test_key"},
-            json={
-                "query_type": "natural_language",
-                "query_text": "Test query",
-                "max_results": 200,  # Over 100 max
-            },
-        )
+        mock_gateway_service.authenticate = AsyncMock(return_value=sample_session)
+
+        with patch(
+            "forge.api.routes.agent_gateway.get_gateway_service",
+            return_value=mock_gateway_service,
+        ):
+            response = client.post(
+                "/api/v1/agent-gateway/query",
+                params={"api_key": "test_key"},
+                json={
+                    "query_type": "natural_language",
+                    "query_text": "Test query",
+                    "max_results": 200,  # Over 100 max
+                },
+            )
         assert response.status_code == 422
 
 
@@ -353,27 +365,39 @@ class TestSemanticSearchRoute:
         )
         assert response.status_code == 422
 
-    def test_search_query_too_long(self, client: TestClient):
+    def test_search_query_too_long(self, client: TestClient, mock_gateway_service, sample_session):
         """Search with query exceeding max length fails validation."""
-        response = client.post(
-            "/api/v1/agent-gateway/search",
-            params={
-                "api_key": "test_key",
-                "query": "A" * 1500,  # Over 1000 max
-            },
-        )
+        mock_gateway_service.authenticate = AsyncMock(return_value=sample_session)
+
+        with patch(
+            "forge.api.routes.agent_gateway.get_gateway_service",
+            return_value=mock_gateway_service,
+        ):
+            response = client.post(
+                "/api/v1/agent-gateway/search",
+                params={
+                    "api_key": "test_key",
+                    "query": "A" * 1500,  # Over 1000 max
+                },
+            )
         assert response.status_code == 422
 
-    def test_search_invalid_max_results(self, client: TestClient):
+    def test_search_invalid_max_results(self, client: TestClient, mock_gateway_service, sample_session):
         """Search with invalid max_results fails validation."""
-        response = client.post(
-            "/api/v1/agent-gateway/search",
-            params={
-                "api_key": "test_key",
-                "query": "test search",
-                "max_results": 100,  # Over 50 max
-            },
-        )
+        mock_gateway_service.authenticate = AsyncMock(return_value=sample_session)
+
+        with patch(
+            "forge.api.routes.agent_gateway.get_gateway_service",
+            return_value=mock_gateway_service,
+        ):
+            response = client.post(
+                "/api/v1/agent-gateway/search",
+                params={
+                    "api_key": "test_key",
+                    "query": "test search",
+                    "max_results": 100,  # Over 50 max
+                },
+            )
         assert response.status_code == 422
 
 
@@ -394,26 +418,38 @@ class TestGetCapsuleNeighborsRoute:
         response = client.get("/api/v1/agent-gateway/capsule/capsule_123/neighbors")
         assert response.status_code == 422
 
-    def test_get_neighbors_invalid_direction(self, client: TestClient):
+    def test_get_neighbors_invalid_direction(self, client: TestClient, mock_gateway_service, sample_session):
         """Get neighbors with invalid direction fails validation."""
-        response = client.get(
-            "/api/v1/agent-gateway/capsule/capsule_123/neighbors",
-            params={
-                "api_key": "test_key",
-                "direction": "invalid",  # Must be in, out, or both
-            },
-        )
+        mock_gateway_service.authenticate = AsyncMock(return_value=sample_session)
+
+        with patch(
+            "forge.api.routes.agent_gateway.get_gateway_service",
+            return_value=mock_gateway_service,
+        ):
+            response = client.get(
+                "/api/v1/agent-gateway/capsule/capsule_123/neighbors",
+                params={
+                    "api_key": "test_key",
+                    "direction": "invalid",  # Must be in, out, or both
+                },
+            )
         assert response.status_code == 422
 
-    def test_get_neighbors_invalid_max_depth(self, client: TestClient):
+    def test_get_neighbors_invalid_max_depth(self, client: TestClient, mock_gateway_service, sample_session):
         """Get neighbors with invalid max_depth fails validation."""
-        response = client.get(
-            "/api/v1/agent-gateway/capsule/capsule_123/neighbors",
-            params={
-                "api_key": "test_key",
-                "max_depth": 10,  # Over 5 max
-            },
-        )
+        mock_gateway_service.authenticate = AsyncMock(return_value=sample_session)
+
+        with patch(
+            "forge.api.routes.agent_gateway.get_gateway_service",
+            return_value=mock_gateway_service,
+        ):
+            response = client.get(
+                "/api/v1/agent-gateway/capsule/capsule_123/neighbors",
+                params={
+                    "api_key": "test_key",
+                    "max_depth": 10,  # Over 5 max
+                },
+            )
         assert response.status_code == 422
 
 
@@ -437,29 +473,41 @@ class TestCreateCapsuleRoute:
         )
         assert response.status_code == 422
 
-    def test_create_capsule_missing_fields(self, client: TestClient):
+    def test_create_capsule_missing_fields(self, client: TestClient, mock_gateway_service, sample_session):
         """Create capsule with missing fields fails validation."""
-        response = client.post(
-            "/api/v1/agent-gateway/capsules",
-            params={"api_key": "test_key"},
-            json={
-                "capsule_type": "knowledge",
-                # Missing title and content
-            },
-        )
+        mock_gateway_service.authenticate = AsyncMock(return_value=sample_session)
+
+        with patch(
+            "forge.api.routes.agent_gateway.get_gateway_service",
+            return_value=mock_gateway_service,
+        ):
+            response = client.post(
+                "/api/v1/agent-gateway/capsules",
+                params={"api_key": "test_key"},
+                json={
+                    "capsule_type": "knowledge",
+                    # Missing title and content
+                },
+            )
         assert response.status_code == 422
 
-    def test_create_capsule_title_too_long(self, client: TestClient):
+    def test_create_capsule_title_too_long(self, client: TestClient, mock_gateway_service, sample_session):
         """Create capsule with title exceeding max length fails."""
-        response = client.post(
-            "/api/v1/agent-gateway/capsules",
-            params={"api_key": "test_key"},
-            json={
-                "capsule_type": "knowledge",
-                "title": "A" * 250,  # Over 200 max
-                "content": "Test content",
-            },
-        )
+        mock_gateway_service.authenticate = AsyncMock(return_value=sample_session)
+
+        with patch(
+            "forge.api.routes.agent_gateway.get_gateway_service",
+            return_value=mock_gateway_service,
+        ):
+            response = client.post(
+                "/api/v1/agent-gateway/capsules",
+                params={"api_key": "test_key"},
+                json={
+                    "capsule_type": "knowledge",
+                    "title": "A" * 250,  # Over 200 max
+                    "content": "Test content",
+                },
+            )
         assert response.status_code == 422
 
 
