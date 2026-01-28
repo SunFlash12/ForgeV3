@@ -976,6 +976,119 @@ def create_app(
                 )
         return JSONResponse(content={"status": "ready"})
 
+    # Detailed health endpoint for debugging and diagnostics
+    # Returns comprehensive status of all components including mock provider detection
+    @app.get("/health/detailed", include_in_schema=True)
+    async def health_detailed() -> dict[str, Any]:
+        """
+        Comprehensive health check showing all component statuses.
+
+        Used by frontend diagnostics page and verify_system.py script.
+        Reveals whether providers are mocked (development) or real (production).
+        """
+        import time
+
+        from forge.services import embedding as embedding_module
+        from forge.services import llm as llm_module
+
+        components: dict[str, Any] = {}
+        warnings: list[str] = []
+        overall_status = "healthy"
+
+        # Database status
+        db_status: dict[str, Any] = {"connected": False, "latency_ms": None, "version": None}
+        if forge_app.db_client:
+            try:
+                start = time.perf_counter()
+                db_ok = await forge_app.db_client.verify_connection()
+                latency = (time.perf_counter() - start) * 1000
+                db_status["connected"] = db_ok
+                db_status["latency_ms"] = round(latency, 2)
+                if not db_ok:
+                    overall_status = "degraded"
+                    warnings.append("Database health check returned false")
+            except Exception as e:
+                db_status["connected"] = False
+                db_status["error"] = str(e)[:100]
+                overall_status = "degraded"
+                warnings.append(f"Database error: {str(e)[:50]}")
+        else:
+            overall_status = "unhealthy"
+            warnings.append("Database client not initialized")
+        components["database"] = db_status
+
+        # LLM provider status
+        llm_status: dict[str, Any] = {
+            "provider": "unknown",
+            "is_mock": True,
+            "operational": False,
+        }
+        try:
+            # Check if LLM service is initialized and what provider it uses
+            llm_service = llm_module.get_llm_service()
+            if llm_service:
+                provider_name = str(llm_service.config.provider.value)
+                llm_status["provider"] = provider_name
+                llm_status["is_mock"] = provider_name.lower() == "mock"
+                llm_status["operational"] = True
+                if llm_status["is_mock"]:
+                    warnings.append("LLM using mock provider - AI features limited")
+        except Exception:
+            llm_status["operational"] = False
+        components["llm_provider"] = llm_status
+
+        # Embedding provider status
+        embedding_status: dict[str, Any] = {
+            "provider": "unknown",
+            "is_mock": True,
+            "dimensions": None,
+        }
+        try:
+            emb_service = embedding_module.get_embedding_service()
+            if emb_service:
+                provider_name = str(emb_service.config.provider.value)
+                embedding_status["provider"] = provider_name
+                embedding_status["is_mock"] = provider_name.lower() == "mock"
+                embedding_status["dimensions"] = emb_service.dimensions
+                if embedding_status["is_mock"]:
+                    warnings.append("Embeddings using mock provider - search features degraded")
+        except Exception:
+            pass
+        components["embedding_provider"] = embedding_status
+
+        # Cache status
+        cache_status: dict[str, Any] = {"type": "none", "connected": False}
+        if forge_app.query_cache:
+            cache_type = type(forge_app.query_cache).__name__
+            cache_status["type"] = "redis" if "Redis" in cache_type else "memory"
+            cache_status["connected"] = True
+        components["cache"] = cache_status
+
+        # Event system status
+        event_status: dict[str, Any] = {"operational": False}
+        if forge_app.event_system:
+            event_status["operational"] = True
+        components["event_system"] = event_status
+
+        # Immune system status
+        immune_status: dict[str, Any] = {"operational": False}
+        if forge_app.health_checker or forge_app.circuit_registry:
+            immune_status["operational"] = True
+        components["immune_system"] = immune_status
+
+        return {
+            "status": overall_status,
+            "timestamp": datetime.now(UTC).isoformat(),
+            "uptime_seconds": (
+                (datetime.now(UTC) - forge_app.started_at).total_seconds()
+                if forge_app.started_at
+                else 0
+            ),
+            "components": components,
+            "warnings": warnings,
+            "environment": settings.app_env,
+        }
+
     # Prometheus metrics endpoint
     # Returns metrics in Prometheus text format for scraping
     # create_metrics_endpoint registers a /metrics route on the app directly

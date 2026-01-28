@@ -15,6 +15,7 @@ import VersionHistoryPage from './pages/VersionHistoryPage';
 import FederationPage from './pages/FederationPage';
 import GraphExplorerPage from './pages/GraphExplorerPage';
 import DiagnosisPage from './pages/DiagnosisPage';
+import DiagnosticsPage from './pages/DiagnosticsPage';
 import UserDirectoryPage from './pages/UserDirectoryPage';
 import NotFoundPage from './pages/NotFoundPage';
 import MarketplaceHome from './pages/marketplace/MarketplaceHome';
@@ -61,6 +62,7 @@ function App() {
         <Route path="diagnosis" element={<DiagnosisPage />} />
         <Route path="users" element={<UserDirectoryPage />} />
         <Route path="system" element={<SystemPage />} />
+        <Route path="diagnostics" element={<DiagnosticsPage />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="marketplace" element={<MarketplaceHome />} />
         <Route path="marketplace/browse" element={<MarketplaceBrowse />} />

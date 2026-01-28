@@ -96,31 +96,31 @@ class TestUserSearchRoute:
         assert response.status_code == 422
 
     def test_search_valid_query(self, client: TestClient, auth_headers: dict):
-        """Search with valid query succeeds."""
+        """Search with valid query succeeds (mocked DB returns empty)."""
         response = client.get(
             "/api/v1/users/search",
             params={"q": "test"},
             headers=auth_headers,
         )
 
-        if response.status_code == 500:
-            pytest.skip("Database unavailable - use mock fixtures for reliable tests")
-        assert response.status_code == 200
+        assert response.status_code == 200, (
+            f"Expected 200, got {response.status_code}: {response.text[:200]}"
+        )
 
         data = response.json()
         assert "users" in data
 
     def test_search_with_limit(self, client: TestClient, auth_headers: dict):
-        """Search with custom limit."""
+        """Search with custom limit succeeds."""
         response = client.get(
             "/api/v1/users/search",
             params={"q": "test", "limit": 5},
             headers=auth_headers,
         )
 
-        if response.status_code == 500:
-            pytest.skip("Database unavailable - use mock fixtures for reliable tests")
-        assert response.status_code == 200
+        assert response.status_code == 200, (
+            f"Expected 200, got {response.status_code}: {response.text[:200]}"
+        )
 
     def test_search_limit_too_high(self, client: TestClient, auth_headers: dict):
         """Search with limit exceeding max fails."""
@@ -148,25 +148,25 @@ class TestUserListRoute:
         assert response.status_code == 401
 
     def test_list_non_admin(self, client: TestClient, auth_headers: dict):
-        """List users as non-admin fails."""
+        """List users as non-admin - depends on implementation."""
         response = client.get("/api/v1/users/", headers=auth_headers)
 
-        if response.status_code == 500:
-            pytest.skip("Database unavailable - use mock fixtures for reliable tests")
-        # Should fail if user is not admin
-        assert response.status_code in [200, 403]
+        # Non-admin may get 200 (allowed) or 403 (forbidden) depending on policy
+        assert response.status_code in [200, 403], (
+            f"Expected 200 or 403, got {response.status_code}: {response.text[:200]}"
+        )
 
     def test_list_pagination(self, client: TestClient, auth_headers: dict):
-        """List users with pagination."""
+        """List users with pagination parameters."""
         response = client.get(
             "/api/v1/users/",
             params={"page": 1, "per_page": 10},
             headers=auth_headers,
         )
 
-        if response.status_code == 500:
-            pytest.skip("Database unavailable - use mock fixtures for reliable tests")
-        assert response.status_code in [200, 403]
+        assert response.status_code in [200, 403], (
+            f"Expected 200 or 403, got {response.status_code}: {response.text[:200]}"
+        )
 
     def test_list_page_too_high(self, client: TestClient, auth_headers: dict):
         """List users with page exceeding max fails."""
@@ -189,16 +189,16 @@ class TestUserListRoute:
         assert response.status_code in [403, 422]
 
     def test_list_filter_by_role(self, client: TestClient, auth_headers: dict):
-        """List users filtered by role."""
+        """List users filtered by role parameter."""
         response = client.get(
             "/api/v1/users/",
             params={"role": "user"},
             headers=auth_headers,
         )
 
-        if response.status_code == 500:
-            pytest.skip("Database unavailable - use mock fixtures for reliable tests")
-        assert response.status_code in [200, 403]
+        assert response.status_code in [200, 403], (
+            f"Expected 200 or 403, got {response.status_code}: {response.text[:200]}"
+        )
 
 
 # =============================================================================
@@ -216,28 +216,28 @@ class TestGetUserRoute:
         assert response.status_code == 401
 
     def test_get_nonexistent_user(self, client: TestClient, auth_headers: dict):
-        """Get nonexistent user returns 404."""
+        """Get nonexistent user returns 403 or 404."""
         response = client.get(
             "/api/v1/users/nonexistent123",
             headers=auth_headers,
         )
 
-        if response.status_code == 500:
-            pytest.skip("Database unavailable - use mock fixtures for reliable tests")
-        assert response.status_code in [403, 404]
+        # 403 (access denied) or 404 (not found) are valid responses
+        assert response.status_code in [403, 404], (
+            f"Expected 403 or 404, got {response.status_code}: {response.text[:200]}"
+        )
 
     def test_get_other_user_as_regular(self, client: TestClient, auth_headers: dict):
-        """Regular user cannot view other user's profile."""
-        # This depends on the actual implementation
-        # Regular users should get 403 when trying to view others
+        """Regular user cannot view other user's profile - IDOR protection."""
         response = client.get(
             "/api/v1/users/other_user_id",
             headers=auth_headers,
         )
 
-        if response.status_code == 500:
-            pytest.skip("Database unavailable - use mock fixtures for reliable tests")
-        assert response.status_code in [403, 404]
+        # Regular users should get 403 (forbidden) or 404 (not found)
+        assert response.status_code in [403, 404], (
+            f"Expected 403 or 404, got {response.status_code}: {response.text[:200]}"
+        )
 
 
 # =============================================================================
@@ -255,27 +255,27 @@ class TestUserCapsulesRoute:
         assert response.status_code == 401
 
     def test_get_capsules_other_user(self, client: TestClient, auth_headers: dict):
-        """Regular user cannot view other user's capsules."""
+        """Regular user cannot view other user's capsules - IDOR protection."""
         response = client.get(
             "/api/v1/users/other_user_id/capsules",
             headers=auth_headers,
         )
 
-        if response.status_code == 500:
-            pytest.skip("Database unavailable - use mock fixtures for reliable tests")
-        assert response.status_code in [403, 404]
+        assert response.status_code in [403, 404], (
+            f"Expected 403 or 404, got {response.status_code}: {response.text[:200]}"
+        )
 
     def test_get_capsules_with_limit(self, client: TestClient, auth_headers: dict):
-        """Get capsules with custom limit."""
+        """Get capsules with custom limit parameter."""
         response = client.get(
             "/api/v1/users/user123/capsules",
             params={"limit": 5},
             headers=auth_headers,
         )
 
-        if response.status_code == 500:
-            pytest.skip("Database unavailable - use mock fixtures for reliable tests")
-        assert response.status_code in [200, 403, 404]
+        assert response.status_code in [200, 403, 404], (
+            f"Expected 200, 403 or 404, got {response.status_code}: {response.text[:200]}"
+        )
 
     def test_get_capsules_limit_too_high(self, client: TestClient, auth_headers: dict):
         """Get capsules with limit exceeding max fails."""
@@ -303,27 +303,27 @@ class TestUserActivityRoute:
         assert response.status_code == 401
 
     def test_get_activity_other_user(self, client: TestClient, auth_headers: dict):
-        """Regular user cannot view other user's activity."""
+        """Regular user cannot view other user's activity - IDOR protection."""
         response = client.get(
             "/api/v1/users/other_user_id/activity",
             headers=auth_headers,
         )
 
-        if response.status_code == 500:
-            pytest.skip("Database unavailable - use mock fixtures for reliable tests")
-        assert response.status_code in [403, 404]
+        assert response.status_code in [403, 404], (
+            f"Expected 403 or 404, got {response.status_code}: {response.text[:200]}"
+        )
 
     def test_get_activity_with_limit(self, client: TestClient, auth_headers: dict):
-        """Get activity with custom limit."""
+        """Get activity with custom limit parameter."""
         response = client.get(
             "/api/v1/users/user123/activity",
             params={"limit": 10},
             headers=auth_headers,
         )
 
-        if response.status_code == 500:
-            pytest.skip("Database unavailable - use mock fixtures for reliable tests")
-        assert response.status_code in [200, 403, 404]
+        assert response.status_code in [200, 403, 404], (
+            f"Expected 200, 403 or 404, got {response.status_code}: {response.text[:200]}"
+        )
 
 
 # =============================================================================
@@ -341,15 +341,15 @@ class TestUserGovernanceRoute:
         assert response.status_code == 401
 
     def test_get_governance_other_user(self, client: TestClient, auth_headers: dict):
-        """Regular user cannot view other user's governance."""
+        """Regular user cannot view other user's governance - IDOR protection."""
         response = client.get(
             "/api/v1/users/other_user_id/governance",
             headers=auth_headers,
         )
 
-        if response.status_code == 500:
-            pytest.skip("Database unavailable - use mock fixtures for reliable tests")
-        assert response.status_code in [403, 404]
+        assert response.status_code in [403, 404], (
+            f"Expected 403 or 404, got {response.status_code}: {response.text[:200]}"
+        )
 
 
 # =============================================================================
@@ -372,28 +372,29 @@ class TestAdminUpdateUserRoute:
         assert response.status_code == 401
 
     def test_update_non_admin(self, client: TestClient, auth_headers: dict):
-        """Update user as non-admin fails."""
+        """Update user as non-admin fails with 403."""
         response = client.patch(
             "/api/v1/users/user123",
             json={"trust_flame": 80},
             headers=auth_headers,
         )
 
-        if response.status_code == 500:
-            pytest.skip("Database unavailable - use mock fixtures for reliable tests")
-        assert response.status_code == 403
+        assert response.status_code == 403, (
+            f"Expected 403, got {response.status_code}: {response.text[:200]}"
+        )
 
     def test_update_no_changes(self, client: TestClient, auth_headers: dict):
-        """Update user with no changes fails."""
+        """Update user with empty payload fails."""
         response = client.patch(
             "/api/v1/users/user123",
             json={},
             headers=auth_headers,
         )
 
-        if response.status_code == 500:
-            pytest.skip("Database unavailable - use mock fixtures for reliable tests")
-        assert response.status_code in [400, 403]
+        # 400 (bad request - no changes) or 403 (non-admin)
+        assert response.status_code in [400, 403], (
+            f"Expected 400 or 403, got {response.status_code}: {response.text[:200]}"
+        )
 
     def test_update_invalid_trust_flame(self, client: TestClient, auth_headers: dict):
         """Update user with invalid trust_flame fails."""
@@ -427,16 +428,16 @@ class TestUpdateTrustRoute:
         assert response.status_code == 401
 
     def test_update_trust_non_admin(self, client: TestClient, auth_headers: dict):
-        """Update trust as non-admin fails."""
+        """Update trust as non-admin fails with 403."""
         response = client.put(
             "/api/v1/users/user123/trust",
             json={"trust_flame": 80, "reason": "Good behavior"},
             headers=auth_headers,
         )
 
-        if response.status_code == 500:
-            pytest.skip("Database unavailable - use mock fixtures for reliable tests")
-        assert response.status_code == 403
+        assert response.status_code == 403, (
+            f"Expected 403, got {response.status_code}: {response.text[:200]}"
+        )
 
     def test_update_trust_missing_reason(self, client: TestClient, auth_headers: dict):
         """Update trust without reason fails."""
@@ -478,38 +479,40 @@ class TestIDORProtection:
     """Tests for IDOR (Insecure Direct Object Reference) protection."""
 
     def test_cannot_access_other_user_capsules(self, client: TestClient, auth_headers: dict):
-        """User cannot access another user's capsules."""
+        """User cannot access another user's capsules - IDOR protection."""
         response = client.get(
             "/api/v1/users/different_user_id/capsules",
             headers=auth_headers,
         )
 
-        if response.status_code == 500:
-            pytest.skip("Database unavailable - use mock fixtures for reliable tests")
-        # Should be 403 (forbidden) not 200 or 404
-        assert response.status_code in [403, 404]
+        # Must be 403 (forbidden) or 404 (not found), never 200
+        assert response.status_code in [403, 404], (
+            f"Expected 403 or 404, got {response.status_code}: {response.text[:200]}"
+        )
 
     def test_cannot_access_other_user_activity(self, client: TestClient, auth_headers: dict):
-        """User cannot access another user's activity."""
+        """User cannot access another user's activity - IDOR protection."""
         response = client.get(
             "/api/v1/users/different_user_id/activity",
             headers=auth_headers,
         )
 
-        if response.status_code == 500:
-            pytest.skip("Database unavailable - use mock fixtures for reliable tests")
-        assert response.status_code in [403, 404]
+        # Must be 403 (forbidden) or 404 (not found), never 200
+        assert response.status_code in [403, 404], (
+            f"Expected 403 or 404, got {response.status_code}: {response.text[:200]}"
+        )
 
     def test_cannot_access_other_user_governance(self, client: TestClient, auth_headers: dict):
-        """User cannot access another user's governance data."""
+        """User cannot access another user's governance data - IDOR protection."""
         response = client.get(
             "/api/v1/users/different_user_id/governance",
             headers=auth_headers,
         )
 
-        if response.status_code == 500:
-            pytest.skip("Database unavailable - use mock fixtures for reliable tests")
-        assert response.status_code in [403, 404]
+        # Must be 403 (forbidden) or 404 (not found), never 200
+        assert response.status_code in [403, 404], (
+            f"Expected 403 or 404, got {response.status_code}: {response.text[:200]}"
+        )
 
 
 if __name__ == "__main__":

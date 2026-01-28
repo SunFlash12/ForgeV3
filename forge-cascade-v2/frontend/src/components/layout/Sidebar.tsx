@@ -48,6 +48,7 @@ const navItems: NavItem[] = [
   { icon: Layers, label: 'Overlays', path: '/overlays', requiredTrust: ['TRUSTED', 'CORE'] },
   { icon: Globe, label: 'Federation', path: '/federation', requiredTrust: ['TRUSTED', 'CORE'] },
   { icon: Activity, label: 'System', path: '/system', requiredTrust: ['TRUSTED', 'CORE'] },
+  { icon: Activity, label: 'Diagnostics', path: '/diagnostics', requiredTrust: ['TRUSTED', 'CORE'] },
 ];
 
 const bottomNavItems: NavItem[] = [

@@ -14,9 +14,33 @@ interface HealthResponse {
   status: string;
 }
 
+interface DetailedHealthResponse {
+  status: string;
+  components?: {
+    llm_provider?: {
+      is_mock?: boolean;
+      provider?: string;
+    };
+    embedding_provider?: {
+      is_mock?: boolean;
+      provider?: string;
+    };
+  };
+  warnings?: string[];
+}
+
 export type BackendStatus = 'connected' | 'disconnected' | 'checking';
 
-export function useBackendHealth() {
+export interface BackendHealthInfo {
+  status: BackendStatus;
+  backendStatus?: string;
+  isUsingMockLLM: boolean;
+  isUsingMockEmbeddings: boolean;
+  warnings: string[];
+}
+
+export function useBackendHealth(): BackendHealthInfo {
+  // Basic health check (fast, for connectivity)
   const { data, isError, isLoading } = useQuery<HealthResponse>({
     queryKey: ['backend-health-ping'],
     queryFn: async () => {
@@ -32,14 +56,39 @@ export function useBackendHealth() {
     staleTime: 10000,
   });
 
+  // Detailed health check (for mock provider detection)
+  const { data: detailedData } = useQuery<DetailedHealthResponse>({
+    queryKey: ['backend-health-detailed'],
+    queryFn: async () => {
+      const response = await axios.get<DetailedHealthResponse>(
+        `${HEALTH_BASE_URL}/health/detailed`,
+        { timeout: 10000 }
+      );
+      return response.data;
+    },
+    refetchInterval: 60000, // Less frequent - every 60s
+    retry: 0, // Don't retry - detailed endpoint is optional
+    refetchOnWindowFocus: false,
+    staleTime: 55000,
+    enabled: !isError && !isLoading, // Only fetch if basic health passed
+  });
+
   const status: BackendStatus = isLoading
     ? 'checking'
     : isError
       ? 'disconnected'
       : 'connected';
 
+  // Extract mock provider info from detailed response
+  const isUsingMockLLM = detailedData?.components?.llm_provider?.is_mock ?? false;
+  const isUsingMockEmbeddings = detailedData?.components?.embedding_provider?.is_mock ?? false;
+  const warnings = detailedData?.warnings ?? [];
+
   return {
     status,
     backendStatus: data?.status,
+    isUsingMockLLM,
+    isUsingMockEmbeddings,
+    warnings,
   };
 }

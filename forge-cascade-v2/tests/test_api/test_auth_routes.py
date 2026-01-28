@@ -96,9 +96,11 @@ class TestRegistrationRoute:
     """Tests for POST /auth/register endpoint."""
 
     def test_register_valid_data(self, client: TestClient, mock_auth_service, sample_user):
-        """Registration with valid data succeeds."""
-        # This test requires mocking the entire dependency chain
-        # Simplified to test request validation
+        """Registration with valid data - tests request validation and routing.
+
+        Note: This is a unit test using mocked DB. For real registration tests,
+        see tests/test_integration/test_auth.py
+        """
         response = client.post(
             "/api/v1/auth/register",
             json={
@@ -109,11 +111,13 @@ class TestRegistrationRoute:
             },
         )
 
-        # Skip if DB unavailable instead of masking errors
-        if response.status_code in (500, 503):
-            pytest.skip("Database/services unavailable - use mock fixtures for reliable tests")
-        # May succeed or conflict (user exists)
-        assert response.status_code in [201, 409]
+        # With mocked DB, we expect either:
+        # - 201: Registration succeeded (mock returned success)
+        # - 409: User already exists (mock returned conflict)
+        # Server errors (500/503) indicate test infrastructure issues, not app bugs
+        assert response.status_code in [201, 409], (
+            f"Expected 201 or 409, got {response.status_code}: {response.text[:200]}"
+        )
 
     def test_register_invalid_username(self, client: TestClient):
         """Registration with invalid username fails validation."""
@@ -289,13 +293,14 @@ class TestLogoutRoute:
         assert response.status_code == 401
 
     def test_logout_authorized(self, client: TestClient, auth_headers: dict):
-        """Logout with auth succeeds."""
+        """Logout with valid auth token succeeds."""
         response = client.post("/api/v1/auth/logout", headers=auth_headers)
 
-        if response.status_code in (500, 503):
-            pytest.skip("Database/services unavailable - use mock fixtures for reliable tests")
-        # May succeed or fail depending on token validity
-        assert response.status_code in [204, 401]
+        # With mocked DB and valid JWT, logout should succeed (204)
+        # 401 only if token is malformed/expired
+        assert response.status_code in [204, 401], (
+            f"Expected 204 or 401, got {response.status_code}: {response.text[:200]}"
+        )
 
 
 # =============================================================================
@@ -313,13 +318,14 @@ class TestProfileRoutes:
         assert response.status_code == 401
 
     def test_get_profile_authorized(self, client: TestClient, auth_headers: dict):
-        """Get profile with auth returns user data."""
+        """Get profile with auth returns user data from JWT claims."""
         response = client.get("/api/v1/auth/me", headers=auth_headers)
 
-        if response.status_code in (500, 503):
-            pytest.skip("Database/services unavailable - use mock fixtures for reliable tests")
-        # May succeed or fail depending on token
-        assert response.status_code in [200, 401]
+        # With test fixtures, user is synthesized from JWT claims
+        # Should succeed with 200 or fail auth with 401
+        assert response.status_code in [200, 401], (
+            f"Expected 200 or 401, got {response.status_code}: {response.text[:200]}"
+        )
 
         if response.status_code == 200:
             data = response.json()
@@ -339,24 +345,24 @@ class TestProfileRoutes:
         assert response.status_code == 401
 
     def test_update_profile_invalid_metadata(self, client: TestClient, auth_headers: dict):
-        """Update profile with invalid metadata fails."""
+        """Update profile with invalid metadata (reserved key) fails validation."""
         response = client.patch(
             "/api/v1/auth/me",
             json={
                 "metadata": {
-                    "__proto__": "dangerous",  # Reserved key
+                    "__proto__": "dangerous",  # Reserved key - security concern
                 },
             },
             headers=auth_headers,
         )
 
-        if response.status_code in (500, 503):
-            pytest.skip("Database/services unavailable - use mock fixtures for reliable tests")
-        # Should fail validation or return error
-        assert response.status_code in [400, 422, 401]
+        # Should fail validation (400/422) or auth (401)
+        assert response.status_code in [400, 422, 401], (
+            f"Expected 400, 422, or 401, got {response.status_code}: {response.text[:200]}"
+        )
 
     def test_update_profile_metadata_too_many_keys(self, client: TestClient, auth_headers: dict):
-        """Update profile with too many metadata keys fails."""
+        """Update profile with too many metadata keys (>10) fails validation."""
         response = client.patch(
             "/api/v1/auth/me",
             json={
@@ -365,9 +371,10 @@ class TestProfileRoutes:
             headers=auth_headers,
         )
 
-        if response.status_code in (500, 503):
-            pytest.skip("Database/services unavailable - use mock fixtures for reliable tests")
-        assert response.status_code in [400, 422, 401]
+        # Should fail validation (400/422) or auth (401)
+        assert response.status_code in [400, 422, 401], (
+            f"Expected 400, 422, or 401, got {response.status_code}: {response.text[:200]}"
+        )
 
 
 # =============================================================================
@@ -432,12 +439,13 @@ class TestTrustInfoRoute:
         assert response.status_code == 401
 
     def test_get_trust_authorized(self, client: TestClient, auth_headers: dict):
-        """Get trust info with auth returns trust data."""
+        """Get trust info with auth returns trust data from JWT claims."""
         response = client.get("/api/v1/auth/me/trust", headers=auth_headers)
 
-        if response.status_code in (500, 503):
-            pytest.skip("Database/services unavailable - use mock fixtures for reliable tests")
-        assert response.status_code in [200, 401]
+        # Should succeed (200) or fail auth (401)
+        assert response.status_code in [200, 401], (
+            f"Expected 200 or 401, got {response.status_code}: {response.text[:200]}"
+        )
 
         if response.status_code == 200:
             data = response.json()
@@ -467,7 +475,7 @@ class TestMFARoutes:
         assert response.status_code == 401
 
     def test_mfa_verify_invalid_code(self, client: TestClient, auth_headers: dict):
-        """MFA verify with invalid code fails."""
+        """MFA verify with invalid code fails validation or MFA error."""
         response = client.post(
             "/api/v1/auth/me/mfa/verify",
             json={
@@ -476,10 +484,10 @@ class TestMFARoutes:
             headers=auth_headers,
         )
 
-        if response.status_code in (500, 503):
-            pytest.skip("Database/services unavailable - use mock fixtures for reliable tests")
-        # May fail validation or return MFA error
-        assert response.status_code in [400, 401]
+        # Should fail MFA validation (400) or auth (401)
+        assert response.status_code in [400, 401], (
+            f"Expected 400 or 401, got {response.status_code}: {response.text[:200]}"
+        )
 
     def test_mfa_verify_code_too_short(self, client: TestClient, auth_headers: dict):
         """MFA verify with too short code fails validation."""
