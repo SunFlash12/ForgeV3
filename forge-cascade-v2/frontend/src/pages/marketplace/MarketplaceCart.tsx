@@ -129,16 +129,6 @@ export default function MarketplaceCart() {
     }
   }, [isConfirmed, txHash, purchaseStep]);
 
-  const fetchVirtualPrice = async () => {
-    try {
-      const { price_usd } = await api.getVirtualPrice();
-      setVirtualPrice(price_usd);
-    } catch (error) {
-      console.error('Failed to fetch $VIRTUAL price:', error);
-      setVirtualPrice(0.10); // Fallback
-    }
-  };
-
   const handlePurchase = async () => {
     if (!isAuthenticated) {
       navigate('/login?redirect=/marketplace/cart');
