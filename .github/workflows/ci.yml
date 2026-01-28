@@ -216,11 +216,11 @@ jobs:
           REDIS_URL: redis://localhost:6379
           JWT_SECRET_KEY: test-secret-key-for-ci-pipeline-min-32-chars
           NEO4J_URI: bolt://localhost:7687
-          NEO4J_USER: neo4j
+          NEO4J_USERNAME: neo4j
           NEO4J_PASSWORD: testpassword
         run: |
           cd forge-cascade-v2
-          # Coverage threshold: 80% (target for comprehensive test coverage)
+          # Coverage threshold: 80% (aiming for comprehensive test coverage)
           python -m pytest tests/ -v --tb=short \
             -m "not integration and not e2e" \
             --cov=forge \
@@ -231,7 +231,7 @@ jobs:
         env:
           JWT_SECRET_KEY: test-secret-key-for-ci-pipeline-min-32-chars
           NEO4J_URI: bolt://localhost:7687
-          NEO4J_USER: neo4j
+          NEO4J_USERNAME: neo4j
           NEO4J_PASSWORD: testpassword
           SEED_ADMIN_PASSWORD: TestAdminPassword123!
         run: |

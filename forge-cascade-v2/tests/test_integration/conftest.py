@@ -95,12 +95,13 @@ async def real_db_client(neo4j_uri: str, neo4j_user: str, neo4j_password: str) -
     """
     from forge.database.client import Neo4jClient
 
-    # Override environment for the client
-    os.environ["NEO4J_URI"] = neo4j_uri
-    os.environ["NEO4J_USER"] = neo4j_user
-    os.environ["NEO4J_PASSWORD"] = neo4j_password
-
-    client = Neo4jClient()
+    # Pass credentials directly to avoid cached Settings singleton issue
+    # (Settings may have been loaded before env vars were set by pytest fixtures)
+    client = Neo4jClient(
+        uri=neo4j_uri,
+        user=neo4j_user,
+        password=neo4j_password,
+    )
 
     try:
         await client.connect()
