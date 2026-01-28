@@ -334,7 +334,9 @@ class TestExecuteQueryRoute:
             )
         assert response.status_code == 422
 
-    def test_query_invalid_max_results(self, client: TestClient, mock_gateway_service, sample_session):
+    def test_query_invalid_max_results(
+        self, client: TestClient, mock_gateway_service, sample_session
+    ):
         """Query with invalid max_results fails validation."""
         mock_gateway_service.authenticate = AsyncMock(return_value=sample_session)
 
@@ -382,7 +384,9 @@ class TestSemanticSearchRoute:
             )
         assert response.status_code == 422
 
-    def test_search_invalid_max_results(self, client: TestClient, mock_gateway_service, sample_session):
+    def test_search_invalid_max_results(
+        self, client: TestClient, mock_gateway_service, sample_session
+    ):
         """Search with invalid max_results fails validation."""
         mock_gateway_service.authenticate = AsyncMock(return_value=sample_session)
 
@@ -418,7 +422,9 @@ class TestGetCapsuleNeighborsRoute:
         response = client.get("/api/v1/agent-gateway/capsule/capsule_123/neighbors")
         assert response.status_code == 422
 
-    def test_get_neighbors_invalid_direction(self, client: TestClient, mock_gateway_service, sample_session):
+    def test_get_neighbors_invalid_direction(
+        self, client: TestClient, mock_gateway_service, sample_session
+    ):
         """Get neighbors with invalid direction fails validation."""
         mock_gateway_service.authenticate = AsyncMock(return_value=sample_session)
 
@@ -435,7 +441,9 @@ class TestGetCapsuleNeighborsRoute:
             )
         assert response.status_code == 422
 
-    def test_get_neighbors_invalid_max_depth(self, client: TestClient, mock_gateway_service, sample_session):
+    def test_get_neighbors_invalid_max_depth(
+        self, client: TestClient, mock_gateway_service, sample_session
+    ):
         """Get neighbors with invalid max_depth fails validation."""
         mock_gateway_service.authenticate = AsyncMock(return_value=sample_session)
 
@@ -473,7 +481,9 @@ class TestCreateCapsuleRoute:
         )
         assert response.status_code == 422
 
-    def test_create_capsule_missing_fields(self, client: TestClient, mock_gateway_service, sample_session):
+    def test_create_capsule_missing_fields(
+        self, client: TestClient, mock_gateway_service, sample_session
+    ):
         """Create capsule with missing fields fails validation."""
         mock_gateway_service.authenticate = AsyncMock(return_value=sample_session)
 
@@ -491,7 +501,9 @@ class TestCreateCapsuleRoute:
             )
         assert response.status_code == 422
 
-    def test_create_capsule_title_too_long(self, client: TestClient, mock_gateway_service, sample_session):
+    def test_create_capsule_title_too_long(
+        self, client: TestClient, mock_gateway_service, sample_session
+    ):
         """Create capsule with title exceeding max length fails."""
         mock_gateway_service.authenticate = AsyncMock(return_value=sample_session)
 
