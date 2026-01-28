@@ -15,13 +15,10 @@ Comprehensive tests for system API routes including:
 """
 
 from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
-
-from forge.immune.anomaly import AnomalySeverity, AnomalyType
-
 
 # =============================================================================
 # Fixtures
@@ -178,9 +175,7 @@ class TestResetCircuitBreakerRoute:
         response = client.post("/api/v1/system/circuit-breakers/test_circuit/reset")
         assert response.status_code == 401
 
-    def test_reset_circuit_breaker_insufficient_trust(
-        self, client: TestClient, auth_headers: dict
-    ):
+    def test_reset_circuit_breaker_insufficient_trust(self, client: TestClient, auth_headers: dict):
         """Reset circuit breaker with insufficient trust fails."""
         response = client.post(
             "/api/v1/system/circuit-breakers/test_circuit/reset", headers=auth_headers
@@ -188,9 +183,7 @@ class TestResetCircuitBreakerRoute:
         # Needs TRUSTED level
         assert response.status_code in [403, 401, 404, 503]
 
-    def test_reset_circuit_breaker_not_found(
-        self, client: TestClient, trusted_auth_headers: dict
-    ):
+    def test_reset_circuit_breaker_not_found(self, client: TestClient, trusted_auth_headers: dict):
         """Reset non-existent circuit breaker returns 404."""
         response = client.post(
             "/api/v1/system/circuit-breakers/nonexistent/reset",
@@ -257,9 +250,7 @@ class TestAcknowledgeAnomalyRoute:
         )
         assert response.status_code == 401
 
-    def test_acknowledge_anomaly_insufficient_trust(
-        self, client: TestClient, auth_headers: dict
-    ):
+    def test_acknowledge_anomaly_insufficient_trust(self, client: TestClient, auth_headers: dict):
         """Acknowledge anomaly with insufficient trust fails."""
         response = client.post(
             "/api/v1/system/anomalies/anomaly123/acknowledge",
@@ -277,13 +268,9 @@ class TestResolveAnomalyRoute:
         response = client.post("/api/v1/system/anomalies/anomaly123/resolve")
         assert response.status_code == 401
 
-    def test_resolve_anomaly_insufficient_trust(
-        self, client: TestClient, auth_headers: dict
-    ):
+    def test_resolve_anomaly_insufficient_trust(self, client: TestClient, auth_headers: dict):
         """Resolve anomaly with insufficient trust fails."""
-        response = client.post(
-            "/api/v1/system/anomalies/anomaly123/resolve", headers=auth_headers
-        )
+        response = client.post("/api/v1/system/anomalies/anomaly123/resolve", headers=auth_headers)
         assert response.status_code in [403, 401, 404, 503]
 
 
@@ -391,18 +378,12 @@ class TestRecentEventsRoute:
         # Needs TRUSTED level
         assert response.status_code in [403, 401, 503]
 
-    def test_get_events_with_trusted_level(
-        self, client: TestClient, trusted_auth_headers: dict
-    ):
+    def test_get_events_with_trusted_level(self, client: TestClient, trusted_auth_headers: dict):
         """Get recent events with trusted level succeeds."""
-        response = client.get(
-            "/api/v1/system/events/recent", headers=trusted_auth_headers
-        )
+        response = client.get("/api/v1/system/events/recent", headers=trusted_auth_headers)
         assert response.status_code in [200, 403, 401, 503]
 
-    def test_get_events_with_filters(
-        self, client: TestClient, trusted_auth_headers: dict
-    ):
+    def test_get_events_with_filters(self, client: TestClient, trusted_auth_headers: dict):
         """Get recent events with filter parameters."""
         response = client.get(
             "/api/v1/system/events/recent",
@@ -441,18 +422,12 @@ class TestMaintenanceModeRoutes:
         # Needs admin role
         assert response.status_code in [403, 401, 503]
 
-    def test_enable_maintenance_admin(
-        self, client: TestClient, admin_auth_headers: dict
-    ):
+    def test_enable_maintenance_admin(self, client: TestClient, admin_auth_headers: dict):
         """Enable maintenance with admin succeeds."""
-        response = client.post(
-            "/api/v1/system/maintenance/enable", headers=admin_auth_headers
-        )
+        response = client.post("/api/v1/system/maintenance/enable", headers=admin_auth_headers)
         assert response.status_code in [200, 403, 401, 503]
 
-    def test_enable_maintenance_with_message(
-        self, client: TestClient, admin_auth_headers: dict
-    ):
+    def test_enable_maintenance_with_message(self, client: TestClient, admin_auth_headers: dict):
         """Enable maintenance with custom message."""
         response = client.post(
             "/api/v1/system/maintenance/enable",
@@ -486,9 +461,7 @@ class TestCacheClearRoute:
         # Needs CORE level
         assert response.status_code in [403, 401, 503]
 
-    def test_clear_cache_with_core_level(
-        self, client: TestClient, core_auth_headers: dict
-    ):
+    def test_clear_cache_with_core_level(self, client: TestClient, core_auth_headers: dict):
         """Clear cache with core level succeeds."""
         response = client.post("/api/v1/system/cache/clear", headers=core_auth_headers)
         assert response.status_code in [200, 403, 401, 503]
@@ -567,9 +540,7 @@ class TestAuditLogRoute:
         response = client.get("/api/v1/system/audit-log", headers=admin_auth_headers)
         assert response.status_code in [200, 403, 401, 503]
 
-    def test_get_audit_log_with_filters(
-        self, client: TestClient, admin_auth_headers: dict
-    ):
+    def test_get_audit_log_with_filters(self, client: TestClient, admin_auth_headers: dict):
         """Get audit log with filter parameters."""
         response = client.get(
             "/api/v1/system/audit-log",
@@ -582,9 +553,7 @@ class TestAuditLogRoute:
         )
         assert response.status_code in [200, 403, 401, 503]
 
-    def test_get_audit_log_pagination_limits(
-        self, client: TestClient, admin_auth_headers: dict
-    ):
+    def test_get_audit_log_pagination_limits(self, client: TestClient, admin_auth_headers: dict):
         """Get audit log respects pagination limits."""
         response = client.get(
             "/api/v1/system/audit-log",
@@ -610,9 +579,7 @@ class TestAuditTrailRoute:
 
     def test_get_audit_trail_admin(self, client: TestClient, admin_auth_headers: dict):
         """Get audit trail with admin succeeds."""
-        response = client.get(
-            "/api/v1/system/audit-log/corr123", headers=admin_auth_headers
-        )
+        response = client.get("/api/v1/system/audit-log/corr123", headers=admin_auth_headers)
         assert response.status_code in [200, 403, 401, 503]
 
 
@@ -631,9 +598,7 @@ class TestActivityTimelineRoute:
 
     def test_activity_timeline_authorized(self, client: TestClient, auth_headers: dict):
         """Get activity timeline with auth succeeds."""
-        response = client.get(
-            "/api/v1/system/metrics/activity-timeline", headers=auth_headers
-        )
+        response = client.get("/api/v1/system/metrics/activity-timeline", headers=auth_headers)
         assert response.status_code in [200, 401, 503]
 
     def test_activity_timeline_with_hours(self, client: TestClient, auth_headers: dict):
@@ -656,9 +621,7 @@ class TestTrustDistributionRoute:
 
     def test_trust_distribution_authorized(self, client: TestClient, auth_headers: dict):
         """Get trust distribution with auth succeeds."""
-        response = client.get(
-            "/api/v1/system/metrics/trust-distribution", headers=auth_headers
-        )
+        response = client.get("/api/v1/system/metrics/trust-distribution", headers=auth_headers)
         assert response.status_code in [200, 401, 503]
 
 
@@ -672,9 +635,7 @@ class TestPipelinePerformanceRoute:
 
     def test_pipeline_performance_authorized(self, client: TestClient, auth_headers: dict):
         """Get pipeline performance with auth succeeds."""
-        response = client.get(
-            "/api/v1/system/metrics/pipeline-performance", headers=auth_headers
-        )
+        response = client.get("/api/v1/system/metrics/pipeline-performance", headers=auth_headers)
         assert response.status_code in [200, 401, 503]
 
 

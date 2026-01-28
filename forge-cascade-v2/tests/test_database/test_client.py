@@ -19,13 +19,12 @@ import pytest
 from neo4j.exceptions import ServiceUnavailable, SessionExpired, TransientError
 
 from forge.database.client import (
-    Neo4jClient,
     RETRYABLE_EXCEPTIONS,
+    Neo4jClient,
     _get_lock,
     close_db_client,
     get_db_client,
 )
-
 
 # =============================================================================
 # Fixtures
@@ -467,9 +466,7 @@ class TestNeo4jClientExecute:
         mock_session.run.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_execute_with_timeout(
-        self, neo4j_client, mock_driver, mock_session, mock_result
-    ):
+    async def test_execute_with_timeout(self, neo4j_client, mock_driver, mock_session, mock_result):
         """Execute passes timeout parameter."""
         mock_driver.session = MagicMock(return_value=mock_session)
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
@@ -563,9 +560,7 @@ class TestNeo4jClientExecute:
 
         neo4j_client._driver = mock_driver
 
-        result = await neo4j_client.execute_write(
-            "CREATE (n:Test {name: $name})", {"name": "test"}
-        )
+        result = await neo4j_client.execute_write("CREATE (n:Test {name: $name})", {"name": "test"})
 
         assert result["nodes_created"] == 1
         assert result["nodes_deleted"] == 0
@@ -606,9 +601,7 @@ class TestNeo4jClientHealthCheck:
     """Tests for health check operations."""
 
     @pytest.mark.asyncio
-    async def test_health_check_healthy(
-        self, neo4j_client, mock_driver, mock_session, mock_result
-    ):
+    async def test_health_check_healthy(self, neo4j_client, mock_driver, mock_session, mock_result):
         """Health check returns healthy status."""
         mock_driver.session = MagicMock(return_value=mock_session)
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
@@ -616,9 +609,7 @@ class TestNeo4jClientHealthCheck:
 
         record = MagicMock()
         record.__iter__ = MagicMock(
-            return_value=iter(
-                [("name", "Neo4j"), ("versions", ["5.0"]), ("edition", "Enterprise")]
-            )
+            return_value=iter([("name", "Neo4j"), ("versions", ["5.0"]), ("edition", "Enterprise")])
         )
         mock_result.single = AsyncMock(return_value=record)
         mock_session.run = AsyncMock(return_value=mock_result)
@@ -869,9 +860,7 @@ class TestNeo4jClientRetryLogic:
         assert isinstance(result, list)
 
     @pytest.mark.asyncio
-    async def test_execute_raises_after_max_retries(
-        self, neo4j_client, mock_driver, mock_session
-    ):
+    async def test_execute_raises_after_max_retries(self, neo4j_client, mock_driver, mock_session):
         """Execute raises after max retries exceeded."""
         mock_driver.session = MagicMock(return_value=mock_session)
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)

@@ -14,19 +14,14 @@ Comprehensive tests for FastAPI dependency injection:
 
 from __future__ import annotations
 
-import os
-from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
-from uuid import uuid4
 
 import pytest
-from fastapi import FastAPI, HTTPException
-from fastapi.testclient import TestClient
+from fastapi import HTTPException
 from starlette.requests import Request
 
 from forge.models.base import TrustLevel
 from forge.models.user import AuthProvider, User, UserRole
-
 
 # =============================================================================
 # Settings Dependency Tests
@@ -342,9 +337,10 @@ class TestAuthenticationDependencies:
     @pytest.mark.asyncio
     async def test_get_token_payload_from_header(self):
         """Test get_token_payload extracts token from Authorization header."""
+        from fastapi.security import HTTPAuthorizationCredentials
+
         from forge.api.dependencies import get_app_settings, get_token_payload
         from forge.security.tokens import create_access_token
-        from fastapi.security import HTTPAuthorizationCredentials
 
         settings = get_app_settings()
         token = create_access_token(
@@ -403,9 +399,10 @@ class TestAuthenticationDependencies:
     @pytest.mark.asyncio
     async def test_get_token_payload_returns_none_for_blacklisted(self):
         """Test get_token_payload returns None for blacklisted token."""
+        from fastapi.security import HTTPAuthorizationCredentials
+
         from forge.api.dependencies import get_app_settings, get_token_payload
         from forge.security.tokens import create_access_token
-        from fastapi.security import HTTPAuthorizationCredentials
 
         settings = get_app_settings()
         token = create_access_token(
@@ -779,8 +776,8 @@ class TestServicesDependencies:
     async def test_get_auth_service(self, mock_db_client):
         """Test get_auth_service returns AuthService."""
         from forge.api.dependencies import get_auth_service
-        from forge.repositories.user_repository import UserRepository
         from forge.repositories.audit_repository import AuditRepository
+        from forge.repositories.user_repository import UserRepository
         from forge.security.auth_service import AuthService
 
         user_repo = UserRepository(mock_db_client)

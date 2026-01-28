@@ -14,34 +14,26 @@ Tests cover:
 - Error handling
 """
 
-import asyncio
-from datetime import UTC, datetime
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
-from uuid import uuid4
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from forge.models.events import Event, EventType
 from forge.models.overlay import Capability
 from forge.models.query import (
-    CompiledQuery,
     QueryComplexity,
-    QueryResult,
     QueryResultRow,
 )
-from forge.overlays.base import OverlayContext, OverlayResult
+from forge.overlays.base import OverlayContext
 from forge.overlays.knowledge_query import (
     KnowledgeQueryOverlay,
     QueryCompilationError,
     QueryConfig,
     QueryExecutionError,
-    QueryHistoryEntry,
     QuerySecurityError,
     create_knowledge_query_overlay,
 )
 from forge.services.query_compiler import CypherSecurityError
-
 
 # =============================================================================
 # Mock Classes
@@ -172,9 +164,7 @@ def high_trust_context() -> OverlayContext:
 class TestKnowledgeQueryInitialization:
     """Tests for overlay initialization."""
 
-    def test_default_initialization(
-        self, query_overlay: KnowledgeQueryOverlay
-    ) -> None:
+    def test_default_initialization(self, query_overlay: KnowledgeQueryOverlay) -> None:
         """Test default initialization values."""
         assert query_overlay.NAME == "knowledge_query"
         assert query_overlay.VERSION == "1.0.0"
@@ -207,16 +197,12 @@ class TestKnowledgeQueryInitialization:
         """Test subscribed events are empty (direct invocation)."""
         assert len(query_overlay.SUBSCRIBED_EVENTS) == 0
 
-    def test_required_capabilities(
-        self, query_overlay: KnowledgeQueryOverlay
-    ) -> None:
+    def test_required_capabilities(self, query_overlay: KnowledgeQueryOverlay) -> None:
         """Test required capabilities."""
         assert Capability.DATABASE_READ in query_overlay.REQUIRED_CAPABILITIES
         assert Capability.LLM_ACCESS in query_overlay.REQUIRED_CAPABILITIES
 
-    def test_set_query_service(
-        self, query_overlay_no_service: KnowledgeQueryOverlay
-    ) -> None:
+    def test_set_query_service(self, query_overlay_no_service: KnowledgeQueryOverlay) -> None:
         """Test setting query service."""
         mock_service = MockQueryService()
         query_overlay_no_service.set_query_service(mock_service)
@@ -437,9 +423,7 @@ class TestQueryCaching:
     def test_cache_disabled(self, mock_query_service: MockQueryService) -> None:
         """Test with caching disabled."""
         config = QueryConfig(cache_compiled_queries=False)
-        overlay = KnowledgeQueryOverlay(
-            query_service=mock_query_service, config=config
-        )
+        overlay = KnowledgeQueryOverlay(query_service=mock_query_service, config=config)
 
         assert overlay._config.cache_compiled_queries is False
 
@@ -621,15 +605,11 @@ class TestRawCypherExecution:
         initialized_overlay: KnowledgeQueryOverlay,
     ) -> None:
         """Test raw execution rejects write queries."""
-        with patch(
-            "forge.overlays.knowledge_query.CypherValidator.validate"
-        ) as mock_validate:
+        with patch("forge.overlays.knowledge_query.CypherValidator.validate") as mock_validate:
             mock_validate.side_effect = CypherSecurityError("Write not allowed")
 
             with pytest.raises(QuerySecurityError):
-                await initialized_overlay.execute_raw(
-                    cypher="CREATE (n:Node {name: 'Test'})"
-                )
+                await initialized_overlay.execute_raw(cypher="CREATE (n:Node {name: 'Test'})")
 
 
 # =============================================================================
@@ -649,9 +629,7 @@ class TestSchemaInformation:
         assert "node_properties" in schema_info
         assert "examples" in schema_info
 
-    def test_get_suggested_queries(
-        self, query_overlay: KnowledgeQueryOverlay
-    ) -> None:
+    def test_get_suggested_queries(self, query_overlay: KnowledgeQueryOverlay) -> None:
         """Test getting suggested queries."""
         suggestions = query_overlay.get_suggested_queries()
 
@@ -701,9 +679,7 @@ class TestStatistics:
         stats = initialized_overlay.get_stats()
         assert stats["queries_failed"] >= 1
 
-    def test_get_stats_includes_cache_info(
-        self, query_overlay: KnowledgeQueryOverlay
-    ) -> None:
+    def test_get_stats_includes_cache_info(self, query_overlay: KnowledgeQueryOverlay) -> None:
         """Test stats include cache information."""
         stats = query_overlay.get_stats()
 
@@ -835,18 +811,14 @@ class TestFactoryFunction:
 class TestCacheKey:
     """Tests for cache key generation."""
 
-    def test_cache_key_normalized(
-        self, query_overlay: KnowledgeQueryOverlay
-    ) -> None:
+    def test_cache_key_normalized(self, query_overlay: KnowledgeQueryOverlay) -> None:
         """Test cache key is normalized."""
         key1 = query_overlay._get_cache_key("What is this?", 60)
         key2 = query_overlay._get_cache_key("WHAT IS THIS?", 60)
 
         assert key1 == key2
 
-    def test_cache_key_includes_trust_bracket(
-        self, query_overlay: KnowledgeQueryOverlay
-    ) -> None:
+    def test_cache_key_includes_trust_bracket(self, query_overlay: KnowledgeQueryOverlay) -> None:
         """Test cache key includes trust bracket."""
         key_low = query_overlay._get_cache_key("question", 20)
         key_high = query_overlay._get_cache_key("question", 90)
@@ -872,9 +844,7 @@ class TestErrorHandling:
         mock_query_service: MockQueryService,
     ) -> None:
         """Test compilation errors are handled."""
-        mock_query_service.compiler.compile.side_effect = ValueError(
-            "Compilation failed"
-        )
+        mock_query_service.compiler.compile.side_effect = ValueError("Compilation failed")
 
         result = await initialized_overlay.execute(
             context=overlay_context,

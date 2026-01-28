@@ -18,8 +18,7 @@ Tests cover:
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, datetime
-from typing import Any
+from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -40,7 +39,6 @@ from forge.immune.health_checker import (
     OverlayHealthCheck,
     create_forge_health_checker,
 )
-
 
 # =============================================================================
 # Test HealthStatus Enum
@@ -280,9 +278,7 @@ class TestCompositeHealthCheck:
         assert success is False
 
     @pytest.mark.asyncio
-    async def test_empty_composite_unknown(
-        self, composite: CompositeHealthCheck
-    ) -> None:
+    async def test_empty_composite_unknown(self, composite: CompositeHealthCheck) -> None:
         """Test empty composite returns unknown status."""
         result = await composite.check()
 
@@ -290,9 +286,7 @@ class TestCompositeHealthCheck:
         assert "No health checks configured" in result.message
 
     @pytest.mark.asyncio
-    async def test_all_healthy_returns_healthy(
-        self, composite: CompositeHealthCheck
-    ) -> None:
+    async def test_all_healthy_returns_healthy(self, composite: CompositeHealthCheck) -> None:
         """Test all healthy children returns healthy."""
 
         async def healthy1() -> tuple[bool, str]:
@@ -310,9 +304,7 @@ class TestCompositeHealthCheck:
         assert "All checks passed" in result.message
 
     @pytest.mark.asyncio
-    async def test_any_unhealthy_returns_unhealthy(
-        self, composite: CompositeHealthCheck
-    ) -> None:
+    async def test_any_unhealthy_returns_unhealthy(self, composite: CompositeHealthCheck) -> None:
         """Test any unhealthy child returns unhealthy."""
 
         async def healthy() -> tuple[bool, str]:
@@ -356,9 +348,7 @@ class TestCompositeHealthCheck:
         assert result.status == HealthStatus.DEGRADED
 
     @pytest.mark.asyncio
-    async def test_composite_includes_children(
-        self, composite: CompositeHealthCheck
-    ) -> None:
+    async def test_composite_includes_children(self, composite: CompositeHealthCheck) -> None:
         """Test composite result includes children."""
 
         async def healthy() -> tuple[bool, str]:
@@ -373,9 +363,7 @@ class TestCompositeHealthCheck:
         assert result.children[0].name == "check1"
 
     @pytest.mark.asyncio
-    async def test_composite_handles_exception(
-        self, composite: CompositeHealthCheck
-    ) -> None:
+    async def test_composite_handles_exception(self, composite: CompositeHealthCheck) -> None:
         """Test composite handles child exceptions."""
 
         async def error() -> tuple[bool, str]:
@@ -871,9 +859,7 @@ class TestMemoryHealthCheck:
                         status=HealthStatus.UNKNOWN,
                         message="psutil not installed",
                     )
-                return HealthCheckResult(
-                    name="memory", status=HealthStatus.HEALTHY, message="OK"
-                )
+                return HealthCheckResult(name="memory", status=HealthStatus.HEALTHY, message="OK")
 
             result = await mock_check()
             assert result.status == HealthStatus.UNKNOWN or result.status == HealthStatus.HEALTHY
@@ -1017,9 +1003,7 @@ class TestForgeHealthChecker:
         assert result.name == "database"
 
     @pytest.mark.asyncio
-    async def test_check_nonexistent_category(
-        self, checker: ForgeHealthChecker
-    ) -> None:
+    async def test_check_nonexistent_category(self, checker: ForgeHealthChecker) -> None:
         """Test checking non-existent category."""
         result = await checker.check_category("nonexistent")
         assert result is None
@@ -1080,9 +1064,7 @@ class TestForgeHealthCheckerBackgroundMonitoring:
         return checker
 
     @pytest.mark.asyncio
-    async def test_start_background_monitoring(
-        self, checker: ForgeHealthChecker
-    ) -> None:
+    async def test_start_background_monitoring(self, checker: ForgeHealthChecker) -> None:
         """Test starting background monitoring."""
         await checker.start_background_monitoring(interval_seconds=0.1)
 
@@ -1093,9 +1075,7 @@ class TestForgeHealthCheckerBackgroundMonitoring:
         await checker.stop_background_monitoring()
 
     @pytest.mark.asyncio
-    async def test_stop_background_monitoring(
-        self, checker: ForgeHealthChecker
-    ) -> None:
+    async def test_stop_background_monitoring(self, checker: ForgeHealthChecker) -> None:
         """Test stopping background monitoring."""
         await checker.start_background_monitoring(interval_seconds=0.1)
         await checker.stop_background_monitoring()
@@ -1121,9 +1101,7 @@ class TestForgeHealthCheckerBackgroundMonitoring:
         callback.assert_called()
 
     @pytest.mark.asyncio
-    async def test_start_monitoring_idempotent(
-        self, checker: ForgeHealthChecker
-    ) -> None:
+    async def test_start_monitoring_idempotent(self, checker: ForgeHealthChecker) -> None:
         """Test starting monitoring twice is idempotent."""
         await checker.start_background_monitoring(interval_seconds=0.1)
         task1 = checker._background_task

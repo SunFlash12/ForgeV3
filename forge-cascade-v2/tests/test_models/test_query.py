@@ -13,7 +13,6 @@ Comprehensive tests for knowledge query models including:
 """
 
 from datetime import UTC, datetime
-from typing import Any
 
 import pytest
 from pydantic import ValidationError
@@ -45,7 +44,6 @@ from forge.models.query import (
     SortDirection,
     get_default_schema,
 )
-
 
 # =============================================================================
 # QueryOperator Enum Tests

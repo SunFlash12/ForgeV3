@@ -12,9 +12,8 @@ Comprehensive tests for marketplace API routes including:
 - Web3 / Virtuals Protocol purchases
 """
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -25,9 +24,7 @@ from forge.models.marketplace import (
     Currency,
     LicenseType,
     ListingStatus,
-    ListingVisibility,
 )
-
 
 # =============================================================================
 # Fixtures
@@ -155,23 +152,25 @@ def mock_marketplace_service(
     service.update_listing = AsyncMock(return_value=mock_listing)
     service.cancel_listing = AsyncMock()
     service.record_view = AsyncMock()
-    service.get_featured_listings = AsyncMock(return_value=[
-        {
-            "id": "listing123",
-            "capsule_id": "capsule123",
-            "title": "Featured Listing",
-            "description": "A featured capsule",
-            "category": "knowledge",
-            "price": 99.99,
-            "currency": "FORGE",
-            "tags": ["featured"],
-            "preview_content": "Preview",
-            "author_name": "Test Author",
-            "purchase_count": 100,
-            "view_count": 1000,
-            "tokenization": None,
-        }
-    ])
+    service.get_featured_listings = AsyncMock(
+        return_value=[
+            {
+                "id": "listing123",
+                "capsule_id": "capsule123",
+                "title": "Featured Listing",
+                "description": "A featured capsule",
+                "category": "knowledge",
+                "price": 99.99,
+                "currency": "FORGE",
+                "tags": ["featured"],
+                "preview_content": "Preview",
+                "author_name": "Test Author",
+                "purchase_count": 100,
+                "view_count": 1000,
+                "tokenization": None,
+            }
+        ]
+    )
     service.get_cart = AsyncMock(return_value=mock_cart)
     service.add_to_cart = AsyncMock(return_value=mock_cart)
     service.remove_from_cart = AsyncMock(return_value=mock_cart)
@@ -199,7 +198,7 @@ def mock_active_user():
 @pytest.fixture
 def marketplace_app(mock_marketplace_service, mock_active_user):
     """Create FastAPI app with marketplace router and mocked dependencies."""
-    from forge.api.routes.marketplace import router, get_marketplace
+    from forge.api.routes.marketplace import get_marketplace, router
 
     app = FastAPI()
     app.include_router(router, prefix="/api/v1")
@@ -302,9 +301,7 @@ class TestCreateListing:
 
         assert response.status_code == 422
 
-    def test_create_listing_service_error(
-        self, client: TestClient, mock_marketplace_service
-    ):
+    def test_create_listing_service_error(self, client: TestClient, mock_marketplace_service):
         """Create listing when service returns error."""
         mock_marketplace_service.create_listing.side_effect = ValueError("Capsule not found")
 
@@ -351,9 +348,7 @@ class TestListListings:
 
     def test_list_listings_price_range(self, client: TestClient):
         """List listings within price range."""
-        response = client.get(
-            "/api/v1/marketplace/listings?min_price=10&max_price=100"
-        )
+        response = client.get("/api/v1/marketplace/listings?min_price=10&max_price=100")
 
         assert response.status_code == 200
 
@@ -394,9 +389,7 @@ class TestGetListing:
         assert "title" in data
         assert "price" in data
 
-    def test_get_listing_not_found(
-        self, client: TestClient, mock_marketplace_service
-    ):
+    def test_get_listing_not_found(self, client: TestClient, mock_marketplace_service):
         """Get non-existent listing."""
         mock_marketplace_service.get_listing.return_value = None
 
@@ -422,9 +415,7 @@ class TestPublishListing:
         assert "id" in data
         assert "status" in data
 
-    def test_publish_listing_service_error(
-        self, client: TestClient, mock_marketplace_service
-    ):
+    def test_publish_listing_service_error(self, client: TestClient, mock_marketplace_service):
         """Publish listing when not authorized."""
         mock_marketplace_service.publish_listing.side_effect = ValueError(
             "You do not own this listing"
@@ -467,13 +458,9 @@ class TestUpdateListing:
 
         assert response.status_code == 200
 
-    def test_update_listing_service_error(
-        self, client: TestClient, mock_marketplace_service
-    ):
+    def test_update_listing_service_error(self, client: TestClient, mock_marketplace_service):
         """Update listing not owned by user."""
-        mock_marketplace_service.update_listing.side_effect = ValueError(
-            "Permission denied"
-        )
+        mock_marketplace_service.update_listing.side_effect = ValueError("Permission denied")
 
         response = client.patch(
             "/api/v1/marketplace/listings/other_listing",
@@ -499,13 +486,9 @@ class TestCancelListing:
         data = response.json()
         assert data["cancelled"] is True
 
-    def test_cancel_listing_service_error(
-        self, client: TestClient, mock_marketplace_service
-    ):
+    def test_cancel_listing_service_error(self, client: TestClient, mock_marketplace_service):
         """Cancel listing not owned by user."""
-        mock_marketplace_service.cancel_listing.side_effect = ValueError(
-            "Permission denied"
-        )
+        mock_marketplace_service.cancel_listing.side_effect = ValueError("Permission denied")
 
         response = client.delete("/api/v1/marketplace/listings/other_listing")
 
@@ -604,9 +587,7 @@ class TestCart:
         data = response.json()
         assert "items" in data
 
-    def test_add_to_cart_error(
-        self, client: TestClient, mock_marketplace_service
-    ):
+    def test_add_to_cart_error(self, client: TestClient, mock_marketplace_service):
         """Add to cart service error."""
         mock_marketplace_service.add_to_cart.side_effect = ValueError("Already in cart")
 
@@ -641,9 +622,7 @@ class TestCheckout:
             assert "listing_id" in data[0]
             assert "price" in data[0]
 
-    def test_checkout_error(
-        self, client: TestClient, mock_marketplace_service
-    ):
+    def test_checkout_error(self, client: TestClient, mock_marketplace_service):
         """Checkout with empty cart or error."""
         mock_marketplace_service.checkout.side_effect = ValueError("Cart is empty")
 
@@ -665,13 +644,9 @@ class TestPurchaseSingle:
         assert "listing_id" in data
         assert "purchased_at" in data
 
-    def test_purchase_single_error(
-        self, client: TestClient, mock_marketplace_service
-    ):
+    def test_purchase_single_error(self, client: TestClient, mock_marketplace_service):
         """Purchase single listing error."""
-        mock_marketplace_service.purchase_single.side_effect = ValueError(
-            "Listing not available"
-        )
+        mock_marketplace_service.purchase_single.side_effect = ValueError("Listing not available")
 
         response = client.post("/api/v1/marketplace/listings/unavailable/purchase")
 
@@ -724,9 +699,7 @@ class TestPricing:
         assert "max_price" in data
         assert "factors" in data
 
-    def test_get_suggested_price_not_found(
-        self, client: TestClient, mock_marketplace_service
-    ):
+    def test_get_suggested_price_not_found(self, client: TestClient, mock_marketplace_service):
         """Get suggested price for non-existent capsule."""
         mock_marketplace_service.calculate_suggested_price.return_value = None
 
@@ -774,9 +747,17 @@ class TestPricing:
         """Get lineage revenue distribution."""
         with patch("forge.api.routes.marketplace.get_pricing_engine") as mock_engine:
             engine = AsyncMock()
-            engine.calculate_lineage_distribution = AsyncMock(return_value=[
-                {"user_id": "user1", "capsule_id": "cap1", "depth": 1, "weight": 0.5, "amount": Decimal("7.50")},
-            ])
+            engine.calculate_lineage_distribution = AsyncMock(
+                return_value=[
+                    {
+                        "user_id": "user1",
+                        "capsule_id": "cap1",
+                        "depth": 1,
+                        "weight": 0.5,
+                        "amount": Decimal("7.50"),
+                    },
+                ]
+            )
             mock_engine.return_value = engine
 
             response = client.get(
@@ -842,9 +823,7 @@ class TestLicenseCheck:
         assert "license_type" in data
         assert "can_view" in data
 
-    def test_check_license_no_license(
-        self, client: TestClient, mock_marketplace_service
-    ):
+    def test_check_license_no_license(self, client: TestClient, mock_marketplace_service):
         """Check license when user doesn't have one."""
         mock_marketplace_service.check_license.return_value = None
 
@@ -945,9 +924,7 @@ class TestWeb3Purchase:
             tx_info.confirmations = 15
             mock_info.return_value = tx_info
 
-            response = client.get(
-                f"/api/v1/marketplace/transaction/0x{'a' * 64}"
-            )
+            response = client.get(f"/api/v1/marketplace/transaction/0x{'a' * 64}")
 
             # May fail if web3 service not available
             assert response.status_code in [200, 400, 503]
@@ -963,9 +940,7 @@ class TestWeb3Purchase:
         with patch("httpx.AsyncClient") as mock_client:
             mock_response = MagicMock()
             mock_response.status_code = 200
-            mock_response.json.return_value = {
-                "pairs": [{"priceUsd": "0.15"}]
-            }
+            mock_response.json.return_value = {"pairs": [{"priceUsd": "0.15"}]}
             mock_client.return_value.__aenter__ = AsyncMock(return_value=MagicMock())
             mock_client.return_value.__aenter__.return_value.get = AsyncMock(
                 return_value=mock_response
@@ -987,9 +962,7 @@ class TestWeb3Purchase:
 class TestErrorSanitization:
     """Tests for error message sanitization."""
 
-    def test_not_found_error_sanitized(
-        self, client: TestClient, mock_marketplace_service
-    ):
+    def test_not_found_error_sanitized(self, client: TestClient, mock_marketplace_service):
         """Not found errors are sanitized."""
         mock_marketplace_service.create_listing.side_effect = ValueError(
             "Capsule with ID xyz not found in database"
@@ -1009,9 +982,7 @@ class TestErrorSanitization:
         assert "not found" in data["detail"].lower()
         assert "xyz" not in data["detail"]  # ID not leaked
 
-    def test_permission_error_sanitized(
-        self, client: TestClient, mock_marketplace_service
-    ):
+    def test_permission_error_sanitized(self, client: TestClient, mock_marketplace_service):
         """Permission errors are sanitized."""
         mock_marketplace_service.update_listing.side_effect = ValueError(
             "User user123 does not own listing abc456"

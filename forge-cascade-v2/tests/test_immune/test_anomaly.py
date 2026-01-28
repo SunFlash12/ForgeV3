@@ -17,15 +17,13 @@ Tests cover:
 from __future__ import annotations
 
 import asyncio
-import math
-from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock, patch
+from datetime import datetime
+from unittest.mock import AsyncMock
 
 import pytest
 
 from forge.immune.anomaly import (
     Anomaly,
-    AnomalyDetector,
     AnomalyDetectorConfig,
     AnomalySeverity,
     AnomalyType,
@@ -40,7 +38,6 @@ from forge.immune.anomaly import (
     UserProfile,
     create_forge_anomaly_system,
 )
-
 
 # =============================================================================
 # Test Enums
@@ -257,9 +254,7 @@ class TestAnomalyDetectorBase:
         assert id2.startswith("anomaly_")
         assert id1 != id2
 
-    def test_can_alert_respects_hourly_limit(
-        self, detector: StatisticalAnomalyDetector
-    ) -> None:
+    def test_can_alert_respects_hourly_limit(self, detector: StatisticalAnomalyDetector) -> None:
         """Test alert rate limiting respects hourly limit."""
         detector._alerts_this_hour = detector.config.max_alerts_per_hour
 
@@ -309,9 +304,7 @@ class TestStatisticalAnomalyDetector:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_detects_z_score_anomaly(
-        self, detector: StatisticalAnomalyDetector
-    ) -> None:
+    async def test_detects_z_score_anomaly(self, detector: StatisticalAnomalyDetector) -> None:
         """Test detection of Z-score based anomalies."""
         # Add normal values
         for _ in range(20):
@@ -326,9 +319,7 @@ class TestStatisticalAnomalyDetector:
         assert result.context["z_score"] > detector.config.z_score_threshold
 
     @pytest.mark.asyncio
-    async def test_detects_iqr_anomaly(
-        self, detector: StatisticalAnomalyDetector
-    ) -> None:
+    async def test_detects_iqr_anomaly(self, detector: StatisticalAnomalyDetector) -> None:
         """Test detection of IQR based anomalies."""
         # Add values with clear IQR bounds
         for v in [10, 20, 30, 40, 50, 60, 70, 80, 90, 100] * 2:
@@ -341,9 +332,7 @@ class TestStatisticalAnomalyDetector:
         assert "iqr" in result.context
 
     @pytest.mark.asyncio
-    async def test_severity_based_on_score(
-        self, detector: StatisticalAnomalyDetector
-    ) -> None:
+    async def test_severity_based_on_score(self, detector: StatisticalAnomalyDetector) -> None:
         """Test severity is determined by anomaly score."""
         # Fill with stable data
         for _ in range(20):
@@ -359,9 +348,7 @@ class TestStatisticalAnomalyDetector:
         ]
 
     @pytest.mark.asyncio
-    async def test_normal_values_no_detection(
-        self, detector: StatisticalAnomalyDetector
-    ) -> None:
+    async def test_normal_values_no_detection(self, detector: StatisticalAnomalyDetector) -> None:
         """Test normal values don't trigger detection."""
         # Add consistent values
         for _ in range(25):
@@ -445,9 +432,7 @@ class TestIsolationForestDetector:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_trains_after_min_samples(
-        self, detector: IsolationForestDetector
-    ) -> None:
+    async def test_trains_after_min_samples(self, detector: IsolationForestDetector) -> None:
         """Test training occurs after minimum samples collected."""
         for i in range(25):
             await detector.detect(float(i % 10), {"metric_name": "test"})
@@ -456,9 +441,7 @@ class TestIsolationForestDetector:
         assert len(detector._trees) == detector.config.n_estimators
 
     @pytest.mark.asyncio
-    async def test_detects_anomalous_points(
-        self, detector: IsolationForestDetector
-    ) -> None:
+    async def test_detects_anomalous_points(self, detector: IsolationForestDetector) -> None:
         """Test detection of anomalous points."""
         # Add normal distribution of values
         for i in range(30):
@@ -504,9 +487,7 @@ class TestRateAnomalyDetector:
         return RateAnomalyDetector("rate_detector", config, bucket_seconds=1.0)
 
     @pytest.mark.asyncio
-    async def test_bucket_accumulation(
-        self, detector: RateAnomalyDetector
-    ) -> None:
+    async def test_bucket_accumulation(self, detector: RateAnomalyDetector) -> None:
         """Test events accumulate in buckets."""
         await detector.detect(1.0, {"metric_name": "test"})
         await detector.detect(1.0, {"metric_name": "test"})
@@ -535,9 +516,7 @@ class TestRateAnomalyDetector:
             assert result.type == AnomalyType.RATE
 
     @pytest.mark.asyncio
-    async def test_no_detection_for_normal_rate(
-        self, detector: RateAnomalyDetector
-    ) -> None:
+    async def test_no_detection_for_normal_rate(self, detector: RateAnomalyDetector) -> None:
         """Test normal rates don't trigger detection."""
         # Consistent low rate
         for _ in range(10):
@@ -608,17 +587,13 @@ class TestBehavioralAnomalyDetector:
         return BehavioralAnomalyDetector("behavioral", config)
 
     @pytest.mark.asyncio
-    async def test_requires_user_id(
-        self, detector: BehavioralAnomalyDetector
-    ) -> None:
+    async def test_requires_user_id(self, detector: BehavioralAnomalyDetector) -> None:
         """Test detection requires user_id in context."""
         result = await detector.detect(10.0, {"metric_name": "test"})
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_builds_user_profile(
-        self, detector: BehavioralAnomalyDetector
-    ) -> None:
+    async def test_builds_user_profile(self, detector: BehavioralAnomalyDetector) -> None:
         """Test user profiles are built from observations."""
         context = {"user_id": "user123", "metric_name": "logins"}
 
@@ -630,9 +605,7 @@ class TestBehavioralAnomalyDetector:
         assert profile.get_stats("logins")["count"] == 10
 
     @pytest.mark.asyncio
-    async def test_detects_behavioral_anomaly(
-        self, detector: BehavioralAnomalyDetector
-    ) -> None:
+    async def test_detects_behavioral_anomaly(self, detector: BehavioralAnomalyDetector) -> None:
         """Test detection of behavioral anomalies."""
         context = {"user_id": "user123", "metric_name": "api_calls"}
 
@@ -683,18 +656,14 @@ class TestCompositeAnomalyDetector:
 
         # Not enough detectors
         composite_with_one = CompositeAnomalyDetector("test")
-        composite_with_one.add_detector(
-            StatisticalAnomalyDetector("stat", AnomalyDetectorConfig())
-        )
+        composite_with_one.add_detector(StatisticalAnomalyDetector("stat", AnomalyDetectorConfig()))
         composite_with_one._min_agreement = 2
 
         result = await composite_with_one.detect(100.0, {"metric_name": "test"})
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_aggregates_scores(
-        self, composite_detector: CompositeAnomalyDetector
-    ) -> None:
+    async def test_aggregates_scores(self, composite_detector: CompositeAnomalyDetector) -> None:
         """Test composite aggregates scores from sub-detectors."""
         # Fill with normal data
         for _ in range(10):
@@ -739,18 +708,14 @@ class TestForgeAnomalySystem:
         assert callback in system._callbacks
 
     @pytest.mark.asyncio
-    async def test_record_metric_creates_detector(
-        self, system: ForgeAnomalySystem
-    ) -> None:
+    async def test_record_metric_creates_detector(self, system: ForgeAnomalySystem) -> None:
         """Test recording metric auto-creates detector."""
         await system.record_metric("new_metric", 10.0)
 
         assert "new_metric" in system._detectors
 
     @pytest.mark.asyncio
-    async def test_callback_invoked_on_anomaly(
-        self, system: ForgeAnomalySystem
-    ) -> None:
+    async def test_callback_invoked_on_anomaly(self, system: ForgeAnomalySystem) -> None:
         """Test callbacks are invoked when anomaly detected."""
         callback = AsyncMock()
         system.register_callback(callback)
@@ -788,9 +753,7 @@ class TestForgeAnomalySystem:
         assert recent[0].id == "test_anomaly"
 
     @pytest.mark.asyncio
-    async def test_get_recent_anomalies_with_filters(
-        self, system: ForgeAnomalySystem
-    ) -> None:
+    async def test_get_recent_anomalies_with_filters(self, system: ForgeAnomalySystem) -> None:
         """Test filtering recent anomalies."""
         # Add anomalies of different severities
         for severity in [
@@ -899,9 +862,7 @@ class TestForgeAnomalySystem:
         )
         system._anomaly_history.append(anomaly)
 
-        success = system.resolve(
-            "to_resolve", resolved_by="admin", notes="Fixed the issue"
-        )
+        success = system.resolve("to_resolve", resolved_by="admin", notes="Fixed the issue")
         assert success is True
         assert anomaly.resolved is True
         assert anomaly.resolved_by == "admin"

@@ -11,8 +11,6 @@ Comprehensive tests for graph analysis models including:
 - Similarity and path models
 """
 
-from datetime import UTC, datetime
-
 import pytest
 from pydantic import ValidationError
 
@@ -40,7 +38,6 @@ from forge.models.graph_analysis import (
     TrustTransitivityRequest,
     TrustTransitivityResult,
 )
-
 
 # =============================================================================
 # GraphBackend Enum Tests

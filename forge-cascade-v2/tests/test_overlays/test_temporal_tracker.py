@@ -14,15 +14,12 @@ Tests cover:
 - Statistics tracking
 """
 
-import asyncio
 from datetime import UTC, datetime, timedelta
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
 
-from forge.models.base import TrustLevel
 from forge.models.events import Event, EventType
 from forge.models.overlay import Capability
 from forge.models.temporal import (
@@ -30,16 +27,13 @@ from forge.models.temporal import (
     SnapshotType,
     TrustChangeType,
 )
-from forge.overlays.base import OverlayContext, OverlayResult
+from forge.overlays.base import OverlayContext
 from forge.overlays.temporal_tracker import (
     TemporalConfig,
     TemporalError,
     TemporalTrackerOverlay,
-    VersionChangeStats,
-    VersionNotFoundError,
     create_temporal_tracker_overlay,
 )
-
 
 # =============================================================================
 # Mock Classes
@@ -128,15 +122,11 @@ class MockTemporalRepository:
     def __init__(self):
         self.create_version = AsyncMock(return_value=MockVersion())
         self.create_trust_snapshot = AsyncMock(return_value=MockTrustSnapshot())
-        self.get_version_history = AsyncMock(
-            return_value=MockVersionHistory([MockVersion()])
-        )
+        self.get_version_history = AsyncMock(return_value=MockVersionHistory([MockVersion()]))
         self._get_version_by_id = AsyncMock(return_value=MockVersion())
         self._reconstruct_content = AsyncMock(return_value="reconstructed content")
         self.get_capsule_at_time = AsyncMock(return_value=MockVersion())
-        self.get_trust_timeline = AsyncMock(
-            return_value=MockTrustTimeline([MockTrustSnapshot()])
-        )
+        self.get_trust_timeline = AsyncMock(return_value=MockTrustTimeline([MockTrustSnapshot()]))
         self.diff_versions = AsyncMock(return_value=MockVersionComparison())
         self.create_graph_snapshot = AsyncMock(return_value=MockGraphSnapshot())
         self.get_latest_graph_snapshot = AsyncMock(return_value=None)
@@ -264,9 +254,7 @@ class TestRepositoryRequirement:
         assert result.success is False
         assert "not configured" in result.error
 
-    def test_require_repository_raises(
-        self, tracker_no_repo: TemporalTrackerOverlay
-    ) -> None:
+    def test_require_repository_raises(self, tracker_no_repo: TemporalTrackerOverlay) -> None:
         """Test _require_repository raises when not configured."""
         with pytest.raises(TemporalError):
             tracker_no_repo._require_repository()
@@ -340,9 +328,7 @@ class TestCapsuleCreated:
             payload={"capsule_id": "test-capsule", "content": "content"},
         )
 
-        result = await initialized_tracker.execute(
-            context=overlay_context, event=event
-        )
+        result = await initialized_tracker.execute(context=overlay_context, event=event)
 
         assert len(result.events_to_emit) >= 1
 
@@ -457,9 +443,7 @@ class TestTrustAdjusted:
             payload={},  # Missing required fields
         )
 
-        result = await initialized_tracker.execute(
-            context=overlay_context, event=event
-        )
+        result = await initialized_tracker.execute(context=overlay_context, event=event)
 
         assert "error" in result.data
 

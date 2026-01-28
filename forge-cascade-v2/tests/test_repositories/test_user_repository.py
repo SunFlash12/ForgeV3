@@ -9,25 +9,20 @@ Comprehensive tests for UserRepository including:
 - OAuth operations
 """
 
-from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
 import hashlib
+from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock
 
 import pytest
 
-from forge.models.base import TrustLevel
 from forge.models.user import (
     AuthProvider,
-    TrustFlameAdjustment,
-    User,
     UserCreate,
     UserInDB,
-    UserPublic,
     UserRole,
     UserUpdate,
 )
 from forge.repositories.user_repository import UserRepository
-
 
 # =============================================================================
 # Fixtures
@@ -437,7 +432,7 @@ class TestUserRepositoryPasswordReset:
         """Store password reset token with hash."""
         mock_db_client.execute_single.return_value = {"id": "user123"}
 
-        token_hash = hashlib.sha256("reset_token".encode()).hexdigest()
+        token_hash = hashlib.sha256(b"reset_token").hexdigest()
         expires_at = datetime.now(UTC) + timedelta(hours=1)
 
         result = await user_repository.store_password_reset_token("user123", token_hash, expires_at)
@@ -453,7 +448,7 @@ class TestUserRepositoryPasswordReset:
         """Valid reset token passes validation."""
         mock_db_client.execute_single.return_value = {"id": "user123"}
 
-        token_hash = hashlib.sha256("reset_token".encode()).hexdigest()
+        token_hash = hashlib.sha256(b"reset_token").hexdigest()
 
         result = await user_repository.validate_password_reset_token("user123", token_hash)
 
@@ -761,7 +756,7 @@ class TestCypherInjectionPrevention:
         params = call_args[0][1]
 
         # Injection payload should be parameterized, not in query
-        assert payload not in query, f"Payload should not appear directly in query"
+        assert payload not in query, "Payload should not appear directly in query"
         assert email_payload in str(params.values()), "Email should be passed as a parameter"
 
     @pytest.mark.asyncio

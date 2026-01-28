@@ -15,10 +15,7 @@ Tests cover:
 
 from __future__ import annotations
 
-import asyncio
-from datetime import UTC, datetime
-from typing import Any
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -31,7 +28,6 @@ from forge.immune.canary import (
     OverlayCanaryManager,
     RolloutStrategy,
 )
-
 
 # =============================================================================
 # Test Enums
@@ -314,9 +310,7 @@ class TestCanaryManagerBasics:
         assert deployment.state == CanaryState.PENDING
 
     @pytest.mark.asyncio
-    async def test_create_deployment_with_custom_id(
-        self, manager: CanaryManager[str]
-    ) -> None:
+    async def test_create_deployment_with_custom_id(self, manager: CanaryManager[str]) -> None:
         """Test creating deployment with custom ID."""
         deployment = await manager.create_deployment(
             name="test",
@@ -342,9 +336,7 @@ class TestCanaryManagerBasics:
         assert retrieved.id == created.id
 
     @pytest.mark.asyncio
-    async def test_get_nonexistent_deployment(
-        self, manager: CanaryManager[str]
-    ) -> None:
+    async def test_get_nonexistent_deployment(self, manager: CanaryManager[str]) -> None:
         """Test getting non-existent deployment returns None."""
         result = await manager.get_deployment("nonexistent")
         assert result is None
@@ -367,9 +359,7 @@ class TestCanaryManagerBasics:
         assert len(all_deployments) == 2
 
     @pytest.mark.asyncio
-    async def test_list_deployments_filtered_by_state(
-        self, manager: CanaryManager[str]
-    ) -> None:
+    async def test_list_deployments_filtered_by_state(self, manager: CanaryManager[str]) -> None:
         """Test listing deployments filtered by state."""
         deploy1 = await manager.create_deployment(
             name="deploy1",
@@ -429,17 +419,13 @@ class TestCanaryManagerStateTransitions:
         assert deployment.current_step == 1
 
     @pytest.mark.asyncio
-    async def test_start_nonexistent_deployment(
-        self, manager: CanaryManager[str]
-    ) -> None:
+    async def test_start_nonexistent_deployment(self, manager: CanaryManager[str]) -> None:
         """Test starting non-existent deployment fails."""
         success = await manager.start("nonexistent")
         assert success is False
 
     @pytest.mark.asyncio
-    async def test_start_already_started_deployment(
-        self, manager: CanaryManager[str]
-    ) -> None:
+    async def test_start_already_started_deployment(self, manager: CanaryManager[str]) -> None:
         """Test starting already started deployment fails."""
         deployment = await manager.create_deployment(
             name="test",
@@ -468,9 +454,7 @@ class TestCanaryManagerStateTransitions:
         assert deployment.state == CanaryState.PAUSED
 
     @pytest.mark.asyncio
-    async def test_pause_non_running_deployment(
-        self, manager: CanaryManager[str]
-    ) -> None:
+    async def test_pause_non_running_deployment(self, manager: CanaryManager[str]) -> None:
         """Test pausing non-running deployment fails."""
         deployment = await manager.create_deployment(
             name="test",
@@ -498,9 +482,7 @@ class TestCanaryManagerStateTransitions:
         assert deployment.state == CanaryState.RUNNING
 
     @pytest.mark.asyncio
-    async def test_resume_non_paused_deployment(
-        self, manager: CanaryManager[str]
-    ) -> None:
+    async def test_resume_non_paused_deployment(self, manager: CanaryManager[str]) -> None:
         """Test resuming non-paused deployment fails."""
         deployment = await manager.create_deployment(
             name="test",
@@ -568,17 +550,13 @@ class TestCanaryManagerRollback:
         assert deployment.current_percentage == 0.0
 
     @pytest.mark.asyncio
-    async def test_rollback_nonexistent_deployment(
-        self, manager: CanaryManager[str]
-    ) -> None:
+    async def test_rollback_nonexistent_deployment(self, manager: CanaryManager[str]) -> None:
         """Test rollback of non-existent deployment fails."""
         success = await manager.rollback("nonexistent")
         assert success is False
 
     @pytest.mark.asyncio
-    async def test_rollback_completed_deployment(
-        self, manager: CanaryManager[str]
-    ) -> None:
+    async def test_rollback_completed_deployment(self, manager: CanaryManager[str]) -> None:
         """Test rollback of completed deployment fails."""
         deployment = await manager.create_deployment(
             name="test",
@@ -621,17 +599,13 @@ class TestCanaryManagerRouting:
         assert version in ["v2.0", "v1.0"]
 
     @pytest.mark.asyncio
-    async def test_route_nonexistent_deployment(
-        self, manager: CanaryManager[str]
-    ) -> None:
+    async def test_route_nonexistent_deployment(self, manager: CanaryManager[str]) -> None:
         """Test routing non-existent deployment returns None."""
         version = manager.route("nonexistent")
         assert version is None
 
     @pytest.mark.asyncio
-    async def test_route_non_running_returns_control(
-        self, manager: CanaryManager[str]
-    ) -> None:
+    async def test_route_non_running_returns_control(self, manager: CanaryManager[str]) -> None:
         """Test routing non-running deployment returns control."""
         deployment = await manager.create_deployment(
             name="test",
@@ -644,9 +618,7 @@ class TestCanaryManagerRouting:
         assert version == "v1.0"
 
     @pytest.mark.asyncio
-    async def test_route_increments_counter(
-        self, manager: CanaryManager[str]
-    ) -> None:
+    async def test_route_increments_counter(self, manager: CanaryManager[str]) -> None:
         """Test routing increments request counter."""
         deployment = await manager.create_deployment(
             name="test",
@@ -677,9 +649,7 @@ class TestCanaryManagerRouting:
         assert isinstance(result, bool)
 
     @pytest.mark.asyncio
-    async def test_should_use_canary_non_running(
-        self, manager: CanaryManager[str]
-    ) -> None:
+    async def test_should_use_canary_non_running(self, manager: CanaryManager[str]) -> None:
         """Test should_use_canary returns False for non-running."""
         deployment = await manager.create_deployment(
             name="test",
@@ -793,9 +763,7 @@ class TestCanaryManagerOutcomes:
         assert 50.0 in deployment.metrics.control_latencies
 
     @pytest.mark.asyncio
-    async def test_record_outcome_trims_latencies(
-        self, manager: CanaryManager[str]
-    ) -> None:
+    async def test_record_outcome_trims_latencies(self, manager: CanaryManager[str]) -> None:
         """Test latency lists are trimmed."""
         deployment = await manager.create_deployment(
             name="test",
@@ -837,9 +805,7 @@ class TestCanaryManagerHealthChecks:
         return CanaryManager(default_config=config)
 
     @pytest.mark.asyncio
-    async def test_health_check_passes_with_good_metrics(
-        self, manager: CanaryManager[str]
-    ) -> None:
+    async def test_health_check_passes_with_good_metrics(self, manager: CanaryManager[str]) -> None:
         """Test health check passes with good metrics."""
         deployment = await manager.create_deployment(
             name="test",
@@ -858,9 +824,7 @@ class TestCanaryManagerHealthChecks:
         assert reason is None
 
     @pytest.mark.asyncio
-    async def test_health_check_fails_high_error_rate(
-        self, manager: CanaryManager[str]
-    ) -> None:
+    async def test_health_check_fails_high_error_rate(self, manager: CanaryManager[str]) -> None:
         """Test health check fails with high error rate."""
         deployment = await manager.create_deployment(
             name="test",
@@ -878,9 +842,7 @@ class TestCanaryManagerHealthChecks:
         assert "Error rate" in reason
 
     @pytest.mark.asyncio
-    async def test_health_check_fails_high_latency(
-        self, manager: CanaryManager[str]
-    ) -> None:
+    async def test_health_check_fails_high_latency(self, manager: CanaryManager[str]) -> None:
         """Test health check fails with high latency."""
         deployment = await manager.create_deployment(
             name="test",
@@ -936,9 +898,7 @@ class TestCanaryManagerApproval:
         return CanaryManager(default_config=config)
 
     @pytest.mark.asyncio
-    async def test_approve_awaiting_deployment(
-        self, manager: CanaryManager[str]
-    ) -> None:
+    async def test_approve_awaiting_deployment(self, manager: CanaryManager[str]) -> None:
         """Test approving a deployment awaiting approval."""
         deployment = await manager.create_deployment(
             name="test",
@@ -954,9 +914,7 @@ class TestCanaryManagerApproval:
         assert deployment.approved_by == "admin"
 
     @pytest.mark.asyncio
-    async def test_approve_non_awaiting_deployment(
-        self, manager: CanaryManager[str]
-    ) -> None:
+    async def test_approve_non_awaiting_deployment(self, manager: CanaryManager[str]) -> None:
         """Test approving non-awaiting deployment fails."""
         deployment = await manager.create_deployment(
             name="test",
@@ -1083,9 +1041,7 @@ class TestCanaryManagerCleanup:
         return CanaryManager()
 
     @pytest.mark.asyncio
-    async def test_cleanup_completed_deployment(
-        self, manager: CanaryManager[str]
-    ) -> None:
+    async def test_cleanup_completed_deployment(self, manager: CanaryManager[str]) -> None:
         """Test cleaning up completed deployment."""
         deployment = await manager.create_deployment(
             name="test",
@@ -1100,9 +1056,7 @@ class TestCanaryManagerCleanup:
         assert await manager.get_deployment(deployment.id) is None
 
     @pytest.mark.asyncio
-    async def test_cleanup_failed_deployment(
-        self, manager: CanaryManager[str]
-    ) -> None:
+    async def test_cleanup_failed_deployment(self, manager: CanaryManager[str]) -> None:
         """Test cleaning up failed deployment."""
         deployment = await manager.create_deployment(
             name="test",
@@ -1115,9 +1069,7 @@ class TestCanaryManagerCleanup:
         assert success is True
 
     @pytest.mark.asyncio
-    async def test_cleanup_active_deployment_fails(
-        self, manager: CanaryManager[str]
-    ) -> None:
+    async def test_cleanup_active_deployment_fails(self, manager: CanaryManager[str]) -> None:
         """Test cleaning up active deployment fails."""
         deployment = await manager.create_deployment(
             name="test",
@@ -1130,9 +1082,7 @@ class TestCanaryManagerCleanup:
         assert success is False
 
     @pytest.mark.asyncio
-    async def test_get_active_deployments(
-        self, manager: CanaryManager[str]
-    ) -> None:
+    async def test_get_active_deployments(self, manager: CanaryManager[str]) -> None:
         """Test getting active deployment IDs."""
         deploy1 = await manager.create_deployment(
             name="test1",

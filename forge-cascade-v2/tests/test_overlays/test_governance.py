@@ -13,8 +13,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime, timedelta
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -22,12 +21,11 @@ from forge.models.base import TrustLevel
 from forge.models.events import Event, EventType
 from forge.models.governance import ProposalType, VoteChoice
 from forge.models.overlay import Capability
+from forge.overlays.base import OverlayContext
 from forge.overlays.governance import (
     ConditionOperator,
     ConsensusConfig,
     ConsensusFailedError,
-    ConsensusResult,
-    GovernanceDecision,
     GovernanceError,
     GovernanceOverlay,
     InsufficientQuorumError,
@@ -35,11 +33,8 @@ from forge.overlays.governance import (
     PolicyViolationError,
     SafeCondition,
     VoteRecord,
-    VotingStatus,
     create_governance_overlay,
 )
-from forge.overlays.base import OverlayContext
-
 
 # =============================================================================
 # SafeCondition Tests
@@ -595,9 +590,7 @@ class TestGovernanceOverlay:
         assert result.data["action"] == "voting_closed"
 
     @pytest.mark.asyncio
-    async def test_handle_governance_action_execute_proposal_timelock(
-        self, overlay, context
-    ):
+    async def test_handle_governance_action_execute_proposal_timelock(self, overlay, context):
         """Test that proposal execution respects timelock."""
         await overlay.initialize()
 

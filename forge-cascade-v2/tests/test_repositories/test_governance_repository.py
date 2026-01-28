@@ -10,9 +10,8 @@ Comprehensive tests for GovernanceRepository including:
 - Trust-weighted voting
 """
 
-import json
-from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock, patch
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -21,7 +20,6 @@ from forge.models.governance import (
     ConstitutionalAnalysis,
     GhostCouncilOpinion,
     GovernanceStats,
-    Proposal,
     ProposalCreate,
     ProposalType,
     Vote,
@@ -33,7 +31,6 @@ from forge.repositories.governance_repository import (
     GovernanceRepository,
     ProposalUpdate,
 )
-
 
 # =============================================================================
 # Fixtures
@@ -265,9 +262,7 @@ class TestGovernanceRepositoryVotingLifecycle:
         assert result.status == ProposalStatus.VOTING
 
     @pytest.mark.asyncio
-    async def test_start_voting_proposal_not_found(
-        self, governance_repository, mock_db_client
-    ):
+    async def test_start_voting_proposal_not_found(self, governance_repository, mock_db_client):
         """Start voting returns None for nonexistent proposal."""
         mock_db_client.execute_single.return_value = None
 
@@ -436,9 +431,7 @@ class TestGovernanceRepositoryVoting:
     """Tests for voting operations."""
 
     @pytest.mark.asyncio
-    async def test_cast_vote_success(
-        self, governance_repository, mock_db_client, sample_vote_data
-    ):
+    async def test_cast_vote_success(self, governance_repository, mock_db_client, sample_vote_data):
         """Successfully cast vote."""
         mock_db_client.execute_single.side_effect = [
             None,  # get_vote returns None (no existing vote)
@@ -505,9 +498,7 @@ class TestGovernanceRepositoryVoting:
         assert params["weight"] == 0.50
 
     @pytest.mark.asyncio
-    async def test_cast_vote_voter_not_found(
-        self, governance_repository, mock_db_client
-    ):
+    async def test_cast_vote_voter_not_found(self, governance_repository, mock_db_client):
         """Cast vote returns None if voter not found."""
         mock_db_client.execute_single.side_effect = [
             None,  # No existing vote
@@ -526,9 +517,7 @@ class TestGovernanceRepositoryVoting:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_get_vote(
-        self, governance_repository, mock_db_client, sample_vote_data
-    ):
+    async def test_get_vote(self, governance_repository, mock_db_client, sample_vote_data):
         """Get user's vote on proposal."""
         mock_db_client.execute_single.return_value = {"vote": sample_vote_data}
 
@@ -549,9 +538,7 @@ class TestGovernanceRepositoryVoting:
         assert len(result) == 1
 
     @pytest.mark.asyncio
-    async def test_get_votes_limit_capped(
-        self, governance_repository, mock_db_client
-    ):
+    async def test_get_votes_limit_capped(self, governance_repository, mock_db_client):
         """Get votes respects limit cap."""
         mock_db_client.execute.return_value = []
 
@@ -562,9 +549,7 @@ class TestGovernanceRepositoryVoting:
         assert params["limit"] == 500  # Capped at 500
 
     @pytest.mark.asyncio
-    async def test_get_voter_history(
-        self, governance_repository, mock_db_client, sample_vote_data
-    ):
+    async def test_get_voter_history(self, governance_repository, mock_db_client, sample_vote_data):
         """Get user's voting history."""
         mock_db_client.execute.return_value = [{"vote": sample_vote_data}]
 
@@ -583,9 +568,7 @@ class TestGovernanceRepositoryDelegation:
     """Tests for vote delegation operations."""
 
     @pytest.mark.asyncio
-    async def test_create_delegation_success(
-        self, governance_repository, mock_db_client
-    ):
+    async def test_create_delegation_success(self, governance_repository, mock_db_client):
         """Successfully create vote delegation."""
         delegation_data = {
             "delegator_id": "user123",
@@ -607,9 +590,7 @@ class TestGovernanceRepositoryDelegation:
         assert result is True
 
     @pytest.mark.asyncio
-    async def test_revoke_delegation_success(
-        self, governance_repository, mock_db_client
-    ):
+    async def test_revoke_delegation_success(self, governance_repository, mock_db_client):
         """Successfully revoke delegation."""
         mock_db_client.execute_single.return_value = {"deleted": 1}
 
@@ -618,9 +599,7 @@ class TestGovernanceRepositoryDelegation:
         assert result is True
 
     @pytest.mark.asyncio
-    async def test_revoke_delegation_not_found(
-        self, governance_repository, mock_db_client
-    ):
+    async def test_revoke_delegation_not_found(self, governance_repository, mock_db_client):
         """Revoke delegation returns False when not found."""
         mock_db_client.execute_single.return_value = {"deleted": 0}
 
@@ -629,9 +608,7 @@ class TestGovernanceRepositoryDelegation:
         assert result is False
 
     @pytest.mark.asyncio
-    async def test_get_delegates(
-        self, governance_repository, mock_db_client
-    ):
+    async def test_get_delegates(self, governance_repository, mock_db_client):
         """Get all delegations from a user."""
         delegation_data = {
             "delegator_id": "user123",
@@ -671,9 +648,7 @@ class TestGovernanceRepositoryConstitutional:
             rationale="This proposal aligns with principles.",
         )
 
-        result = await governance_repository.save_constitutional_review(
-            "prop123", analysis
-        )
+        result = await governance_repository.save_constitutional_review("prop123", analysis)
 
         assert result is True
         call_args = mock_db_client.execute_single.call_args
@@ -695,9 +670,7 @@ class TestGovernanceRepositoryConstitutional:
             key_concerns=[],
         )
 
-        result = await governance_repository.save_ghost_council_opinion(
-            "prop123", opinion
-        )
+        result = await governance_repository.save_ghost_council_opinion("prop123", opinion)
 
         assert result is True
 
@@ -711,9 +684,7 @@ class TestGovernanceRepositoryQueries:
     """Tests for query operations."""
 
     @pytest.mark.asyncio
-    async def test_get_by_status(
-        self, governance_repository, mock_db_client, sample_proposal_data
-    ):
+    async def test_get_by_status(self, governance_repository, mock_db_client, sample_proposal_data):
         """Get proposals by status."""
         mock_db_client.execute.return_value = [{"entity": sample_proposal_data}]
 
@@ -746,9 +717,7 @@ class TestGovernanceRepositoryQueries:
         assert result[0].proposer_id == "user123"
 
     @pytest.mark.asyncio
-    async def test_get_by_proposer_limit_capped(
-        self, governance_repository, mock_db_client
-    ):
+    async def test_get_by_proposer_limit_capped(self, governance_repository, mock_db_client):
         """Get by proposer respects limit cap."""
         mock_db_client.execute.return_value = []
 
@@ -788,9 +757,7 @@ class TestGovernanceRepositoryQueries:
         assert total == 1
 
     @pytest.mark.asyncio
-    async def test_list_proposals_limit_capped(
-        self, governance_repository, mock_db_client
-    ):
+    async def test_list_proposals_limit_capped(self, governance_repository, mock_db_client):
         """List proposals respects limit cap."""
         mock_db_client.execute_single.return_value = {"total": 0}
         mock_db_client.execute.return_value = []
@@ -949,9 +916,7 @@ class TestGovernanceRepositoryAPIMethods:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_create_delegation_from_dict(
-        self, governance_repository, mock_db_client
-    ):
+    async def test_create_delegation_from_dict(self, governance_repository, mock_db_client):
         """Create delegation from dict."""
         delegation_data = {
             "id": "del123",
@@ -1028,9 +993,7 @@ class TestGovernanceRepositoryHelpers:
     """Tests for helper methods."""
 
     @pytest.mark.asyncio
-    async def test_count_eligible_voters(
-        self, governance_repository, mock_db_client
-    ):
+    async def test_count_eligible_voters(self, governance_repository, mock_db_client):
         """Count eligible voters with minimum trust level."""
         mock_db_client.execute_single.return_value = {"eligible_count": 50}
 
@@ -1042,9 +1005,7 @@ class TestGovernanceRepositoryHelpers:
         assert params["min_trust"] == 30
 
     @pytest.mark.asyncio
-    async def test_count_eligible_voters_none_result(
-        self, governance_repository, mock_db_client
-    ):
+    async def test_count_eligible_voters_none_result(self, governance_repository, mock_db_client):
         """Count eligible voters returns 0 on None result."""
         mock_db_client.execute_single.return_value = None
 

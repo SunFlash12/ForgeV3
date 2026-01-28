@@ -35,10 +35,9 @@ from forge.models.semantic_edges import (
     SemanticEdgeWithNodes,
     SemanticNeighbor,
     SemanticRelationType,
-    SupportEdge,
     SupersedesEdge,
+    SupportEdge,
 )
-
 
 # =============================================================================
 # SemanticRelationType Enum Tests

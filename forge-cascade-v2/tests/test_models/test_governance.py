@@ -37,7 +37,6 @@ from forge.models.governance import (
     VoteDelegation,
 )
 
-
 # =============================================================================
 # ProposalType Enum Tests
 # =============================================================================
@@ -998,9 +997,7 @@ class TestValidProposalActions:
     def test_actions_are_non_empty(self):
         """Each proposal type has at least one action."""
         for proposal_type, actions in VALID_PROPOSAL_ACTIONS.items():
-            assert len(actions) > 0, (
-                f"ProposalType.{proposal_type.name} has no actions defined"
-            )
+            assert len(actions) > 0, f"ProposalType.{proposal_type.name} has no actions defined"
 
 
 if __name__ == "__main__":

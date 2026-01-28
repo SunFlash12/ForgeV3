@@ -10,7 +10,7 @@ Comprehensive tests for the BaseRepository abstract class including:
 """
 
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 from uuid import UUID
 
 import pytest
@@ -23,7 +23,6 @@ from forge.repositories.base import (
     QueryTimeoutConfig,
     validate_identifier,
 )
-
 
 # =============================================================================
 # Test Models
@@ -695,7 +694,9 @@ class TestUpdateField:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_update_field_sets_updated_at(self, repository, mock_db_client, sample_entity_data):
+    async def test_update_field_sets_updated_at(
+        self, repository, mock_db_client, sample_entity_data
+    ):
         """update_field sets updated_at timestamp."""
         mock_db_client.execute_single.return_value = {"entity": sample_entity_data}
 

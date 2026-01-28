@@ -14,7 +14,7 @@ Tests cover:
 """
 
 import asyncio
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -275,6 +275,7 @@ class TestBackgroundScheduler:
     @pytest.mark.asyncio
     async def test_task_updates_stats(self, scheduler):
         """Test task execution updates stats."""
+
         async def task_func():
             pass
 
@@ -292,6 +293,7 @@ class TestBackgroundScheduler:
     @pytest.mark.asyncio
     async def test_task_error_handling(self, scheduler):
         """Test task error is handled and logged."""
+
         async def failing_task():
             raise ValueError("Task failed!")
 
@@ -331,6 +333,7 @@ class TestBackgroundScheduler:
     @pytest.mark.asyncio
     async def test_task_auto_disables_after_max_failures(self, scheduler):
         """Test task auto-disables after MAX_CONSECUTIVE_FAILURES."""
+
         async def always_failing():
             raise ValueError("Always fails")
 
@@ -397,6 +400,7 @@ class TestBackgroundScheduler:
     @pytest.mark.asyncio
     async def test_get_stats_after_execution(self, scheduler):
         """Test get_stats after task execution."""
+
         async def task_func():
             pass
 
@@ -443,6 +447,7 @@ class TestBackgroundScheduler:
     @pytest.mark.asyncio
     async def test_run_task_now_error(self, scheduler):
         """Test running task that errors returns False."""
+
         async def failing_task():
             raise ValueError("Error!")
 
@@ -458,6 +463,7 @@ class TestBackgroundScheduler:
     @pytest.mark.asyncio
     async def test_run_task_now_resets_failures(self, scheduler):
         """Test successful manual run resets consecutive failures."""
+
         async def task_func():
             pass
 
@@ -561,6 +567,7 @@ class TestGlobalSchedulerFunctions:
     def reset_global_scheduler(self):
         """Reset global scheduler before each test."""
         import forge.services.scheduler as scheduler_module
+
         scheduler_module._scheduler = None
         yield
         scheduler_module._scheduler = None
@@ -582,7 +589,7 @@ class TestGlobalSchedulerFunctions:
     @pytest.mark.asyncio
     async def test_setup_scheduler_disabled(self):
         """Test setup_scheduler when scheduler is disabled."""
-        with patch('forge.services.scheduler.get_settings') as mock_settings:
+        with patch("forge.services.scheduler.get_settings") as mock_settings:
             mock_settings.return_value = MagicMock(
                 scheduler_enabled=False,
             )
@@ -596,7 +603,7 @@ class TestGlobalSchedulerFunctions:
     @pytest.mark.asyncio
     async def test_setup_scheduler_with_all_tasks(self):
         """Test setup_scheduler registers all enabled tasks."""
-        with patch('forge.services.scheduler.get_settings') as mock_settings:
+        with patch("forge.services.scheduler.get_settings") as mock_settings:
             mock_settings.return_value = MagicMock(
                 scheduler_enabled=True,
                 graph_snapshot_enabled=True,
@@ -615,7 +622,7 @@ class TestGlobalSchedulerFunctions:
     @pytest.mark.asyncio
     async def test_setup_scheduler_snapshot_disabled(self):
         """Test setup_scheduler with snapshot disabled."""
-        with patch('forge.services.scheduler.get_settings') as mock_settings:
+        with patch("forge.services.scheduler.get_settings") as mock_settings:
             mock_settings.return_value = MagicMock(
                 scheduler_enabled=True,
                 graph_snapshot_enabled=False,
@@ -632,7 +639,7 @@ class TestGlobalSchedulerFunctions:
     @pytest.mark.asyncio
     async def test_setup_scheduler_compaction_disabled(self):
         """Test setup_scheduler with compaction disabled."""
-        with patch('forge.services.scheduler.get_settings') as mock_settings:
+        with patch("forge.services.scheduler.get_settings") as mock_settings:
             mock_settings.return_value = MagicMock(
                 scheduler_enabled=True,
                 graph_snapshot_enabled=True,
@@ -649,7 +656,7 @@ class TestGlobalSchedulerFunctions:
     @pytest.mark.asyncio
     async def test_setup_scheduler_intervals(self):
         """Test setup_scheduler uses correct intervals."""
-        with patch('forge.services.scheduler.get_settings') as mock_settings:
+        with patch("forge.services.scheduler.get_settings") as mock_settings:
             mock_settings.return_value = MagicMock(
                 scheduler_enabled=True,
                 graph_snapshot_enabled=True,
@@ -681,23 +688,32 @@ class TestScheduledTaskFunctions:
         mock_graph_repo = AsyncMock()
         mock_temporal_repo = AsyncMock()
 
-        mock_graph_repo.get_graph_metrics = AsyncMock(return_value=MagicMock(
-            total_nodes=100,
-            total_edges=200,
-            density=0.5,
-            connected_components=1,
-            nodes_by_type={"Capsule": 50},
-            edges_by_type={"DERIVED_FROM": 100},
-        ))
+        mock_graph_repo.get_graph_metrics = AsyncMock(
+            return_value=MagicMock(
+                total_nodes=100,
+                total_edges=200,
+                density=0.5,
+                connected_components=1,
+                nodes_by_type={"Capsule": 50},
+                edges_by_type={"DERIVED_FROM": 100},
+            )
+        )
         mock_temporal_repo.create_graph_snapshot = AsyncMock(return_value=MagicMock(id="snap-123"))
 
         mock_circuit = AsyncMock()
         mock_circuit.call = AsyncMock(side_effect=lambda fn: fn())
 
-        with patch('forge.services.scheduler.ForgeCircuits.neo4j', AsyncMock(return_value=mock_circuit)):
-            with patch('forge.services.scheduler.Neo4jClient', return_value=mock_client):
-                with patch('forge.services.scheduler.GraphRepository', return_value=mock_graph_repo):
-                    with patch('forge.services.scheduler.TemporalRepository', return_value=mock_temporal_repo):
+        with patch(
+            "forge.services.scheduler.ForgeCircuits.neo4j", AsyncMock(return_value=mock_circuit)
+        ):
+            with patch("forge.services.scheduler.Neo4jClient", return_value=mock_client):
+                with patch(
+                    "forge.services.scheduler.GraphRepository", return_value=mock_graph_repo
+                ):
+                    with patch(
+                        "forge.services.scheduler.TemporalRepository",
+                        return_value=mock_temporal_repo,
+                    ):
                         await task_func()
 
         mock_graph_repo.get_graph_metrics.assert_called_once()
@@ -711,7 +727,9 @@ class TestScheduledTaskFunctions:
         task_func = _create_version_compaction_task()
 
         mock_client = AsyncMock()
-        mock_client.execute = AsyncMock(return_value=[{"capsule_id": "cap-1"}, {"capsule_id": "cap-2"}])
+        mock_client.execute = AsyncMock(
+            return_value=[{"capsule_id": "cap-1"}, {"capsule_id": "cap-2"}]
+        )
 
         mock_temporal_repo = AsyncMock()
         mock_temporal_repo.compact_old_versions = AsyncMock(return_value=5)
@@ -719,9 +737,13 @@ class TestScheduledTaskFunctions:
         mock_circuit = AsyncMock()
         mock_circuit.call = AsyncMock(side_effect=lambda fn: fn())
 
-        with patch('forge.services.scheduler.ForgeCircuits.neo4j', AsyncMock(return_value=mock_circuit)):
-            with patch('forge.services.scheduler.Neo4jClient', return_value=mock_client):
-                with patch('forge.services.scheduler.TemporalRepository', return_value=mock_temporal_repo):
+        with patch(
+            "forge.services.scheduler.ForgeCircuits.neo4j", AsyncMock(return_value=mock_circuit)
+        ):
+            with patch("forge.services.scheduler.Neo4jClient", return_value=mock_client):
+                with patch(
+                    "forge.services.scheduler.TemporalRepository", return_value=mock_temporal_repo
+                ):
                     await task_func()
 
         # Should be called for each capsule
@@ -737,7 +759,7 @@ class TestScheduledTaskFunctions:
         mock_cache = AsyncMock()
         mock_cache.cleanup_expired = AsyncMock(return_value={"removed": 5})
 
-        with patch('forge.services.scheduler.get_query_cache', return_value=mock_cache):
+        with patch("forge.services.scheduler.get_query_cache", return_value=mock_cache):
             await task_func()
 
         mock_cache.cleanup_expired.assert_called_once()
@@ -749,7 +771,7 @@ class TestScheduledTaskFunctions:
 
         task_func = _create_cache_cleanup_task()
 
-        with patch('forge.services.scheduler.get_query_cache', return_value=None):
+        with patch("forge.services.scheduler.get_query_cache", return_value=None):
             # Should not raise
             await task_func()
 
@@ -914,6 +936,7 @@ class TestSchedulerEdgeCases:
     @pytest.mark.asyncio
     async def test_task_state_lock_protects_concurrent_updates(self, scheduler):
         """Test task state lock protects concurrent state updates."""
+
         async def task_func():
             pass
 

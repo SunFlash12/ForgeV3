@@ -11,10 +11,6 @@ Tests cover:
 - Background workers
 """
 
-import asyncio
-import hashlib
-import hmac
-import json
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -28,7 +24,6 @@ from forge.models.notifications import (
     NotificationPreferences,
     NotificationPriority,
     WebhookDelivery,
-    WebhookPayload,
     WebhookSubscription,
 )
 from forge.services.notifications import (
@@ -137,6 +132,7 @@ class TestSSRFValidation:
         """Test handling of DNS resolution failures."""
         with patch("socket.getaddrinfo") as mock_dns:
             import socket
+
             mock_dns.side_effect = socket.gaierror("DNS failed")
             with pytest.raises(SSRFError) as exc_info:
                 validate_webhook_url("https://nonexistent.invalid/webhook")
@@ -611,7 +607,9 @@ class TestWebhookManagement:
             active=True,
         )
 
-        result = await service.update_webhook("wh-1", "user-123", {"active": False, "name": "Updated"})
+        result = await service.update_webhook(
+            "wh-1", "user-123", {"active": False, "name": "Updated"}
+        )
 
         assert result is not None
         assert result.active is False
@@ -686,7 +684,9 @@ class TestWebhookVerification:
             mock_response.status_code = 200
             mock_post.return_value = mock_response
 
-            with patch("forge.services.notifications.validate_webhook_url", return_value=webhook.url):
+            with patch(
+                "forge.services.notifications.validate_webhook_url", return_value=webhook.url
+            ):
                 result = await service._verify_webhook(webhook)
 
         assert result is True
@@ -706,7 +706,9 @@ class TestWebhookVerification:
             secret="secret",
         )
 
-        with patch("forge.services.notifications.validate_webhook_url", side_effect=SSRFError("Blocked")):
+        with patch(
+            "forge.services.notifications.validate_webhook_url", side_effect=SSRFError("Blocked")
+        ):
             result = await service._verify_webhook(webhook)
 
         assert result is False
@@ -728,7 +730,9 @@ class TestWebhookVerification:
         with patch.object(service._http_client, "post") as mock_post:
             mock_post.side_effect = httpx.HTTPError("Connection failed")
 
-            with patch("forge.services.notifications.validate_webhook_url", return_value=webhook.url):
+            with patch(
+                "forge.services.notifications.validate_webhook_url", return_value=webhook.url
+            ):
                 result = await service._verify_webhook(webhook)
 
         assert result is False
@@ -770,7 +774,9 @@ class TestWebhookDelivery:
             mock_response.text = "OK"
             mock_post.return_value = mock_response
 
-            with patch("forge.services.notifications.validate_webhook_url", return_value=webhook.url):
+            with patch(
+                "forge.services.notifications.validate_webhook_url", return_value=webhook.url
+            ):
                 delivery = await service._deliver_webhook(webhook, notification)
 
         assert delivery.success is True
@@ -807,7 +813,9 @@ class TestWebhookDelivery:
             mock_response.text = "Internal Error"
             mock_post.return_value = mock_response
 
-            with patch("forge.services.notifications.validate_webhook_url", return_value=webhook.url):
+            with patch(
+                "forge.services.notifications.validate_webhook_url", return_value=webhook.url
+            ):
                 delivery = await service._deliver_webhook(webhook, notification)
 
         assert delivery.success is False
@@ -838,7 +846,9 @@ class TestWebhookDelivery:
             message="Test message",
         )
 
-        with patch("forge.services.notifications.validate_webhook_url", side_effect=SSRFError("Blocked")):
+        with patch(
+            "forge.services.notifications.validate_webhook_url", side_effect=SSRFError("Blocked")
+        ):
             delivery = await service._deliver_webhook(webhook, notification)
 
         assert delivery.success is False
@@ -1209,4 +1219,5 @@ class TestGlobalFunctions:
         await shutdown_notification_service()
 
         import forge.services.notifications as module
+
         assert module._notification_service is None

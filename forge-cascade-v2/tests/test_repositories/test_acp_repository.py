@@ -15,7 +15,7 @@ Tests cover:
 
 import json
 from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -32,7 +32,6 @@ from forge.virtuals.models.acp import (
     JobOffering,
 )
 from forge.virtuals.models.base import ACPJobStatus, ACPPhase
-
 
 # =============================================================================
 # Fixtures
@@ -233,9 +232,7 @@ class TestOfferingRepositoryRead:
     """Tests for OfferingRepository read operations."""
 
     @pytest.mark.asyncio
-    async def test_get_by_id_found(
-        self, offering_repository, mock_db_client, sample_offering_data
-    ):
+    async def test_get_by_id_found(self, offering_repository, mock_db_client, sample_offering_data):
         """Get offering by ID when found."""
         mock_db_client.execute_single.return_value = {"o": sample_offering_data}
 
@@ -408,9 +405,7 @@ class TestOfferingRepositoryUpdateDelete:
     """Tests for OfferingRepository update and delete operations."""
 
     @pytest.mark.asyncio
-    async def test_update_offering(
-        self, offering_repository, mock_db_client, sample_offering
-    ):
+    async def test_update_offering(self, offering_repository, mock_db_client, sample_offering):
         """Update offering successfully."""
         mock_db_client.execute_write.return_value = None
 
@@ -474,9 +469,7 @@ class TestACPJobRepositoryCreate:
         mock_db_client.execute_write.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_create_job_serializes_memos(
-        self, job_repository, mock_db_client, sample_job
-    ):
+    async def test_create_job_serializes_memos(self, job_repository, mock_db_client, sample_job):
         """Create job serializes memo fields."""
         mock_db_client.execute_write.return_value = None
 
@@ -601,9 +594,7 @@ class TestACPJobRepositoryRead:
         """List jobs by provider with status filter."""
         mock_db_client.execute.return_value = [{"j": sample_job_data}]
 
-        await job_repository.list_by_provider(
-            "agent-provider-001", status=ACPJobStatus.IN_PROGRESS
-        )
+        await job_repository.list_by_provider("agent-provider-001", status=ACPJobStatus.IN_PROGRESS)
 
         call_args = mock_db_client.execute.call_args
         params = call_args[0][1]
@@ -631,9 +622,7 @@ class TestACPJobRepositoryUpdate:
         mock_db_client.execute_write.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_update_job_sets_updated_at(
-        self, job_repository, mock_db_client, sample_job
-    ):
+    async def test_update_job_sets_updated_at(self, job_repository, mock_db_client, sample_job):
         """Update job sets updated_at timestamp."""
         mock_db_client.execute_write.return_value = None
         original_updated_at = sample_job.updated_at
@@ -747,9 +736,7 @@ class TestACPJobRepositoryPendingTimedOut:
     async def test_get_timed_out_jobs(self, job_repository, mock_db_client, sample_job_data):
         """Get timed out jobs."""
         # Set job as timed out in request phase
-        sample_job_data["request_timeout"] = (
-            datetime.now(UTC) - timedelta(hours=1)
-        ).isoformat()
+        sample_job_data["request_timeout"] = (datetime.now(UTC) - timedelta(hours=1)).isoformat()
         mock_db_client.execute.return_value = [{"j": sample_job_data}]
 
         result = await job_repository.get_timed_out_jobs()

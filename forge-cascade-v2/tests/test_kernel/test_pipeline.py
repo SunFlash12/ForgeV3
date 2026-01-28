@@ -15,7 +15,6 @@ Tests cover:
 import asyncio
 from datetime import UTC, datetime
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -35,11 +34,9 @@ from forge.kernel.pipeline import (
     init_pipeline,
     shutdown_pipeline,
 )
-from forge.models.base import OverlayState
 from forge.models.events import Event, EventType
 from forge.models.overlay import Capability, FuelBudget
 from forge.overlays.base import BaseOverlay, OverlayContext, OverlayResult
-
 
 # =============================================================================
 # Test Overlays for Pipeline
@@ -154,9 +151,7 @@ def pipeline(overlay_manager: OverlayManager, event_bus: EventBus) -> Pipeline:
 
 
 @pytest.fixture
-async def pipeline_with_overlays(
-    overlay_manager: OverlayManager, event_bus: EventBus
-) -> Pipeline:
+async def pipeline_with_overlays(overlay_manager: OverlayManager, event_bus: EventBus) -> Pipeline:
     """Create a pipeline with registered overlays."""
     await overlay_manager.start()
 
@@ -439,9 +434,7 @@ class TestPipelineExecution:
     """Tests for pipeline execution."""
 
     @pytest.mark.asyncio
-    async def test_execute_returns_result(
-        self, pipeline_with_overlays: Pipeline
-    ) -> None:
+    async def test_execute_returns_result(self, pipeline_with_overlays: Pipeline) -> None:
         """Test that execute returns a PipelineResult."""
         result = await pipeline_with_overlays.execute(
             input_data={"initial": "data"},
@@ -468,9 +461,7 @@ class TestPipelineExecution:
         # Note: only overlays that match PHASE_OVERLAYS mapping will run
 
     @pytest.mark.asyncio
-    async def test_execute_with_event(
-        self, pipeline_with_overlays: Pipeline
-    ) -> None:
+    async def test_execute_with_event(self, pipeline_with_overlays: Pipeline) -> None:
         """Test executing with a triggering event."""
         event = Event(
             id="trigger-event",
@@ -489,9 +480,7 @@ class TestPipelineExecution:
         assert result.correlation_id == "event-corr-123"
 
     @pytest.mark.asyncio
-    async def test_execute_with_skip_phases(
-        self, pipeline_with_overlays: Pipeline
-    ) -> None:
+    async def test_execute_with_skip_phases(self, pipeline_with_overlays: Pipeline) -> None:
         """Test skipping specific phases."""
         result = await pipeline_with_overlays.execute(
             input_data={},
@@ -529,9 +518,7 @@ class TestPipelineExecution:
         assert result.phases[PipelinePhase.INGESTION].data.get("custom") == "handler_data"
 
     @pytest.mark.asyncio
-    async def test_execute_records_timing(
-        self, pipeline_with_overlays: Pipeline
-    ) -> None:
+    async def test_execute_records_timing(self, pipeline_with_overlays: Pipeline) -> None:
         """Test that execution timing is recorded."""
         result = await pipeline_with_overlays.execute(input_data={})
 
@@ -540,9 +527,7 @@ class TestPipelineExecution:
         assert result.completed_at is not None
 
     @pytest.mark.asyncio
-    async def test_execute_adds_to_history(
-        self, pipeline_with_overlays: Pipeline
-    ) -> None:
+    async def test_execute_adds_to_history(self, pipeline_with_overlays: Pipeline) -> None:
         """Test that execution is added to history."""
         await pipeline_with_overlays.execute(input_data={})
 
@@ -559,9 +544,7 @@ class TestPhaseExecution:
     """Tests for individual phase execution."""
 
     @pytest.mark.asyncio
-    async def test_phase_with_no_overlays_passes_through(
-        self, pipeline: Pipeline
-    ) -> None:
+    async def test_phase_with_no_overlays_passes_through(self, pipeline: Pipeline) -> None:
         """Test that phases with no overlays pass through."""
         result = await pipeline.execute(input_data={"test": "data"})
 
@@ -672,9 +655,7 @@ class TestPipelineErrorHandling:
         await overlay_manager.stop()
 
     @pytest.mark.asyncio
-    async def test_hook_errors_dont_stop_pipeline(
-        self, pipeline_with_overlays: Pipeline
-    ) -> None:
+    async def test_hook_errors_dont_stop_pipeline(self, pipeline_with_overlays: Pipeline) -> None:
         """Test that hook errors don't stop pipeline execution."""
 
         def failing_hook(context: PipelineContext, phase: PipelinePhase) -> None:
@@ -739,9 +720,7 @@ class TestPipelineControl:
         assert isinstance(history, list)
 
     @pytest.mark.asyncio
-    async def test_get_pipeline_stats(
-        self, pipeline_with_overlays: Pipeline
-    ) -> None:
+    async def test_get_pipeline_stats(self, pipeline_with_overlays: Pipeline) -> None:
         """Test getting pipeline statistics."""
         await pipeline_with_overlays.execute(input_data={})
         await pipeline_with_overlays.execute(input_data={})
@@ -789,9 +768,7 @@ class TestPipelineEventEmission:
     """Tests for pipeline event emission."""
 
     @pytest.mark.asyncio
-    async def test_completion_event_emitted(
-        self, overlay_manager: OverlayManager
-    ) -> None:
+    async def test_completion_event_emitted(self, overlay_manager: OverlayManager) -> None:
         """Test that completion event is emitted."""
         event_bus = EventBus()
         events_received: list[Event] = []

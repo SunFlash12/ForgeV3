@@ -9,17 +9,12 @@ Comprehensive tests for capsule integrity verification including:
 
 import base64
 from dataclasses import dataclass
-from datetime import UTC, datetime
 
 import pytest
 
 from forge.security.capsule_integrity import (
     CapsuleIntegrityService,
-    ContentHashMismatchError,
-    MerkleChainError,
-    SignatureVerificationError,
 )
-
 
 # =============================================================================
 # Fixtures

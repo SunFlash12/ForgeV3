@@ -8,7 +8,6 @@ Agent Commerce Protocol (ACP) and GAME SDK functionality.
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -21,7 +20,6 @@ from forge.services.virtuals_integration import (
     init_virtuals_service,
     shutdown_virtuals_service,
 )
-
 
 # =============================================================================
 # Fixtures
@@ -283,7 +281,9 @@ class TestVirtualsIntegrationServiceInit:
         )
 
         with patch("forge.services.virtuals_integration.VirtualsConfig"):
-            with patch("forge.services.virtuals_integration.GAMESDKClient", return_value=mock_game_client):
+            with patch(
+                "forge.services.virtuals_integration.GAMESDKClient", return_value=mock_game_client
+            ):
                 await service.initialize()
 
         assert service._initialized is True
@@ -331,7 +331,10 @@ class TestShutdown:
         """Test service shutdown."""
         with patch("forge.services.virtuals_integration.ACPService", return_value=mock_acp_service):
             with patch("forge.services.virtuals_integration.VirtualsConfig"):
-                with patch("forge.services.virtuals_integration.GAMESDKClient", return_value=mock_game_client):
+                with patch(
+                    "forge.services.virtuals_integration.GAMESDKClient",
+                    return_value=mock_game_client,
+                ):
                     await virtuals_service.initialize()
                     await virtuals_service.shutdown()
 
@@ -683,8 +686,12 @@ class TestGAMEAgentManagement:
         mock_game_client.create_agent.return_value = mock_agent
 
         with patch("forge.services.virtuals_integration.VirtualsConfig"):
-            with patch("forge.services.virtuals_integration.GAMESDKClient", return_value=mock_game_client):
-                with patch("forge.services.virtuals_integration.create_knowledge_worker") as mock_kw:
+            with patch(
+                "forge.services.virtuals_integration.GAMESDKClient", return_value=mock_game_client
+            ):
+                with patch(
+                    "forge.services.virtuals_integration.create_knowledge_worker"
+                ) as mock_kw:
                     mock_worker = MagicMock()
                     mock_worker.worker_id = "knowledge_worker"
                     mock_kw.return_value = mock_worker
@@ -717,7 +724,9 @@ class TestGAMEAgentManagement:
         )
 
         with patch("forge.services.virtuals_integration.VirtualsConfig"):
-            with patch("forge.services.virtuals_integration.GAMESDKClient", return_value=mock_game_client):
+            with patch(
+                "forge.services.virtuals_integration.GAMESDKClient", return_value=mock_game_client
+            ):
                 await service.initialize()
 
                 with pytest.raises(ValueError, match="No workers could be created"):
@@ -751,7 +760,9 @@ class TestGAMEAgentManagement:
         service._agent_workers["agent-123"] = {"worker1": MagicMock()}
 
         with patch("forge.services.virtuals_integration.VirtualsConfig"):
-            with patch("forge.services.virtuals_integration.GAMESDKClient", return_value=mock_game_client):
+            with patch(
+                "forge.services.virtuals_integration.GAMESDKClient", return_value=mock_game_client
+            ):
                 await service.initialize()
 
                 result = await service.get_game_agent("agent-123")
@@ -779,7 +790,9 @@ class TestGAMEAgentManagement:
         service._agent_workers["agent-123"] = {}
 
         with patch("forge.services.virtuals_integration.VirtualsConfig"):
-            with patch("forge.services.virtuals_integration.GAMESDKClient", return_value=mock_game_client):
+            with patch(
+                "forge.services.virtuals_integration.GAMESDKClient", return_value=mock_game_client
+            ):
                 await service.initialize()
 
                 result = await service.delete_game_agent("agent-123")
@@ -817,7 +830,9 @@ class TestGAMEAgentManagement:
         service._agent_workers = {"agent-1": {}, "agent-2": {}}
 
         with patch("forge.services.virtuals_integration.VirtualsConfig"):
-            with patch("forge.services.virtuals_integration.GAMESDKClient", return_value=mock_game_client):
+            with patch(
+                "forge.services.virtuals_integration.GAMESDKClient", return_value=mock_game_client
+            ):
                 await service.initialize()
 
                 results = await service.list_game_agents()
@@ -858,7 +873,9 @@ class TestGAMEAgentExecution:
         ]
 
         with patch("forge.services.virtuals_integration.VirtualsConfig"):
-            with patch("forge.services.virtuals_integration.GAMESDKClient", return_value=mock_game_client):
+            with patch(
+                "forge.services.virtuals_integration.GAMESDKClient", return_value=mock_game_client
+            ):
                 await service.initialize()
 
                 results = await service.run_game_agent(
@@ -884,7 +901,9 @@ class TestGAMEAgentExecution:
         )
 
         with patch("forge.services.virtuals_integration.VirtualsConfig"):
-            with patch("forge.services.virtuals_integration.GAMESDKClient", return_value=mock_game_client):
+            with patch(
+                "forge.services.virtuals_integration.GAMESDKClient", return_value=mock_game_client
+            ):
                 await service.initialize()
 
                 with pytest.raises(ValueError, match="Agent .* not found"):
@@ -917,7 +936,9 @@ class TestGAMEAgentExecution:
         }
 
         with patch("forge.services.virtuals_integration.VirtualsConfig"):
-            with patch("forge.services.virtuals_integration.GAMESDKClient", return_value=mock_game_client):
+            with patch(
+                "forge.services.virtuals_integration.GAMESDKClient", return_value=mock_game_client
+            ):
                 await service.initialize()
 
                 result = await service.get_agent_next_action("agent-123")
@@ -953,7 +974,9 @@ class TestGAMEMemoryOperations:
         mock_game_client.store_memory.return_value = "memory-456"
 
         with patch("forge.services.virtuals_integration.VirtualsConfig"):
-            with patch("forge.services.virtuals_integration.GAMESDKClient", return_value=mock_game_client):
+            with patch(
+                "forge.services.virtuals_integration.GAMESDKClient", return_value=mock_game_client
+            ):
                 await service.initialize()
 
                 result = await service.store_agent_memory(
@@ -988,7 +1011,9 @@ class TestGAMEMemoryOperations:
         ]
 
         with patch("forge.services.virtuals_integration.VirtualsConfig"):
-            with patch("forge.services.virtuals_integration.GAMESDKClient", return_value=mock_game_client):
+            with patch(
+                "forge.services.virtuals_integration.GAMESDKClient", return_value=mock_game_client
+            ):
                 await service.initialize()
 
                 results = await service.search_agent_memories(

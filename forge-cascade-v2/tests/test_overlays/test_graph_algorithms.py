@@ -14,35 +14,24 @@ Tests cover:
 - Event emission
 """
 
-import asyncio
 from datetime import UTC, datetime, timedelta
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
-from uuid import uuid4
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from forge.models.events import Event, EventType
+from forge.models.events import EventType
 from forge.models.graph_analysis import (
-    AlgorithmType,
-    CommunityResult,
     GraphBackend,
-    GraphMetrics,
     NodeRanking,
-    RankingResult,
-    TrustPath,
-    TrustTransitivityResult,
 )
 from forge.models.overlay import Capability
-from forge.overlays.base import OverlayContext, OverlayResult
+from forge.overlays.base import OverlayContext
 from forge.overlays.graph_algorithms import (
     AlgorithmConfig,
     CachedResult,
-    GraphAlgorithmError,
     GraphAlgorithmsOverlay,
     create_graph_algorithms_overlay,
 )
-
 
 # =============================================================================
 # Mock Classes
@@ -63,9 +52,7 @@ class MockCommunity:
         self.size = size
         self.density = density
         self.dominant_type = dominant_type
-        self.members = [
-            MagicMock(node_id=f"node-{i}") for i in range(min(size, 5))
-        ]
+        self.members = [MagicMock(node_id=f"node-{i}") for i in range(min(size, 5))]
 
 
 class MockCommunityResult:
@@ -125,9 +112,7 @@ class MockProvider:
         self.compute_pagerank = AsyncMock(return_value=MockRankingResult())
         self.compute_centrality = AsyncMock(return_value=MockRankingResult())
         self.detect_communities = AsyncMock(return_value=MockCommunityResult())
-        self.compute_trust_transitivity = AsyncMock(
-            return_value=MockTrustTransitivityResult()
-        )
+        self.compute_trust_transitivity = AsyncMock(return_value=MockTrustTransitivityResult())
 
 
 class MockGraphRepository:
@@ -193,9 +178,7 @@ def overlay_context() -> OverlayContext:
 class TestGraphAlgorithmsInitialization:
     """Tests for overlay initialization."""
 
-    def test_default_initialization(
-        self, graph_overlay: GraphAlgorithmsOverlay
-    ) -> None:
+    def test_default_initialization(self, graph_overlay: GraphAlgorithmsOverlay) -> None:
         """Test default initialization values."""
         assert graph_overlay.NAME == "graph_algorithms"
         assert graph_overlay.VERSION == "1.0.0"
@@ -229,15 +212,11 @@ class TestGraphAlgorithmsInitialization:
         assert EventType.CASCADE_TRIGGERED in graph_overlay.SUBSCRIBED_EVENTS
         assert EventType.SYSTEM_EVENT in graph_overlay.SUBSCRIBED_EVENTS
 
-    def test_required_capabilities(
-        self, graph_overlay: GraphAlgorithmsOverlay
-    ) -> None:
+    def test_required_capabilities(self, graph_overlay: GraphAlgorithmsOverlay) -> None:
         """Test required capabilities."""
         assert Capability.DATABASE_READ in graph_overlay.REQUIRED_CAPABILITIES
 
-    def test_set_repository(
-        self, graph_overlay_no_repo: GraphAlgorithmsOverlay
-    ) -> None:
+    def test_set_repository(self, graph_overlay_no_repo: GraphAlgorithmsOverlay) -> None:
         """Test setting repository."""
         mock_repo = MockGraphRepository()
         graph_overlay_no_repo.set_repository(mock_repo)
@@ -754,9 +733,7 @@ class TestCaching:
     ) -> None:
         """Test with caching disabled."""
         config = AlgorithmConfig(enable_caching=False)
-        overlay = GraphAlgorithmsOverlay(
-            graph_repository=mock_repo, config=config
-        )
+        overlay = GraphAlgorithmsOverlay(graph_repository=mock_repo, config=config)
         await overlay.initialize()
 
         # First call
@@ -964,9 +941,7 @@ class TestErrorHandling:
         mock_repo: MockGraphRepository,
     ) -> None:
         """Test handling provider errors."""
-        mock_repo.provider.compute_pagerank.side_effect = RuntimeError(
-            "Provider error"
-        )
+        mock_repo.provider.compute_pagerank.side_effect = RuntimeError("Provider error")
         initialized_overlay._cache.clear()
 
         result = await initialized_overlay.execute(

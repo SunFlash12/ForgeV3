@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import os
 from collections.abc import AsyncGenerator
-from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
@@ -87,9 +86,7 @@ def neo4j_password() -> str:
 
 
 @pytest.fixture(scope="session")
-async def real_db_client(
-    neo4j_uri: str, neo4j_user: str, neo4j_password: str
-) -> AsyncGenerator:
+async def real_db_client(neo4j_uri: str, neo4j_user: str, neo4j_password: str) -> AsyncGenerator:
     """
     Connect to REAL Neo4j instance.
 

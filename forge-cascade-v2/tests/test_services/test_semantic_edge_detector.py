@@ -8,7 +8,6 @@ using embedding similarity and LLM-based classification.
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -22,7 +21,6 @@ from forge.services.semantic_edge_detector import (
     create_semantic_edge_detector,
     get_semantic_edge_detector,
 )
-
 
 # =============================================================================
 # Fixtures
@@ -79,12 +77,14 @@ def mock_llm_service():
     """Create a mock LLM service."""
     service = AsyncMock()
     response = MagicMock()
-    response.content = json.dumps({
-        "relationship_type": "SUPPORTS",
-        "confidence": 0.85,
-        "reasoning": "Source provides evidence for target claims",
-        "bidirectional": False,
-    })
+    response.content = json.dumps(
+        {
+            "relationship_type": "SUPPORTS",
+            "confidence": 0.85,
+            "reasoning": "Source provides evidence for target claims",
+            "bidirectional": False,
+        }
+    )
     service.complete = AsyncMock(return_value=response)
     return service
 
@@ -249,7 +249,9 @@ class TestSemanticEdgeDetectorInit:
             assert detector.config is not None
             assert detector.config.enabled is True
 
-    def test_init_with_custom_config(self, mock_capsule_repo, mock_embedding_service, detection_config):
+    def test_init_with_custom_config(
+        self, mock_capsule_repo, mock_embedding_service, detection_config
+    ):
         """Test initialization with custom config."""
         detector = SemanticEdgeDetector(
             capsule_repo=mock_capsule_repo,
@@ -335,7 +337,10 @@ class TestAnalyzeCapsule:
         # Inject mock LLM
         semantic_edge_detector._llm = mock_llm_service
 
-        with patch("forge.services.semantic_edge_detector.sanitize_for_prompt", side_effect=lambda x, **kwargs: x):
+        with patch(
+            "forge.services.semantic_edge_detector.sanitize_for_prompt",
+            side_effect=lambda x, **kwargs: x,
+        ):
             result = await semantic_edge_detector.analyze_capsule(
                 capsule=mock_capsule,
                 created_by="user-123",
@@ -413,7 +418,10 @@ class TestAnalyzeCapsule:
         mock_llm_service.complete.side_effect = RuntimeError("LLM error")
         semantic_edge_detector._llm = mock_llm_service
 
-        with patch("forge.services.semantic_edge_detector.sanitize_for_prompt", side_effect=lambda x, **kwargs: x):
+        with patch(
+            "forge.services.semantic_edge_detector.sanitize_for_prompt",
+            side_effect=lambda x, **kwargs: x,
+        ):
             result = await semantic_edge_detector.analyze_capsule(
                 capsule=mock_capsule,
                 created_by="user-123",
@@ -488,7 +496,10 @@ class TestClassifyRelationship:
         """Test classification of SUPPORTS relationship."""
         semantic_edge_detector._llm = mock_llm_service
 
-        with patch("forge.services.semantic_edge_detector.sanitize_for_prompt", side_effect=lambda x, **kwargs: x):
+        with patch(
+            "forge.services.semantic_edge_detector.sanitize_for_prompt",
+            side_effect=lambda x, **kwargs: x,
+        ):
             classification = await semantic_edge_detector._classify_relationship(
                 source=mock_capsule,
                 target=mock_target_capsule,
@@ -505,16 +516,21 @@ class TestClassifyRelationship:
         """Test classification when no relationship exists."""
         # Configure LLM to return NONE
         response = MagicMock()
-        response.content = json.dumps({
-            "relationship_type": "NONE",
-            "confidence": 0.1,
-            "reasoning": "No meaningful relationship",
-            "bidirectional": False,
-        })
+        response.content = json.dumps(
+            {
+                "relationship_type": "NONE",
+                "confidence": 0.1,
+                "reasoning": "No meaningful relationship",
+                "bidirectional": False,
+            }
+        )
         mock_llm_service.complete.return_value = response
         semantic_edge_detector._llm = mock_llm_service
 
-        with patch("forge.services.semantic_edge_detector.sanitize_for_prompt", side_effect=lambda x, **kwargs: x):
+        with patch(
+            "forge.services.semantic_edge_detector.sanitize_for_prompt",
+            side_effect=lambda x, **kwargs: x,
+        ):
             classification = await semantic_edge_detector._classify_relationship(
                 source=mock_capsule,
                 target=mock_target_capsule,
@@ -541,7 +557,10 @@ class TestClassifyRelationship:
         mock_llm_service.complete.return_value = response
         semantic_edge_detector._llm = mock_llm_service
 
-        with patch("forge.services.semantic_edge_detector.sanitize_for_prompt", side_effect=lambda x, **kwargs: x):
+        with patch(
+            "forge.services.semantic_edge_detector.sanitize_for_prompt",
+            side_effect=lambda x, **kwargs: x,
+        ):
             classification = await semantic_edge_detector._classify_relationship(
                 source=mock_capsule,
                 target=mock_target_capsule,
@@ -560,7 +579,10 @@ class TestClassifyRelationship:
         mock_llm_service.complete.return_value = response
         semantic_edge_detector._llm = mock_llm_service
 
-        with patch("forge.services.semantic_edge_detector.sanitize_for_prompt", side_effect=lambda x, **kwargs: x):
+        with patch(
+            "forge.services.semantic_edge_detector.sanitize_for_prompt",
+            side_effect=lambda x, **kwargs: x,
+        ):
             classification = await semantic_edge_detector._classify_relationship(
                 source=mock_capsule,
                 target=mock_target_capsule,
@@ -759,16 +781,21 @@ class TestConfidenceThreshold:
 
         # Configure LLM to return low confidence
         response = MagicMock()
-        response.content = json.dumps({
-            "relationship_type": "SUPPORTS",
-            "confidence": 0.5,  # Below threshold
-            "reasoning": "Weak relationship",
-            "bidirectional": False,
-        })
+        response.content = json.dumps(
+            {
+                "relationship_type": "SUPPORTS",
+                "confidence": 0.5,  # Below threshold
+                "reasoning": "Weak relationship",
+                "bidirectional": False,
+            }
+        )
         mock_llm_service.complete.return_value = response
         semantic_edge_detector._llm = mock_llm_service
 
-        with patch("forge.services.semantic_edge_detector.sanitize_for_prompt", side_effect=lambda x, **kwargs: x):
+        with patch(
+            "forge.services.semantic_edge_detector.sanitize_for_prompt",
+            side_effect=lambda x, **kwargs: x,
+        ):
             result = await semantic_edge_detector.analyze_capsule(
                 capsule=mock_capsule,
                 created_by="user-123",
@@ -815,15 +842,20 @@ class TestRelationshipTypeFiltering:
 
         # Configure LLM to return CONTRADICTS (disabled)
         response = MagicMock()
-        response.content = json.dumps({
-            "relationship_type": "CONTRADICTS",
-            "confidence": 0.9,
-            "reasoning": "Source contradicts target",
-            "bidirectional": True,
-        })
+        response.content = json.dumps(
+            {
+                "relationship_type": "CONTRADICTS",
+                "confidence": 0.9,
+                "reasoning": "Source contradicts target",
+                "bidirectional": True,
+            }
+        )
         mock_llm_service.complete.return_value = response
 
-        with patch("forge.services.semantic_edge_detector.sanitize_for_prompt", side_effect=lambda x, **kwargs: x):
+        with patch(
+            "forge.services.semantic_edge_detector.sanitize_for_prompt",
+            side_effect=lambda x, **kwargs: x,
+        ):
             result = await detector.analyze_capsule(
                 capsule=mock_capsule,
                 created_by="user-123",

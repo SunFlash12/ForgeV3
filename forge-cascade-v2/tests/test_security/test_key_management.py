@@ -31,7 +31,6 @@ from forge.security.key_management import (
     get_key_management_service,
 )
 
-
 # =============================================================================
 # Key Generation Tests
 # =============================================================================
@@ -66,9 +65,7 @@ class TestKeyGeneration:
         """Converts keypair to base64 strings."""
         private_key, public_key = KeyManagementService.generate_keypair()
 
-        private_b64, public_b64 = KeyManagementService.keypair_to_b64(
-            private_key, public_key
-        )
+        private_b64, public_b64 = KeyManagementService.keypair_to_b64(private_key, public_key)
 
         assert isinstance(private_b64, str)
         assert isinstance(public_b64, str)
@@ -236,9 +233,7 @@ class TestPasswordDerived:
         """Derives deterministic keypair from password."""
         password = "my-password-123"
 
-        private1, public1, salt1 = KeyManagementService.derive_keypair_from_password(
-            password
-        )
+        private1, public1, salt1 = KeyManagementService.derive_keypair_from_password(password)
 
         # Keys should be valid
         assert len(private1) == 32
@@ -253,9 +248,7 @@ class TestPasswordDerived:
         """Same password and salt produce same keypair."""
         password = "my-password-123"
 
-        private1, public1, salt1 = KeyManagementService.derive_keypair_from_password(
-            password
-        )
+        private1, public1, salt1 = KeyManagementService.derive_keypair_from_password(password)
 
         # Use same salt
         private2, public2, salt2 = KeyManagementService.derive_keypair_from_password(
@@ -284,12 +277,8 @@ class TestPasswordDerived:
         """Different salts produce different keypairs."""
         password = "same-password"
 
-        private1, public1, salt1 = KeyManagementService.derive_keypair_from_password(
-            password
-        )
-        private2, public2, salt2 = KeyManagementService.derive_keypair_from_password(
-            password
-        )
+        private1, public1, salt1 = KeyManagementService.derive_keypair_from_password(password)
+        private2, public2, salt2 = KeyManagementService.derive_keypair_from_password(password)
 
         # Different random salts
         assert salt1 != salt2

@@ -14,18 +14,11 @@ Comprehensive tests for WebSocket endpoints and handlers:
 from __future__ import annotations
 
 import asyncio
-import json
-import time
-from collections import deque
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
-from uuid import uuid4
 
 import pytest
-from fastapi import FastAPI, WebSocket
-from fastapi.testclient import TestClient
-from starlette.websockets import WebSocketDisconnect
-
+from fastapi import WebSocket
 
 # =============================================================================
 # WebSocketConnection Tests
@@ -85,7 +78,7 @@ class TestWebSocketConnectionRateLimiting:
 
     def test_check_rate_limit_allows_under_limit(self):
         """Test rate limit allows requests under the limit."""
-        from forge.api.websocket.handlers import WebSocketConnection, MAX_MESSAGES_PER_MINUTE
+        from forge.api.websocket.handlers import WebSocketConnection
 
         mock_ws = MagicMock(spec=WebSocket)
         connection = WebSocketConnection(
@@ -99,8 +92,8 @@ class TestWebSocketConnectionRateLimiting:
     def test_check_rate_limit_blocks_over_limit(self):
         """Test rate limit blocks when over limit."""
         from forge.api.websocket.handlers import (
-            WebSocketConnection,
             MAX_MESSAGES_PER_MINUTE,
+            WebSocketConnection,
         )
 
         mock_ws = MagicMock(spec=WebSocket)
@@ -119,8 +112,8 @@ class TestWebSocketConnectionRateLimiting:
     def test_rate_limit_uses_bounded_deque(self):
         """Test rate limit uses bounded deque for memory safety."""
         from forge.api.websocket.handlers import (
-            WebSocketConnection,
             MAX_MESSAGES_PER_MINUTE,
+            WebSocketConnection,
         )
 
         mock_ws = MagicMock(spec=WebSocket)
@@ -151,8 +144,8 @@ class TestWebSocketConnectionSubscriptions:
     def test_can_add_subscription_at_limit(self):
         """Test cannot add subscription at limit."""
         from forge.api.websocket.handlers import (
-            WebSocketConnection,
             MAX_SUBSCRIPTIONS_PER_CONNECTION,
+            WebSocketConnection,
         )
 
         mock_ws = MagicMock(spec=WebSocket)
@@ -188,7 +181,6 @@ class TestWebSocketConnectionTokenExpiry:
         """Test check_token_expiry returns True for valid token."""
         from forge.api.websocket.handlers import WebSocketConnection
         from forge.security.tokens import create_access_token
-        from forge.models.user import TokenPayload
 
         token = create_access_token(
             user_id="user-123",
@@ -292,8 +284,8 @@ class TestWebSocketConnectionIdleTimeout:
     def test_is_idle_when_no_recent_activity(self):
         """Test is_idle returns True when no recent activity."""
         from forge.api.websocket.handlers import (
-            WebSocketConnection,
             IDLE_TIMEOUT_SECONDS,
+            WebSocketConnection,
         )
 
         mock_ws = MagicMock(spec=WebSocket)
@@ -647,9 +639,7 @@ class TestConnectionManagerForceDisconnect:
         await manager.connect_events(websocket=mock_ws1, user_id="user-123")
         await manager.connect_dashboard(websocket=mock_ws2, user_id="user-123")
 
-        closed_count = await manager.force_disconnect_user(
-            "user-123", reason="privilege_change"
-        )
+        closed_count = await manager.force_disconnect_user("user-123", reason="privilege_change")
 
         assert closed_count == 2
         assert manager.get_user_connection_count("user-123") == 0
@@ -668,9 +658,7 @@ class TestConnectionManagerForceDisconnect:
 
         # Should have sent a session_terminated message
         calls = mock_ws.send_json.call_args_list
-        notification_sent = any(
-            "session_terminated" in str(call) for call in calls
-        )
+        notification_sent = any("session_terminated" in str(call) for call in calls)
         assert notification_sent
 
     @pytest.mark.asyncio
@@ -889,7 +877,7 @@ class TestSendErrorAndClose:
     @pytest.mark.asyncio
     async def test_sends_error_before_close(self):
         """Test sends error message before closing."""
-        from forge.api.websocket.handlers import _send_error_and_close, WebSocketConnection
+        from forge.api.websocket.handlers import WebSocketConnection, _send_error_and_close
 
         mock_ws = AsyncMock(spec=WebSocket)
         connection = WebSocketConnection(
@@ -947,7 +935,7 @@ class TestRunPeriodicChecks:
     @pytest.mark.asyncio
     async def test_returns_true_for_valid_connection(self):
         """Test returns True for valid connection."""
-        from forge.api.websocket.handlers import _run_periodic_checks, WebSocketConnection
+        from forge.api.websocket.handlers import WebSocketConnection, _run_periodic_checks
 
         mock_ws = AsyncMock(spec=WebSocket)
         connection = WebSocketConnection(
@@ -964,7 +952,7 @@ class TestRunPeriodicChecks:
     @pytest.mark.asyncio
     async def test_returns_false_for_expired_token(self):
         """Test returns False for expired token."""
-        from forge.api.websocket.handlers import _run_periodic_checks, WebSocketConnection
+        from forge.api.websocket.handlers import WebSocketConnection, _run_periodic_checks
 
         mock_ws = AsyncMock(spec=WebSocket)
         connection = WebSocketConnection(
@@ -1042,7 +1030,7 @@ class TestGlobalConnectionManager:
 
     def test_global_manager_is_connection_manager(self):
         """Test global instance is ConnectionManager."""
-        from forge.api.websocket.handlers import connection_manager, ConnectionManager
+        from forge.api.websocket.handlers import ConnectionManager, connection_manager
 
         assert isinstance(connection_manager, ConnectionManager)
 

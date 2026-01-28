@@ -15,7 +15,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-
 # =============================================================================
 # Fixtures
 # =============================================================================
@@ -343,9 +342,7 @@ class TestExecutePipelineRoute:
         # Should fail with 403 (insufficient trust) or succeed if mock allows
         assert response.status_code in [403, 500]
 
-    def test_execute_pipeline_missing_fields(
-        self, client: TestClient, trusted_auth_headers: dict
-    ):
+    def test_execute_pipeline_missing_fields(self, client: TestClient, trusted_auth_headers: dict):
         """Execute pipeline with missing fields fails validation."""
         response = client.post(
             "/api/v1/cascade/execute-pipeline",

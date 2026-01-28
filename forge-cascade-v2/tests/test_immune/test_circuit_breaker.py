@@ -19,10 +19,7 @@ Tests cover:
 from __future__ import annotations
 
 import asyncio
-import time
-from datetime import UTC, datetime
-from typing import Any
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -37,7 +34,6 @@ from forge.immune.circuit_breaker import (
     circuit_breaker,
     get_circuit_registry,
 )
-
 
 # =============================================================================
 # Test CircuitState Enum
@@ -291,9 +287,7 @@ class TestCircuitBreakerStateTransitions:
         return CircuitBreaker("test_breaker", config)
 
     @pytest.mark.asyncio
-    async def test_successful_call_keeps_closed(
-        self, breaker: CircuitBreaker[str]
-    ) -> None:
+    async def test_successful_call_keeps_closed(self, breaker: CircuitBreaker[str]) -> None:
         """Test successful calls keep circuit closed."""
 
         async def success_fn() -> str:
@@ -321,9 +315,7 @@ class TestCircuitBreakerStateTransitions:
         assert breaker.stats.failed_calls == 3
 
     @pytest.mark.asyncio
-    async def test_open_circuit_rejects_calls(
-        self, breaker: CircuitBreaker[str]
-    ) -> None:
+    async def test_open_circuit_rejects_calls(self, breaker: CircuitBreaker[str]) -> None:
         """Test open circuit rejects calls."""
 
         async def failing_fn() -> str:
@@ -371,9 +363,7 @@ class TestCircuitBreakerStateTransitions:
         assert result == "success"
 
     @pytest.mark.asyncio
-    async def test_half_open_success_closes_circuit(
-        self, breaker: CircuitBreaker[str]
-    ) -> None:
+    async def test_half_open_success_closes_circuit(self, breaker: CircuitBreaker[str]) -> None:
         """Test successful calls in half-open close the circuit."""
 
         async def failing_fn() -> str:
@@ -397,9 +387,7 @@ class TestCircuitBreakerStateTransitions:
         assert breaker.is_closed is True
 
     @pytest.mark.asyncio
-    async def test_half_open_failure_reopens_circuit(
-        self, breaker: CircuitBreaker[str]
-    ) -> None:
+    async def test_half_open_failure_reopens_circuit(self, breaker: CircuitBreaker[str]) -> None:
         """Test failure in half-open reopens circuit."""
 
         async def failing_fn() -> str:
@@ -447,9 +435,7 @@ class TestCircuitBreakerFailureRate:
         return CircuitBreaker("rate_test", config)
 
     @pytest.mark.asyncio
-    async def test_failure_rate_opens_circuit(
-        self, breaker: CircuitBreaker[str]
-    ) -> None:
+    async def test_failure_rate_opens_circuit(self, breaker: CircuitBreaker[str]) -> None:
         """Test failure rate threshold opens circuit."""
 
         async def success_fn() -> str:
@@ -488,9 +474,7 @@ class TestCircuitBreakerTimeout:
         return CircuitBreaker("timeout_test", config)
 
     @pytest.mark.asyncio
-    async def test_timeout_counts_as_failure(
-        self, breaker: CircuitBreaker[str]
-    ) -> None:
+    async def test_timeout_counts_as_failure(self, breaker: CircuitBreaker[str]) -> None:
         """Test call timeout counts as failure."""
 
         async def slow_fn() -> str:
@@ -522,9 +506,7 @@ class TestCircuitBreakerExcludedExceptions:
         return CircuitBreaker("excluded_test", config)
 
     @pytest.mark.asyncio
-    async def test_excluded_exception_not_counted(
-        self, breaker: CircuitBreaker[str]
-    ) -> None:
+    async def test_excluded_exception_not_counted(self, breaker: CircuitBreaker[str]) -> None:
         """Test excluded exceptions don't count as failures."""
 
         async def excluded_fn() -> str:
@@ -540,9 +522,7 @@ class TestCircuitBreakerExcludedExceptions:
         assert breaker.stats.successful_calls == 5  # Counted as success
 
     @pytest.mark.asyncio
-    async def test_non_excluded_exception_counted(
-        self, breaker: CircuitBreaker[str]
-    ) -> None:
+    async def test_non_excluded_exception_counted(self, breaker: CircuitBreaker[str]) -> None:
         """Test non-excluded exceptions count as failures."""
 
         async def non_excluded_fn() -> str:
@@ -570,9 +550,7 @@ class TestCircuitBreakerDecorator:
         return CircuitBreaker("decorator_test", config)
 
     @pytest.mark.asyncio
-    async def test_decorator_wraps_function(
-        self, breaker: CircuitBreaker[str]
-    ) -> None:
+    async def test_decorator_wraps_function(self, breaker: CircuitBreaker[str]) -> None:
         """Test decorator wraps function correctly."""
 
         @breaker
@@ -587,9 +565,7 @@ class TestCircuitBreakerDecorator:
         assert my_function.__doc__ == "My docstring."
 
     @pytest.mark.asyncio
-    async def test_decorator_tracks_calls(
-        self, breaker: CircuitBreaker[str]
-    ) -> None:
+    async def test_decorator_tracks_calls(self, breaker: CircuitBreaker[str]) -> None:
         """Test decorator tracks calls through breaker."""
 
         @breaker
@@ -621,9 +597,7 @@ class TestCircuitBreakerListeners:
         return CircuitBreaker("listener_test", config)
 
     @pytest.mark.asyncio
-    async def test_listener_called_on_state_change(
-        self, breaker: CircuitBreaker[str]
-    ) -> None:
+    async def test_listener_called_on_state_change(self, breaker: CircuitBreaker[str]) -> None:
         """Test listener is called on state change."""
         listener = AsyncMock()
         breaker.add_listener(listener)
@@ -699,9 +673,7 @@ class TestCircuitBreakerManualOps:
         assert breaker.is_open is True
 
     @pytest.mark.asyncio
-    async def test_force_open_with_duration(
-        self, breaker: CircuitBreaker[str]
-    ) -> None:
+    async def test_force_open_with_duration(self, breaker: CircuitBreaker[str]) -> None:
         """Test force opening with custom duration."""
         await breaker.force_open(duration=60.0)
 
@@ -744,9 +716,7 @@ class TestCircuitBreakerWindowTrimming:
             with pytest.raises(RuntimeError):
                 await breaker.call(failing_fn)
 
-        total_recent = len(breaker.stats.recent_successes) + len(
-            breaker.stats.recent_failures
-        )
+        total_recent = len(breaker.stats.recent_successes) + len(breaker.stats.recent_failures)
         assert total_recent <= 5
 
 
@@ -772,9 +742,7 @@ class TestCircuitBreakerRegistry:
         assert breaker.name == "test"
 
     @pytest.mark.asyncio
-    async def test_get_or_create_returns_existing(
-        self, registry: CircuitBreakerRegistry
-    ) -> None:
+    async def test_get_or_create_returns_existing(self, registry: CircuitBreakerRegistry) -> None:
         """Test get_or_create returns existing breaker."""
         breaker1 = await registry.get_or_create("test")
         breaker2 = await registry.get_or_create("test")
@@ -1005,9 +973,7 @@ class TestCircuitBreakerConcurrency:
         assert breaker.stats.successful_calls == 50
 
     @pytest.mark.asyncio
-    async def test_concurrent_failures_open_circuit(
-        self, breaker: CircuitBreaker[str]
-    ) -> None:
+    async def test_concurrent_failures_open_circuit(self, breaker: CircuitBreaker[str]) -> None:
         """Test concurrent failures properly open circuit."""
         breaker.config.failure_threshold = 5
 

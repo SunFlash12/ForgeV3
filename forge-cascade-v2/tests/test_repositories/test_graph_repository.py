@@ -13,15 +13,13 @@ Comprehensive tests for GraphRepository and GraphAlgorithmProvider including:
 - Identifier validation
 """
 
-from datetime import UTC, datetime
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 
 from forge.models.graph_analysis import (
     AlgorithmType,
     CentralityRequest,
-    Community,
     CommunityDetectionRequest,
     CommunityDetectionResult,
     GraphBackend,
@@ -33,7 +31,6 @@ from forge.models.graph_analysis import (
     PageRankRequest,
     ShortestPathRequest,
     ShortestPathResult,
-    SimilarNode,
     TrustInfluence,
     TrustTransitivityRequest,
     TrustTransitivityResult,
@@ -44,7 +41,6 @@ from forge.repositories.graph_repository import (
     validate_neo4j_identifier,
     validate_relationship_pattern,
 )
-
 
 # =============================================================================
 # Fixtures
@@ -175,9 +171,7 @@ class TestBackendDetection:
     """Tests for backend detection."""
 
     @pytest.mark.asyncio
-    async def test_detect_backend_gds_available(
-        self, graph_provider, mock_db_client
-    ):
+    async def test_detect_backend_gds_available(self, graph_provider, mock_db_client):
         """Detect GDS when available."""
         mock_db_client.execute_single.return_value = {"version": "2.5.0"}
 
@@ -186,9 +180,7 @@ class TestBackendDetection:
         assert result == GraphBackend.GDS
 
     @pytest.mark.asyncio
-    async def test_detect_backend_gds_not_available(
-        self, graph_provider, mock_db_client
-    ):
+    async def test_detect_backend_gds_not_available(self, graph_provider, mock_db_client):
         """Fallback to Cypher when GDS not available."""
         mock_db_client.execute_single.side_effect = RuntimeError("GDS not installed")
 
@@ -197,9 +189,7 @@ class TestBackendDetection:
         assert result == GraphBackend.CYPHER
 
     @pytest.mark.asyncio
-    async def test_detect_backend_caches_result(
-        self, graph_provider, mock_db_client
-    ):
+    async def test_detect_backend_caches_result(self, graph_provider, mock_db_client):
         """Backend detection result is cached."""
         mock_db_client.execute_single.return_value = {"version": "2.5.0"}
 
@@ -238,9 +228,7 @@ class TestPageRankComputation:
         assert len(result.rankings) == 2
 
     @pytest.mark.asyncio
-    async def test_pagerank_with_caching(
-        self, graph_provider, mock_db_client, sample_ranking_data
-    ):
+    async def test_pagerank_with_caching(self, graph_provider, mock_db_client, sample_ranking_data):
         """PageRank results are cached."""
         mock_db_client.execute_single.side_effect = [
             RuntimeError("GDS not available"),
@@ -263,9 +251,7 @@ class TestPageRankComputation:
         mock_db_client.execute.assert_not_called()  # Cache used
 
     @pytest.mark.asyncio
-    async def test_pagerank_limit_capped(
-        self, graph_provider, mock_db_client
-    ):
+    async def test_pagerank_limit_capped(self, graph_provider, mock_db_client):
         """PageRank limit is capped at 1000."""
         mock_db_client.execute_single.side_effect = [
             RuntimeError("GDS not available"),
@@ -290,9 +276,7 @@ class TestCentralityComputation:
     """Tests for centrality computation."""
 
     @pytest.mark.asyncio
-    async def test_degree_centrality(
-        self, graph_provider, mock_db_client, sample_ranking_data
-    ):
+    async def test_degree_centrality(self, graph_provider, mock_db_client, sample_ranking_data):
         """Degree centrality computation."""
         mock_db_client.execute_single.side_effect = [
             RuntimeError("GDS not available"),
@@ -360,9 +344,7 @@ class TestCommunityDetection:
     """Tests for community detection."""
 
     @pytest.mark.asyncio
-    async def test_community_detection_cypher(
-        self, graph_provider, mock_db_client
-    ):
+    async def test_community_detection_cypher(self, graph_provider, mock_db_client):
         """Community detection using Cypher."""
         mock_db_client.execute_single.return_value = None  # GDS not available
         mock_db_client.execute.return_value = [
@@ -385,9 +367,7 @@ class TestCommunityDetection:
         assert result.backend_used == GraphBackend.CYPHER
 
     @pytest.mark.asyncio
-    async def test_community_detection_min_size_filter(
-        self, graph_provider, mock_db_client
-    ):
+    async def test_community_detection_min_size_filter(self, graph_provider, mock_db_client):
         """Community detection respects minimum size."""
         graph_provider._gds_available = False
         mock_db_client.execute.return_value = []
@@ -409,9 +389,7 @@ class TestTrustTransitivity:
     """Tests for trust transitivity computation."""
 
     @pytest.mark.asyncio
-    async def test_trust_transitivity_success(
-        self, graph_provider, mock_db_client
-    ):
+    async def test_trust_transitivity_success(self, graph_provider, mock_db_client):
         """Compute trust transitivity between nodes."""
         mock_db_client.execute.return_value = [
             {
@@ -435,9 +413,7 @@ class TestTrustTransitivity:
         assert result.transitive_trust == 0.5
 
     @pytest.mark.asyncio
-    async def test_trust_transitivity_no_path(
-        self, graph_provider, mock_db_client
-    ):
+    async def test_trust_transitivity_no_path(self, graph_provider, mock_db_client):
         """Trust transitivity with no path found."""
         mock_db_client.execute.return_value = []
 
@@ -452,9 +428,7 @@ class TestTrustTransitivity:
         assert result.transitive_trust == 0.0
 
     @pytest.mark.asyncio
-    async def test_trust_transitivity_max_hops_clamped(
-        self, graph_provider, mock_db_client
-    ):
+    async def test_trust_transitivity_max_hops_clamped(self, graph_provider, mock_db_client):
         """Trust transitivity max hops is clamped."""
         mock_db_client.execute.return_value = []
 
@@ -481,9 +455,7 @@ class TestNodeSimilarity:
     """Tests for node similarity computation."""
 
     @pytest.mark.asyncio
-    async def test_node_similarity_cypher(
-        self, graph_provider, mock_db_client
-    ):
+    async def test_node_similarity_cypher(self, graph_provider, mock_db_client):
         """Node similarity using Cypher (Jaccard)."""
         graph_provider._gds_available = False
         mock_db_client.execute.return_value = [
@@ -507,9 +479,7 @@ class TestNodeSimilarity:
         assert result.similar_nodes[0].similarity_score == 0.75
 
     @pytest.mark.asyncio
-    async def test_node_similarity_top_k_capped(
-        self, graph_provider, mock_db_client
-    ):
+    async def test_node_similarity_top_k_capped(self, graph_provider, mock_db_client):
         """Node similarity top_k is capped."""
         graph_provider._gds_available = False
         mock_db_client.execute.return_value = []
@@ -534,9 +504,7 @@ class TestShortestPath:
     """Tests for shortest path computation."""
 
     @pytest.mark.asyncio
-    async def test_shortest_path_cypher(
-        self, graph_provider, mock_db_client
-    ):
+    async def test_shortest_path_cypher(self, graph_provider, mock_db_client):
         """Shortest path using Cypher."""
         graph_provider._gds_available = False
         mock_db_client.execute_single.return_value = {
@@ -561,9 +529,7 @@ class TestShortestPath:
         assert len(result.path_nodes) == 3
 
     @pytest.mark.asyncio
-    async def test_shortest_path_not_found(
-        self, graph_provider, mock_db_client
-    ):
+    async def test_shortest_path_not_found(self, graph_provider, mock_db_client):
         """Shortest path when no path exists."""
         graph_provider._gds_available = False
         mock_db_client.execute_single.return_value = None
@@ -579,9 +545,7 @@ class TestShortestPath:
         assert result.path_nodes is None or len(result.path_nodes) == 0
 
     @pytest.mark.asyncio
-    async def test_shortest_path_max_depth_clamped(
-        self, graph_provider, mock_db_client
-    ):
+    async def test_shortest_path_max_depth_clamped(self, graph_provider, mock_db_client):
         """Shortest path max depth is clamped."""
         graph_provider._gds_available = False
         mock_db_client.execute_single.return_value = None
@@ -600,9 +564,7 @@ class TestShortestPath:
         assert "*1..20" in query
 
     @pytest.mark.asyncio
-    async def test_shortest_path_weighted(
-        self, graph_provider, mock_db_client
-    ):
+    async def test_shortest_path_weighted(self, graph_provider, mock_db_client):
         """Shortest path with weight computation."""
         graph_provider._gds_available = False
         mock_db_client.execute_single.return_value = {
@@ -634,9 +596,7 @@ class TestGraphMetrics:
     """Tests for graph metrics computation."""
 
     @pytest.mark.asyncio
-    async def test_get_graph_metrics(
-        self, graph_provider, mock_db_client
-    ):
+    async def test_get_graph_metrics(self, graph_provider, mock_db_client):
         """Get comprehensive graph metrics."""
         mock_db_client.execute.side_effect = [
             [{"label": "Capsule", "count": 100}],  # Node counts
@@ -656,9 +616,7 @@ class TestGraphMetrics:
         assert result.avg_degree == 2.0
 
     @pytest.mark.asyncio
-    async def test_get_trust_influences(
-        self, graph_provider, mock_db_client
-    ):
+    async def test_get_trust_influences(self, graph_provider, mock_db_client):
         """Get trust influence rankings."""
         mock_db_client.execute.return_value = [
             {
@@ -677,9 +635,7 @@ class TestGraphMetrics:
         assert result[0].influence_score == 10.0
 
     @pytest.mark.asyncio
-    async def test_get_trust_influences_limit_capped(
-        self, graph_provider, mock_db_client
-    ):
+    async def test_get_trust_influences_limit_capped(self, graph_provider, mock_db_client):
         """Trust influences limit is capped."""
         mock_db_client.execute.return_value = []
 
@@ -734,9 +690,7 @@ class TestGraphRepository:
     """Tests for GraphRepository wrapper."""
 
     @pytest.mark.asyncio
-    async def test_compute_pagerank(
-        self, graph_repository, mock_db_client, sample_ranking_data
-    ):
+    async def test_compute_pagerank(self, graph_repository, mock_db_client, sample_ranking_data):
         """GraphRepository compute_pagerank wrapper."""
         mock_db_client.execute_single.side_effect = [
             RuntimeError("GDS not available"),
@@ -765,9 +719,7 @@ class TestGraphRepository:
         assert isinstance(result, list)
 
     @pytest.mark.asyncio
-    async def test_detect_communities(
-        self, graph_repository, mock_db_client
-    ):
+    async def test_detect_communities(self, graph_repository, mock_db_client):
         """GraphRepository community detection wrapper."""
         mock_db_client.execute_single.return_value = None
         mock_db_client.execute.return_value = []
@@ -779,9 +731,7 @@ class TestGraphRepository:
         assert isinstance(result, list)
 
     @pytest.mark.asyncio
-    async def test_compute_trust_transitivity(
-        self, graph_repository, mock_db_client
-    ):
+    async def test_compute_trust_transitivity(self, graph_repository, mock_db_client):
         """GraphRepository trust transitivity wrapper."""
         mock_db_client.execute.return_value = [
             {
@@ -801,9 +751,7 @@ class TestGraphRepository:
         assert result == 0.6
 
     @pytest.mark.asyncio
-    async def test_get_metrics(
-        self, graph_repository, mock_db_client
-    ):
+    async def test_get_metrics(self, graph_repository, mock_db_client):
         """GraphRepository get_metrics wrapper."""
         mock_db_client.execute.side_effect = [
             [{"label": "Capsule", "count": 50}],
@@ -820,9 +768,7 @@ class TestGraphRepository:
         assert isinstance(result, GraphMetrics)
 
     @pytest.mark.asyncio
-    async def test_find_similar_nodes(
-        self, graph_repository, mock_db_client
-    ):
+    async def test_find_similar_nodes(self, graph_repository, mock_db_client):
         """GraphRepository find similar nodes wrapper."""
         graph_repository.provider._gds_available = False
         mock_db_client.execute.return_value = [
@@ -840,9 +786,7 @@ class TestGraphRepository:
         assert len(result) == 1
 
     @pytest.mark.asyncio
-    async def test_find_shortest_path(
-        self, graph_repository, mock_db_client
-    ):
+    async def test_find_shortest_path(self, graph_repository, mock_db_client):
         """GraphRepository find shortest path wrapper."""
         graph_repository.provider._gds_available = False
         mock_db_client.execute_single.return_value = {
@@ -862,9 +806,7 @@ class TestGraphRepository:
         assert isinstance(result, ShortestPathResult)
 
     @pytest.mark.asyncio
-    async def test_get_gds_status(
-        self, graph_repository, mock_db_client
-    ):
+    async def test_get_gds_status(self, graph_repository, mock_db_client):
         """GraphRepository GDS status check."""
         mock_db_client.execute_single.return_value = {"version": "2.5.0"}
 
@@ -884,9 +826,7 @@ class TestGDSAlgorithms:
     """Tests for GDS-specific algorithm implementations."""
 
     @pytest.mark.asyncio
-    async def test_gds_pagerank(
-        self, graph_provider, mock_db_client, sample_ranking_data
-    ):
+    async def test_gds_pagerank(self, graph_provider, mock_db_client, sample_ranking_data):
         """PageRank using GDS."""
         graph_provider._gds_available = True
         mock_db_client.execute.side_effect = [
@@ -903,9 +843,7 @@ class TestGDSAlgorithms:
         assert len(result.rankings) == 2
 
     @pytest.mark.asyncio
-    async def test_gds_centrality(
-        self, graph_provider, mock_db_client, sample_ranking_data
-    ):
+    async def test_gds_centrality(self, graph_provider, mock_db_client, sample_ranking_data):
         """Centrality using GDS."""
         graph_provider._gds_available = True
         mock_db_client.execute.side_effect = [
@@ -923,9 +861,7 @@ class TestGDSAlgorithms:
         assert result.backend_used == GraphBackend.GDS
 
     @pytest.mark.asyncio
-    async def test_gds_communities(
-        self, graph_provider, mock_db_client, sample_community_data
-    ):
+    async def test_gds_communities(self, graph_provider, mock_db_client, sample_community_data):
         """Community detection using GDS Louvain."""
         graph_provider._gds_available = True
         mock_db_client.execute.side_effect = [
@@ -941,9 +877,7 @@ class TestGDSAlgorithms:
         assert result.algorithm == AlgorithmType.COMMUNITY_LOUVAIN
 
     @pytest.mark.asyncio
-    async def test_gds_node_similarity(
-        self, graph_provider, mock_db_client
-    ):
+    async def test_gds_node_similarity(self, graph_provider, mock_db_client):
         """Node similarity using GDS."""
         graph_provider._gds_available = True
         mock_db_client.execute.side_effect = [
@@ -958,9 +892,7 @@ class TestGDSAlgorithms:
         assert result.backend_used == GraphBackend.GDS
 
     @pytest.mark.asyncio
-    async def test_gds_shortest_path(
-        self, graph_provider, mock_db_client
-    ):
+    async def test_gds_shortest_path(self, graph_provider, mock_db_client):
         """Shortest path using GDS Dijkstra."""
         graph_provider._gds_available = True
         mock_db_client.execute.side_effect = [
@@ -996,9 +928,7 @@ class TestErrorHandling:
     """Tests for error handling."""
 
     @pytest.mark.asyncio
-    async def test_gds_graph_cleanup_on_error(
-        self, graph_provider, mock_db_client
-    ):
+    async def test_gds_graph_cleanup_on_error(self, graph_provider, mock_db_client):
         """GDS graphs are cleaned up even on error."""
         graph_provider._gds_available = True
         mock_db_client.execute.side_effect = [
@@ -1013,8 +943,7 @@ class TestErrorHandling:
 
         # Should still attempt cleanup (last call)
         cleanup_calls = [
-            c for c in mock_db_client.execute.call_args_list
-            if "gds.graph.drop" in str(c)
+            c for c in mock_db_client.execute.call_args_list if "gds.graph.drop" in str(c)
         ]
         # Cleanup is in finally block, but may fail silently
 

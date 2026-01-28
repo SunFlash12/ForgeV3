@@ -11,9 +11,7 @@ Comprehensive tests for governance API routes including:
 """
 
 from datetime import UTC, datetime, timedelta
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
-from uuid import uuid4
 
 import pytest
 from fastapi import FastAPI
@@ -21,7 +19,6 @@ from fastapi.testclient import TestClient
 
 from forge.models.base import ProposalStatus
 from forge.models.governance import ProposalType, VoteChoice
-
 
 # =============================================================================
 # Fixtures
@@ -189,11 +186,11 @@ def governance_app(
 
     # Override dependencies
     from forge.api.dependencies import (
+        get_audit_repo,
+        get_current_active_user,
+        get_event_system,
         get_governance_repo,
         get_user_repo,
-        get_audit_repo,
-        get_event_system,
-        get_current_active_user,
     )
 
     app.dependency_overrides[get_governance_repo] = lambda: mock_governance_repo
@@ -576,17 +573,20 @@ class TestGhostCouncil:
 
     def test_get_ghost_council_members(self, client: TestClient):
         """Get Ghost Council members."""
-        with patch("forge.api.routes.governance.DEFAULT_COUNCIL_MEMBERS", [
-            MagicMock(
-                id="member1",
-                name="Ethics Expert",
-                role="advisor",
-                domain="ethics",
-                icon="scale",
-                weight=1.0,
-                persona="Ethical advisor",
-            )
-        ]):
+        with patch(
+            "forge.api.routes.governance.DEFAULT_COUNCIL_MEMBERS",
+            [
+                MagicMock(
+                    id="member1",
+                    name="Ethics Expert",
+                    role="advisor",
+                    domain="ethics",
+                    icon="scale",
+                    weight=1.0,
+                    persona="Ethical advisor",
+                )
+            ],
+        ):
             response = client.get("/api/v1/governance/ghost-council/members")
 
             assert response.status_code == 200
@@ -618,9 +618,7 @@ class TestConstitutionalAnalysis:
 
     def test_get_constitutional_analysis(self, client: TestClient):
         """Get Constitutional AI analysis."""
-        response = client.get(
-            "/api/v1/governance/proposals/prop_test123/constitutional-analysis"
-        )
+        response = client.get("/api/v1/governance/proposals/prop_test123/constitutional-analysis")
 
         assert response.status_code in [200, 404]
         if response.status_code == 200:
@@ -714,11 +712,10 @@ class TestDelegation:
 class TestFinalizeProposal:
     """Tests for POST /governance/proposals/{proposal_id}/finalize endpoint."""
 
-    def test_finalize_proposal_requires_core(
-        self, governance_app, mock_core_user
-    ):
+    def test_finalize_proposal_requires_core(self, governance_app, mock_core_user):
         """Finalize proposal requires CORE trust."""
         from forge.api.dependencies import get_current_active_user
+
         governance_app.dependency_overrides[get_current_active_user] = lambda: mock_core_user
 
         client = TestClient(governance_app)
@@ -790,6 +787,7 @@ class TestSeriousIssues:
     def test_get_active_issues(self, governance_app, mock_trusted_user):
         """Get active issues requires TRUSTED trust."""
         from forge.api.dependencies import get_current_active_user
+
         governance_app.dependency_overrides[get_current_active_user] = lambda: mock_trusted_user
 
         with patch("forge.api.routes.governance.get_ghost_council_service") as mock_gc:
@@ -805,10 +803,13 @@ class TestSeriousIssues:
     def test_report_serious_issue(self, governance_app, mock_trusted_user):
         """Report serious issue."""
         from forge.api.dependencies import get_current_active_user
+
         governance_app.dependency_overrides[get_current_active_user] = lambda: mock_trusted_user
 
-        with patch("forge.api.routes.governance.get_ghost_council_service") as mock_gc, \
-             patch("forge.api.routes.governance.validate_capsule_content") as mock_validate:
+        with (
+            patch("forge.api.routes.governance.get_ghost_council_service") as mock_gc,
+            patch("forge.api.routes.governance.validate_capsule_content") as mock_validate,
+        ):
             mock_service = MagicMock()
             mock_service.respond_to_issue = AsyncMock()
             mock_gc.return_value = mock_service
@@ -831,6 +832,7 @@ class TestSeriousIssues:
     def test_resolve_serious_issue(self, governance_app, mock_core_user):
         """Resolve serious issue requires CORE trust."""
         from forge.api.dependencies import get_current_active_user
+
         governance_app.dependency_overrides[get_current_active_user] = lambda: mock_core_user
 
         with patch("forge.api.routes.governance.get_ghost_council_service") as mock_gc:

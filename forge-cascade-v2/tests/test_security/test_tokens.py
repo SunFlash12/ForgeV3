@@ -9,10 +9,8 @@ Comprehensive tests for JWT token handling including:
 - Token hashing utilities
 """
 
-import asyncio
 import time
 from datetime import UTC, datetime, timedelta
-from unittest.mock import patch
 
 import pytest
 
@@ -20,8 +18,6 @@ from forge.security.tokens import (
     ALLOWED_JWT_ALGORITHMS,
     KeyRotationManager,
     TokenBlacklist,
-    TokenError,
-    TokenExpiredError,
     TokenInvalidError,
     TokenService,
     create_access_token,
@@ -38,7 +34,6 @@ from forge.security.tokens import (
     verify_refresh_token_hash,
     verify_token,
 )
-
 
 # =============================================================================
 # Token Creation Tests
@@ -234,6 +229,7 @@ class TestTokenValidation:
         """Access token validation checks trust_flame bounds."""
         # Create a token with invalid trust_flame by manipulating the payload
         import jwt as pyjwt
+
         from forge.config import get_settings
 
         settings = get_settings()

@@ -88,7 +88,7 @@ class TestQueryCache:
     @pytest.fixture
     def cache(self, mock_redis):
         """Create a QueryCache with mock Redis."""
-        with patch('forge.services.query_cache.get_settings') as mock_settings:
+        with patch("forge.services.query_cache.get_settings") as mock_settings:
             mock_settings.return_value = MagicMock(
                 query_cache_ttl_seconds=3600,
             )
@@ -105,7 +105,7 @@ class TestQueryCache:
 
     def test_make_key_custom_prefix(self, mock_redis):
         """Test key generation with custom prefix."""
-        with patch('forge.services.query_cache.get_settings') as mock_settings:
+        with patch("forge.services.query_cache.get_settings") as mock_settings:
             mock_settings.return_value = MagicMock(query_cache_ttl_seconds=3600)
             cache = QueryCache(mock_redis, prefix="custom:")
 
@@ -392,11 +392,14 @@ class TestQueryCache:
     @pytest.mark.asyncio
     async def test_invalidate_all_with_keys(self, cache, mock_redis):
         """Test invalidate_all with multiple keys."""
-        mock_redis.scan.return_value = (0, [
-            "forge:query_cache:key1",
-            "forge:query_cache:key2",
-            "forge:query_cache:key3",
-        ])
+        mock_redis.scan.return_value = (
+            0,
+            [
+                "forge:query_cache:key1",
+                "forge:query_cache:key2",
+                "forge:query_cache:key3",
+            ],
+        )
 
         count = await cache.invalidate_all()
 
@@ -699,9 +702,7 @@ class TestInMemoryQueryCache:
 
         # Manually expire Q1
         hash1 = cache._hash_query("Q1", 50)
-        cache._cache[hash1]["cached_at"] = (
-            datetime.now(UTC) - timedelta(seconds=10)
-        ).isoformat()
+        cache._cache[hash1]["cached_at"] = (datetime.now(UTC) - timedelta(seconds=10)).isoformat()
 
         result = await cache.cleanup_expired()
 
@@ -738,6 +739,7 @@ class TestGlobalCacheFunctions:
     def reset_global_cache(self):
         """Reset global cache before each test."""
         import forge.services.query_cache as cache_module
+
         cache_module._query_cache = None
         yield
         cache_module._query_cache = None
@@ -745,7 +747,7 @@ class TestGlobalCacheFunctions:
     @pytest.mark.asyncio
     async def test_init_query_cache_disabled(self):
         """Test init when cache is disabled."""
-        with patch('forge.services.query_cache.get_settings') as mock_settings:
+        with patch("forge.services.query_cache.get_settings") as mock_settings:
             mock_settings.return_value = MagicMock(
                 query_cache_enabled=False,
             )
@@ -758,7 +760,7 @@ class TestGlobalCacheFunctions:
     @pytest.mark.asyncio
     async def test_init_query_cache_no_redis(self):
         """Test init without Redis URL."""
-        with patch('forge.services.query_cache.get_settings') as mock_settings:
+        with patch("forge.services.query_cache.get_settings") as mock_settings:
             mock_settings.return_value = MagicMock(
                 query_cache_enabled=True,
                 redis_url=None,
@@ -776,7 +778,7 @@ class TestGlobalCacheFunctions:
         mock_client = AsyncMock()
         mock_client.ping = AsyncMock(return_value=True)
 
-        with patch('forge.services.query_cache.get_settings') as mock_settings:
+        with patch("forge.services.query_cache.get_settings") as mock_settings:
             mock_settings.return_value = MagicMock(
                 query_cache_enabled=True,
                 redis_url="redis://localhost:6379",
@@ -785,7 +787,7 @@ class TestGlobalCacheFunctions:
                 query_cache_ttl_seconds=3600,
             )
 
-            with patch('redis.asyncio.from_url', return_value=mock_client):
+            with patch("redis.asyncio.from_url", return_value=mock_client):
                 cache = await init_query_cache()
 
             assert isinstance(cache, QueryCache)
@@ -793,7 +795,7 @@ class TestGlobalCacheFunctions:
     @pytest.mark.asyncio
     async def test_init_query_cache_redis_failure(self):
         """Test init falls back to memory when Redis fails."""
-        with patch('forge.services.query_cache.get_settings') as mock_settings:
+        with patch("forge.services.query_cache.get_settings") as mock_settings:
             mock_settings.return_value = MagicMock(
                 query_cache_enabled=True,
                 redis_url="redis://localhost:6379",
@@ -801,7 +803,7 @@ class TestGlobalCacheFunctions:
                 query_cache_max_size=5000,
             )
 
-            with patch('redis.asyncio.from_url', side_effect=ConnectionError("Cannot connect")):
+            with patch("redis.asyncio.from_url", side_effect=ConnectionError("Cannot connect")):
                 cache = await init_query_cache()
 
             assert isinstance(cache, InMemoryQueryCache)
@@ -809,10 +811,9 @@ class TestGlobalCacheFunctions:
     @pytest.mark.asyncio
     async def test_init_query_cache_returns_existing(self):
         """Test init returns existing cache if already initialized."""
-        import forge.services.query_cache as cache_module
 
         # First initialization
-        with patch('forge.services.query_cache.get_settings') as mock_settings:
+        with patch("forge.services.query_cache.get_settings") as mock_settings:
             mock_settings.return_value = MagicMock(
                 query_cache_enabled=True,
                 redis_url=None,
@@ -834,7 +835,7 @@ class TestGlobalCacheFunctions:
     @pytest.mark.asyncio
     async def test_get_query_cache_after_init(self):
         """Test get_query_cache returns cache after init."""
-        with patch('forge.services.query_cache.get_settings') as mock_settings:
+        with patch("forge.services.query_cache.get_settings") as mock_settings:
             mock_settings.return_value = MagicMock(
                 query_cache_enabled=True,
                 redis_url=None,
@@ -856,7 +857,7 @@ class TestGlobalCacheFunctions:
     @pytest.mark.asyncio
     async def test_close_query_cache_memory(self):
         """Test close_query_cache with in-memory cache."""
-        with patch('forge.services.query_cache.get_settings') as mock_settings:
+        with patch("forge.services.query_cache.get_settings") as mock_settings:
             mock_settings.return_value = MagicMock(
                 query_cache_enabled=True,
                 redis_url=None,
@@ -877,7 +878,7 @@ class TestGlobalCacheFunctions:
         mock_client.ping = AsyncMock(return_value=True)
         mock_client.close = AsyncMock()
 
-        with patch('forge.services.query_cache.get_settings') as mock_settings:
+        with patch("forge.services.query_cache.get_settings") as mock_settings:
             mock_settings.return_value = MagicMock(
                 query_cache_enabled=True,
                 redis_url="redis://localhost:6379",
@@ -886,7 +887,7 @@ class TestGlobalCacheFunctions:
                 query_cache_ttl_seconds=3600,
             )
 
-            with patch('redis.asyncio.from_url', return_value=mock_client):
+            with patch("redis.asyncio.from_url", return_value=mock_client):
                 await init_query_cache()
 
         await close_query_cache()
@@ -902,7 +903,7 @@ class TestGlobalCacheFunctions:
         mock_client.ping = AsyncMock(return_value=True)
         mock_client.close = AsyncMock(side_effect=ConnectionError("Error closing"))
 
-        with patch('forge.services.query_cache.get_settings') as mock_settings:
+        with patch("forge.services.query_cache.get_settings") as mock_settings:
             mock_settings.return_value = MagicMock(
                 query_cache_enabled=True,
                 redis_url="redis://localhost:6379",
@@ -911,7 +912,7 @@ class TestGlobalCacheFunctions:
                 query_cache_ttl_seconds=3600,
             )
 
-            with patch('redis.asyncio.from_url', return_value=mock_client):
+            with patch("redis.asyncio.from_url", return_value=mock_client):
                 await init_query_cache()
 
         # Should not raise

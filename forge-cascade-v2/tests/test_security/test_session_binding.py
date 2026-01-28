@@ -275,9 +275,7 @@ class TestIPChangeHandling:
     """Tests for IP change handling based on binding mode."""
 
     @pytest.mark.asyncio
-    async def test_ip_change_disabled_mode_allows(
-        self, mock_session_repository, mock_settings
-    ):
+    async def test_ip_change_disabled_mode_allows(self, mock_session_repository, mock_settings):
         """IP change with disabled mode allows access."""
         mock_settings.session_ip_binding_mode = "disabled"
 
@@ -314,9 +312,7 @@ class TestIPChangeHandling:
             assert is_allowed is True
 
     @pytest.mark.asyncio
-    async def test_ip_change_log_only_mode_allows(
-        self, mock_session_repository, mock_settings
-    ):
+    async def test_ip_change_log_only_mode_allows(self, mock_session_repository, mock_settings):
         """IP change with log_only mode allows access."""
         mock_settings.session_ip_binding_mode = "log_only"
 
@@ -520,9 +516,7 @@ class TestUserAgentChangeHandling:
     """Tests for User-Agent change handling based on binding mode."""
 
     @pytest.mark.asyncio
-    async def test_ua_change_disabled_mode_allows(
-        self, mock_session_repository, mock_settings
-    ):
+    async def test_ua_change_disabled_mode_allows(self, mock_session_repository, mock_settings):
         """UA change with disabled mode allows access."""
         mock_settings.session_user_agent_binding_mode = "disabled"
 
@@ -563,9 +557,7 @@ class TestUserAgentChangeHandling:
             assert is_allowed is True
 
     @pytest.mark.asyncio
-    async def test_ua_change_strict_mode_blocks(
-        self, mock_session_repository, mock_settings
-    ):
+    async def test_ua_change_strict_mode_blocks(self, mock_session_repository, mock_settings):
         """UA change with strict mode blocks access."""
         mock_settings.session_user_agent_binding_mode = "strict"
         mock_settings.session_ip_binding_mode = "disabled"
@@ -760,9 +752,7 @@ class TestRevokeSession:
     """Tests for revoke_session method."""
 
     @pytest.mark.asyncio
-    async def test_revoke_session_success(
-        self, session_binding_service, mock_session_repository
-    ):
+    async def test_revoke_session_success(self, session_binding_service, mock_session_repository):
         """revoke_session returns True on success."""
         from forge.models.session import Session, SessionStatus
 
@@ -869,9 +859,7 @@ class TestGetActiveSessionCount:
     """Tests for get_active_session_count method."""
 
     @pytest.mark.asyncio
-    async def test_get_active_session_count(
-        self, session_binding_service, mock_session_repository
-    ):
+    async def test_get_active_session_count(self, session_binding_service, mock_session_repository):
         """get_active_session_count returns correct count."""
         mock_session_repository.count_active_sessions.return_value = 7
 

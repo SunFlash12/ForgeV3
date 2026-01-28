@@ -29,7 +29,6 @@ from forge.models.notifications import (
     WebhookSubscription,
 )
 
-
 # =============================================================================
 # NotificationEvent Enum Tests
 # =============================================================================
@@ -579,7 +578,7 @@ class TestNotificationPreferences:
         preferences = NotificationPreferences(
             user_id="user123",
             quiet_hours_start=22,  # 10 PM
-            quiet_hours_end=7,     # 7 AM
+            quiet_hours_end=7,  # 7 AM
         )
         assert preferences.quiet_hours_start == 22
         assert preferences.quiet_hours_end == 7

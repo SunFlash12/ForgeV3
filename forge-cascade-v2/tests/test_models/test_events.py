@@ -13,7 +13,6 @@ Comprehensive tests for event models including:
 """
 
 from datetime import UTC, datetime
-from typing import Any
 
 import pytest
 from pydantic import ValidationError
@@ -29,7 +28,6 @@ from forge.models.events import (
     EventSubscription,
     EventType,
 )
-
 
 # =============================================================================
 # EventType Enum Tests

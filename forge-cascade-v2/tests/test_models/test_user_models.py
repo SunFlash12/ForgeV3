@@ -18,11 +18,8 @@ from forge.models.user import (
     AuthProvider,
     Capability,
     KeyStorageStrategy,
-    LoginRequest,
-    Token,
     TokenPayload,
     TrustFlameAdjustment,
-    TrustFlameReason,
     User,
     UserBase,
     UserCreate,
@@ -30,10 +27,8 @@ from forge.models.user import (
     UserPasswordChange,
     UserPublic,
     UserRole,
-    UserStats,
     UserUpdate,
 )
-
 
 # =============================================================================
 # UserBase Tests

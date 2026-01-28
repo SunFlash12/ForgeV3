@@ -14,7 +14,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-
 # =============================================================================
 # Fixtures
 # =============================================================================
@@ -97,7 +96,6 @@ class TestCreateRoomRoute:
         self, client: TestClient, auth_headers: dict, mock_chat_service, sample_room
     ):
         """Create room with valid data succeeds."""
-        from forge.models.chat import RoomRole
 
         mock_chat_service.create_room = AsyncMock(return_value=sample_room)
 
@@ -133,9 +131,7 @@ class TestListRoomsRoute:
         self, client: TestClient, auth_headers: dict, mock_chat_service, sample_room
     ):
         """List rooms with auth returns rooms."""
-        mock_chat_service.get_user_accessible_rooms = AsyncMock(
-            return_value=([sample_room], 1)
-        )
+        mock_chat_service.get_user_accessible_rooms = AsyncMock(return_value=([sample_room], 1))
         mock_chat_service.get_user_role = AsyncMock(return_value=MagicMock(value="member"))
 
         with patch(

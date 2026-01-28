@@ -15,7 +15,6 @@ Tests cover:
 import asyncio
 from datetime import UTC, datetime, timedelta
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -24,21 +23,19 @@ from forge.kernel.overlay_manager import (
     OverlayExecutionRequest,
     OverlayManager,
     OverlayNotFoundError,
-    OverlayRegistrationError,
     get_overlay_manager,
     init_overlay_manager,
     shutdown_overlay_manager,
 )
 from forge.models.base import OverlayState
 from forge.models.events import Event, EventType
-from forge.models.overlay import Capability, FuelBudget
+from forge.models.overlay import Capability
 from forge.overlays.base import (
     BaseOverlay,
     OverlayContext,
     OverlayResult,
     PassthroughOverlay,
 )
-
 
 # =============================================================================
 # Test Overlays
@@ -173,9 +170,7 @@ class TestOverlayRegistration:
 
         assert "mock_overlay" in overlay_manager._registry.classes
 
-    def test_register_class_with_custom_name(
-        self, overlay_manager: OverlayManager
-    ) -> None:
+    def test_register_class_with_custom_name(self, overlay_manager: OverlayManager) -> None:
         """Test registering an overlay class with custom name."""
         overlay_manager.register_class(MockOverlay, name="custom_name")
 
@@ -194,9 +189,7 @@ class TestOverlayRegistration:
         assert overlay._initialized is True
 
     @pytest.mark.asyncio
-    async def test_create_instance_not_found(
-        self, overlay_manager: OverlayManager
-    ) -> None:
+    async def test_create_instance_not_found(self, overlay_manager: OverlayManager) -> None:
         """Test creating instance for unregistered class."""
         with pytest.raises(OverlayNotFoundError):
             await overlay_manager.create_instance("nonexistent")
@@ -286,9 +279,7 @@ class TestOverlayActivation:
         assert result is True  # Should succeed but not change state
 
     @pytest.mark.asyncio
-    async def test_activate_nonexistent(
-        self, overlay_manager: OverlayManager
-    ) -> None:
+    async def test_activate_nonexistent(self, overlay_manager: OverlayManager) -> None:
         """Test activating non-existent overlay."""
         result = await overlay_manager.activate("nonexistent")
         assert result is False
@@ -317,9 +308,7 @@ class TestOverlayActivation:
         assert result is True  # Should succeed
 
     @pytest.mark.asyncio
-    async def test_deactivate_nonexistent(
-        self, overlay_manager: OverlayManager
-    ) -> None:
+    async def test_deactivate_nonexistent(self, overlay_manager: OverlayManager) -> None:
         """Test deactivating non-existent overlay."""
         result = await overlay_manager.deactivate("nonexistent")
         assert result is False
@@ -358,9 +347,7 @@ class TestOverlayUnregistration:
         assert len(overlay_manager.get_by_event(EventType.CAPSULE_CREATED)) == 0
 
     @pytest.mark.asyncio
-    async def test_unregister_nonexistent(
-        self, overlay_manager: OverlayManager
-    ) -> None:
+    async def test_unregister_nonexistent(self, overlay_manager: OverlayManager) -> None:
         """Test unregistering non-existent overlay."""
         result = await overlay_manager.unregister("nonexistent")
         assert result is False
@@ -403,9 +390,7 @@ class TestOverlayDiscovery:
         assert result[0] is mock_overlay
 
     @pytest.mark.asyncio
-    async def test_get_by_name_multiple(
-        self, overlay_manager: OverlayManager
-    ) -> None:
+    async def test_get_by_name_multiple(self, overlay_manager: OverlayManager) -> None:
         """Test getting multiple overlays by name."""
         overlay1 = MockOverlay()
         overlay2 = MockOverlay()
@@ -571,9 +556,7 @@ class TestCircuitBreaker:
     """Tests for circuit breaker functionality."""
 
     @pytest.mark.asyncio
-    async def test_circuit_opens_on_failures(
-        self, overlay_manager: OverlayManager
-    ) -> None:
+    async def test_circuit_opens_on_failures(self, overlay_manager: OverlayManager) -> None:
         """Test that circuit opens after threshold failures."""
         overlay = FailingOverlay()
         await overlay_manager.register_instance(overlay)
@@ -588,9 +571,7 @@ class TestCircuitBreaker:
         assert overlay_manager._is_circuit_open(overlay.id) is True
 
     @pytest.mark.asyncio
-    async def test_circuit_blocks_execution(
-        self, overlay_manager: OverlayManager
-    ) -> None:
+    async def test_circuit_blocks_execution(self, overlay_manager: OverlayManager) -> None:
         """Test that open circuit blocks execution."""
         overlay = FailingOverlay()
         await overlay_manager.register_instance(overlay)
@@ -605,9 +586,7 @@ class TestCircuitBreaker:
         assert "circuit breaker open" in result.error.lower()
 
     @pytest.mark.asyncio
-    async def test_circuit_resets_after_timeout(
-        self, overlay_manager: OverlayManager
-    ) -> None:
+    async def test_circuit_resets_after_timeout(self, overlay_manager: OverlayManager) -> None:
         """Test that circuit resets after timeout."""
         overlay = MockOverlay()
         await overlay_manager.register_instance(overlay)
@@ -659,9 +638,7 @@ class TestHealthMonitoring:
         assert results[mock_overlay.id].healthy is True
 
     @pytest.mark.asyncio
-    async def test_get_unhealthy_overlays(
-        self, overlay_manager: OverlayManager
-    ) -> None:
+    async def test_get_unhealthy_overlays(self, overlay_manager: OverlayManager) -> None:
         """Test getting unhealthy overlays."""
         overlay1 = MockOverlay()
         overlay2 = MockOverlay()
@@ -965,9 +942,7 @@ class TestEdgeCases:
         await overlay_manager_with_bus.stop()
 
     @pytest.mark.asyncio
-    async def test_phase_to_int_conversion(
-        self, overlay_manager: OverlayManager
-    ) -> None:
+    async def test_phase_to_int_conversion(self, overlay_manager: OverlayManager) -> None:
         """Test phase to int conversion."""
         from enum import Enum
 
@@ -978,9 +953,7 @@ class TestEdgeCases:
         assert result == 2  # validation maps to 2
 
     @pytest.mark.asyncio
-    async def test_get_overlays_for_phase(
-        self, overlay_manager: OverlayManager
-    ) -> None:
+    async def test_get_overlays_for_phase(self, overlay_manager: OverlayManager) -> None:
         """Test getting overlays for a pipeline phase."""
         # Currently no overlays have phase attribute in tests
         result = overlay_manager.get_overlays_for_phase(1)

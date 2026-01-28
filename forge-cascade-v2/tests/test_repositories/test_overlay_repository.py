@@ -17,7 +17,7 @@ exercise this path will fail until the repository is fixed to handle both cases.
 """
 
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -34,7 +34,6 @@ from forge.repositories.overlay_repository import (
     OverlayRepository,
     OverlayUpdate,
 )
-
 
 # =============================================================================
 # Fixtures
@@ -423,9 +422,7 @@ class TestOverlayRepositoryStateTransitions:
         assert "deactivated_at" in query
 
     @pytest.mark.asyncio
-    async def test_activate_overlay(
-        self, overlay_repository, mock_db_client, sample_overlay_data
-    ):
+    async def test_activate_overlay(self, overlay_repository, mock_db_client, sample_overlay_data):
         """Activate an overlay."""
         sample_overlay_data["state"] = "active"  # lowercase
         mock_db_client.execute_single.return_value = {"entity": sample_overlay_data}
@@ -462,9 +459,7 @@ class TestOverlayRepositoryStateTransitions:
         assert result.state == OverlayState.QUARANTINED
 
     @pytest.mark.asyncio
-    async def test_recover_overlay(
-        self, overlay_repository, mock_db_client, sample_overlay_data
-    ):
+    async def test_recover_overlay(self, overlay_repository, mock_db_client, sample_overlay_data):
         """Recover a quarantined overlay."""
         # First call resets consecutive_failures, second sets state
         sample_overlay_data["state"] = "inactive"  # lowercase
@@ -501,9 +496,7 @@ class TestOverlayRepositoryMetrics:
     """Tests for overlay metrics and execution tracking."""
 
     @pytest.mark.asyncio
-    async def test_record_successful_execution(
-        self, overlay_repository, mock_db_client
-    ):
+    async def test_record_successful_execution(self, overlay_repository, mock_db_client):
         """Record a successful execution."""
         mock_db_client.execute_single.return_value = {"consecutive_failures": 0}
 
@@ -529,9 +522,7 @@ class TestOverlayRepositoryMetrics:
         assert params["memory"] == 2048
 
     @pytest.mark.asyncio
-    async def test_record_failed_execution(
-        self, overlay_repository, mock_db_client
-    ):
+    async def test_record_failed_execution(self, overlay_repository, mock_db_client):
         """Record a failed execution."""
         mock_db_client.execute_single.return_value = {"consecutive_failures": 1}
 
@@ -668,9 +659,7 @@ class TestOverlayRepositoryQueries:
     """Tests for overlay query operations."""
 
     @pytest.mark.asyncio
-    async def test_get_by_state(
-        self, overlay_repository, mock_db_client, sample_overlay_data
-    ):
+    async def test_get_by_state(self, overlay_repository, mock_db_client, sample_overlay_data):
         """Get overlays by state."""
         # Use find_by_field which is inherited
         mock_db_client.execute.return_value = [{"entity": sample_overlay_data}]
@@ -680,9 +669,7 @@ class TestOverlayRepositoryQueries:
         assert len(result) == 1
 
     @pytest.mark.asyncio
-    async def test_get_active(
-        self, overlay_repository, mock_db_client, sample_overlay_data
-    ):
+    async def test_get_active(self, overlay_repository, mock_db_client, sample_overlay_data):
         """Get all active overlays."""
         sample_overlay_data["state"] = "active"
         mock_db_client.execute.return_value = [{"entity": sample_overlay_data}]
@@ -693,9 +680,7 @@ class TestOverlayRepositoryQueries:
         assert result[0].state == OverlayState.ACTIVE
 
     @pytest.mark.asyncio
-    async def test_get_quarantined(
-        self, overlay_repository, mock_db_client, sample_overlay_data
-    ):
+    async def test_get_quarantined(self, overlay_repository, mock_db_client, sample_overlay_data):
         """Get all quarantined overlays."""
         sample_overlay_data["state"] = "quarantined"
         mock_db_client.execute.return_value = [{"entity": sample_overlay_data}]
@@ -758,9 +743,7 @@ class TestOverlayRepositoryQueries:
         assert params["trust"] == TrustLevel.TRUSTED.value
 
     @pytest.mark.asyncio
-    async def test_get_dependencies(
-        self, overlay_repository, mock_db_client, sample_overlay_data
-    ):
+    async def test_get_dependencies(self, overlay_repository, mock_db_client, sample_overlay_data):
         """Get overlay dependencies."""
         dep_data = {**sample_overlay_data, "id": "dep123", "name": "dependency-overlay"}
         mock_db_client.execute.return_value = [{"entity": dep_data}]
@@ -771,9 +754,7 @@ class TestOverlayRepositoryQueries:
         assert result[0].id == "dep123"
 
     @pytest.mark.asyncio
-    async def test_get_dependents(
-        self, overlay_repository, mock_db_client, sample_overlay_data
-    ):
+    async def test_get_dependents(self, overlay_repository, mock_db_client, sample_overlay_data):
         """Get overlays that depend on this overlay."""
         dependent_data = {
             **sample_overlay_data,
@@ -788,9 +769,7 @@ class TestOverlayRepositoryQueries:
         assert result[0].id == "dependent123"
 
     @pytest.mark.asyncio
-    async def test_get_unhealthy(
-        self, overlay_repository, mock_db_client, sample_overlay_data
-    ):
+    async def test_get_unhealthy(self, overlay_repository, mock_db_client, sample_overlay_data):
         """Get unhealthy overlays."""
         sample_overlay_data["state"] = "active"
         sample_overlay_data["consecutive_failures"] = 5
@@ -808,9 +787,7 @@ class TestOverlayRepositoryQueries:
         assert params["error_threshold"] == 0.1
 
     @pytest.mark.asyncio
-    async def test_get_by_name(
-        self, overlay_repository, mock_db_client, sample_overlay_data
-    ):
+    async def test_get_by_name(self, overlay_repository, mock_db_client, sample_overlay_data):
         """Get overlay by name."""
         mock_db_client.execute_single.return_value = {"entity": sample_overlay_data}
 

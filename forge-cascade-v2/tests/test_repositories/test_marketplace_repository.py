@@ -12,13 +12,12 @@ Comprehensive tests for MarketplaceRepository including:
 
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 
 from forge.models.marketplace import (
     CapsuleListing,
-    Cart,
     CartItem,
     Currency,
     License,
@@ -35,7 +34,6 @@ from forge.repositories.marketplace_repository import (
     MarketplaceRepository,
     PurchaseRepository,
 )
-
 
 # =============================================================================
 # Fixtures
@@ -198,9 +196,7 @@ class TestListingRepository:
         mock_db_client.execute_single.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_create_listing_failure_raises_error(
-        self, listing_repository, mock_db_client
-    ):
+    async def test_create_listing_failure_raises_error(self, listing_repository, mock_db_client):
         """Listing creation failure raises RuntimeError."""
         mock_db_client.execute_single.return_value = None
 
@@ -242,9 +238,7 @@ class TestListingRepository:
         assert result.title == "Updated Title"
 
     @pytest.mark.asyncio
-    async def test_update_listing_not_found(
-        self, listing_repository, mock_db_client
-    ):
+    async def test_update_listing_not_found(self, listing_repository, mock_db_client):
         """Update returns None when listing not found."""
         mock_db_client.execute_single.return_value = None
 
@@ -275,9 +269,7 @@ class TestListingRepository:
         assert result[0].status == ListingStatus.ACTIVE
 
     @pytest.mark.asyncio
-    async def test_find_active_listings_limit_capped(
-        self, listing_repository, mock_db_client
-    ):
+    async def test_find_active_listings_limit_capped(self, listing_repository, mock_db_client):
         """Find active listings respects limit cap."""
         mock_db_client.execute.return_value = []
 
@@ -288,9 +280,7 @@ class TestListingRepository:
         assert params["limit"] == 100  # Capped at 100
 
     @pytest.mark.asyncio
-    async def test_find_by_seller(
-        self, listing_repository, mock_db_client, sample_listing_data
-    ):
+    async def test_find_by_seller(self, listing_repository, mock_db_client, sample_listing_data):
         """Find listings by seller."""
         mock_db_client.execute.return_value = [{"entity": sample_listing_data}]
 
@@ -300,9 +290,7 @@ class TestListingRepository:
         assert result[0].seller_id == "user123"
 
     @pytest.mark.asyncio
-    async def test_find_by_capsule(
-        self, listing_repository, mock_db_client, sample_listing_data
-    ):
+    async def test_find_by_capsule(self, listing_repository, mock_db_client, sample_listing_data):
         """Find listing for specific capsule."""
         mock_db_client.execute.return_value = [{"entity": sample_listing_data}]
 
@@ -312,9 +300,7 @@ class TestListingRepository:
         assert result.capsule_id == "cap123"
 
     @pytest.mark.asyncio
-    async def test_find_by_capsule_not_found(
-        self, listing_repository, mock_db_client
-    ):
+    async def test_find_by_capsule_not_found(self, listing_repository, mock_db_client):
         """Find by capsule returns None when not found."""
         mock_db_client.execute.return_value = []
 
@@ -323,9 +309,7 @@ class TestListingRepository:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_increment_view_count(
-        self, listing_repository, mock_db_client
-    ):
+    async def test_increment_view_count(self, listing_repository, mock_db_client):
         """Increment listing view count."""
         await listing_repository.increment_view_count("listing123")
 
@@ -393,9 +377,7 @@ class TestPurchaseRepository:
         assert result.buyer_id == "buyer456"
 
     @pytest.mark.asyncio
-    async def test_create_purchase_failure_raises_error(
-        self, purchase_repository, mock_db_client
-    ):
+    async def test_create_purchase_failure_raises_error(self, purchase_repository, mock_db_client):
         """Purchase creation failure raises RuntimeError."""
         mock_db_client.execute_single.return_value = None
 
@@ -448,9 +430,7 @@ class TestPurchaseRepository:
         assert result is not None
 
     @pytest.mark.asyncio
-    async def test_find_by_buyer(
-        self, purchase_repository, mock_db_client, sample_purchase_data
-    ):
+    async def test_find_by_buyer(self, purchase_repository, mock_db_client, sample_purchase_data):
         """Find purchases by buyer."""
         mock_db_client.execute.return_value = [{"entity": sample_purchase_data}]
 
@@ -460,9 +440,7 @@ class TestPurchaseRepository:
         assert result[0].buyer_id == "buyer456"
 
     @pytest.mark.asyncio
-    async def test_find_by_seller(
-        self, purchase_repository, mock_db_client, sample_purchase_data
-    ):
+    async def test_find_by_seller(self, purchase_repository, mock_db_client, sample_purchase_data):
         """Find sales by seller."""
         mock_db_client.execute.return_value = [{"entity": sample_purchase_data}]
 
@@ -485,9 +463,7 @@ class TestPurchaseRepository:
         assert result.buyer_id == "buyer456"
 
     @pytest.mark.asyncio
-    async def test_find_by_capsule_no_purchase(
-        self, purchase_repository, mock_db_client
-    ):
+    async def test_find_by_capsule_no_purchase(self, purchase_repository, mock_db_client):
         """Find by capsule returns None when not purchased."""
         mock_db_client.execute_single.return_value = None
 
@@ -516,9 +492,7 @@ class TestCartRepository:
     """Tests for CartRepository."""
 
     @pytest.mark.asyncio
-    async def test_get_cart_creates_if_not_exists(
-        self, cart_repository, mock_db_client
-    ):
+    async def test_get_cart_creates_if_not_exists(self, cart_repository, mock_db_client):
         """Get cart creates new cart if not exists."""
         mock_db_client.execute_single.return_value = {
             "cart": {"id": "cart123", "user_id": "user123"}
@@ -547,9 +521,7 @@ class TestCartRepository:
         assert result.items[0].listing_id == "listing123"
 
     @pytest.mark.asyncio
-    async def test_add_item_to_cart(
-        self, cart_repository, mock_db_client, sample_cart_item_data
-    ):
+    async def test_add_item_to_cart(self, cart_repository, mock_db_client, sample_cart_item_data):
         """Add item to cart."""
         # First call for get_cart (MERGE), second for loading items after add
         mock_db_client.execute_single.side_effect = [
@@ -576,9 +548,7 @@ class TestCartRepository:
         assert result is not None
 
     @pytest.mark.asyncio
-    async def test_remove_item_from_cart(
-        self, cart_repository, mock_db_client
-    ):
+    async def test_remove_item_from_cart(self, cart_repository, mock_db_client):
         """Remove item from cart."""
         mock_db_client.execute_single.return_value = {
             "cart": {"id": "cart123", "user_id": "user123"}
@@ -589,10 +559,7 @@ class TestCartRepository:
 
         assert result is not None
         # Verify delete query was called
-        delete_calls = [
-            c for c in mock_db_client.execute.call_args_list
-            if "DELETE" in str(c)
-        ]
+        delete_calls = [c for c in mock_db_client.execute.call_args_list if "DELETE" in str(c)]
         assert len(delete_calls) > 0
 
     @pytest.mark.asyncio
@@ -639,9 +606,7 @@ class TestLicenseRepository:
         assert result.holder_id == "buyer456"
 
     @pytest.mark.asyncio
-    async def test_create_license_failure_raises_error(
-        self, license_repository, mock_db_client
-    ):
+    async def test_create_license_failure_raises_error(self, license_repository, mock_db_client):
         """License creation failure raises RuntimeError."""
         mock_db_client.execute_single.return_value = None
 
@@ -694,9 +659,7 @@ class TestLicenseRepository:
         assert result.revoked_at is None
 
     @pytest.mark.asyncio
-    async def test_find_valid_license_not_found(
-        self, license_repository, mock_db_client
-    ):
+    async def test_find_valid_license_not_found(self, license_repository, mock_db_client):
         """Find valid license returns None when not found."""
         mock_db_client.execute_single.return_value = None
 
@@ -705,9 +668,7 @@ class TestLicenseRepository:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_find_by_holder(
-        self, license_repository, mock_db_client, sample_license_data
-    ):
+    async def test_find_by_holder(self, license_repository, mock_db_client, sample_license_data):
         """Find all licenses held by user."""
         mock_db_client.execute.return_value = [{"entity": sample_license_data}]
 
@@ -727,9 +688,7 @@ class TestLicenseRepository:
         assert "access_count + 1" in query
 
     @pytest.mark.asyncio
-    async def test_revoke_license(
-        self, license_repository, mock_db_client, sample_license_data
-    ):
+    async def test_revoke_license(self, license_repository, mock_db_client, sample_license_data):
         """Revoke a license."""
         sample_license_data["revoked_at"] = datetime.now(UTC).isoformat()
         mock_db_client.execute_single.return_value = {"entity": sample_license_data}
@@ -740,9 +699,7 @@ class TestLicenseRepository:
         assert result.revoked_at is not None
 
     @pytest.mark.asyncio
-    async def test_revoke_license_not_found(
-        self, license_repository, mock_db_client
-    ):
+    async def test_revoke_license_not_found(self, license_repository, mock_db_client):
         """Revoke returns None when license not found."""
         mock_db_client.execute_single.return_value = None
 
@@ -767,9 +724,7 @@ class TestMarketplaceRepository:
     """Tests for unified MarketplaceRepository."""
 
     @pytest.mark.asyncio
-    async def test_initialize_creates_indexes(
-        self, marketplace_repository, mock_db_client
-    ):
+    async def test_initialize_creates_indexes(self, marketplace_repository, mock_db_client):
         """Initialize creates necessary indexes."""
         mock_db_client.execute.return_value = None
 
@@ -779,9 +734,7 @@ class TestMarketplaceRepository:
         assert mock_db_client.execute.call_count >= 8
 
     @pytest.mark.asyncio
-    async def test_initialize_handles_index_errors(
-        self, marketplace_repository, mock_db_client
-    ):
+    async def test_initialize_handles_index_errors(self, marketplace_repository, mock_db_client):
         """Initialize handles index creation errors gracefully."""
         mock_db_client.execute.side_effect = RuntimeError("Index error")
 
@@ -789,9 +742,7 @@ class TestMarketplaceRepository:
         await marketplace_repository.initialize()
 
     @pytest.mark.asyncio
-    async def test_get_stats_success(
-        self, marketplace_repository, mock_db_client
-    ):
+    async def test_get_stats_success(self, marketplace_repository, mock_db_client):
         """Get marketplace statistics."""
         mock_db_client.execute_single.return_value = {
             "total_listings": 100,
@@ -809,9 +760,7 @@ class TestMarketplaceRepository:
         assert result.total_revenue == Decimal("50000.00")
 
     @pytest.mark.asyncio
-    async def test_get_stats_empty(
-        self, marketplace_repository, mock_db_client
-    ):
+    async def test_get_stats_empty(self, marketplace_repository, mock_db_client):
         """Get stats returns defaults when no data."""
         mock_db_client.execute_single.return_value = None
 
@@ -904,9 +853,7 @@ class TestEdgeCases:
         assert total == result.price
 
     @pytest.mark.asyncio
-    async def test_cart_item_price_conversion(
-        self, cart_repository, mock_db_client
-    ):
+    async def test_cart_item_price_conversion(self, cart_repository, mock_db_client):
         """Cart item handles string to Decimal conversion."""
         mock_db_client.execute_single.return_value = {
             "cart": {"id": "cart123", "user_id": "user123"}

@@ -9,31 +9,22 @@ Comprehensive tests for CapsuleRepository including:
 - Semantic edges
 """
 
-import json
 from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 
-from forge.models.base import CapsuleType, TrustLevel
+from forge.models.base import CapsuleType
 from forge.models.capsule import (
-    Capsule,
     CapsuleCreate,
-    CapsuleSearchResult,
     CapsuleUpdate,
-    CapsuleWithLineage,
-    IntegrityStatus,
-    LineageNode,
 )
 from forge.models.semantic_edges import (
-    SemanticEdge,
     SemanticEdgeCreate,
-    SemanticNeighbor,
     SemanticRelationType,
 )
 from forge.repositories.capsule_repository import CapsuleRepository
 from forge.security.capsule_integrity import CapsuleIntegrityService
-
 
 # =============================================================================
 # Fixtures

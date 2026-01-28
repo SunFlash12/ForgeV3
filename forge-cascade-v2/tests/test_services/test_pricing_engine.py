@@ -15,7 +15,7 @@ Tests cover:
 """
 
 from decimal import Decimal
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -920,9 +920,11 @@ class TestTrustBasedPricingEngine:
     @pytest.mark.asyncio
     async def test_lineage_distribution_single_ancestor(self, engine_with_mocks):
         """Test lineage distribution with single ancestor."""
-        engine_with_mocks._get_lineage_chain = AsyncMock(return_value=[
-            {"depth": 1, "owner_id": "user-1", "capsule_id": "cap-ancestor"},
-        ])
+        engine_with_mocks._get_lineage_chain = AsyncMock(
+            return_value=[
+                {"depth": 1, "owner_id": "user-1", "capsule_id": "cap-ancestor"},
+            ]
+        )
 
         distributions = await engine_with_mocks.calculate_lineage_distribution(
             "cap-789",
@@ -938,11 +940,13 @@ class TestTrustBasedPricingEngine:
     @pytest.mark.asyncio
     async def test_lineage_distribution_multiple_ancestors(self, engine_with_mocks):
         """Test lineage distribution with multiple ancestors."""
-        engine_with_mocks._get_lineage_chain = AsyncMock(return_value=[
-            {"depth": 1, "owner_id": "user-1", "capsule_id": "cap-a1"},
-            {"depth": 2, "owner_id": "user-2", "capsule_id": "cap-a2"},
-            {"depth": 3, "owner_id": "user-3", "capsule_id": "cap-a3"},
-        ])
+        engine_with_mocks._get_lineage_chain = AsyncMock(
+            return_value=[
+                {"depth": 1, "owner_id": "user-1", "capsule_id": "cap-a1"},
+                {"depth": 2, "owner_id": "user-2", "capsule_id": "cap-a2"},
+                {"depth": 3, "owner_id": "user-3", "capsule_id": "cap-a3"},
+            ]
+        )
 
         distributions = await engine_with_mocks.calculate_lineage_distribution(
             "cap-multi",
@@ -957,9 +961,7 @@ class TestTrustBasedPricingEngine:
     @pytest.mark.asyncio
     async def test_lineage_distribution_handles_error(self, engine_with_mocks):
         """Test lineage distribution handles errors gracefully."""
-        engine_with_mocks._get_lineage_chain = AsyncMock(
-            side_effect=ValueError("Database error")
-        )
+        engine_with_mocks._get_lineage_chain = AsyncMock(side_effect=ValueError("Database error"))
 
         distributions = await engine_with_mocks.calculate_lineage_distribution(
             "cap-error",
@@ -977,6 +979,7 @@ class TestTrustBasedPricingEngine:
         """Test get_pricing_engine returns singleton."""
         # Reset singleton
         import forge.services.pricing_engine as pe_module
+
         pe_module._pricing_engine = None
 
         engine1 = await get_pricing_engine()
@@ -1013,8 +1016,15 @@ class TestPricingEdgeCases:
     @pytest.mark.asyncio
     async def test_all_capsule_types_have_base_price(self, engine):
         """Test all known capsule types have defined base prices."""
-        types = ["OBSERVATION", "KNOWLEDGE", "DECISION", "INSIGHT",
-                 "PROTOCOL", "POLICY", "GOVERNANCE"]
+        types = [
+            "OBSERVATION",
+            "KNOWLEDGE",
+            "DECISION",
+            "INSIGHT",
+            "PROTOCOL",
+            "POLICY",
+            "GOVERNANCE",
+        ]
 
         for capsule_type in types:
             factors = PricingFactors(trust_level=50, capsule_type=capsule_type)

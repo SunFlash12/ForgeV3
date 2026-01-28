@@ -12,15 +12,13 @@ Comprehensive tests for the AuthService including:
 
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
-import hashlib
+
 import pytest
 
 from forge.models.user import (
     AuthProvider,
-    Token,
     TrustFlameAdjustment,
     User,
-    UserCreate,
     UserInDB,
     UserRole,
 )
@@ -30,8 +28,8 @@ from forge.security.auth_service import (
     AuthenticationError,
     AuthService,
     InvalidCredentialsError,
-    IPRateLimitExceededError,
     IPRateLimiter,
+    IPRateLimitExceededError,
     RegistrationError,
 )
 

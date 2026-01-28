@@ -8,8 +8,7 @@ Comprehensive tests for GAME SDK API routes including:
 - Function listing
 """
 
-from datetime import datetime, UTC
-from typing import Any
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -17,7 +16,6 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from forge.api.routes.game import router
-
 
 # =============================================================================
 # Fixtures
@@ -32,19 +30,23 @@ def mock_agent():
     agent.name = "Test Agent"
     agent.status = MagicMock(value="active")
     agent.game_agent_id = "game_agent_456"
-    agent.personality = MagicMock(model_dump=lambda: {
-        "name": "Test Agent",
-        "description": "A test agent",
-        "personality_traits": ["helpful", "analytical"],
-        "communication_style": "professional",
-        "expertise_domains": ["knowledge", "analysis"],
-    })
-    agent.goals = MagicMock(model_dump=lambda: {
-        "primary_goal": "Help users find information",
-        "secondary_goals": ["Maintain accuracy"],
-        "constraints": ["Be truthful"],
-        "success_metrics": ["User satisfaction"],
-    })
+    agent.personality = MagicMock(
+        model_dump=lambda: {
+            "name": "Test Agent",
+            "description": "A test agent",
+            "personality_traits": ["helpful", "analytical"],
+            "communication_style": "professional",
+            "expertise_domains": ["knowledge", "analysis"],
+        }
+    )
+    agent.goals = MagicMock(
+        model_dump=lambda: {
+            "primary_goal": "Help users find information",
+            "secondary_goals": ["Maintain accuracy"],
+            "constraints": ["Be truthful"],
+            "success_metrics": ["User satisfaction"],
+        }
+    )
     agent.workers = [
         MagicMock(id="worker1", name="Knowledge Worker", description="Handles knowledge"),
     ]
@@ -63,19 +65,25 @@ def mock_game_client(mock_agent):
     client.create_agent = AsyncMock(return_value=mock_agent)
     client.get_agent = AsyncMock(return_value=mock_agent)
     client.delete_agent = AsyncMock(return_value=True)
-    client.run_agent_loop = AsyncMock(return_value=[
-        {"iteration": 0, "action": "search", "result": "found"},
-    ])
-    client.get_next_action = AsyncMock(return_value={
-        "worker_id": "knowledge_worker",
-        "function_name": "search_capsules",
-        "arguments": {"query": "test"},
-        "reasoning": "User asked for information",
-    })
+    client.run_agent_loop = AsyncMock(
+        return_value=[
+            {"iteration": 0, "action": "search", "result": "found"},
+        ]
+    )
+    client.get_next_action = AsyncMock(
+        return_value={
+            "worker_id": "knowledge_worker",
+            "function_name": "search_capsules",
+            "arguments": {"query": "test"},
+            "reasoning": "User asked for information",
+        }
+    )
     client.store_memory = AsyncMock(return_value="memory123")
-    client.retrieve_memories = AsyncMock(return_value=[
-        {"id": "mem1", "content": "Previous interaction", "type": "conversation"},
-    ])
+    client.retrieve_memories = AsyncMock(
+        return_value=[
+            {"id": "mem1", "content": "Previous interaction", "type": "conversation"},
+        ]
+    )
     return client
 
 
@@ -103,7 +111,6 @@ def game_app(mock_game_client, mock_active_user):
     app.include_router(router, prefix="/api/v1")
 
     # Override user dependencies
-    from forge.api.dependencies import ActiveUserDep, OptionalUserDep
 
     async def get_active_user():
         return mock_active_user
@@ -371,15 +378,18 @@ class TestRunAgent:
             mock_agent.id = "agent123"
             mock_agent.game_agent_id = "game123"
             mock_client.get_agent = AsyncMock(return_value=mock_agent)
-            mock_client.run_agent_loop = AsyncMock(return_value=[
-                {"iteration": 0, "action": "test", "result": "done"},
-            ])
+            mock_client.run_agent_loop = AsyncMock(
+                return_value=[
+                    {"iteration": 0, "action": "test", "result": "done"},
+                ]
+            )
             mock_get_client.return_value = mock_client
 
-            with patch("forge.api.routes.game.get_db_client"), \
-                 patch("forge.api.routes.game.CapsuleRepository"), \
-                 patch("forge.api.routes.game.create_knowledge_worker"):
-
+            with (
+                patch("forge.api.routes.game.get_db_client"),
+                patch("forge.api.routes.game.CapsuleRepository"),
+                patch("forge.api.routes.game.create_knowledge_worker"),
+            ):
                 response = client.post(
                     "/api/v1/game/agents/agent123/run",
                     json={
@@ -402,10 +412,11 @@ class TestRunAgent:
             mock_client.run_agent_loop = AsyncMock(return_value=[])
             mock_get_client.return_value = mock_client
 
-            with patch("forge.api.routes.game.get_db_client"), \
-                 patch("forge.api.routes.game.CapsuleRepository"), \
-                 patch("forge.api.routes.game.create_knowledge_worker"):
-
+            with (
+                patch("forge.api.routes.game.get_db_client"),
+                patch("forge.api.routes.game.CapsuleRepository"),
+                patch("forge.api.routes.game.create_knowledge_worker"),
+            ):
                 response = client.post(
                     "/api/v1/game/agents/agent123/run",
                     json={},
@@ -455,12 +466,14 @@ class TestGetNextAction:
             mock_agent.id = "agent123"
             mock_agent.game_agent_id = "game123"
             mock_client.get_agent = AsyncMock(return_value=mock_agent)
-            mock_client.get_next_action = AsyncMock(return_value={
-                "worker_id": "knowledge_worker",
-                "function_name": "search_capsules",
-                "arguments": {"query": "test"},
-                "reasoning": "User needs information",
-            })
+            mock_client.get_next_action = AsyncMock(
+                return_value={
+                    "worker_id": "knowledge_worker",
+                    "function_name": "search_capsules",
+                    "arguments": {"query": "test"},
+                    "reasoning": "User needs information",
+                }
+            )
             mock_get_client.return_value = mock_client
 
             response = client.post(
@@ -544,10 +557,12 @@ class TestSearchMemories:
         """Search memories successfully."""
         with patch("forge.api.routes.game.get_game_client") as mock_get_client:
             mock_client = AsyncMock()
-            mock_client.retrieve_memories = AsyncMock(return_value=[
-                {"id": "mem1", "content": "Previous chat", "type": "conversation"},
-                {"id": "mem2", "content": "Fact about user", "type": "fact"},
-            ])
+            mock_client.retrieve_memories = AsyncMock(
+                return_value=[
+                    {"id": "mem1", "content": "Previous chat", "type": "conversation"},
+                    {"id": "mem2", "content": "Fact about user", "type": "fact"},
+                ]
+            )
             mock_get_client.return_value = mock_client
 
             response = client.post(
@@ -681,7 +696,9 @@ class TestErrorHandling:
 
     def test_sdk_not_available(self, client: TestClient):
         """Test handling when GAME SDK is not available."""
-        with patch("forge.api.routes.game.get_game_client", side_effect=ImportError("SDK not found")):
+        with patch(
+            "forge.api.routes.game.get_game_client", side_effect=ImportError("SDK not found")
+        ):
             # The route catches ImportError and returns 503
             response = client.post(
                 "/api/v1/game/agents",

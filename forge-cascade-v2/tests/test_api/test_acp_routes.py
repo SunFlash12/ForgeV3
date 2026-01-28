@@ -13,7 +13,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-
 # =============================================================================
 # Fixtures
 # =============================================================================
@@ -160,9 +159,7 @@ class TestCreateOfferingRoute:
         """Create offering with valid data succeeds."""
         mock_virtuals_service.register_offering = AsyncMock(return_value=sample_offering)
 
-        with patch(
-            "forge.api.routes.acp.get_virtuals_service", return_value=mock_virtuals_service
-        ):
+        with patch("forge.api.routes.acp.get_virtuals_service", return_value=mock_virtuals_service):
             response = client.post(
                 "/api/v1/acp/offerings",
                 json={
@@ -195,9 +192,7 @@ class TestSearchOfferingsRoute:
         """Search offerings without filters returns results."""
         mock_virtuals_service.search_offerings = AsyncMock(return_value=[sample_offering])
 
-        with patch(
-            "forge.api.routes.acp.get_virtuals_service", return_value=mock_virtuals_service
-        ):
+        with patch("forge.api.routes.acp.get_virtuals_service", return_value=mock_virtuals_service):
             response = client.get("/api/v1/acp/offerings")
 
         # Public endpoint, should succeed or service unavailable
@@ -211,9 +206,7 @@ class TestSearchOfferingsRoute:
         """Search offerings with filters returns filtered results."""
         mock_virtuals_service.search_offerings = AsyncMock(return_value=[sample_offering])
 
-        with patch(
-            "forge.api.routes.acp.get_virtuals_service", return_value=mock_virtuals_service
-        ):
+        with patch("forge.api.routes.acp.get_virtuals_service", return_value=mock_virtuals_service):
             response = client.get(
                 "/api/v1/acp/offerings",
                 params={
@@ -245,15 +238,11 @@ class TestSearchOfferingsRoute:
 class TestGetOfferingRoute:
     """Tests for GET /acp/offerings/{offering_id} endpoint."""
 
-    def test_get_offering_success(
-        self, client: TestClient, mock_virtuals_service, sample_offering
-    ):
+    def test_get_offering_success(self, client: TestClient, mock_virtuals_service, sample_offering):
         """Get offering by ID returns offering."""
         mock_virtuals_service.get_offering = AsyncMock(return_value=sample_offering)
 
-        with patch(
-            "forge.api.routes.acp.get_virtuals_service", return_value=mock_virtuals_service
-        ):
+        with patch("forge.api.routes.acp.get_virtuals_service", return_value=mock_virtuals_service):
             response = client.get("/api/v1/acp/offerings/offering_123")
 
         assert response.status_code in [200, 503]
@@ -262,9 +251,7 @@ class TestGetOfferingRoute:
         """Get non-existent offering returns 404."""
         mock_virtuals_service.get_offering = AsyncMock(return_value=None)
 
-        with patch(
-            "forge.api.routes.acp.get_virtuals_service", return_value=mock_virtuals_service
-        ):
+        with patch("forge.api.routes.acp.get_virtuals_service", return_value=mock_virtuals_service):
             response = client.get("/api/v1/acp/offerings/nonexistent")
 
         assert response.status_code in [404, 503]
@@ -337,9 +324,7 @@ class TestCreateJobRoute:
         """Create job with valid data succeeds."""
         mock_virtuals_service.create_job = AsyncMock(return_value=sample_job)
 
-        with patch(
-            "forge.api.routes.acp.get_virtuals_service", return_value=mock_virtuals_service
-        ):
+        with patch("forge.api.routes.acp.get_virtuals_service", return_value=mock_virtuals_service):
             response = client.post(
                 "/api/v1/acp/jobs",
                 json={
@@ -368,22 +353,16 @@ class TestGetJobRoute:
         """Get job by ID returns job."""
         mock_virtuals_service.get_job = AsyncMock(return_value=sample_job)
 
-        with patch(
-            "forge.api.routes.acp.get_virtuals_service", return_value=mock_virtuals_service
-        ):
+        with patch("forge.api.routes.acp.get_virtuals_service", return_value=mock_virtuals_service):
             response = client.get("/api/v1/acp/jobs/job_123", headers=auth_headers)
 
         assert response.status_code in [200, 503]
 
-    def test_get_job_not_found(
-        self, client: TestClient, auth_headers: dict, mock_virtuals_service
-    ):
+    def test_get_job_not_found(self, client: TestClient, auth_headers: dict, mock_virtuals_service):
         """Get non-existent job returns 404."""
         mock_virtuals_service.get_job = AsyncMock(return_value=None)
 
-        with patch(
-            "forge.api.routes.acp.get_virtuals_service", return_value=mock_virtuals_service
-        ):
+        with patch("forge.api.routes.acp.get_virtuals_service", return_value=mock_virtuals_service):
             response = client.get("/api/v1/acp/jobs/nonexistent", headers=auth_headers)
 
         assert response.status_code in [404, 503]
@@ -446,9 +425,7 @@ class TestAcceptJobRoute:
         """Accept job with valid auth succeeds."""
         mock_virtuals_service.accept_terms = AsyncMock(return_value=sample_job)
 
-        with patch(
-            "forge.api.routes.acp.get_virtuals_service", return_value=mock_virtuals_service
-        ):
+        with patch("forge.api.routes.acp.get_virtuals_service", return_value=mock_virtuals_service):
             response = client.post("/api/v1/acp/jobs/job_123/accept", headers=auth_headers)
 
         assert response.status_code in [200, 400, 503]
@@ -583,9 +560,7 @@ class TestGetBuyerJobsRoute:
         """Get buyer jobs with auth returns jobs."""
         mock_virtuals_service.get_buyer_jobs = AsyncMock(return_value=[sample_job])
 
-        with patch(
-            "forge.api.routes.acp.get_virtuals_service", return_value=mock_virtuals_service
-        ):
+        with patch("forge.api.routes.acp.get_virtuals_service", return_value=mock_virtuals_service):
             response = client.get(
                 "/api/v1/acp/jobs/buyer/agent_001",
                 headers=auth_headers,
@@ -599,9 +574,7 @@ class TestGetBuyerJobsRoute:
         """Get buyer jobs with filters returns filtered jobs."""
         mock_virtuals_service.get_buyer_jobs = AsyncMock(return_value=[sample_job])
 
-        with patch(
-            "forge.api.routes.acp.get_virtuals_service", return_value=mock_virtuals_service
-        ):
+        with patch("forge.api.routes.acp.get_virtuals_service", return_value=mock_virtuals_service):
             response = client.get(
                 "/api/v1/acp/jobs/buyer/agent_001",
                 params={"status": "pending", "limit": 10},
@@ -634,9 +607,7 @@ class TestGetProviderJobsRoute:
         """Get provider jobs with auth returns jobs."""
         mock_virtuals_service.get_provider_jobs = AsyncMock(return_value=[sample_job])
 
-        with patch(
-            "forge.api.routes.acp.get_virtuals_service", return_value=mock_virtuals_service
-        ):
+        with patch("forge.api.routes.acp.get_virtuals_service", return_value=mock_virtuals_service):
             response = client.get(
                 "/api/v1/acp/jobs/provider/agent_001",
                 headers=auth_headers,

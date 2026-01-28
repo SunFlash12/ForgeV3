@@ -12,7 +12,6 @@ Tests cover:
 """
 
 import json
-from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -30,10 +29,8 @@ from forge.models.query import (
     QueryIntent,
     QueryOperator,
     QueryResult,
-    QueryResultRow,
     RelationshipRef,
     SortDirection,
-    get_default_schema,
 )
 from forge.services.query_compiler import (
     CypherSecurityError,
@@ -269,32 +266,40 @@ class TestCypherValidator:
 
     def test_validate_parameters_valid(self):
         """Test valid parameters pass validation."""
-        CypherValidator.validate_parameters({
-            "id": "capsule-123",
-            "trust_level": 60,
-            "limit": 10,
-        })
+        CypherValidator.validate_parameters(
+            {
+                "id": "capsule-123",
+                "trust_level": 60,
+                "limit": 10,
+            }
+        )
 
     def test_validate_parameters_invalid_key(self):
         """Test invalid parameter key is rejected."""
         with pytest.raises(CypherSecurityError, match="Invalid parameter name"):
-            CypherValidator.validate_parameters({
-                "123invalid": "value",
-            })
+            CypherValidator.validate_parameters(
+                {
+                    "123invalid": "value",
+                }
+            )
 
     def test_validate_parameters_injection_in_value(self):
         """Test injection attempt in parameter value is rejected."""
         with pytest.raises(CypherSecurityError, match="Suspicious content"):
-            CypherValidator.validate_parameters({
-                "name": "test } ) DELETE",
-            })
+            CypherValidator.validate_parameters(
+                {
+                    "name": "test } ) DELETE",
+                }
+            )
 
     def test_validate_parameters_procedure_call_in_value(self):
         """Test procedure call in parameter value is rejected."""
         with pytest.raises(CypherSecurityError, match="Suspicious content"):
-            CypherValidator.validate_parameters({
-                "query": "CALL db.indexes()",
-            })
+            CypherValidator.validate_parameters(
+                {
+                    "query": "CALL db.indexes()",
+                }
+            )
 
     # =========================================================================
     # is_read_only Tests
@@ -376,7 +381,7 @@ class TestQueryCompiler:
 
     def test_parse_json_response_invalid(self, compiler):
         """Test parsing invalid JSON raises error."""
-        content = 'This is not JSON at all'
+        content = "This is not JSON at all"
         with pytest.raises(ValueError, match="Could not parse JSON"):
             compiler._parse_json_response(content)
 
@@ -387,9 +392,7 @@ class TestQueryCompiler:
     def test_to_query_intent_entities(self, compiler):
         """Test converting entities to QueryIntent."""
         data = {
-            "entities": [
-                {"alias": "c", "label": "Capsule", "properties": {"type": "KNOWLEDGE"}}
-            ],
+            "entities": [{"alias": "c", "label": "Capsule", "properties": {"type": "KNOWLEDGE"}}],
             "constraints": [],
             "return_fields": ["c.id"],
         }
@@ -546,9 +549,7 @@ class TestQueryCompiler:
     def test_generate_cypher_with_properties(self, compiler):
         """Test generating Cypher with entity properties."""
         intent = QueryIntent(
-            entities=[
-                EntityRef(alias="c", label="Capsule", properties={"type": "KNOWLEDGE"})
-            ],
+            entities=[EntityRef(alias="c", label="Capsule", properties={"type": "KNOWLEDGE"})],
             return_fields=["c.id"],
         )
 
@@ -623,9 +624,7 @@ class TestQueryCompiler:
         """Test generating Cypher with aggregation."""
         intent = QueryIntent(
             entities=[EntityRef(alias="c", label="Capsule")],
-            aggregations=[
-                Aggregation(function=AggregationType.COUNT, field="c", alias="total")
-            ],
+            aggregations=[Aggregation(function=AggregationType.COUNT, field="c", alias="total")],
             is_count_query=True,
         )
 
@@ -750,12 +749,14 @@ class TestQueryCompiler:
     async def test_compile_success(self, compiler, mock_llm_service):
         """Test successful query compilation."""
         mock_llm_service.complete.return_value = MagicMock(
-            content=json.dumps({
-                "entities": [{"alias": "c", "label": "Capsule"}],
-                "constraints": [],
-                "return_fields": ["c.id", "c.title"],
-                "limit": 10,
-            })
+            content=json.dumps(
+                {
+                    "entities": [{"alias": "c", "label": "Capsule"}],
+                    "constraints": [],
+                    "return_fields": ["c.id", "c.title"],
+                    "limit": 10,
+                }
+            )
         )
 
         result = await compiler.compile("Find all capsules", user_trust=60)
@@ -770,7 +771,7 @@ class TestQueryCompiler:
         """Test compilation falls back on LLM error."""
         mock_llm_service.complete.side_effect = RuntimeError("LLM unavailable")
 
-        with patch.object(compiler, '_create_fallback_intent') as mock_fallback:
+        with patch.object(compiler, "_create_fallback_intent") as mock_fallback:
             mock_fallback.return_value = QueryIntent(
                 entities=[EntityRef(alias="c", label="Capsule")],
                 return_fields=["c.id"],
@@ -815,12 +816,14 @@ class TestKnowledgeQueryService:
     async def test_query_success(self, service, mock_db_client, mock_llm_service):
         """Test successful query execution."""
         mock_llm_service.complete.return_value = MagicMock(
-            content=json.dumps({
-                "entities": [{"alias": "c", "label": "Capsule"}],
-                "constraints": [],
-                "return_fields": ["c.id"],
-                "limit": 10,
-            })
+            content=json.dumps(
+                {
+                    "entities": [{"alias": "c", "label": "Capsule"}],
+                    "constraints": [],
+                    "return_fields": ["c.id"],
+                    "limit": 10,
+                }
+            )
         )
         mock_db_client.execute.return_value = [
             {"c.id": "cap-1"},
@@ -838,11 +841,13 @@ class TestKnowledgeQueryService:
     async def test_query_with_truncation(self, service, mock_db_client, mock_llm_service):
         """Test query with truncated results."""
         mock_llm_service.complete.return_value = MagicMock(
-            content=json.dumps({
-                "entities": [{"alias": "c", "label": "Capsule"}],
-                "constraints": [],
-                "return_fields": ["c.id"],
-            })
+            content=json.dumps(
+                {
+                    "entities": [{"alias": "c", "label": "Capsule"}],
+                    "constraints": [],
+                    "return_fields": ["c.id"],
+                }
+            )
         )
         # Return more than max_results
         mock_db_client.execute.return_value = [{"c.id": f"cap-{i}"} for i in range(150)]
@@ -862,16 +867,18 @@ class TestKnowledgeQueryService:
         """Test query fails security validation."""
         # Mock LLM to return dangerous query
         mock_llm_service.complete.return_value = MagicMock(
-            content=json.dumps({
-                "entities": [],
-                "constraints": [],
-            })
+            content=json.dumps(
+                {
+                    "entities": [],
+                    "constraints": [],
+                }
+            )
         )
 
         # Mock compiler to return a query that will fail validation
         with patch.object(
             service.compiler,
-            'compile',
+            "compile",
             return_value=CompiledQuery(
                 cypher="MATCH (n) DELETE n",  # Dangerous!
                 parameters={},
@@ -888,11 +895,13 @@ class TestKnowledgeQueryService:
     async def test_query_database_error(self, service, mock_db_client, mock_llm_service):
         """Test query handles database errors."""
         mock_llm_service.complete.return_value = MagicMock(
-            content=json.dumps({
-                "entities": [{"alias": "c", "label": "Capsule"}],
-                "constraints": [],
-                "return_fields": ["c.id"],
-            })
+            content=json.dumps(
+                {
+                    "entities": [{"alias": "c", "label": "Capsule"}],
+                    "constraints": [],
+                    "return_fields": ["c.id"],
+                }
+            )
         )
         mock_db_client.execute.side_effect = ConnectionError("Database unavailable")
 
@@ -909,11 +918,15 @@ class TestKnowledgeQueryService:
     async def test_query_with_synthesis(self, service, mock_db_client, mock_llm_service):
         """Test query with answer synthesis."""
         mock_llm_service.complete.side_effect = [
-            MagicMock(content=json.dumps({
-                "entities": [{"alias": "c", "label": "Capsule"}],
-                "constraints": [],
-                "return_fields": ["c.id", "c.title"],
-            })),
+            MagicMock(
+                content=json.dumps(
+                    {
+                        "entities": [{"alias": "c", "label": "Capsule"}],
+                        "constraints": [],
+                        "return_fields": ["c.id", "c.title"],
+                    }
+                )
+            ),
             MagicMock(content="There are 2 capsules about AI."),
         ]
         mock_db_client.execute.return_value = [
@@ -928,14 +941,18 @@ class TestKnowledgeQueryService:
         assert result.synthesis_time_ms > 0
 
     @pytest.mark.asyncio
-    async def test_query_no_synthesis_for_empty_results(self, service, mock_db_client, mock_llm_service):
+    async def test_query_no_synthesis_for_empty_results(
+        self, service, mock_db_client, mock_llm_service
+    ):
         """Test no synthesis when results are empty."""
         mock_llm_service.complete.return_value = MagicMock(
-            content=json.dumps({
-                "entities": [{"alias": "c", "label": "Capsule"}],
-                "constraints": [],
-                "return_fields": ["c.id"],
-            })
+            content=json.dumps(
+                {
+                    "entities": [{"alias": "c", "label": "Capsule"}],
+                    "constraints": [],
+                    "return_fields": ["c.id"],
+                }
+            )
         )
         mock_db_client.execute.return_value = []
 
@@ -946,14 +963,20 @@ class TestKnowledgeQueryService:
         assert mock_llm_service.complete.call_count == 1
 
     @pytest.mark.asyncio
-    async def test_synthesize_answer_error_handling(self, service, mock_db_client, mock_llm_service):
+    async def test_synthesize_answer_error_handling(
+        self, service, mock_db_client, mock_llm_service
+    ):
         """Test synthesis handles errors gracefully."""
         mock_llm_service.complete.side_effect = [
-            MagicMock(content=json.dumps({
-                "entities": [{"alias": "c", "label": "Capsule"}],
-                "constraints": [],
-                "return_fields": ["c.id"],
-            })),
+            MagicMock(
+                content=json.dumps(
+                    {
+                        "entities": [{"alias": "c", "label": "Capsule"}],
+                        "constraints": [],
+                        "return_fields": ["c.id"],
+                    }
+                )
+            ),
             RuntimeError("Synthesis failed"),
         ]
         mock_db_client.execute.return_value = [{"c.id": "cap-1"}]
@@ -972,11 +995,13 @@ class TestKnowledgeQueryService:
     async def test_query_respects_trust_level(self, service, mock_db_client, mock_llm_service):
         """Test query includes trust filtering."""
         mock_llm_service.complete.return_value = MagicMock(
-            content=json.dumps({
-                "entities": [{"alias": "c", "label": "Capsule"}],
-                "constraints": [],
-                "return_fields": ["c.id"],
-            })
+            content=json.dumps(
+                {
+                    "entities": [{"alias": "c", "label": "Capsule"}],
+                    "constraints": [],
+                    "return_fields": ["c.id"],
+                }
+            )
         )
         mock_db_client.execute.return_value = []
 
@@ -988,14 +1013,18 @@ class TestKnowledgeQueryService:
         assert "trust_level" in cypher
 
     @pytest.mark.asyncio
-    async def test_query_confidence_high_with_results(self, service, mock_db_client, mock_llm_service):
+    async def test_query_confidence_high_with_results(
+        self, service, mock_db_client, mock_llm_service
+    ):
         """Test confidence is high when results found."""
         mock_llm_service.complete.return_value = MagicMock(
-            content=json.dumps({
-                "entities": [{"alias": "c", "label": "Capsule"}],
-                "constraints": [],
-                "return_fields": ["c.id"],
-            })
+            content=json.dumps(
+                {
+                    "entities": [{"alias": "c", "label": "Capsule"}],
+                    "constraints": [],
+                    "return_fields": ["c.id"],
+                }
+            )
         )
         mock_db_client.execute.return_value = [{"c.id": "cap-1"}]
 
@@ -1004,14 +1033,18 @@ class TestKnowledgeQueryService:
         assert result.confidence == 0.9
 
     @pytest.mark.asyncio
-    async def test_query_confidence_low_without_results(self, service, mock_db_client, mock_llm_service):
+    async def test_query_confidence_low_without_results(
+        self, service, mock_db_client, mock_llm_service
+    ):
         """Test confidence is lower when no results found."""
         mock_llm_service.complete.return_value = MagicMock(
-            content=json.dumps({
-                "entities": [{"alias": "c", "label": "Capsule"}],
-                "constraints": [],
-                "return_fields": ["c.id"],
-            })
+            content=json.dumps(
+                {
+                    "entities": [{"alias": "c", "label": "Capsule"}],
+                    "constraints": [],
+                    "return_fields": ["c.id"],
+                }
+            )
         )
         mock_db_client.execute.return_value = []
 

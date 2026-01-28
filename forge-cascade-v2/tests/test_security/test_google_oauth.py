@@ -21,7 +21,6 @@ from forge.security.google_oauth import (
     get_google_oauth_service,
 )
 
-
 # =============================================================================
 # GoogleUserInfo Model Tests
 # =============================================================================

@@ -22,11 +22,10 @@ from neo4j.exceptions import (
 )
 
 from forge.database.schema import (
-    SchemaManager,
     _SAFE_IDENTIFIER_PATTERN,
+    SchemaManager,
     _validate_identifier,
 )
-
 
 # =============================================================================
 # Fixtures
@@ -162,9 +161,7 @@ class TestSchemaManagerConstraints:
         assert "semanticedge_id_unique" in results
 
     @pytest.mark.asyncio
-    async def test_create_constraints_includes_chat_room(
-        self, schema_manager, mock_db_client
-    ):
+    async def test_create_constraints_includes_chat_room(self, schema_manager, mock_db_client):
         """Create constraints includes chat room constraints."""
         mock_db_client.execute.return_value = []
 
@@ -197,9 +194,7 @@ class TestSchemaManagerConstraints:
         assert failed_count == 1
 
     @pytest.mark.asyncio
-    async def test_create_constraints_handles_client_error(
-        self, schema_manager, mock_db_client
-    ):
+    async def test_create_constraints_handles_client_error(self, schema_manager, mock_db_client):
         """Create constraints handles ClientError gracefully."""
         call_count = [0]
 
@@ -218,9 +213,7 @@ class TestSchemaManagerConstraints:
         assert failed_count == 1
 
     @pytest.mark.asyncio
-    async def test_create_constraints_handles_database_error(
-        self, schema_manager, mock_db_client
-    ):
+    async def test_create_constraints_handles_database_error(self, schema_manager, mock_db_client):
         """Create constraints handles DatabaseError gracefully."""
         call_count = [0]
 
@@ -242,9 +235,7 @@ class TestSchemaManagerConstraints:
         self, schema_manager, mock_db_client
     ):
         """Create constraints raises on ServiceUnavailable."""
-        mock_db_client.execute = AsyncMock(
-            side_effect=ServiceUnavailable("Database unavailable")
-        )
+        mock_db_client.execute = AsyncMock(side_effect=ServiceUnavailable("Database unavailable"))
 
         with pytest.raises(ServiceUnavailable):
             await schema_manager.create_constraints()
@@ -300,9 +291,7 @@ class TestSchemaManagerIndexes:
         assert all(v is True for v in results.values())
 
     @pytest.mark.asyncio
-    async def test_create_indexes_includes_overlay_indexes(
-        self, schema_manager, mock_db_client
-    ):
+    async def test_create_indexes_includes_overlay_indexes(self, schema_manager, mock_db_client):
         """Create indexes includes overlay indexes."""
         mock_db_client.execute.return_value = []
 
@@ -312,9 +301,7 @@ class TestSchemaManagerIndexes:
         assert "overlay_trust_idx" in results
 
     @pytest.mark.asyncio
-    async def test_create_indexes_includes_proposal_indexes(
-        self, schema_manager, mock_db_client
-    ):
+    async def test_create_indexes_includes_proposal_indexes(self, schema_manager, mock_db_client):
         """Create indexes includes proposal indexes."""
         mock_db_client.execute.return_value = []
 
@@ -324,9 +311,7 @@ class TestSchemaManagerIndexes:
         assert "proposal_proposer_idx" in results
 
     @pytest.mark.asyncio
-    async def test_create_indexes_includes_audit_indexes(
-        self, schema_manager, mock_db_client
-    ):
+    async def test_create_indexes_includes_audit_indexes(self, schema_manager, mock_db_client):
         """Create indexes includes audit log indexes."""
         mock_db_client.execute.return_value = []
 
@@ -338,9 +323,7 @@ class TestSchemaManagerIndexes:
         assert "audit_correlation_idx" in results
 
     @pytest.mark.asyncio
-    async def test_create_indexes_includes_event_indexes(
-        self, schema_manager, mock_db_client
-    ):
+    async def test_create_indexes_includes_event_indexes(self, schema_manager, mock_db_client):
         """Create indexes includes event indexes."""
         mock_db_client.execute.return_value = []
 
@@ -351,9 +334,7 @@ class TestSchemaManagerIndexes:
         assert "event_timestamp_idx" in results
 
     @pytest.mark.asyncio
-    async def test_create_indexes_includes_temporal_indexes(
-        self, schema_manager, mock_db_client
-    ):
+    async def test_create_indexes_includes_temporal_indexes(self, schema_manager, mock_db_client):
         """Create indexes includes temporal graph extension indexes."""
         mock_db_client.execute.return_value = []
 
@@ -389,9 +370,7 @@ class TestSchemaManagerIndexes:
         assert "semanticedge_created_idx" in results
 
     @pytest.mark.asyncio
-    async def test_create_indexes_includes_chat_indexes(
-        self, schema_manager, mock_db_client
-    ):
+    async def test_create_indexes_includes_chat_indexes(self, schema_manager, mock_db_client):
         """Create indexes includes chat room indexes."""
         mock_db_client.execute.return_value = []
 
@@ -413,9 +392,7 @@ class TestSchemaManagerIndexes:
         assert "chatmessage_created_idx" in results
 
     @pytest.mark.asyncio
-    async def test_create_indexes_handles_client_error(
-        self, schema_manager, mock_db_client
-    ):
+    async def test_create_indexes_handles_client_error(self, schema_manager, mock_db_client):
         """Create indexes handles ClientError gracefully."""
         call_count = [0]
 
@@ -433,9 +410,7 @@ class TestSchemaManagerIndexes:
         assert failed_count == 1
 
     @pytest.mark.asyncio
-    async def test_create_indexes_handles_database_error(
-        self, schema_manager, mock_db_client
-    ):
+    async def test_create_indexes_handles_database_error(self, schema_manager, mock_db_client):
         """Create indexes handles DatabaseError gracefully."""
         call_count = [0]
 
@@ -457,9 +432,7 @@ class TestSchemaManagerIndexes:
         self, schema_manager, mock_db_client
     ):
         """Create indexes raises on ServiceUnavailable."""
-        mock_db_client.execute = AsyncMock(
-            side_effect=ServiceUnavailable("Database unavailable")
-        )
+        mock_db_client.execute = AsyncMock(side_effect=ServiceUnavailable("Database unavailable"))
 
         with pytest.raises(ServiceUnavailable):
             await schema_manager.create_indexes()
@@ -504,13 +477,9 @@ class TestSchemaManagerVectorIndexes:
         assert results["capsule_embeddings"] is True
 
     @pytest.mark.asyncio
-    async def test_create_vector_indexes_handles_client_error(
-        self, schema_manager, mock_db_client
-    ):
+    async def test_create_vector_indexes_handles_client_error(self, schema_manager, mock_db_client):
         """Create vector indexes handles ClientError (unsupported)."""
-        mock_db_client.execute = AsyncMock(
-            side_effect=ClientError("Vector indexes not supported")
-        )
+        mock_db_client.execute = AsyncMock(side_effect=ClientError("Vector indexes not supported"))
 
         results = await schema_manager.create_vector_indexes()
 
@@ -522,9 +491,7 @@ class TestSchemaManagerVectorIndexes:
         self, schema_manager, mock_db_client
     ):
         """Create vector indexes handles DatabaseError (version incompatibility)."""
-        mock_db_client.execute = AsyncMock(
-            side_effect=DatabaseError("Unsupported feature")
-        )
+        mock_db_client.execute = AsyncMock(side_effect=DatabaseError("Unsupported feature"))
 
         results = await schema_manager.create_vector_indexes()
 
@@ -535,9 +502,7 @@ class TestSchemaManagerVectorIndexes:
         self, schema_manager, mock_db_client
     ):
         """Create vector indexes raises on ServiceUnavailable."""
-        mock_db_client.execute = AsyncMock(
-            side_effect=ServiceUnavailable("Database unavailable")
-        )
+        mock_db_client.execute = AsyncMock(side_effect=ServiceUnavailable("Database unavailable"))
 
         with pytest.raises(ServiceUnavailable):
             await schema_manager.create_vector_indexes()
@@ -622,9 +587,7 @@ class TestSchemaManagerDropAll:
                 await schema_manager.drop_all()
 
     @pytest.mark.asyncio
-    async def test_drop_all_allowed_in_production_with_force(
-        self, schema_manager, mock_db_client
-    ):
+    async def test_drop_all_allowed_in_production_with_force(self, schema_manager, mock_db_client):
         """Drop all is allowed in production with force=True."""
         with patch("forge.database.schema.get_settings") as mock_get_settings:
             mock_settings = MagicMock()
@@ -639,9 +602,7 @@ class TestSchemaManagerDropAll:
             assert isinstance(results, dict)
 
     @pytest.mark.asyncio
-    async def test_drop_all_allowed_in_development(
-        self, schema_manager, mock_db_client
-    ):
+    async def test_drop_all_allowed_in_development(self, schema_manager, mock_db_client):
         """Drop all is allowed in development environment."""
         with patch("forge.database.schema.get_settings") as mock_get_settings:
             mock_settings = MagicMock()
@@ -781,9 +742,7 @@ class TestSchemaManagerDropAll:
             assert results["drop_constraint_test_constraint"] is False
 
     @pytest.mark.asyncio
-    async def test_drop_all_raises_on_service_unavailable(
-        self, schema_manager, mock_db_client
-    ):
+    async def test_drop_all_raises_on_service_unavailable(self, schema_manager, mock_db_client):
         """Drop all raises on ServiceUnavailable."""
         with patch("forge.database.schema.get_settings") as mock_get_settings:
             mock_settings = MagicMock()
@@ -799,9 +758,7 @@ class TestSchemaManagerDropAll:
                 await schema_manager.drop_all()
 
     @pytest.mark.asyncio
-    async def test_drop_all_handles_unexpected_exception(
-        self, schema_manager, mock_db_client
-    ):
+    async def test_drop_all_handles_unexpected_exception(self, schema_manager, mock_db_client):
         """Drop all handles unexpected exceptions gracefully."""
         with patch("forge.database.schema.get_settings") as mock_get_settings:
             mock_settings = MagicMock()
@@ -918,9 +875,7 @@ class TestSchemaManagerVerifySchema:
         assert len(result["indexes"]["missing"]) == 0
 
     @pytest.mark.asyncio
-    async def test_verify_schema_missing_constraints(
-        self, schema_manager, mock_db_client
-    ):
+    async def test_verify_schema_missing_constraints(self, schema_manager, mock_db_client):
         """Verify schema reports missing constraints."""
         mock_db_client.execute.side_effect = [
             # Missing some constraints
@@ -971,9 +926,7 @@ class TestSchemaManagerVerifySchema:
         assert len(result["indexes"]["missing"]) > 0
 
     @pytest.mark.asyncio
-    async def test_verify_schema_missing_vector_indexes(
-        self, schema_manager, mock_db_client
-    ):
+    async def test_verify_schema_missing_vector_indexes(self, schema_manager, mock_db_client):
         """Verify schema reports missing vector indexes."""
         mock_db_client.execute.side_effect = [
             [],  # No constraints
@@ -985,9 +938,7 @@ class TestSchemaManagerVerifySchema:
         assert "capsule_embeddings" in result["vector_indexes"]["missing"]
 
     @pytest.mark.asyncio
-    async def test_verify_schema_distinguishes_vector_indexes(
-        self, schema_manager, mock_db_client
-    ):
+    async def test_verify_schema_distinguishes_vector_indexes(self, schema_manager, mock_db_client):
         """Verify schema distinguishes vector indexes from regular indexes."""
         mock_db_client.execute.side_effect = [
             [],  # Constraints

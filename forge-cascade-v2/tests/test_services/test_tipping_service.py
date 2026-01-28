@@ -7,7 +7,7 @@ Tests the social tipping layer using $FROWG tokens on Solana.
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -18,7 +18,6 @@ from forge.virtuals.models.tipping import (
     TipSummary,
     TipTargetType,
 )
-
 
 # =============================================================================
 # Fixtures
@@ -131,7 +130,7 @@ class TestTipModel:
             amount_frowg=1.0,
         )
 
-        expected_lamports = int(1.0 * (10 ** FROWG_DECIMALS))
+        expected_lamports = int(1.0 * (10**FROWG_DECIMALS))
         assert tip.to_lamports() == expected_lamports
 
     def test_to_lamports_fractional(self):
@@ -144,7 +143,7 @@ class TestTipModel:
             amount_frowg=0.5,
         )
 
-        expected_lamports = int(0.5 * (10 ** FROWG_DECIMALS))
+        expected_lamports = int(0.5 * (10**FROWG_DECIMALS))
         assert tip.to_lamports() == expected_lamports
 
     def test_tip_target_types(self):
@@ -275,7 +274,7 @@ class TestCreateTip:
             amount_frowg=1.0,
         )
 
-        assert tip.amount_lamports == int(1.0 * (10 ** FROWG_DECIMALS))
+        assert tip.amount_lamports == int(1.0 * (10**FROWG_DECIMALS))
 
 
 # =============================================================================
@@ -373,7 +372,9 @@ class TestGetTipsForTarget:
         assert tips[0].target_id == "capsule-789"
 
     @pytest.mark.asyncio
-    async def test_get_tips_for_target_with_limit(self, tipping_service, mock_db_session, sample_tip_record):
+    async def test_get_tips_for_target_with_limit(
+        self, tipping_service, mock_db_session, sample_tip_record
+    ):
         """Test getting tips with custom limit."""
         mock_result = AsyncMock()
         mock_result.data = AsyncMock(return_value=[{"t": sample_tip_record}])
@@ -402,7 +403,9 @@ class TestGetTipsForTarget:
         assert len(tips) == 0
 
     @pytest.mark.asyncio
-    async def test_get_tips_for_target_unconfirmed(self, tipping_service, mock_db_session, sample_tip_record):
+    async def test_get_tips_for_target_unconfirmed(
+        self, tipping_service, mock_db_session, sample_tip_record
+    ):
         """Test getting tips including unconfirmed."""
         mock_result = AsyncMock()
         mock_result.data = AsyncMock(return_value=[{"t": sample_tip_record}])
@@ -430,11 +433,13 @@ class TestGetTipSummary:
         """Test getting tip summary for a target."""
         # Mock the aggregation query
         mock_agg_result = AsyncMock()
-        mock_agg_result.single = AsyncMock(return_value={
-            "total_tips": 5,
-            "total_frowg": 500.0,
-            "unique_tippers": 3,
-        })
+        mock_agg_result.single = AsyncMock(
+            return_value={
+                "total_tips": 5,
+                "total_frowg": 500.0,
+                "unique_tippers": 3,
+            }
+        )
 
         # Mock the recent tips query
         mock_recent_result = AsyncMock()
@@ -457,11 +462,13 @@ class TestGetTipSummary:
     async def test_get_tip_summary_no_tips(self, tipping_service, mock_db_session):
         """Test getting tip summary when no tips exist."""
         mock_agg_result = AsyncMock()
-        mock_agg_result.single = AsyncMock(return_value={
-            "total_tips": 0,
-            "total_frowg": 0.0,
-            "unique_tippers": 0,
-        })
+        mock_agg_result.single = AsyncMock(
+            return_value={
+                "total_tips": 0,
+                "total_frowg": 0.0,
+                "unique_tippers": 0,
+            }
+        )
 
         mock_recent_result = AsyncMock()
         mock_recent_result.data = AsyncMock(return_value=[])
@@ -526,11 +533,13 @@ class TestGetLeaderboard:
     async def test_get_leaderboard(self, tipping_service, mock_db_session):
         """Test getting tip leaderboard."""
         mock_result = AsyncMock()
-        mock_result.data = AsyncMock(return_value=[
-            {"target_id": "capsule-1", "total_frowg": 1000.0, "tip_count": 10},
-            {"target_id": "capsule-2", "total_frowg": 500.0, "tip_count": 5},
-            {"target_id": "capsule-3", "total_frowg": 250.0, "tip_count": 3},
-        ])
+        mock_result.data = AsyncMock(
+            return_value=[
+                {"target_id": "capsule-1", "total_frowg": 1000.0, "tip_count": 10},
+                {"target_id": "capsule-2", "total_frowg": 500.0, "tip_count": 5},
+                {"target_id": "capsule-3", "total_frowg": 250.0, "tip_count": 3},
+            ]
+        )
         mock_db_session.run.return_value = mock_result
 
         leaderboard = await tipping_service.get_leaderboard(

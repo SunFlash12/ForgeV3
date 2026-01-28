@@ -14,7 +14,6 @@ from __future__ import annotations
 import asyncio
 from datetime import UTC, datetime
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
@@ -33,7 +32,6 @@ from forge.overlays.base import (
     PassthroughOverlay,
     ResourceLimitError,
 )
-
 
 # =============================================================================
 # OverlayContext Tests
@@ -781,19 +779,13 @@ class TestCompositeOverlay:
     @pytest.mark.asyncio
     async def test_execute_chains_data(self):
         """Test execute passes data through overlay chain."""
-        overlay1 = ConcreteOverlay(
-            execute_result=OverlayResult.ok(data={"step1": "complete"})
-        )
-        overlay2 = ConcreteOverlay(
-            execute_result=OverlayResult.ok(data={"step2": "complete"})
-        )
+        overlay1 = ConcreteOverlay(execute_result=OverlayResult.ok(data={"step1": "complete"}))
+        overlay2 = ConcreteOverlay(execute_result=OverlayResult.ok(data={"step2": "complete"}))
         composite = CompositeOverlay([overlay1, overlay2])
 
         await composite.initialize()
         # Create context with required capabilities for child overlays
-        context = composite.create_context(
-            capabilities={Capability.DATABASE_READ}
-        )
+        context = composite.create_context(capabilities={Capability.DATABASE_READ})
 
         result = await composite.execute(context, input_data={"initial": "data"})
 
@@ -806,16 +798,12 @@ class TestCompositeOverlay:
     @pytest.mark.asyncio
     async def test_execute_stops_on_failure(self):
         """Test execute stops chain on first failure."""
-        overlay1 = ConcreteOverlay(
-            execute_result=OverlayResult.fail("First overlay failed")
-        )
+        overlay1 = ConcreteOverlay(execute_result=OverlayResult.fail("First overlay failed"))
         overlay2 = ConcreteOverlay()
         composite = CompositeOverlay([overlay1, overlay2])
 
         await composite.initialize()
-        context = composite.create_context(
-            capabilities={Capability.DATABASE_READ}
-        )
+        context = composite.create_context(capabilities={Capability.DATABASE_READ})
 
         result = await composite.execute(context)
 
@@ -840,9 +828,7 @@ class TestCompositeOverlay:
         composite = CompositeOverlay([overlay1, overlay2])
 
         await composite.initialize()
-        context = composite.create_context(
-            capabilities={Capability.DATABASE_READ}
-        )
+        context = composite.create_context(capabilities={Capability.DATABASE_READ})
 
         result = await composite.execute(context)
 
@@ -865,9 +851,7 @@ class TestCompositeOverlay:
         composite = CompositeOverlay([overlay1, overlay2])
 
         await composite.initialize()
-        context = composite.create_context(
-            capabilities={Capability.DATABASE_READ}
-        )
+        context = composite.create_context(capabilities={Capability.DATABASE_READ})
 
         result = await composite.execute(context)
 
@@ -882,18 +866,12 @@ class TestCompositeOverlay:
         rather than summing the duration_ms values from child overlay results.
         This is because execute() tracks real elapsed time, not mock durations.
         """
-        overlay1 = ConcreteOverlay(
-            execute_result=OverlayResult(success=True, duration_ms=50.0)
-        )
-        overlay2 = ConcreteOverlay(
-            execute_result=OverlayResult(success=True, duration_ms=75.0)
-        )
+        overlay1 = ConcreteOverlay(execute_result=OverlayResult(success=True, duration_ms=50.0))
+        overlay2 = ConcreteOverlay(execute_result=OverlayResult(success=True, duration_ms=75.0))
         composite = CompositeOverlay([overlay1, overlay2])
 
         await composite.initialize()
-        context = composite.create_context(
-            capabilities={Capability.DATABASE_READ}
-        )
+        context = composite.create_context(capabilities={Capability.DATABASE_READ})
 
         result = await composite.execute(context)
 
@@ -962,21 +940,13 @@ class TestOverlayIntegration:
     @pytest.mark.asyncio
     async def test_composite_with_mixed_results(self):
         """Test composite overlay handles mixed success/failure gracefully."""
-        success_overlay = ConcreteOverlay(
-            execute_result=OverlayResult.ok(data={"success": True})
-        )
-        fail_overlay = ConcreteOverlay(
-            execute_result=OverlayResult.fail("Intentional failure")
-        )
-        another_success = ConcreteOverlay(
-            execute_result=OverlayResult.ok(data={"another": True})
-        )
+        success_overlay = ConcreteOverlay(execute_result=OverlayResult.ok(data={"success": True}))
+        fail_overlay = ConcreteOverlay(execute_result=OverlayResult.fail("Intentional failure"))
+        another_success = ConcreteOverlay(execute_result=OverlayResult.ok(data={"another": True}))
 
         composite = CompositeOverlay([success_overlay, fail_overlay, another_success])
         await composite.initialize()
-        context = composite.create_context(
-            capabilities={Capability.DATABASE_READ}
-        )
+        context = composite.create_context(capabilities={Capability.DATABASE_READ})
 
         result = await composite.execute(context)
 

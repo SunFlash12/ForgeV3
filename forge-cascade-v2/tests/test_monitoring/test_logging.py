@@ -12,16 +12,13 @@ Tests cover:
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
-import re
 import time
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
-import structlog
 
 from forge.monitoring.logging import (
     CloudWatchFormatter,
@@ -39,7 +36,6 @@ from forge.monitoring.logging import (
     sanitize_sensitive_data,
     unbind_context,
 )
-
 
 # =============================================================================
 # Tests for add_timestamp processor

@@ -7,13 +7,12 @@ Tests app creation, middleware setup, exception handlers, and route configuratio
 
 from __future__ import annotations
 
-import pytest
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from starlette.requests import Request
-
 
 # =============================================================================
 # ForgeApp Class Tests
@@ -276,6 +275,7 @@ class TestExceptionHandlers:
 
     def test_general_exception_returns_500(self, app: FastAPI):
         """Test unhandled exceptions return 500 with safe message."""
+
         # Create a route that raises an exception
         @app.get("/test-error")
         async def test_error():
@@ -382,7 +382,6 @@ class TestLifespan:
     async def test_lifespan_context_manager(self):
         """Test lifespan context manager structure."""
         from forge.api.app import lifespan
-        from forge.api.app import ForgeApp
 
         # Create a mock app
         mock_app = MagicMock(spec=FastAPI)

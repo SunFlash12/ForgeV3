@@ -15,12 +15,10 @@ Tests cover:
 """
 
 import asyncio
-import tempfile
-from datetime import UTC, datetime
-from pathlib import Path
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
 import hashlib
+import tempfile
+from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -32,7 +30,6 @@ from forge.kernel.wasm_runtime import (
     ExecutionMetrics,
     ExecutionState,
     FuelBudget,
-    HostFunction,
     LogHostFunction,
     OverlayManifest,
     OverlaySecurityMode,
@@ -44,7 +41,6 @@ from forge.kernel.wasm_runtime import (
     init_wasm_runtime,
     shutdown_wasm_runtime,
 )
-
 
 # =============================================================================
 # Capability Tests
@@ -865,9 +861,7 @@ class TestWasmOverlayRuntime:
         instance_id = await runtime.load_overlay(manifest, mock_overlay)
 
         # Manually change security mode after loading (simulating bypass attempt)
-        runtime._instances[instance_id].manifest.security_mode = (
-            OverlaySecurityMode.WASM_STRICT
-        )
+        runtime._instances[instance_id].manifest.security_mode = OverlaySecurityMode.WASM_STRICT
 
         with pytest.raises(SecurityError):
             await runtime.execute(instance_id, "run", {})

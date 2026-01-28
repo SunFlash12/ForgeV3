@@ -10,13 +10,11 @@ Comprehensive tests for users API routes including:
 """
 
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 
 from forge.models.user import AuthProvider, User, UserRole
-
 
 # =============================================================================
 # Fixtures

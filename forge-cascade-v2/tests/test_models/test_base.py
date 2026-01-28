@@ -13,8 +13,7 @@ Comprehensive tests for base models including:
 - FORBIDDEN_DICT_KEYS and validate_dict_security function
 """
 
-import json
-from datetime import UTC, datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -44,7 +43,6 @@ from forge.models.base import (
     generate_uuid,
     validate_dict_security,
 )
-
 
 # =============================================================================
 # convert_neo4j_datetime Tests
@@ -128,7 +126,12 @@ class TestConvertNeo4jDatetime:
         """Datetime with different timezone is preserved."""
         from datetime import timezone as tz
 
-        est = tz(offset=datetime.now(tz.utc).utcoffset() or datetime.now().utcoffset() or datetime.now(UTC) - datetime.now(UTC), name="EST")
+        est = tz(
+            offset=datetime.now(UTC).utcoffset()
+            or datetime.now().utcoffset()
+            or datetime.now(UTC) - datetime.now(UTC),
+            name="EST",
+        )
         # Use a fixed offset for testing
         fixed_offset = tz(offset=datetime.now(UTC) - datetime.now(UTC))
         dt_with_tz = datetime(2024, 1, 15, 12, 0, 0, tzinfo=UTC)
@@ -864,33 +867,29 @@ class TestValidateDictSecurity:
     def test_validate_dict_security_forbidden_key_deeply_nested(self):
         """Deeply nested forbidden keys are detected."""
         with pytest.raises(ValueError, match="Forbidden keys detected"):
-            validate_dict_security({
-                "level1": {
-                    "level2": {
-                        "level3": {
-                            "__class__": "attack"
-                        }
-                    }
-                }
-            })
+            validate_dict_security({"level1": {"level2": {"level3": {"__class__": "attack"}}}})
 
     def test_validate_dict_security_forbidden_key_in_list(self):
         """Forbidden keys in list items are detected."""
         with pytest.raises(ValueError, match="Forbidden keys detected"):
-            validate_dict_security({
-                "items": [
-                    {"safe": "value"},
-                    {"__proto__": "attack"},
-                ]
-            })
+            validate_dict_security(
+                {
+                    "items": [
+                        {"safe": "value"},
+                        {"__proto__": "attack"},
+                    ]
+                }
+            )
 
     def test_validate_dict_security_multiple_forbidden_keys(self):
         """Multiple forbidden keys in error message."""
         with pytest.raises(ValueError, match="Forbidden keys detected"):
-            validate_dict_security({
-                "__proto__": {},
-                "__class__": "Evil",
-            })
+            validate_dict_security(
+                {
+                    "__proto__": {},
+                    "__class__": "Evil",
+                }
+            )
 
     # --- Depth Limits ---
 
@@ -996,9 +995,7 @@ class TestValidateDictSecurity:
 
     def test_validate_dict_security_nested_key_limit(self):
         """Key limit applies to nested dicts."""
-        data = {
-            "outer": {f"inner{i}": i for i in range(DEFAULT_MAX_DICT_KEYS + 10)}
-        }
+        data = {"outer": {f"inner{i}": i for i in range(DEFAULT_MAX_DICT_KEYS + 10)}}
 
         with pytest.raises(ValueError, match="Too many keys"):
             validate_dict_security(data)
@@ -1034,9 +1031,7 @@ class TestValidateDictSecurity:
 
     def test_validate_dict_security_mixed_list(self):
         """Lists with mixed types are handled."""
-        data = {
-            "mixed": [1, "string", {"nested": "dict"}, [1, 2, 3]]
-        }
+        data = {"mixed": [1, "string", {"nested": "dict"}, [1, 2, 3]]}
         result = validate_dict_security(data)
         assert result == data
 

@@ -43,7 +43,6 @@ from forge.models.temporal import (
     VersioningPolicy,
 )
 
-
 # =============================================================================
 # ChangeType Enum Tests
 # =============================================================================
@@ -742,7 +741,9 @@ class TestTrustSnapshotCompressor:
         assert TrustSnapshotCompressor.classify("governance_action") == TrustChangeType.ESSENTIAL
         assert TrustSnapshotCompressor.classify("initial_assignment") == TrustChangeType.ESSENTIAL
         assert TrustSnapshotCompressor.classify("security_incident") == TrustChangeType.ESSENTIAL
-        assert TrustSnapshotCompressor.classify("verification_complete") == TrustChangeType.ESSENTIAL
+        assert (
+            TrustSnapshotCompressor.classify("verification_complete") == TrustChangeType.ESSENTIAL
+        )
         assert TrustSnapshotCompressor.classify("quarantine") == TrustChangeType.ESSENTIAL
         assert TrustSnapshotCompressor.classify("restore") == TrustChangeType.ESSENTIAL
 
@@ -764,7 +765,10 @@ class TestTrustSnapshotCompressor:
 
     def test_classify_partial_match(self):
         """Classification matches partial reason strings."""
-        assert TrustSnapshotCompressor.classify("user manual_adjustment applied") == TrustChangeType.ESSENTIAL
+        assert (
+            TrustSnapshotCompressor.classify("user manual_adjustment applied")
+            == TrustChangeType.ESSENTIAL
+        )
 
     def test_compress_essential_snapshot(self):
         """Essential snapshots retain all data."""
@@ -904,69 +908,90 @@ class TestVersioningPolicy:
     def test_should_full_snapshot_initial_creation(self):
         """should_full_snapshot returns True for initial creation."""
         policy = VersioningPolicy()
-        assert policy.should_full_snapshot(
-            change_number=1,
-            trust_level=60,
-            is_major_version=False,
-            diff_chain_length=0,
-        ) is True
+        assert (
+            policy.should_full_snapshot(
+                change_number=1,
+                trust_level=60,
+                is_major_version=False,
+                diff_chain_length=0,
+            )
+            is True
+        )
 
     def test_should_full_snapshot_periodic(self):
         """should_full_snapshot returns True at periodic intervals."""
         policy = VersioningPolicy(snapshot_every_n_changes=5)
-        assert policy.should_full_snapshot(
-            change_number=5,
-            trust_level=60,
-            is_major_version=False,
-            diff_chain_length=4,
-        ) is True
-        assert policy.should_full_snapshot(
-            change_number=10,
-            trust_level=60,
-            is_major_version=False,
-            diff_chain_length=9,
-        ) is True
+        assert (
+            policy.should_full_snapshot(
+                change_number=5,
+                trust_level=60,
+                is_major_version=False,
+                diff_chain_length=4,
+            )
+            is True
+        )
+        assert (
+            policy.should_full_snapshot(
+                change_number=10,
+                trust_level=60,
+                is_major_version=False,
+                diff_chain_length=9,
+            )
+            is True
+        )
 
     def test_should_full_snapshot_high_trust(self):
         """should_full_snapshot returns True for high trust capsules."""
         policy = VersioningPolicy(snapshot_for_trust_level=80)
-        assert policy.should_full_snapshot(
-            change_number=3,
-            trust_level=85,
-            is_major_version=False,
-            diff_chain_length=2,
-        ) is True
+        assert (
+            policy.should_full_snapshot(
+                change_number=3,
+                trust_level=85,
+                is_major_version=False,
+                diff_chain_length=2,
+            )
+            is True
+        )
 
     def test_should_full_snapshot_major_version(self):
         """should_full_snapshot returns True for major versions."""
         policy = VersioningPolicy()
-        assert policy.should_full_snapshot(
-            change_number=3,
-            trust_level=60,
-            is_major_version=True,
-            diff_chain_length=2,
-        ) is True
+        assert (
+            policy.should_full_snapshot(
+                change_number=3,
+                trust_level=60,
+                is_major_version=True,
+                diff_chain_length=2,
+            )
+            is True
+        )
 
     def test_should_full_snapshot_chain_too_long(self):
         """should_full_snapshot returns True when diff chain too long."""
         policy = VersioningPolicy(max_diff_chain_length=5)
-        assert policy.should_full_snapshot(
-            change_number=7,
-            trust_level=60,
-            is_major_version=False,
-            diff_chain_length=5,
-        ) is True
+        assert (
+            policy.should_full_snapshot(
+                change_number=7,
+                trust_level=60,
+                is_major_version=False,
+                diff_chain_length=5,
+            )
+            is True
+        )
 
     def test_should_full_snapshot_diff_too_large(self):
         """should_full_snapshot returns True when diff too large."""
         policy = VersioningPolicy(max_diff_size_bytes=5000)
-        assert policy.should_full_snapshot(
-            change_number=3,
-            trust_level=60,
-            is_major_version=False,
-            diff_chain_length=2,
-            diff_size=6000,
-        ) is True
+        assert (
+            policy.should_full_snapshot(
+                change_number=3,
+                trust_level=60,
+                is_major_version=False,
+                diff_chain_length=2,
+                diff_size=6000,
+            )
+            is True
+        )
 
     def test_should_full_snapshot_false(self):
         """should_full_snapshot returns False when no triggers hit."""
@@ -975,13 +1000,16 @@ class TestVersioningPolicy:
             snapshot_for_trust_level=80,
             max_diff_chain_length=10,
         )
-        assert policy.should_full_snapshot(
-            change_number=3,
-            trust_level=60,
-            is_major_version=False,
-            diff_chain_length=2,
-            diff_size=1000,
-        ) is False
+        assert (
+            policy.should_full_snapshot(
+                change_number=3,
+                trust_level=60,
+                is_major_version=False,
+                diff_chain_length=2,
+                diff_size=1000,
+            )
+            is False
+        )
 
     def test_should_compact_diff_old_enough(self):
         """should_compact returns True for old diffs."""

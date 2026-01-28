@@ -11,13 +11,11 @@ Comprehensive tests for graph API routes including:
 """
 
 from datetime import UTC, datetime, timedelta
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
 
 # =============================================================================
 # Fixtures
@@ -77,25 +75,29 @@ def mock_graph_repo():
 
     # Mock client
     repo.client = AsyncMock()
-    repo.client.execute = AsyncMock(return_value=[
-        {
+    repo.client.execute = AsyncMock(
+        return_value=[
+            {
+                "id": "capsule123",
+                "label": "Test Capsule",
+                "type": "KNOWLEDGE",
+                "trust_level": 60,
+                "pagerank_score": 0.5,
+                "community_id": 1,
+            }
+        ]
+    )
+    repo.client.execute_single = AsyncMock(
+        return_value={
             "id": "capsule123",
-            "label": "Test Capsule",
+            "title": "Test Capsule",
             "type": "KNOWLEDGE",
+            "content": "Test content",
             "trust_level": 60,
             "pagerank_score": 0.5,
             "community_id": 1,
         }
-    ])
-    repo.client.execute_single = AsyncMock(return_value={
-        "id": "capsule123",
-        "title": "Test Capsule",
-        "type": "KNOWLEDGE",
-        "content": "Test content",
-        "trust_level": 60,
-        "pagerank_score": 0.5,
-        "community_id": 1,
-    })
+    )
 
     # Mock graph metrics
     mock_metrics = MagicMock()
@@ -186,16 +188,20 @@ def mock_temporal_repo(mock_version):
     """Create mock temporal repository."""
     repo = AsyncMock()
     repo.client = AsyncMock()
-    repo.client.execute_single = AsyncMock(return_value={"version": {
-        "id": "version123",
-        "capsule_id": "capsule123",
-        "version_number": "1.0.0",
-        "snapshot_type": "full",
-        "change_type": "update",
-        "created_by": "user123",
-        "created_at": datetime.now(UTC).isoformat(),
-        "content_snapshot": "Version content",
-    }})
+    repo.client.execute_single = AsyncMock(
+        return_value={
+            "version": {
+                "id": "version123",
+                "capsule_id": "capsule123",
+                "version_number": "1.0.0",
+                "snapshot_type": "full",
+                "change_type": "update",
+                "created_by": "user123",
+                "created_at": datetime.now(UTC).isoformat(),
+                "content_snapshot": "Version content",
+            }
+        }
+    )
 
     version_history = MagicMock()
     version_history.versions = [mock_version]
@@ -323,18 +329,6 @@ def graph_app(
     app.include_router(router, prefix="/api/v1/graph")
 
     # Override dependencies
-    from forge.api.dependencies import (
-        GraphRepoDep,
-        CapsuleRepoDep,
-        TemporalRepoDep,
-        OverlayManagerDep,
-        AuditRepoDep,
-        EventSystemDep,
-        ActiveUserDep,
-        StandardUserDep,
-        TrustedUserDep,
-        CorrelationIdDep,
-    )
 
     # Create override functions
     async def get_graph_repo():
@@ -360,16 +354,22 @@ def graph_app(
 
     # Apply overrides using actual dependency injection patterns
     from forge.api.dependencies import (
-        get_graph_repository,
-        get_capsule_repository,
-        get_temporal_repository,
-        get_overlay_manager as dep_get_overlay,
         get_audit_repository,
-        get_event_system as dep_get_event,
+        get_capsule_repository,
         get_current_active_user,
         get_current_standard_user,
         get_current_trusted_user,
+        get_graph_repository,
+        get_temporal_repository,
+    )
+    from forge.api.dependencies import (
         get_correlation_id as dep_get_correlation_id,
+    )
+    from forge.api.dependencies import (
+        get_event_system as dep_get_event,
+    )
+    from forge.api.dependencies import (
+        get_overlay_manager as dep_get_overlay,
     )
 
     app.dependency_overrides[get_graph_repository] = get_graph_repo
@@ -413,9 +413,7 @@ class TestGraphExplorer:
 
     def test_explore_graph_filtered(self, client: TestClient):
         """Explore graph with filters."""
-        response = client.get(
-            "/api/v1/graph/explore?type=KNOWLEDGE&min_trust=40&limit=50"
-        )
+        response = client.get("/api/v1/graph/explore?type=KNOWLEDGE&min_trust=40&limit=50")
 
         assert response.status_code == 200
         data = response.json()
@@ -479,9 +477,7 @@ class TestFindPaths:
 
     def test_find_paths_with_options(self, client: TestClient):
         """Find paths with custom options."""
-        response = client.get(
-            "/api/v1/graph/paths/capsule123/capsule456?max_hops=3&limit=10"
-        )
+        response = client.get("/api/v1/graph/paths/capsule123/capsule456?max_hops=3&limit=10")
 
         assert response.status_code == 200
 
@@ -736,9 +732,7 @@ class TestCapsuleVersions:
     def test_get_capsule_at_time(self, client: TestClient):
         """Get capsule state at specific time."""
         timestamp = datetime.now(UTC).isoformat()
-        response = client.get(
-            f"/api/v1/graph/capsules/capsule123/at-time?timestamp={timestamp}"
-        )
+        response = client.get(f"/api/v1/graph/capsules/capsule123/at-time?timestamp={timestamp}")
 
         assert response.status_code == 200
         data = response.json()
@@ -747,9 +741,7 @@ class TestCapsuleVersions:
 
     def test_get_capsule_at_time_invalid_timestamp(self, client: TestClient):
         """Get capsule at time with invalid timestamp."""
-        response = client.get(
-            "/api/v1/graph/capsules/capsule123/at-time?timestamp=invalid"
-        )
+        response = client.get("/api/v1/graph/capsules/capsule123/at-time?timestamp=invalid")
 
         assert response.status_code == 400
 
@@ -820,9 +812,7 @@ class TestGraphSnapshots:
         assert "snapshot_id" in data
         assert "found" in data
 
-    def test_get_latest_graph_snapshot_none(
-        self, client: TestClient, mock_temporal_repo
-    ):
+    def test_get_latest_graph_snapshot_none(self, client: TestClient, mock_temporal_repo):
         """Get latest snapshot when none exists."""
         mock_temporal_repo.get_latest_graph_snapshot.return_value = None
 
@@ -874,9 +864,7 @@ class TestCreateSemanticEdge:
 
         assert response.status_code == 400
 
-    def test_create_semantic_edge_source_not_found(
-        self, client: TestClient, mock_capsule_repo
-    ):
+    def test_create_semantic_edge_source_not_found(self, client: TestClient, mock_capsule_repo):
         """Create edge with non-existent source."""
         mock_capsule_repo.get_by_id.side_effect = [None, MagicMock()]
 
@@ -955,9 +943,7 @@ class TestDeleteSemanticEdge:
 
         assert response.status_code == 204
 
-    def test_delete_semantic_edge_not_found(
-        self, client: TestClient, mock_capsule_repo
-    ):
+    def test_delete_semantic_edge_not_found(self, client: TestClient, mock_capsule_repo):
         """Delete non-existent edge."""
         mock_capsule_repo.get_semantic_edge.return_value = None
 
@@ -965,9 +951,7 @@ class TestDeleteSemanticEdge:
 
         assert response.status_code == 404
 
-    def test_delete_semantic_edge_not_owner(
-        self, client: TestClient, mock_semantic_edge
-    ):
+    def test_delete_semantic_edge_not_owner(self, client: TestClient, mock_semantic_edge):
         """Delete edge by non-creator."""
         mock_semantic_edge.created_by = "other_user"
 
@@ -996,9 +980,7 @@ class TestContradictionClusters:
 
     def test_get_contradiction_clusters_with_min_size(self, client: TestClient):
         """Get clusters with minimum size filter."""
-        response = client.get(
-            "/api/v1/graph/analysis/contradiction-clusters?min_size=3"
-        )
+        response = client.get("/api/v1/graph/analysis/contradiction-clusters?min_size=3")
 
         assert response.status_code == 200
 
@@ -1035,9 +1017,7 @@ class TestContradictionResolution:
 
     def test_get_unresolved_contradictions_pagination(self, client: TestClient):
         """Get unresolved contradictions with pagination."""
-        response = client.get(
-            "/api/v1/graph/contradictions/unresolved?limit=10&offset=5"
-        )
+        response = client.get("/api/v1/graph/contradictions/unresolved?limit=10&offset=5")
 
         assert response.status_code == 200
 

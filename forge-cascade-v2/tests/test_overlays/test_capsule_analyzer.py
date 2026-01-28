@@ -16,24 +16,16 @@ Tests cover:
 - Health checks
 """
 
-import asyncio
-from datetime import UTC, datetime
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
-
 import pytest
 
 from forge.models.base import CapsuleType
 from forge.models.events import Event, EventType
 from forge.models.overlay import Capability
-from forge.overlays.base import OverlayContext, OverlayResult
+from forge.overlays.base import OverlayContext
 from forge.overlays.capsule_analyzer import (
     CapsuleAnalyzerOverlay,
     ContentAnalysis,
-    InsightExtraction,
-    SimilarityResult,
 )
-
 
 # =============================================================================
 # Fixtures
@@ -293,10 +285,7 @@ class TestInsightExtraction:
         overlay_context: OverlayContext,
     ) -> None:
         """Test fact extraction."""
-        content = (
-            "The system is running on 4 servers. "
-            "The database contains 1000 records."
-        )
+        content = "The system is running on 4 servers. The database contains 1000 records."
         result = await initialized_analyzer.execute(
             context=overlay_context,
             input_data={"operation": "extract_insights", "content": content},
@@ -338,8 +327,7 @@ class TestContentClassification:
     ) -> None:
         """Test knowledge content classification."""
         content = (
-            "This is a guide on how to implement the tutorial. "
-            "An overview and explanation follows."
+            "This is a guide on how to implement the tutorial. An overview and explanation follows."
         )
         result = await initialized_analyzer.execute(
             context=overlay_context,
@@ -619,8 +607,7 @@ class TestSummarization:
     ) -> None:
         """Test summarization with max sentences limit."""
         content = (
-            "First sentence. Second sentence. Third sentence. "
-            "Fourth sentence. Fifth sentence."
+            "First sentence. Second sentence. Third sentence. Fourth sentence. Fifth sentence."
         )
         result = await initialized_analyzer.execute(
             context=overlay_context,
@@ -643,36 +630,28 @@ class TestSummarization:
 class TestTopicDetection:
     """Tests for topic detection."""
 
-    def test_detect_technology_topic(
-        self, analyzer: CapsuleAnalyzerOverlay
-    ) -> None:
+    def test_detect_technology_topic(self, analyzer: CapsuleAnalyzerOverlay) -> None:
         """Test technology topic detection."""
         content = "The software system uses a database and API for programming"
         topics = analyzer._detect_topics(content)
 
         assert "technology" in topics
 
-    def test_detect_security_topic(
-        self, analyzer: CapsuleAnalyzerOverlay
-    ) -> None:
+    def test_detect_security_topic(self, analyzer: CapsuleAnalyzerOverlay) -> None:
         """Test security topic detection."""
         content = "Security authentication and permission trust vulnerability"
         topics = analyzer._detect_topics(content)
 
         assert "security" in topics
 
-    def test_detect_multiple_topics(
-        self, analyzer: CapsuleAnalyzerOverlay
-    ) -> None:
+    def test_detect_multiple_topics(self, analyzer: CapsuleAnalyzerOverlay) -> None:
         """Test detecting multiple topics."""
         content = "The software system security authentication database"
         topics = analyzer._detect_topics(content)
 
         assert len(topics) >= 2
 
-    def test_detect_general_topic(
-        self, analyzer: CapsuleAnalyzerOverlay
-    ) -> None:
+    def test_detect_general_topic(self, analyzer: CapsuleAnalyzerOverlay) -> None:
         """Test fallback to general topic."""
         content = "Some unrelated random words here"
         topics = analyzer._detect_topics(content)
@@ -767,9 +746,7 @@ class TestHealthCheck:
     """Tests for health checks."""
 
     @pytest.mark.asyncio
-    async def test_health_check_healthy(
-        self, initialized_analyzer: CapsuleAnalyzerOverlay
-    ) -> None:
+    async def test_health_check_healthy(self, initialized_analyzer: CapsuleAnalyzerOverlay) -> None:
         """Test health check when healthy."""
         health = await initialized_analyzer.health_check()
 

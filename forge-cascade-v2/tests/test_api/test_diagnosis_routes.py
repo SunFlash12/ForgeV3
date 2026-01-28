@@ -8,22 +8,18 @@ Comprehensive tests for diagnosis API routes including:
 - Health check
 """
 
-from datetime import UTC, datetime
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from forge.api.routes.diagnosis import (
-    router,
     _DiagnosisServices,
     get_session_controller,
-    get_diagnostic_coordinator,
     initialize_diagnosis_services,
+    router,
 )
-
 
 # =============================================================================
 # Fixtures
@@ -105,6 +101,7 @@ def diagnosis_app(mock_session_controller, mock_diagnostic_coordinator, mock_use
 
     # Override user dependency
     from forge.api.dependencies import get_current_active_user
+
     app.dependency_overrides[get_current_active_user] = lambda: mock_user
 
     return app
@@ -155,6 +152,7 @@ class TestCreateSession:
         """Create session without auth fails."""
         # Remove user override
         from forge.api.dependencies import get_current_active_user
+
         diagnosis_app.dependency_overrides.pop(get_current_active_user, None)
 
         client = TestClient(diagnosis_app)
@@ -203,7 +201,12 @@ class TestStartDiagnosis:
             json={
                 "phenotypes": [
                     {"code": "HP:0001250", "value": "Seizures", "negated": False},
-                    {"code": "HP:0002315", "value": "Headache", "negated": True, "severity": "moderate"},
+                    {
+                        "code": "HP:0002315",
+                        "value": "Headache",
+                        "negated": True,
+                        "severity": "moderate",
+                    },
                 ],
                 "genetic_variants": [
                     {
@@ -431,9 +434,7 @@ class TestMultiAgentDiagnosis:
             "/api/v1/diagnosis/multi-agent/diagnose",
             json={
                 "phenotypes": ["HP:0001250", "HP:0002315"],
-                "genetic_variants": [
-                    {"gene_symbol": "BRCA1", "pathogenicity": "pathogenic"}
-                ],
+                "genetic_variants": [{"gene_symbol": "BRCA1", "pathogenicity": "pathogenic"}],
                 "medical_history": ["Previous diagnosis"],
                 "family_history": ["Family history of cancer"],
                 "demographics": {"age": 45, "sex": "female"},
@@ -473,6 +474,7 @@ class TestStreamEvents:
 
     def test_stream_events_returns_sse(self, client: TestClient, mock_session_controller):
         """Stream events returns Server-Sent Events response."""
+
         # Mock streaming
         async def mock_stream(session_id):
             yield MagicMock(to_dict=lambda: {"event": "test"})
@@ -569,8 +571,8 @@ class TestServiceInitialization:
         _DiagnosisServices._instance = None
         services = _DiagnosisServices()
 
-        from fastapi import HTTPException
         import pytest
+        from fastapi import HTTPException
 
         with pytest.raises(HTTPException) as exc_info:
             get_session_controller()

@@ -9,7 +9,7 @@ Comprehensive tests for session management API routes including:
 """
 
 from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -20,7 +20,6 @@ from forge.models.session import (
     SessionPublic,
     SessionStatus,
 )
-
 
 # =============================================================================
 # Fixtures
@@ -108,9 +107,7 @@ class TestListSessionsRoute:
             assert "sessions" in data
             assert "total" in data
 
-    def test_list_sessions_includes_current_marker(
-        self, client: TestClient, auth_headers: dict
-    ):
+    def test_list_sessions_includes_current_marker(self, client: TestClient, auth_headers: dict):
         """List sessions marks current session."""
         response = client.get("/api/v1/sessions", headers=auth_headers)
         assert response.status_code in [200, 401, 503]

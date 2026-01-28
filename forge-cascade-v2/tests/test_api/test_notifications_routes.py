@@ -9,7 +9,7 @@ Comprehensive tests for notification API routes including:
 """
 
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -23,7 +23,6 @@ from forge.models.notifications import (
     NotificationPriority,
     WebhookSubscription,
 )
-
 
 # =============================================================================
 # Fixtures
@@ -304,9 +303,7 @@ class TestWebhookGetRoute:
 
     def test_get_webhook_authorized(self, client: TestClient, auth_headers: dict):
         """Get webhook with auth returns webhook or 404."""
-        response = client.get(
-            "/api/v1/notifications/webhooks/webhook123", headers=auth_headers
-        )
+        response = client.get("/api/v1/notifications/webhooks/webhook123", headers=auth_headers)
         assert response.status_code in [200, 404, 401, 503]
 
 
@@ -344,9 +341,7 @@ class TestWebhookDeleteRoute:
 
     def test_delete_webhook_authorized(self, client: TestClient, auth_headers: dict):
         """Delete webhook with auth succeeds."""
-        response = client.delete(
-            "/api/v1/notifications/webhooks/webhook123", headers=auth_headers
-        )
+        response = client.delete("/api/v1/notifications/webhooks/webhook123", headers=auth_headers)
         assert response.status_code in [200, 404, 401, 503]
 
 

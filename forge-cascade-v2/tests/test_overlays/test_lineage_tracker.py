@@ -11,17 +11,11 @@ Tests the lineage tracking overlay implementation including:
 
 from __future__ import annotations
 
-import asyncio
-from datetime import UTC, datetime, timedelta
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
-from uuid import uuid4
-
 import pytest
 
-from forge.models.base import CapsuleType
 from forge.models.events import Event, EventType
 from forge.models.overlay import Capability
+from forge.overlays.base import OverlayContext
 from forge.overlays.lineage_tracker import (
     BrokenChainError,
     CircularLineageError,
@@ -34,8 +28,6 @@ from forge.overlays.lineage_tracker import (
     SemanticEdgeInfo,
     create_lineage_tracker,
 )
-from forge.overlays.base import OverlayContext
-
 
 # =============================================================================
 # SemanticEdgeInfo Tests
@@ -474,7 +466,7 @@ class TestLineageTrackerOverlay:
 
         # Create a chain of 4 capsules
         for i in range(4):
-            parent_id = f"cap-{i-1}" if i > 0 else None
+            parent_id = f"cap-{i - 1}" if i > 0 else None
             event = Event(
                 id=f"event-{i}",
                 type=EventType.CAPSULE_CREATED,
@@ -574,7 +566,7 @@ class TestLineageTrackerOverlay:
 
         # Create very deep chain (> 50)
         for i in range(55):
-            parent_id = f"cap-{i-1}" if i > 0 else None
+            parent_id = f"cap-{i - 1}" if i > 0 else None
             event = Event(
                 id=f"event-{i}",
                 type=EventType.CAPSULE_CREATED,
@@ -596,9 +588,7 @@ class TestLineageTrackerOverlay:
     @pytest.mark.asyncio
     async def test_anomaly_detection_rapid_derivation(self, overlay, context):
         """Test anomaly detection for rapid derivation."""
-        overlay = LineageTrackerOverlay(
-            enable_anomaly_detection=True, max_derivations_per_day=5
-        )
+        overlay = LineageTrackerOverlay(enable_anomaly_detection=True, max_derivations_per_day=5)
         await overlay.initialize()
 
         # Create many capsules rapidly
@@ -681,9 +671,7 @@ class TestLineageTrackerOverlay:
         """Test get lineage info for non-existent capsule."""
         await overlay.initialize()
 
-        result = await overlay.execute(
-            context, input_data={"capsule_id": "non-existent"}
-        )
+        result = await overlay.execute(context, input_data={"capsule_id": "non-existent"})
 
         assert result.success is True
         assert result.data["found"] is False
@@ -712,12 +700,8 @@ class TestLineageTrackerOverlay:
     def test_get_roots(self, overlay):
         """Test getting root capsule IDs."""
         # Manually add some nodes
-        overlay._nodes["root-1"] = LineageNode(
-            capsule_id="root-1", capsule_type="KNOWLEDGE"
-        )
-        overlay._nodes["root-2"] = LineageNode(
-            capsule_id="root-2", capsule_type="KNOWLEDGE"
-        )
+        overlay._nodes["root-1"] = LineageNode(capsule_id="root-1", capsule_type="KNOWLEDGE")
+        overlay._nodes["root-2"] = LineageNode(capsule_id="root-2", capsule_type="KNOWLEDGE")
         overlay._roots = {"root-1", "root-2"}
 
         roots = overlay.get_roots()
@@ -754,9 +738,7 @@ class TestLineageTrackerOverlay:
     def test_clear_cache(self, overlay):
         """Test clearing the lineage cache."""
         # Add some nodes
-        overlay._nodes["cap-1"] = LineageNode(
-            capsule_id="cap-1", capsule_type="KNOWLEDGE"
-        )
+        overlay._nodes["cap-1"] = LineageNode(capsule_id="cap-1", capsule_type="KNOWLEDGE")
         overlay._roots.add("cap-1")
 
         count = overlay.clear_cache()
@@ -994,9 +976,7 @@ class TestLineageTrackerIntegration:
     @pytest.mark.asyncio
     async def test_full_lineage_workflow(self):
         """Test complete lineage tracking workflow."""
-        overlay = LineageTrackerOverlay(
-            enable_anomaly_detection=True, enable_metrics=True
-        )
+        overlay = LineageTrackerOverlay(enable_anomaly_detection=True, enable_metrics=True)
         await overlay.initialize()
 
         context = OverlayContext(

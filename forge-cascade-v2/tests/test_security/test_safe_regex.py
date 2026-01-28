@@ -9,7 +9,6 @@ SECURITY FIX (Audit 3): Testing regex security mechanisms against ReDoS attacks.
 
 import re
 import time
-from unittest.mock import patch
 
 import pytest
 
@@ -473,7 +472,7 @@ class TestExecutorManagement:
 
     def test_executor_lazy_initialization(self):
         """Executor is lazily initialized."""
-        from forge.security.safe_regex import _executor, _get_executor, shutdown_executor
+        from forge.security.safe_regex import _get_executor, shutdown_executor
 
         # Shutdown any existing executor
         shutdown_executor()

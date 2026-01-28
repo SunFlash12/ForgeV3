@@ -14,8 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -32,7 +31,6 @@ from forge.monitoring.metrics import (
     track_in_progress,
     track_time,
 )
-
 
 # =============================================================================
 # Tests for Counter
@@ -390,7 +388,7 @@ class TestHistogram:
         histogram.observe(0.05)  # <= 0.1
         histogram.observe(0.25)  # <= 0.5
         histogram.observe(0.75)  # <= 1.0
-        histogram.observe(2.0)   # > 1.0 (only in +Inf)
+        histogram.observe(2.0)  # > 1.0 (only in +Inf)
 
         collected = histogram.collect()
         buckets = collected[0]["buckets"]

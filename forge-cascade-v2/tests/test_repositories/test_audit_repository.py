@@ -11,15 +11,13 @@ Comprehensive tests for the AuditRepository including:
 
 import json
 from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from forge.database.client import Neo4jClient
-from forge.models.base import TrustLevel
-from forge.models.events import AuditEvent, EventPriority, EventType
+from forge.models.events import AuditEvent, EventType
 from forge.repositories.audit_repository import AuditRepository, get_audit_repository
-
 
 # =============================================================================
 # Fixtures
@@ -73,7 +71,9 @@ class TestAuditRepositoryLog:
     """Tests for core log method."""
 
     @pytest.mark.asyncio
-    async def test_log_creates_audit_event(self, audit_repository, mock_db_client, sample_audit_node):
+    async def test_log_creates_audit_event(
+        self, audit_repository, mock_db_client, sample_audit_node
+    ):
         """Log creates an audit event."""
         mock_db_client.execute_single.return_value = {"a": sample_audit_node}
 
@@ -170,9 +170,7 @@ class TestCapsuleActionLogging:
     """Tests for log_capsule_action method."""
 
     @pytest.mark.asyncio
-    async def test_log_capsule_create(
-        self, audit_repository, mock_db_client, sample_audit_node
-    ):
+    async def test_log_capsule_create(self, audit_repository, mock_db_client, sample_audit_node):
         """Log capsule create action."""
         mock_db_client.execute_single.return_value = {"a": sample_audit_node}
 
@@ -185,9 +183,7 @@ class TestCapsuleActionLogging:
         assert result.event_type == EventType.CAPSULE_CREATED
 
     @pytest.mark.asyncio
-    async def test_log_capsule_update(
-        self, audit_repository, mock_db_client, sample_audit_node
-    ):
+    async def test_log_capsule_update(self, audit_repository, mock_db_client, sample_audit_node):
         """Log capsule update action."""
         sample_audit_node["event_type"] = "capsule.updated"
         mock_db_client.execute_single.return_value = {"a": sample_audit_node}
@@ -203,9 +199,7 @@ class TestCapsuleActionLogging:
         assert result.event_type == EventType.CAPSULE_UPDATED
 
     @pytest.mark.asyncio
-    async def test_log_capsule_fork(
-        self, audit_repository, mock_db_client, sample_audit_node
-    ):
+    async def test_log_capsule_fork(self, audit_repository, mock_db_client, sample_audit_node):
         """Log capsule fork action."""
         sample_audit_node["event_type"] = "capsule.forked"
         mock_db_client.execute_single.return_value = {"a": sample_audit_node}
@@ -275,9 +269,7 @@ class TestGovernanceActionLogging:
     """Tests for log_governance_action method."""
 
     @pytest.mark.asyncio
-    async def test_log_proposal_created(
-        self, audit_repository, mock_db_client, sample_audit_node
-    ):
+    async def test_log_proposal_created(self, audit_repository, mock_db_client, sample_audit_node):
         """Log proposal creation."""
         sample_audit_node["event_type"] = "governance.proposal_created"
         sample_audit_node["priority"] = "high"
@@ -349,9 +341,7 @@ class TestSecurityEventLogging:
     """Tests for log_security_event method."""
 
     @pytest.mark.asyncio
-    async def test_log_security_event(
-        self, audit_repository, mock_db_client, sample_audit_node
-    ):
+    async def test_log_security_event(self, audit_repository, mock_db_client, sample_audit_node):
         """Log security event with critical priority."""
         sample_audit_node["event_type"] = "security.event"
         sample_audit_node["priority"] = "critical"
@@ -370,9 +360,7 @@ class TestImmuneEventLogging:
     """Tests for log_immune_event method."""
 
     @pytest.mark.asyncio
-    async def test_log_immune_event(
-        self, audit_repository, mock_db_client, sample_audit_node
-    ):
+    async def test_log_immune_event(self, audit_repository, mock_db_client, sample_audit_node):
         """Log immune system event."""
         sample_audit_node["event_type"] = "immune.event"
         sample_audit_node["actor_id"] = "system:immune"
@@ -390,9 +378,7 @@ class TestCascadeActionLogging:
     """Tests for log_cascade_action method."""
 
     @pytest.mark.asyncio
-    async def test_log_cascade_triggered(
-        self, audit_repository, mock_db_client, sample_audit_node
-    ):
+    async def test_log_cascade_triggered(self, audit_repository, mock_db_client, sample_audit_node):
         """Log cascade triggered action."""
         sample_audit_node["event_type"] = "cascade.initiated"
         mock_db_client.execute_single.return_value = {"a": sample_audit_node}
@@ -489,9 +475,7 @@ class TestAuditRepositoryQueries:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_get_by_correlation_id(
-        self, audit_repository, mock_db_client, sample_audit_node
-    ):
+    async def test_get_by_correlation_id(self, audit_repository, mock_db_client, sample_audit_node):
         """Get events by correlation ID."""
         mock_db_client.execute.return_value = [
             {"a": sample_audit_node},
@@ -540,9 +524,7 @@ class TestAuditRepositoryQueries:
         assert params["limit"] == 1000
 
     @pytest.mark.asyncio
-    async def test_get_by_resource(
-        self, audit_repository, mock_db_client, sample_audit_node
-    ):
+    async def test_get_by_resource(self, audit_repository, mock_db_client, sample_audit_node):
         """Get events by resource."""
         mock_db_client.execute.return_value = [{"a": sample_audit_node}]
 
@@ -552,9 +534,7 @@ class TestAuditRepositoryQueries:
         assert result[0].resource_id == "capsule-001"
 
     @pytest.mark.asyncio
-    async def test_get_by_event_type(
-        self, audit_repository, mock_db_client, sample_audit_node
-    ):
+    async def test_get_by_event_type(self, audit_repository, mock_db_client, sample_audit_node):
         """Get events by event type."""
         mock_db_client.execute.return_value = [{"a": sample_audit_node}]
 
@@ -585,9 +565,7 @@ class TestAuditRepositorySearch:
     """Tests for search operation."""
 
     @pytest.mark.asyncio
-    async def test_search_by_query_text(
-        self, audit_repository, mock_db_client, sample_audit_node
-    ):
+    async def test_search_by_query_text(self, audit_repository, mock_db_client, sample_audit_node):
         """Search by query text."""
         mock_db_client.execute.return_value = [{"a": sample_audit_node}]
 
@@ -743,9 +721,7 @@ class TestAuditRepositoryAnalytics:
         assert result[0]["attempt_count"] == 5
 
     @pytest.mark.asyncio
-    async def test_get_security_events(
-        self, audit_repository, mock_db_client, sample_audit_node
-    ):
+    async def test_get_security_events(self, audit_repository, mock_db_client, sample_audit_node):
         """Get security events."""
         sample_audit_node["event_type"] = "security.event"
         mock_db_client.execute.return_value = [{"a": sample_audit_node}]
@@ -808,16 +784,12 @@ class TestAuditRepositoryMaintenance:
             await audit_repository.archive_events(older_than, archive_label="Invalid-Label!")
 
     @pytest.mark.asyncio
-    async def test_archive_events_rejects_too_long_label(
-        self, audit_repository, mock_db_client
-    ):
+    async def test_archive_events_rejects_too_long_label(self, audit_repository, mock_db_client):
         """Archive events rejects label over 100 chars."""
         older_than = datetime.now(UTC) - timedelta(days=30)
 
         with pytest.raises(ValueError, match="1-100 characters"):
-            await audit_repository.archive_events(
-                older_than, archive_label="A" * 101
-            )
+            await audit_repository.archive_events(older_than, archive_label="A" * 101)
 
     @pytest.mark.asyncio
     async def test_count_events(self, audit_repository, mock_db_client):
@@ -900,9 +872,7 @@ class TestBulkAndExportLogging:
     """Tests for bulk operation and data export logging."""
 
     @pytest.mark.asyncio
-    async def test_log_bulk_operation(
-        self, audit_repository, mock_db_client, sample_audit_node
-    ):
+    async def test_log_bulk_operation(self, audit_repository, mock_db_client, sample_audit_node):
         """Log bulk operation."""
         sample_audit_node["priority"] = "high"
         mock_db_client.execute_single.return_value = {"a": sample_audit_node}
@@ -940,9 +910,7 @@ class TestBulkAndExportLogging:
         assert details["ids_truncated"] is True
 
     @pytest.mark.asyncio
-    async def test_log_data_export(
-        self, audit_repository, mock_db_client, sample_audit_node
-    ):
+    async def test_log_data_export(self, audit_repository, mock_db_client, sample_audit_node):
         """Log data export operation."""
         sample_audit_node["priority"] = "high"
         mock_db_client.execute_single.return_value = {"a": sample_audit_node}
@@ -959,9 +927,7 @@ class TestBulkAndExportLogging:
         assert result is not None
 
     @pytest.mark.asyncio
-    async def test_log_maintenance_mode(
-        self, audit_repository, mock_db_client, sample_audit_node
-    ):
+    async def test_log_maintenance_mode(self, audit_repository, mock_db_client, sample_audit_node):
         """Log maintenance mode change."""
         sample_audit_node["priority"] = "critical"
         mock_db_client.execute_single.return_value = {"a": sample_audit_node}
@@ -977,9 +943,7 @@ class TestBulkAndExportLogging:
         assert result is not None
 
     @pytest.mark.asyncio
-    async def test_log_self_audit(
-        self, audit_repository, mock_db_client, sample_audit_node
-    ):
+    async def test_log_self_audit(self, audit_repository, mock_db_client, sample_audit_node):
         """Log self-audit operation."""
         sample_audit_node["event_type"] = "security.event"
         sample_audit_node["priority"] = "critical"

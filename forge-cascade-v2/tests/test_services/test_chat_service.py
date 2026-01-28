@@ -9,7 +9,6 @@ Tests cover:
 - Invite code operations
 """
 
-from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -18,7 +17,6 @@ from forge.models.chat import (
     ChatMessage,
     ChatRoom,
     RoomAccessCheck,
-    RoomCreate,
     RoomMember,
     RoomRole,
     RoomUpdate,
@@ -884,6 +882,7 @@ class TestGlobalServiceFunctions:
         """Test getting uninitialized chat service raises error."""
         # Clear global service
         import forge.services.chat_service as module
+
         module._chat_service = None
 
         with pytest.raises(RuntimeError, match="not initialized"):
@@ -901,4 +900,5 @@ class TestGlobalServiceFunctions:
 
         # Clean up
         import forge.services.chat_service as module
+
         module._chat_service = None

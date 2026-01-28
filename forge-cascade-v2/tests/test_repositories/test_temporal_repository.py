@@ -15,16 +15,14 @@ Comprehensive tests for TemporalRepository including:
 import hashlib
 import json
 from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 
 from forge.models.temporal import (
-    CapsuleVersion,
     ChangeType,
     GraphSnapshot,
     SnapshotType,
-    TimeGranularity,
     TrustChangeType,
     TrustSnapshot,
     TrustSnapshotCreate,
@@ -33,7 +31,6 @@ from forge.models.temporal import (
     VersioningPolicy,
 )
 from forge.repositories.temporal_repository import TemporalRepository
-
 
 # =============================================================================
 # Fixtures
@@ -128,7 +125,9 @@ def sample_graph_snapshot_data():
         "avg_degree": 10.0,
         "connected_components": 5,
         "avg_trust": 65.0,
-        "trust_distribution": json.dumps({"0-20": 50, "21-40": 100, "41-60": 350, "61-80": 400, "81-100": 100}),
+        "trust_distribution": json.dumps(
+            {"0-20": 50, "21-40": 100, "41-60": 350, "61-80": 400, "81-100": 100}
+        ),
         "community_count": 15,
         "modularity": 0.45,
         "top_capsules_by_pagerank": json.dumps(["cap1", "cap2", "cap3"]),
@@ -186,7 +185,13 @@ class TestTemporalRepositoryVersionCreate:
                 "diff_chain_length": 0,
                 "version_count": 1,
             },
-            {"version": {**sample_version_data, "version_number": "1.0.1", "snapshot_type": "diff"}},
+            {
+                "version": {
+                    **sample_version_data,
+                    "version_number": "1.0.1",
+                    "snapshot_type": "diff",
+                }
+            },
         ]
 
         result = await temporal_repository.create_version(
@@ -243,7 +248,13 @@ class TestTemporalRepositoryVersionCreate:
                 "diff_chain_length": 2,
                 "version_count": 5,
             },
-            {"version": {**sample_version_data, "version_number": "2.0.0", "snapshot_type": "full"}},
+            {
+                "version": {
+                    **sample_version_data,
+                    "version_number": "2.0.0",
+                    "snapshot_type": "full",
+                }
+            },
         ]
 
         await temporal_repository.create_version(
@@ -287,9 +298,7 @@ class TestTemporalRepositoryVersionCreate:
         assert params["snapshot_type"] == "full"
 
     @pytest.mark.asyncio
-    async def test_create_version_failure_raises_error(
-        self, temporal_repository, mock_db_client
-    ):
+    async def test_create_version_failure_raises_error(self, temporal_repository, mock_db_client):
         """Version creation failure raises RuntimeError."""
         mock_db_client.execute_single.side_effect = [
             None,  # No previous version
@@ -334,9 +343,7 @@ class TestTemporalRepositoryVersionHistory:
         assert len(result.versions) == 1
 
     @pytest.mark.asyncio
-    async def test_get_version_history_limits_results(
-        self, temporal_repository, mock_db_client
-    ):
+    async def test_get_version_history_limits_results(self, temporal_repository, mock_db_client):
         """Version history respects limit."""
         mock_db_client.execute.return_value = []
         mock_db_client.execute_single.return_value = None
@@ -348,9 +355,7 @@ class TestTemporalRepositoryVersionHistory:
         assert params["limit"] == 25
 
     @pytest.mark.asyncio
-    async def test_get_version_history_clamps_limit(
-        self, temporal_repository, mock_db_client
-    ):
+    async def test_get_version_history_clamps_limit(self, temporal_repository, mock_db_client):
         """Version history clamps excessive limit."""
         mock_db_client.execute.return_value = []
         mock_db_client.execute_single.return_value = None
@@ -388,9 +393,7 @@ class TestTemporalRepositoryTimeTravel:
         assert result.capsule_id == "capsule123"
 
     @pytest.mark.asyncio
-    async def test_get_capsule_at_time_not_found(
-        self, temporal_repository, mock_db_client
-    ):
+    async def test_get_capsule_at_time_not_found(self, temporal_repository, mock_db_client):
         """Get capsule at time returns None when not found."""
         mock_db_client.execute_single.return_value = None
 
@@ -403,9 +406,7 @@ class TestTemporalRepositoryTimeTravel:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_get_capsule_at_time_reconstructs_diff(
-        self, temporal_repository, mock_db_client
-    ):
+    async def test_get_capsule_at_time_reconstructs_diff(self, temporal_repository, mock_db_client):
         """Get capsule at time reconstructs content from diff."""
         diff_version = {
             "id": "version123",
@@ -448,9 +449,7 @@ class TestTemporalRepositoryVersionDiff:
     """Tests for version comparison."""
 
     @pytest.mark.asyncio
-    async def test_diff_versions(
-        self, temporal_repository, mock_db_client, sample_version_data
-    ):
+    async def test_diff_versions(self, temporal_repository, mock_db_client, sample_version_data):
         """Compare two versions."""
         version_a = {**sample_version_data, "id": "va", "trust_at_version": 60}
         version_b = {
@@ -472,9 +471,7 @@ class TestTemporalRepositoryVersionDiff:
         assert result.trust_change == 10
 
     @pytest.mark.asyncio
-    async def test_diff_versions_not_found(
-        self, temporal_repository, mock_db_client
-    ):
+    async def test_diff_versions_not_found(self, temporal_repository, mock_db_client):
         """Diff versions raises error when versions not found."""
         mock_db_client.execute_single.return_value = None
 
@@ -526,9 +523,7 @@ class TestTemporalRepositoryTrustSnapshots:
     @pytest.mark.xfail(
         reason="Bug: temporal_repository.py line 536 calls .value on string change_type"
     )
-    async def test_create_trust_snapshot_derived(
-        self, temporal_repository, mock_db_client
-    ):
+    async def test_create_trust_snapshot_derived(self, temporal_repository, mock_db_client):
         """Create derived trust snapshot (compressed)."""
         mock_db_client.execute_single.return_value = {"trust_value": 60}  # Previous
         mock_db_client.execute.return_value = []
@@ -596,9 +591,7 @@ class TestTemporalRepositoryTrustTimeline:
         assert result.max_trust == 75
 
     @pytest.mark.asyncio
-    async def test_get_trust_timeline_with_date_range(
-        self, temporal_repository, mock_db_client
-    ):
+    async def test_get_trust_timeline_with_date_range(self, temporal_repository, mock_db_client):
         """Get trust timeline with date range."""
         mock_db_client.execute.return_value = []
 
@@ -618,9 +611,7 @@ class TestTemporalRepositoryTrustTimeline:
         assert "end" in params
 
     @pytest.mark.asyncio
-    async def test_get_trust_timeline_essential_only(
-        self, temporal_repository, mock_db_client
-    ):
+    async def test_get_trust_timeline_essential_only(self, temporal_repository, mock_db_client):
         """Get trust timeline with only essential changes."""
         mock_db_client.execute.return_value = []
 
@@ -698,9 +689,7 @@ class TestTemporalRepositoryGraphSnapshots:
         assert result.total_nodes == 1000
 
     @pytest.mark.asyncio
-    async def test_create_graph_snapshot_failure(
-        self, temporal_repository, mock_db_client
-    ):
+    async def test_create_graph_snapshot_failure(self, temporal_repository, mock_db_client):
         """Graph snapshot creation failure raises error."""
         mock_db_client.execute_single.return_value = None
 
@@ -720,9 +709,7 @@ class TestTemporalRepositoryGraphSnapshots:
         assert result.total_nodes == 1000
 
     @pytest.mark.asyncio
-    async def test_get_latest_graph_snapshot_not_found(
-        self, temporal_repository, mock_db_client
-    ):
+    async def test_get_latest_graph_snapshot_not_found(self, temporal_repository, mock_db_client):
         """Get latest returns None when no snapshots exist."""
         mock_db_client.execute_single.return_value = None
 
@@ -742,9 +729,7 @@ class TestTemporalRepositoryGraphSnapshots:
         assert len(result) == 1
 
     @pytest.mark.asyncio
-    async def test_get_graph_snapshots_with_date_range(
-        self, temporal_repository, mock_db_client
-    ):
+    async def test_get_graph_snapshots_with_date_range(self, temporal_repository, mock_db_client):
         """Get graph snapshots with date range."""
         mock_db_client.execute.return_value = []
 
@@ -759,9 +744,7 @@ class TestTemporalRepositoryGraphSnapshots:
         assert "end" in params
 
     @pytest.mark.asyncio
-    async def test_get_graph_snapshots_clamps_limit(
-        self, temporal_repository, mock_db_client
-    ):
+    async def test_get_graph_snapshots_clamps_limit(self, temporal_repository, mock_db_client):
         """Get graph snapshots clamps excessive limit."""
         mock_db_client.execute.return_value = []
 
@@ -803,9 +786,7 @@ class TestTemporalRepositoryCompaction:
         assert result >= 0
 
     @pytest.mark.asyncio
-    async def test_compact_no_old_versions(
-        self, temporal_repository, mock_db_client
-    ):
+    async def test_compact_no_old_versions(self, temporal_repository, mock_db_client):
         """Compaction returns 0 when no old versions."""
         mock_db_client.execute.return_value = []
 

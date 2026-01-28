@@ -16,29 +16,20 @@ Tests cover:
 - Statistics tracking
 """
 
-import asyncio
 import math
-from datetime import UTC, datetime
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from forge.models.events import Event, EventType
 from forge.models.overlay import Capability
-from forge.overlays.base import OverlayContext, OverlayResult
+from forge.overlays.base import OverlayContext
 from forge.overlays.ml_intelligence import (
     AnalysisResult,
     ClassificationResult,
-    EmbeddingError,
-    EmbeddingResult,
-    EntityExtractionResult,
     MLIntelligenceOverlay,
     MLProcessingError,
-    PatternMatch,
     create_ml_intelligence,
 )
-
 
 # =============================================================================
 # Fixtures
@@ -256,26 +247,20 @@ class TestEmbeddingGeneration:
     """Tests for embedding generation."""
 
     @pytest.mark.asyncio
-    async def test_pseudo_embedding_dimensions(
-        self, ml_overlay: MLIntelligenceOverlay
-    ) -> None:
+    async def test_pseudo_embedding_dimensions(self, ml_overlay: MLIntelligenceOverlay) -> None:
         """Test pseudo embedding has correct dimensions."""
         embedding = ml_overlay._pseudo_embedding("test content")
         assert len(embedding) == 384
 
     @pytest.mark.asyncio
-    async def test_pseudo_embedding_deterministic(
-        self, ml_overlay: MLIntelligenceOverlay
-    ) -> None:
+    async def test_pseudo_embedding_deterministic(self, ml_overlay: MLIntelligenceOverlay) -> None:
         """Test pseudo embedding is deterministic."""
         emb1 = ml_overlay._pseudo_embedding("test content")
         emb2 = ml_overlay._pseudo_embedding("test content")
         assert emb1 == emb2
 
     @pytest.mark.asyncio
-    async def test_pseudo_embedding_normalized(
-        self, ml_overlay: MLIntelligenceOverlay
-    ) -> None:
+    async def test_pseudo_embedding_normalized(self, ml_overlay: MLIntelligenceOverlay) -> None:
         """Test pseudo embedding is normalized."""
         embedding = ml_overlay._pseudo_embedding("test content")
         magnitude = math.sqrt(sum(x * x for x in embedding))
@@ -313,6 +298,7 @@ class TestEmbeddingGeneration:
     @pytest.mark.asyncio
     async def test_external_embedding_provider(self) -> None:
         """Test using external embedding provider."""
+
         async def mock_provider(content: str) -> list[float]:
             return [0.1] * 128
 
@@ -357,9 +343,7 @@ class TestClassification:
 
         assert result.primary_class == "business"
 
-    def test_classify_returns_all_classes(
-        self, ml_overlay: MLIntelligenceOverlay
-    ) -> None:
+    def test_classify_returns_all_classes(self, ml_overlay: MLIntelligenceOverlay) -> None:
         """Test classification returns all class scores."""
         result = ml_overlay._classify("test content")
 
@@ -369,9 +353,7 @@ class TestClassification:
 
     def test_classify_with_custom_categories(self) -> None:
         """Test classification with custom categories."""
-        overlay = MLIntelligenceOverlay(
-            custom_categories={"special": ["unique", "special_term"]}
-        )
+        overlay = MLIntelligenceOverlay(custom_categories={"special": ["unique", "special_term"]})
 
         result = overlay._classify("This is a unique and special_term document")
 
@@ -635,9 +617,7 @@ class TestSimilarityComputation:
         self, initialized_overlay: MLIntelligenceOverlay
     ) -> None:
         """Test similarity of identical content."""
-        similarity = await initialized_overlay.compute_similarity(
-            "test content", "test content"
-        )
+        similarity = await initialized_overlay.compute_similarity("test content", "test content")
 
         assert abs(similarity - 1.0) < 0.0001
 
@@ -710,6 +690,7 @@ class TestFactoryFunction:
 
     def test_create_with_provider(self) -> None:
         """Test creating with embedding provider."""
+
         async def provider(content: str) -> list[float]:
             return [0.1] * 128
 
@@ -735,6 +716,7 @@ class TestErrorHandling:
         overlay_context: OverlayContext,
     ) -> None:
         """Test execution handles ML processing errors gracefully."""
+
         async def failing_analyze(*args, **kwargs):
             raise MLProcessingError("Test error")
 

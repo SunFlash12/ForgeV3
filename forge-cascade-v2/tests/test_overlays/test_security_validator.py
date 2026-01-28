@@ -16,14 +16,13 @@ from __future__ import annotations
 import asyncio
 from collections import OrderedDict
 from datetime import UTC, datetime, timedelta
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from forge.models.base import TrustLevel
 from forge.models.events import Event, EventType
 from forge.models.overlay import Capability
+from forge.overlays.base import OverlayContext
 from forge.overlays.security_validator import (
     ContentPolicyRule,
     InputSanitizationRule,
@@ -34,11 +33,8 @@ from forge.overlays.security_validator import (
     ThreatDetectedError,
     TrustRule,
     ValidationResult,
-    ValidationRule,
     create_security_validator,
 )
-from forge.overlays.base import OverlayContext
-
 
 # =============================================================================
 # ValidationResult Tests
@@ -333,10 +329,7 @@ class TestRateLimitRule:
         )
 
         # Run multiple async validations concurrently
-        tasks = [
-            rule.validate_async({"user_id": "user-1"})
-            for _ in range(50)
-        ]
+        tasks = [rule.validate_async({"user_id": "user-1"}) for _ in range(50)]
 
         results = await asyncio.gather(*tasks)
 
@@ -961,8 +954,7 @@ class TestSecurityValidatorIntegration:
         # Should emit security alert event
         assert len(result.events_to_emit) > 0
         security_events = [
-            e for e in result.events_to_emit
-            if e.get("event_type") == EventType.SECURITY_ALERT
+            e for e in result.events_to_emit if e.get("event_type") == EventType.SECURITY_ALERT
         ]
         assert len(security_events) > 0
 
@@ -983,9 +975,7 @@ class TestSecurityValidatorIntegration:
             capabilities={Capability.DATABASE_READ},
         )
 
-        result = await overlay.execute(
-            context, input_data={"content": "Normal content"}
-        )
+        result = await overlay.execute(context, input_data={"content": "Normal content"})
 
         assert result.success is True
         assert "rules_checked" in result.metrics

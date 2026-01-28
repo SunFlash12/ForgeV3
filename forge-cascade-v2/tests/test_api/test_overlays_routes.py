@@ -10,13 +10,12 @@ Comprehensive tests for overlay API routes including:
 """
 
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
 
 from forge.models.base import OverlayPhase, OverlayState
-
 
 # =============================================================================
 # Fixtures
@@ -160,16 +159,12 @@ class TestOverlaysByPhaseRoute:
 
     def test_list_by_phase_valid(self, client: TestClient, auth_headers: dict):
         """List by valid phase returns list."""
-        response = client.get(
-            "/api/v1/overlays/by-phase/validation", headers=auth_headers
-        )
+        response = client.get("/api/v1/overlays/by-phase/validation", headers=auth_headers)
         assert response.status_code in [200, 401, 422, 503]
 
     def test_list_by_phase_invalid(self, client: TestClient, auth_headers: dict):
         """List by invalid phase fails validation."""
-        response = client.get(
-            "/api/v1/overlays/by-phase/invalid_phase", headers=auth_headers
-        )
+        response = client.get("/api/v1/overlays/by-phase/invalid_phase", headers=auth_headers)
         assert response.status_code in [422, 401]
 
 
@@ -211,13 +206,9 @@ class TestActivateOverlayRoute:
         response = client.post("/api/v1/overlays/overlay123/activate", headers=auth_headers)
         assert response.status_code in [403, 401, 404, 503]
 
-    def test_activate_with_trusted_level(
-        self, client: TestClient, trusted_auth_headers: dict
-    ):
+    def test_activate_with_trusted_level(self, client: TestClient, trusted_auth_headers: dict):
         """Activate with trusted level succeeds or returns 404."""
-        response = client.post(
-            "/api/v1/overlays/overlay123/activate", headers=trusted_auth_headers
-        )
+        response = client.post("/api/v1/overlays/overlay123/activate", headers=trusted_auth_headers)
         assert response.status_code in [200, 400, 404, 403, 401, 503]
 
 
@@ -231,14 +222,10 @@ class TestDeactivateOverlayRoute:
 
     def test_deactivate_insufficient_trust(self, client: TestClient, auth_headers: dict):
         """Deactivate with insufficient trust level fails."""
-        response = client.post(
-            "/api/v1/overlays/overlay123/deactivate", headers=auth_headers
-        )
+        response = client.post("/api/v1/overlays/overlay123/deactivate", headers=auth_headers)
         assert response.status_code in [403, 401, 404, 503]
 
-    def test_deactivate_with_trusted_level(
-        self, client: TestClient, trusted_auth_headers: dict
-    ):
+    def test_deactivate_with_trusted_level(self, client: TestClient, trusted_auth_headers: dict):
         """Deactivate with trusted level succeeds or returns 404."""
         response = client.post(
             "/api/v1/overlays/overlay123/deactivate", headers=trusted_auth_headers
@@ -272,9 +259,7 @@ class TestUpdateOverlayConfigRoute:
         # Needs CORE trust level
         assert response.status_code in [403, 401, 404, 503]
 
-    def test_update_config_with_core_level(
-        self, client: TestClient, core_auth_headers: dict
-    ):
+    def test_update_config_with_core_level(self, client: TestClient, core_auth_headers: dict):
         """Update config with core level succeeds or returns 404."""
         response = client.patch(
             "/api/v1/overlays/overlay123/config",
@@ -283,9 +268,7 @@ class TestUpdateOverlayConfigRoute:
         )
         assert response.status_code in [200, 404, 403, 401, 503]
 
-    def test_update_config_missing_config(
-        self, client: TestClient, core_auth_headers: dict
-    ):
+    def test_update_config_missing_config(self, client: TestClient, core_auth_headers: dict):
         """Update config without config field fails validation."""
         response = client.patch(
             "/api/v1/overlays/overlay123/config",
@@ -362,15 +345,11 @@ class TestStartCanaryRoute:
 
     def test_start_canary_insufficient_trust(self, client: TestClient, auth_headers: dict):
         """Start canary with insufficient trust fails."""
-        response = client.post(
-            "/api/v1/overlays/overlay123/canary/start", headers=auth_headers
-        )
+        response = client.post("/api/v1/overlays/overlay123/canary/start", headers=auth_headers)
         # Needs CORE trust level
         assert response.status_code in [403, 401, 404, 503]
 
-    def test_start_canary_with_core_level(
-        self, client: TestClient, core_auth_headers: dict
-    ):
+    def test_start_canary_with_core_level(self, client: TestClient, core_auth_headers: dict):
         """Start canary with core level succeeds or returns 404/400."""
         response = client.post(
             "/api/v1/overlays/overlay123/canary/start", headers=core_auth_headers
@@ -388,9 +367,7 @@ class TestAdvanceCanaryRoute:
 
     def test_advance_canary_insufficient_trust(self, client: TestClient, auth_headers: dict):
         """Advance canary with insufficient trust fails."""
-        response = client.post(
-            "/api/v1/overlays/overlay123/canary/advance", headers=auth_headers
-        )
+        response = client.post("/api/v1/overlays/overlay123/canary/advance", headers=auth_headers)
         assert response.status_code in [403, 401, 404, 503]
 
 
@@ -402,13 +379,9 @@ class TestRollbackCanaryRoute:
         response = client.post("/api/v1/overlays/overlay123/canary/rollback")
         assert response.status_code == 401
 
-    def test_rollback_canary_insufficient_trust(
-        self, client: TestClient, auth_headers: dict
-    ):
+    def test_rollback_canary_insufficient_trust(self, client: TestClient, auth_headers: dict):
         """Rollback canary with insufficient trust fails."""
-        response = client.post(
-            "/api/v1/overlays/overlay123/canary/rollback", headers=auth_headers
-        )
+        response = client.post("/api/v1/overlays/overlay123/canary/rollback", headers=auth_headers)
         assert response.status_code in [403, 401, 404, 503]
 
 

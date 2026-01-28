@@ -13,24 +13,18 @@ Tests cover:
 - Cache cleanup
 """
 
-import asyncio
 import time
-from datetime import UTC, datetime
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from forge.models.events import Event, EventType
-from forge.models.overlay import Capability, OverlayHealthCheck
-from forge.overlays.base import OverlayContext, OverlayResult
+from forge.models.overlay import Capability
+from forge.overlays.base import OverlayContext
 from forge.overlays.performance_optimizer import (
     CacheEntry,
-    OptimizationRecommendation,
     PerformanceMetrics,
     PerformanceOptimizerOverlay,
 )
-
 
 # =============================================================================
 # Fixtures
@@ -157,9 +151,7 @@ class TestPerformanceMetrics:
 class TestPerformanceOptimizerInitialization:
     """Tests for overlay initialization."""
 
-    def test_default_initialization(
-        self, optimizer: PerformanceOptimizerOverlay
-    ) -> None:
+    def test_default_initialization(self, optimizer: PerformanceOptimizerOverlay) -> None:
         """Test default initialization values."""
         assert optimizer.NAME == "performance_optimizer"
         assert optimizer.VERSION == "1.0.0"
@@ -177,9 +169,7 @@ class TestPerformanceOptimizerInitialization:
         await optimizer.cleanup()
 
     @pytest.mark.asyncio
-    async def test_cleanup(
-        self, initialized_optimizer: PerformanceOptimizerOverlay
-    ) -> None:
+    async def test_cleanup(self, initialized_optimizer: PerformanceOptimizerOverlay) -> None:
         """Test overlay cleanup."""
         # Add some cache entries
         initialized_optimizer._cache["test"] = CacheEntry(value="test")
@@ -187,12 +177,12 @@ class TestPerformanceOptimizerInitialization:
         await initialized_optimizer.cleanup()
 
         assert len(initialized_optimizer._cache) == 0
-        assert initialized_optimizer._cleanup_task is None or \
-               initialized_optimizer._cleanup_task.cancelled()
+        assert (
+            initialized_optimizer._cleanup_task is None
+            or initialized_optimizer._cleanup_task.cancelled()
+        )
 
-    def test_subscribed_events(
-        self, optimizer: PerformanceOptimizerOverlay
-    ) -> None:
+    def test_subscribed_events(self, optimizer: PerformanceOptimizerOverlay) -> None:
         """Test subscribed events."""
         assert EventType.SYSTEM_EVENT in optimizer.SUBSCRIBED_EVENTS
         assert EventType.SYSTEM_ERROR in optimizer.SUBSCRIBED_EVENTS
@@ -214,9 +204,7 @@ class TestCacheGetOperation:
     ) -> None:
         """Test cache get with hit."""
         # Pre-populate cache
-        initialized_optimizer._cache["test-key"] = CacheEntry(
-            value={"data": "cached_value"}
-        )
+        initialized_optimizer._cache["test-key"] = CacheEntry(value={"data": "cached_value"})
 
         result = await initialized_optimizer.execute(
             context=overlay_context,
@@ -644,9 +632,7 @@ class TestGetLLMParamsOperation:
     ) -> None:
         """Test LLM params with cache hit."""
         # Pre-populate cache
-        initialized_optimizer._cache["llm-cache-key"] = CacheEntry(
-            value={"cached": "result"}
-        )
+        initialized_optimizer._cache["llm-cache-key"] = CacheEntry(value={"cached": "result"})
 
         result = await initialized_optimizer.execute(
             context=overlay_context,
@@ -704,9 +690,7 @@ class TestAnalyzeOperation:
 
         assert result.success is True
         recommendations = result.data["recommendations"]
-        cache_recs = [
-            r for r in recommendations if r["category"] == "caching"
-        ]
+        cache_recs = [r for r in recommendations if r["category"] == "caching"]
         assert len(cache_recs) >= 1
 
     @pytest.mark.asyncio
@@ -726,9 +710,7 @@ class TestAnalyzeOperation:
 
         assert result.success is True
         recommendations = result.data["recommendations"]
-        perf_recs = [
-            r for r in recommendations if r["category"] == "performance"
-        ]
+        perf_recs = [r for r in recommendations if r["category"] == "performance"]
         assert len(perf_recs) >= 1
         assert perf_recs[0]["priority"] == "critical"
 
@@ -751,9 +733,7 @@ class TestAnalyzeOperation:
 
         assert result.success is True
         recommendations = result.data["recommendations"]
-        reliability_recs = [
-            r for r in recommendations if r["category"] == "reliability"
-        ]
+        reliability_recs = [r for r in recommendations if r["category"] == "reliability"]
         assert len(reliability_recs) >= 1
 
 
@@ -801,9 +781,7 @@ class TestHealthCheck:
         assert "Cache operational" in health.message
 
     @pytest.mark.asyncio
-    async def test_health_check_unhealthy(
-        self, optimizer: PerformanceOptimizerOverlay
-    ) -> None:
+    async def test_health_check_unhealthy(self, optimizer: PerformanceOptimizerOverlay) -> None:
         """Test health check when unhealthy (cache issue)."""
         # Initialize but mock cache to fail
         await optimizer.initialize()
@@ -892,9 +870,7 @@ class TestCleanupLoop:
         optimizer._cache["fresh"] = CacheEntry(value="new", ttl=300.0)
 
         # Manually trigger cleanup logic
-        expired_keys = [
-            key for key, entry in optimizer._cache.items() if entry.is_expired
-        ]
+        expired_keys = [key for key, entry in optimizer._cache.items() if entry.is_expired]
         for key in expired_keys:
             del optimizer._cache[key]
 
@@ -919,6 +895,7 @@ class TestErrorHandling:
         overlay_context: OverlayContext,
     ) -> None:
         """Test handling runtime errors."""
+
         # Mock an operation to raise an error
         async def failing_operation(*args, **kwargs):
             raise RuntimeError("Test error")

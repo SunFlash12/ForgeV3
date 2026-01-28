@@ -2,19 +2,17 @@
 Tests for federation trust manager.
 """
 
-import pytest
-from datetime import datetime, UTC, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import UTC, datetime, timedelta
 
-from forge.federation.trust import (
-    TrustEvent,
-    PeerTrustManager,
-)
+import pytest
+
 from forge.federation.models import (
     FederatedPeer,
     PeerStatus,
-    SyncDirection,
-    ConflictResolution,
+)
+from forge.federation.trust import (
+    PeerTrustManager,
+    TrustEvent,
 )
 
 
@@ -141,9 +139,7 @@ class TestPeerTrustManager:
         """Test recording unresolved conflict."""
         initial_trust = sample_peer.trust_score
 
-        new_trust = await trust_manager.record_conflict(
-            sample_peer, "content", resolved=False
-        )
+        new_trust = await trust_manager.record_conflict(sample_peer, "content", resolved=False)
 
         expected = max(0.0, initial_trust - PeerTrustManager.CONFLICT_PENALTY)
         assert new_trust == expected
@@ -153,9 +149,7 @@ class TestPeerTrustManager:
         """Test recording resolved conflict (no penalty)."""
         initial_trust = sample_peer.trust_score
 
-        new_trust = await trust_manager.record_conflict(
-            sample_peer, "content", resolved=True
-        )
+        new_trust = await trust_manager.record_conflict(sample_peer, "content", resolved=True)
 
         assert new_trust == initial_trust
 
@@ -412,7 +406,9 @@ class TestPeerTrustManager:
         """Test trust expiration for old verification."""
         sample_peer.last_seen_at = datetime.now(UTC) - timedelta(days=10)
 
-        is_expired, reason = await trust_manager.check_trust_expiration(sample_peer, max_trust_age_days=7)
+        is_expired, reason = await trust_manager.check_trust_expiration(
+            sample_peer, max_trust_age_days=7
+        )
 
         assert is_expired is True
         assert "expired" in reason.lower()
@@ -422,7 +418,9 @@ class TestPeerTrustManager:
         """Test trust expiration for recent verification."""
         sample_peer.last_seen_at = datetime.now(UTC) - timedelta(days=3)
 
-        is_expired, reason = await trust_manager.check_trust_expiration(sample_peer, max_trust_age_days=7)
+        is_expired, reason = await trust_manager.check_trust_expiration(
+            sample_peer, max_trust_age_days=7
+        )
 
         assert is_expired is False
         assert "valid" in reason.lower()
@@ -433,7 +431,9 @@ class TestPeerTrustManager:
         sample_peer.last_seen_at = datetime.now(UTC) - timedelta(days=10)
         initial_trust = sample_peer.trust_score
 
-        new_trust = await trust_manager.apply_trust_decay_if_expired(sample_peer, max_trust_age_days=7)
+        new_trust = await trust_manager.apply_trust_decay_if_expired(
+            sample_peer, max_trust_age_days=7
+        )
 
         assert new_trust < initial_trust
         assert new_trust == max(0.0, initial_trust - 0.1)
@@ -444,7 +444,9 @@ class TestPeerTrustManager:
         sample_peer.last_seen_at = datetime.now(UTC) - timedelta(days=3)
         initial_trust = sample_peer.trust_score
 
-        new_trust = await trust_manager.apply_trust_decay_if_expired(sample_peer, max_trust_age_days=7)
+        new_trust = await trust_manager.apply_trust_decay_if_expired(
+            sample_peer, max_trust_age_days=7
+        )
 
         assert new_trust == initial_trust
 
@@ -501,9 +503,15 @@ class TestPeerTrustManager:
     async def test_get_federation_stats(self, trust_manager):
         """Test getting federation stats."""
         peers = [
-            FederatedPeer(name="P1", url="https://p1.com", public_key="k1", status=PeerStatus.ACTIVE),
-            FederatedPeer(name="P2", url="https://p2.com", public_key="k2", status=PeerStatus.ACTIVE),
-            FederatedPeer(name="P3", url="https://p3.com", public_key="k3", status=PeerStatus.PENDING),
+            FederatedPeer(
+                name="P1", url="https://p1.com", public_key="k1", status=PeerStatus.ACTIVE
+            ),
+            FederatedPeer(
+                name="P2", url="https://p2.com", public_key="k2", status=PeerStatus.ACTIVE
+            ),
+            FederatedPeer(
+                name="P3", url="https://p3.com", public_key="k3", status=PeerStatus.PENDING
+            ),
         ]
 
         stats = await trust_manager.get_federation_stats(peers)
@@ -602,9 +610,7 @@ class TestPeerTrustManager:
     async def test_trust_history_bounded(self, trust_manager, sample_peer):
         """Test trust history is bounded."""
         original_max = trust_manager.MAX_HISTORY_EVENTS
-        trust_manager._trust_history = trust_manager._trust_history.__class__(
-            maxlen=10
-        )
+        trust_manager._trust_history = trust_manager._trust_history.__class__(maxlen=10)
 
         # Generate many events
         for _ in range(20):

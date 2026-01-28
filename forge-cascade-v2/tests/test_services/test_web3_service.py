@@ -21,7 +21,6 @@ from forge.services.web3_service import (
     verify_purchase_transaction,
 )
 
-
 # =============================================================================
 # Test Constants
 # =============================================================================
@@ -500,9 +499,7 @@ class TestGetTransactionInfo:
             mock_client = AsyncMock()
             mock_client.__aenter__ = AsyncMock(return_value=mock_client)
             mock_client.__aexit__ = AsyncMock(return_value=None)
-            mock_client.post = AsyncMock(
-                side_effect=[mock_response_receipt, mock_response_tx]
-            )
+            mock_client.post = AsyncMock(side_effect=[mock_response_receipt, mock_response_tx])
             mock_client_class.return_value = mock_client
 
             result = await get_transaction_info(
@@ -527,9 +524,7 @@ class TestGetTransactionInfo:
             mock_client = AsyncMock()
             mock_client.__aenter__ = AsyncMock(return_value=mock_client)
             mock_client.__aexit__ = AsyncMock(return_value=None)
-            mock_client.post = AsyncMock(
-                side_effect=[mock_response_receipt, mock_response_tx]
-            )
+            mock_client.post = AsyncMock(side_effect=[mock_response_receipt, mock_response_tx])
             mock_client_class.return_value = mock_client
 
             result = await get_transaction_info(

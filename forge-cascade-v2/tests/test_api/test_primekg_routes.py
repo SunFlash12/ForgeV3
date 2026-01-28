@@ -11,12 +11,10 @@ Comprehensive tests for PrimeKG biomedical knowledge graph API routes including:
 - Admin operations
 """
 
-from datetime import UTC, datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
-
 
 # =============================================================================
 # Fixtures
@@ -93,9 +91,7 @@ class TestDifferentialDiagnosisRoute:
         )
         assert response.status_code in [200, 401, 500, 503]
 
-    def test_differential_empty_phenotypes_fails(
-        self, client: TestClient, auth_headers: dict
-    ):
+    def test_differential_empty_phenotypes_fails(self, client: TestClient, auth_headers: dict):
         """Differential diagnosis with empty phenotypes fails validation."""
         response = client.post(
             "/api/v1/primekg/diagnosis/differential",
@@ -106,9 +102,7 @@ class TestDifferentialDiagnosisRoute:
         )
         assert response.status_code in [422, 401]
 
-    def test_differential_too_many_phenotypes(
-        self, client: TestClient, auth_headers: dict
-    ):
+    def test_differential_too_many_phenotypes(self, client: TestClient, auth_headers: dict):
         """Differential diagnosis with too many phenotypes fails validation."""
         response = client.post(
             "/api/v1/primekg/diagnosis/differential",
@@ -228,9 +222,7 @@ class TestDrugInteractionsRoute:
         )
         assert response.status_code in [200, 401, 500, 503]
 
-    def test_drug_interactions_empty_drugs_fails(
-        self, client: TestClient, auth_headers: dict
-    ):
+    def test_drug_interactions_empty_drugs_fails(self, client: TestClient, auth_headers: dict):
         """Check drug interactions with empty drugs fails."""
         response = client.post(
             "/api/v1/primekg/drugs/interactions",
@@ -239,9 +231,7 @@ class TestDrugInteractionsRoute:
         )
         assert response.status_code in [422, 401]
 
-    def test_drug_interactions_too_many_drugs(
-        self, client: TestClient, auth_headers: dict
-    ):
+    def test_drug_interactions_too_many_drugs(self, client: TestClient, auth_headers: dict):
         """Check drug interactions with too many drugs fails."""
         response = client.post(
             "/api/v1/primekg/drugs/interactions",
@@ -291,9 +281,7 @@ class TestGeneAssociationsRoute:
         )
         assert response.status_code in [200, 400, 401, 500, 503]
 
-    def test_gene_associations_neither_id_fails(
-        self, client: TestClient, auth_headers: dict
-    ):
+    def test_gene_associations_neither_id_fails(self, client: TestClient, auth_headers: dict):
         """Get gene associations without gene_id or disease_id fails."""
         response = client.post(
             "/api/v1/primekg/genes/associations",
@@ -346,9 +334,7 @@ class TestSemanticSearchRoute:
         )
         assert response.status_code in [200, 401, 500, 503]
 
-    def test_semantic_search_query_too_short(
-        self, client: TestClient, auth_headers: dict
-    ):
+    def test_semantic_search_query_too_short(self, client: TestClient, auth_headers: dict):
         """Semantic search with query too short fails."""
         response = client.post(
             "/api/v1/primekg/search/semantic",
@@ -357,9 +343,7 @@ class TestSemanticSearchRoute:
         )
         assert response.status_code in [422, 401]
 
-    def test_semantic_search_query_too_long(
-        self, client: TestClient, auth_headers: dict
-    ):
+    def test_semantic_search_query_too_long(self, client: TestClient, auth_headers: dict):
         """Semantic search with query too long fails."""
         response = client.post(
             "/api/v1/primekg/search/semantic",
@@ -388,9 +372,7 @@ class TestDiscriminatingPhenotypesRoute:
         )
         assert response.status_code == 401
 
-    def test_discriminating_phenotypes_authorized(
-        self, client: TestClient, auth_headers: dict
-    ):
+    def test_discriminating_phenotypes_authorized(self, client: TestClient, auth_headers: dict):
         """Get discriminating phenotypes with auth and valid data."""
         response = client.post(
             "/api/v1/primekg/diagnosis/discriminating-phenotypes",
@@ -430,9 +412,7 @@ class TestDiseaseDetailsRoute:
 
     def test_disease_details_authorized(self, client: TestClient, auth_headers: dict):
         """Get disease details with auth returns details or error."""
-        response = client.get(
-            "/api/v1/primekg/diseases/MONDO:0005148", headers=auth_headers
-        )
+        response = client.get("/api/v1/primekg/diseases/MONDO:0005148", headers=auth_headers)
         assert response.status_code in [200, 404, 401, 500, 503]
 
 
@@ -487,13 +467,9 @@ class TestRefreshEmbeddingsRoute:
         response = client.post("/api/v1/primekg/admin/refresh-embeddings")
         assert response.status_code == 401
 
-    def test_refresh_embeddings_insufficient_trust(
-        self, client: TestClient, auth_headers: dict
-    ):
+    def test_refresh_embeddings_insufficient_trust(self, client: TestClient, auth_headers: dict):
         """Refresh embeddings with insufficient trust fails."""
-        response = client.post(
-            "/api/v1/primekg/admin/refresh-embeddings", headers=auth_headers
-        )
+        response = client.post("/api/v1/primekg/admin/refresh-embeddings", headers=auth_headers)
         # Requires TRUSTED level
         assert response.status_code in [403, 401, 500, 503]
 

@@ -10,8 +10,8 @@ Comprehensive tests for the CascadeRepository including:
 """
 
 import json
-from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -22,7 +22,6 @@ from forge.repositories.cascade_repository import (
     CascadeRepository,
     get_cascade_repository,
 )
-
 
 # =============================================================================
 # Fixtures
@@ -206,9 +205,7 @@ class TestHelperMethods:
         assert cascade_repository._deserialize_chain({}) is None
         assert cascade_repository._deserialize_chain(None) is None  # type: ignore
 
-    def test_deserialize_chain_without_events(
-        self, cascade_repository, sample_chain_node_data
-    ):
+    def test_deserialize_chain_without_events(self, cascade_repository, sample_chain_node_data):
         """_deserialize_chain handles chain without events."""
         result = cascade_repository._deserialize_chain(sample_chain_node_data)
 
@@ -329,9 +326,7 @@ class TestUpdateChain:
         self, cascade_repository, mock_db_client, sample_cascade_chain
     ):
         """Update chain successfully."""
-        mock_db_client.execute_single.return_value = {
-            "chain": {"cascade_id": "cascade-123"}
-        }
+        mock_db_client.execute_single.return_value = {"chain": {"cascade_id": "cascade-123"}}
 
         sample_cascade_chain.total_hops = 5
         sample_cascade_chain.insights_generated = 10
@@ -344,9 +339,7 @@ class TestUpdateChain:
         self, cascade_repository, mock_db_client, sample_cascade_chain
     ):
         """Update chain uses correct query structure."""
-        mock_db_client.execute_single.return_value = {
-            "chain": {"cascade_id": "cascade-123"}
-        }
+        mock_db_client.execute_single.return_value = {"chain": {"cascade_id": "cascade-123"}}
 
         sample_cascade_chain.errors_encountered = 2
         await cascade_repository.update_chain(sample_cascade_chain)
@@ -487,9 +480,7 @@ class TestGetActiveChains:
         assert result[0].cascade_id == "cascade-123"
 
     @pytest.mark.asyncio
-    async def test_get_active_chains_filters_by_status(
-        self, cascade_repository, mock_db_client
-    ):
+    async def test_get_active_chains_filters_by_status(self, cascade_repository, mock_db_client):
         """Get active chains filters by status or completed_at."""
         mock_db_client.execute.return_value = []
 
@@ -537,9 +528,7 @@ class TestGetCompletedChains:
         assert len(result) == 1
 
     @pytest.mark.asyncio
-    async def test_get_completed_chains_with_pagination(
-        self, cascade_repository, mock_db_client
-    ):
+    async def test_get_completed_chains_with_pagination(self, cascade_repository, mock_db_client):
         """Get completed chains respects pagination."""
         mock_db_client.execute.return_value = []
 

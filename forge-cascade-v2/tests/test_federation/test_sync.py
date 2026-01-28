@@ -2,27 +2,23 @@
 Tests for federation sync service.
 """
 
-import pytest
-from datetime import datetime, UTC, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
-import asyncio
+from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock, MagicMock
 
-from forge.federation.sync import (
-    SyncConflict,
-    SyncService,
-)
+import pytest
+
 from forge.federation.models import (
-    FederatedPeer,
+    ConflictResolution,
     FederatedCapsule,
-    FederatedEdge,
-    SyncState,
+    FederatedPeer,
     PeerStatus,
     SyncDirection,
     SyncOperationStatus,
-    SyncPhase,
-    ConflictResolution,
-    FederatedSyncStatus,
-    SyncPayload,
+    SyncState,
+)
+from forge.federation.sync import (
+    SyncConflict,
+    SyncService,
 )
 
 
@@ -277,7 +273,9 @@ class TestSyncService:
         assert state.status == SyncOperationStatus.COMPLETED
 
     @pytest.mark.asyncio
-    async def test_sync_with_peer_bidirectional(self, sync_service, mock_protocol, mock_driver, sample_peer):
+    async def test_sync_with_peer_bidirectional(
+        self, sync_service, mock_protocol, mock_driver, sample_peer
+    ):
         """Test bidirectional sync."""
         sample_peer.sync_direction = SyncDirection.BIDIRECTIONAL
         sync_service._peers[sample_peer.id] = sample_peer
@@ -413,7 +411,9 @@ class TestSyncService:
         assert state.edges_created == 1
 
     @pytest.mark.asyncio
-    async def test_process_incoming_edges_invalid_relationship(self, sync_service, mock_driver, sample_peer):
+    async def test_process_incoming_edges_invalid_relationship(
+        self, sync_service, mock_driver, sample_peer
+    ):
         """Test invalid relationship type is sanitized."""
         sync_service._federated_capsules = {
             f"{sample_peer.id}:remote-1": FederatedCapsule(

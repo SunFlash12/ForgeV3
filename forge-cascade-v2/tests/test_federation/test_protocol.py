@@ -2,36 +2,32 @@
 Tests for federation protocol.
 """
 
-import json
-import pytest
-from datetime import datetime, UTC, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch, mock_open
 import base64
 import hashlib
+import json
+from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock, patch
 
-from forge.federation.protocol import (
-    SSRFError,
-    DNSRebindingError,
-    CertificatePinningError,
-    ReplayAttackError,
-    PinnedConnection,
-    PinnedCertificate,
-    DNSPinStore,
-    CertificatePinStore,
-    NonceStore,
-    ValidatedURL,
-    validate_url_for_ssrf,
-    FederationProtocol,
-    get_nonce_store,
-    get_dns_pin_store,
-    get_cert_pin_store,
-    _compute_cert_fingerprint,
-)
+import pytest
+
 from forge.federation.models import (
     FederatedPeer,
     PeerHandshake,
-    PeerStatus,
-    SyncPayload,
+)
+from forge.federation.protocol import (
+    CertificatePinStore,
+    DNSPinStore,
+    DNSRebindingError,
+    FederationProtocol,
+    NonceStore,
+    PinnedCertificate,
+    PinnedConnection,
+    ReplayAttackError,
+    SSRFError,
+    _compute_cert_fingerprint,
+    get_dns_pin_store,
+    get_nonce_store,
+    validate_url_for_ssrf,
 )
 
 
@@ -167,6 +163,7 @@ class TestDNSPinStore:
 
         # Wait for expiration
         import time
+
         time.sleep(0.01)
 
         ips = store.get_pinned_ips("example.com", 443)
@@ -563,8 +560,12 @@ class TestFederationProtocol:
         protocol._public_key = protocol._private_key.public_key()
         protocol._public_key_b64 = base64.b64encode(
             protocol._public_key.public_bytes(
-                encoding=__import__("cryptography.hazmat.primitives.serialization", fromlist=["Encoding"]).Encoding.Raw,
-                format=__import__("cryptography.hazmat.primitives.serialization", fromlist=["PublicFormat"]).PublicFormat.Raw,
+                encoding=__import__(
+                    "cryptography.hazmat.primitives.serialization", fromlist=["Encoding"]
+                ).Encoding.Raw,
+                format=__import__(
+                    "cryptography.hazmat.primitives.serialization", fromlist=["PublicFormat"]
+                ).PublicFormat.Raw,
             )
         ).decode()
 
@@ -580,8 +581,8 @@ class TestFederationProtocol:
     @pytest.mark.asyncio
     async def test_verify_handshake_valid(self, protocol):
         """Test verifying valid handshake."""
-        from cryptography.hazmat.primitives.asymmetric import ed25519
         from cryptography.hazmat.primitives import serialization
+        from cryptography.hazmat.primitives.asymmetric import ed25519
 
         # Generate keys
         private_key = ed25519.Ed25519PrivateKey.generate()
@@ -625,8 +626,8 @@ class TestFederationProtocol:
     @pytest.mark.asyncio
     async def test_verify_handshake_no_nonce(self, protocol):
         """Test rejecting handshake without nonce."""
-        from cryptography.hazmat.primitives.asymmetric import ed25519
         from cryptography.hazmat.primitives import serialization
+        from cryptography.hazmat.primitives.asymmetric import ed25519
 
         private_key = ed25519.Ed25519PrivateKey.generate()
         public_key = private_key.public_key()
@@ -665,8 +666,8 @@ class TestFederationProtocol:
     @pytest.mark.asyncio
     async def test_verify_handshake_old_timestamp(self, protocol):
         """Test rejecting handshake with old timestamp."""
-        from cryptography.hazmat.primitives.asymmetric import ed25519
         from cryptography.hazmat.primitives import serialization
+        from cryptography.hazmat.primitives.asymmetric import ed25519
 
         private_key = ed25519.Ed25519PrivateKey.generate()
         public_key = private_key.public_key()
@@ -695,8 +696,8 @@ class TestFederationProtocol:
 
     def test_verify_signature_valid(self, protocol):
         """Test verifying valid signature."""
-        from cryptography.hazmat.primitives.asymmetric import ed25519
         from cryptography.hazmat.primitives import serialization
+        from cryptography.hazmat.primitives.asymmetric import ed25519
 
         private_key = ed25519.Ed25519PrivateKey.generate()
         public_key = private_key.public_key()
@@ -715,8 +716,8 @@ class TestFederationProtocol:
 
     def test_verify_signature_invalid(self, protocol):
         """Test verifying invalid signature."""
-        from cryptography.hazmat.primitives.asymmetric import ed25519
         from cryptography.hazmat.primitives import serialization
+        from cryptography.hazmat.primitives.asymmetric import ed25519
 
         private_key = ed25519.Ed25519PrivateKey.generate()
         public_key = private_key.public_key()

@@ -9,23 +9,18 @@ Comprehensive tests for ChatRepository including:
 - Invite code handling
 """
 
-from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock, patch
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock
 
 import pytest
 
 from forge.models.chat import (
-    ChatMessage,
-    ChatRoom,
-    RoomAccessCheck,
     RoomCreate,
-    RoomMember,
     RoomRole,
     RoomUpdate,
     RoomVisibility,
 )
 from forge.repositories.chat_repository import ChatRepository
-
 
 # =============================================================================
 # Fixtures
@@ -105,9 +100,7 @@ class TestChatRepositoryRoomCreate:
     """Tests for room creation."""
 
     @pytest.mark.asyncio
-    async def test_create_room_success(
-        self, chat_repository, mock_db_client, sample_room_data
-    ):
+    async def test_create_room_success(self, chat_repository, mock_db_client, sample_room_data):
         """Successful room creation."""
         mock_db_client.execute_single.return_value = {"room": sample_room_data}
 
@@ -174,9 +167,7 @@ class TestChatRepositoryRoomCreate:
         assert params["invite_code"] is not None
 
     @pytest.mark.asyncio
-    async def test_create_room_failure_raises_error(
-        self, chat_repository, mock_db_client
-    ):
+    async def test_create_room_failure_raises_error(self, chat_repository, mock_db_client):
         """Room creation failure raises RuntimeError."""
         mock_db_client.execute_single.return_value = None
 
@@ -201,9 +192,7 @@ class TestChatRepositoryRoomRetrieval:
     """Tests for room retrieval operations."""
 
     @pytest.mark.asyncio
-    async def test_get_room_success(
-        self, chat_repository, mock_db_client, sample_room_data
-    ):
+    async def test_get_room_success(self, chat_repository, mock_db_client, sample_room_data):
         """Get room by ID."""
         mock_db_client.execute_single.return_value = {"room": sample_room_data}
 
@@ -223,9 +212,7 @@ class TestChatRepositoryRoomRetrieval:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_get_room_by_invite_code(
-        self, chat_repository, mock_db_client, sample_room_data
-    ):
+    async def test_get_room_by_invite_code(self, chat_repository, mock_db_client, sample_room_data):
         """Get room by invite code."""
         sample_room_data["invite_code"] = "ABC123"
         mock_db_client.execute_single.return_value = {"room": sample_room_data}
@@ -242,9 +229,7 @@ class TestChatRepositoryRoomRetrieval:
         self, chat_repository, mock_db_client, sample_room_data
     ):
         """Get user rooms including public rooms."""
-        mock_db_client.execute.return_value = [
-            {"room": sample_room_data, "role": "owner"}
-        ]
+        mock_db_client.execute.return_value = [{"room": sample_room_data, "role": "owner"}]
 
         result = await chat_repository.get_user_rooms("user123", include_public=True)
 
@@ -258,9 +243,7 @@ class TestChatRepositoryRoomRetrieval:
         self, chat_repository, mock_db_client, sample_room_data
     ):
         """Get user rooms excluding public rooms."""
-        mock_db_client.execute.return_value = [
-            {"room": sample_room_data, "role": "member"}
-        ]
+        mock_db_client.execute.return_value = [{"room": sample_room_data, "role": "member"}]
 
         result = await chat_repository.get_user_rooms("user123", include_public=False)
 
@@ -269,9 +252,7 @@ class TestChatRepositoryRoomRetrieval:
         assert role == RoomRole.MEMBER
 
     @pytest.mark.asyncio
-    async def test_get_user_rooms_limit_capped(
-        self, chat_repository, mock_db_client
-    ):
+    async def test_get_user_rooms_limit_capped(self, chat_repository, mock_db_client):
         """Get user rooms respects limit cap."""
         mock_db_client.execute.return_value = []
 
@@ -291,9 +272,7 @@ class TestChatRepositoryRoomUpdate:
     """Tests for room update operations."""
 
     @pytest.mark.asyncio
-    async def test_update_room_name(
-        self, chat_repository, mock_db_client, sample_room_data
-    ):
+    async def test_update_room_name(self, chat_repository, mock_db_client, sample_room_data):
         """Update room name."""
         sample_room_data["name"] = "Updated Room"
         mock_db_client.execute_single.return_value = {"room": sample_room_data}
@@ -329,9 +308,7 @@ class TestChatRepositoryRoomUpdate:
         assert params["max_members"] == 50
 
     @pytest.mark.asyncio
-    async def test_update_room_archive(
-        self, chat_repository, mock_db_client, sample_room_data
-    ):
+    async def test_update_room_archive(self, chat_repository, mock_db_client, sample_room_data):
         """Archive room via update."""
         sample_room_data["is_archived"] = True
         mock_db_client.execute_single.return_value = {"room": sample_room_data}
@@ -388,9 +365,7 @@ class TestChatRepositoryMemberManagement:
     """Tests for member management operations."""
 
     @pytest.mark.asyncio
-    async def test_add_member_success(
-        self, chat_repository, mock_db_client, sample_member_data
-    ):
+    async def test_add_member_success(self, chat_repository, mock_db_client, sample_member_data):
         """Successfully add member to room."""
         sample_member_data["role"] = "member"
         mock_db_client.execute_single.return_value = {"member": sample_member_data}
@@ -423,9 +398,7 @@ class TestChatRepositoryMemberManagement:
         assert params["invited_by"] == "user123"
 
     @pytest.mark.asyncio
-    async def test_add_member_room_full_or_archived(
-        self, chat_repository, mock_db_client
-    ):
+    async def test_add_member_room_full_or_archived(self, chat_repository, mock_db_client):
         """Add member returns None when room is full or archived."""
         mock_db_client.execute_single.return_value = None
 
@@ -455,9 +428,7 @@ class TestChatRepositoryMemberManagement:
         assert result is False
 
     @pytest.mark.asyncio
-    async def test_get_member_success(
-        self, chat_repository, mock_db_client, sample_member_data
-    ):
+    async def test_get_member_success(self, chat_repository, mock_db_client, sample_member_data):
         """Get specific member info."""
         mock_db_client.execute_single.return_value = {"member": sample_member_data}
 
@@ -467,9 +438,7 @@ class TestChatRepositoryMemberManagement:
         assert result.user_id == "user123"
 
     @pytest.mark.asyncio
-    async def test_get_room_members(
-        self, chat_repository, mock_db_client, sample_member_data
-    ):
+    async def test_get_room_members(self, chat_repository, mock_db_client, sample_member_data):
         """Get all room members."""
         mock_db_client.execute.return_value = [{"member": sample_member_data}]
 
@@ -479,9 +448,7 @@ class TestChatRepositoryMemberManagement:
         assert result[0].user_id == "user123"
 
     @pytest.mark.asyncio
-    async def test_get_room_members_limit_capped(
-        self, chat_repository, mock_db_client
-    ):
+    async def test_get_room_members_limit_capped(self, chat_repository, mock_db_client):
         """Get room members respects limit cap at 500."""
         mock_db_client.execute.return_value = []
 
@@ -496,9 +463,7 @@ class TestChatRepositoryMemberManagement:
         """Update member role."""
         mock_db_client.execute_single.return_value = {"updated": True}
 
-        result = await chat_repository.update_member_role(
-            "room123", "user456", RoomRole.MODERATOR
-        )
+        result = await chat_repository.update_member_role("room123", "user456", RoomRole.MODERATOR)
 
         assert result is True
         call_args = mock_db_client.execute_single.call_args
@@ -506,15 +471,11 @@ class TestChatRepositoryMemberManagement:
         assert "role <> 'owner'" in query  # Cannot change owner role
 
     @pytest.mark.asyncio
-    async def test_update_member_role_owner_protected(
-        self, chat_repository, mock_db_client
-    ):
+    async def test_update_member_role_owner_protected(self, chat_repository, mock_db_client):
         """Cannot update owner's role."""
         mock_db_client.execute_single.return_value = {"updated": False}
 
-        result = await chat_repository.update_member_role(
-            "room123", "owner_user", RoomRole.MEMBER
-        )
+        result = await chat_repository.update_member_role("room123", "owner_user", RoomRole.MEMBER)
 
         assert result is False
 
@@ -528,9 +489,7 @@ class TestChatRepositoryAccessControl:
     """Tests for access control operations."""
 
     @pytest.mark.asyncio
-    async def test_check_access_room_not_found(
-        self, chat_repository, mock_db_client
-    ):
+    async def test_check_access_room_not_found(self, chat_repository, mock_db_client):
         """Access check allows creation when room not found."""
         mock_db_client.execute_single.return_value = {"room": None, "role": None}
 
@@ -603,9 +562,7 @@ class TestChatRepositoryAccessControl:
         assert "private" in result.reason.lower()
 
     @pytest.mark.asyncio
-    async def test_get_user_role(
-        self, chat_repository, mock_db_client, sample_member_data
-    ):
+    async def test_get_user_role(self, chat_repository, mock_db_client, sample_member_data):
         """Get user role in room."""
         mock_db_client.execute_single.return_value = {"member": sample_member_data}
 
@@ -632,9 +589,7 @@ class TestChatRepositoryMessages:
     """Tests for message operations."""
 
     @pytest.mark.asyncio
-    async def test_save_message_success(
-        self, chat_repository, mock_db_client, sample_message_data
-    ):
+    async def test_save_message_success(self, chat_repository, mock_db_client, sample_message_data):
         """Successfully save message."""
         mock_db_client.execute_single.return_value = {"message": sample_message_data}
 
@@ -648,9 +603,7 @@ class TestChatRepositoryMessages:
         assert result.room_id == "room123"
 
     @pytest.mark.asyncio
-    async def test_save_message_failure_raises_error(
-        self, chat_repository, mock_db_client
-    ):
+    async def test_save_message_failure_raises_error(self, chat_repository, mock_db_client):
         """Save message failure raises RuntimeError."""
         mock_db_client.execute_single.return_value = None
 
@@ -662,9 +615,7 @@ class TestChatRepositoryMessages:
             )
 
     @pytest.mark.asyncio
-    async def test_get_room_messages(
-        self, chat_repository, mock_db_client, sample_message_data
-    ):
+    async def test_get_room_messages(self, chat_repository, mock_db_client, sample_message_data):
         """Get messages in room."""
         mock_db_client.execute.return_value = [{"message": sample_message_data}]
 
@@ -729,9 +680,7 @@ class TestChatRepositoryMessages:
         assert result is False
 
     @pytest.mark.asyncio
-    async def test_get_message_success(
-        self, chat_repository, mock_db_client, sample_message_data
-    ):
+    async def test_get_message_success(self, chat_repository, mock_db_client, sample_message_data):
         """Get message by ID."""
         mock_db_client.execute_single.return_value = {"message": sample_message_data}
 
@@ -759,9 +708,7 @@ class TestChatRepositoryInviteCodes:
     """Tests for invite code operations."""
 
     @pytest.mark.asyncio
-    async def test_regenerate_invite_code_success(
-        self, chat_repository, mock_db_client
-    ):
+    async def test_regenerate_invite_code_success(self, chat_repository, mock_db_client):
         """Successfully regenerate invite code."""
         mock_db_client.execute_single.return_value = {"code": "NEW123"}
 
@@ -770,9 +717,7 @@ class TestChatRepositoryInviteCodes:
         assert result == "NEW123"
 
     @pytest.mark.asyncio
-    async def test_regenerate_invite_code_with_expiry(
-        self, chat_repository, mock_db_client
-    ):
+    async def test_regenerate_invite_code_with_expiry(self, chat_repository, mock_db_client):
         """Regenerate invite code with expiry hours."""
         mock_db_client.execute_single.return_value = {"code": "EXP456"}
 
@@ -783,9 +728,7 @@ class TestChatRepositoryInviteCodes:
         assert params["expires_at"] is not None
 
     @pytest.mark.asyncio
-    async def test_regenerate_invite_code_no_expiry(
-        self, chat_repository, mock_db_client
-    ):
+    async def test_regenerate_invite_code_no_expiry(self, chat_repository, mock_db_client):
         """Regenerate invite code without expiry."""
         mock_db_client.execute_single.return_value = {"code": "PERM789"}
 
@@ -796,9 +739,7 @@ class TestChatRepositoryInviteCodes:
         assert params["expires_at"] is None
 
     @pytest.mark.asyncio
-    async def test_regenerate_invite_code_room_not_found(
-        self, chat_repository, mock_db_client
-    ):
+    async def test_regenerate_invite_code_room_not_found(self, chat_repository, mock_db_client):
         """Regenerate invite code returns None for nonexistent room."""
         mock_db_client.execute_single.return_value = None
 

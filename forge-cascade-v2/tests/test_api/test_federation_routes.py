@@ -11,8 +11,7 @@ Comprehensive tests for federation API routes including:
 """
 
 from datetime import UTC, datetime
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import FastAPI
@@ -25,7 +24,6 @@ from forge.federation.models import (
     SyncOperationStatus,
     SyncPhase,
 )
-
 
 # =============================================================================
 # Fixtures
@@ -95,9 +93,11 @@ def mock_protocol():
         )
     )
     protocol.verify_handshake = MagicMock(return_value=True)
-    protocol.create_handshake = AsyncMock(return_value=MagicMock(
-        model_dump=lambda mode: {"public_key": "our_pubkey", "signature": "sig123"}
-    ))
+    protocol.create_handshake = AsyncMock(
+        return_value=MagicMock(
+            model_dump=lambda mode: {"public_key": "our_pubkey", "signature": "sig123"}
+        )
+    )
     protocol.verify_signature = MagicMock(return_value=True)
     protocol.API_VERSION = "1.0"
     return protocol
@@ -129,25 +129,29 @@ def mock_trust_manager(mock_peer):
     manager.get_trust_tier = AsyncMock(return_value="standard")
     manager.manual_adjustment = AsyncMock(return_value=0.80)
     manager.get_trust_history = AsyncMock(return_value=[])
-    manager.get_sync_permissions = AsyncMock(return_value={
-        "can_push": True,
-        "can_pull": True,
-        "max_capsules_per_sync": 100,
-    })
+    manager.get_sync_permissions = AsyncMock(
+        return_value={
+            "can_push": True,
+            "can_pull": True,
+            "max_capsules_per_sync": 100,
+        }
+    )
     manager.can_sync = AsyncMock(return_value=(True, None))
-    manager.get_federation_stats = AsyncMock(return_value=MagicMock(
-        total_peers=5,
-        active_peers=3,
-        pending_peers=1,
-        total_federated_capsules=100,
-        synced_capsules=80,
-        pending_capsules=15,
-        conflicted_capsules=5,
-        total_federated_edges=50,
-        last_sync_at=datetime.now(UTC),
-        syncs_today=10,
-        syncs_failed_today=1,
-    ))
+    manager.get_federation_stats = AsyncMock(
+        return_value=MagicMock(
+            total_peers=5,
+            active_peers=3,
+            pending_peers=1,
+            total_federated_capsules=100,
+            synced_capsules=80,
+            pending_capsules=15,
+            conflicted_capsules=5,
+            total_federated_edges=50,
+            last_sync_at=datetime.now(UTC),
+            syncs_today=10,
+            syncs_failed_today=1,
+        )
+    )
     manager.calculate_network_trust = AsyncMock(return_value={"overall": 0.75})
     return manager
 
@@ -197,14 +201,14 @@ def federation_app(
     mock_admin_user,
 ):
     """Create FastAPI app with federation router and mocked dependencies."""
+    from forge.api.dependencies import get_current_active_user
     from forge.api.routes.federation import (
-        router,
+        get_capsule_repository,
         get_protocol,
         get_sync_service,
         get_trust_manager,
-        get_capsule_repository,
+        router,
     )
-    from forge.api.dependencies import get_current_active_user
 
     app = FastAPI()
     app.include_router(router)
@@ -270,11 +274,10 @@ class TestRegisterPeer:
 
         assert response.status_code in [200, 400, 503]
 
-    def test_register_peer_non_admin(
-        self, federation_app, mock_regular_user
-    ):
+    def test_register_peer_non_admin(self, federation_app, mock_regular_user):
         """Register peer as non-admin fails."""
         from forge.api.dependencies import get_current_active_user
+
         federation_app.dependency_overrides[get_current_active_user] = lambda: mock_regular_user
 
         client = TestClient(federation_app)
@@ -430,6 +433,7 @@ class TestUpdatePeer:
     def test_update_peer_non_admin(self, federation_app, mock_regular_user):
         """Update peer as non-admin fails."""
         from forge.api.dependencies import get_current_active_user
+
         federation_app.dependency_overrides[get_current_active_user] = lambda: mock_regular_user
 
         client = TestClient(federation_app)
@@ -693,9 +697,7 @@ class TestGetChanges:
         # Should return changes or auth error
         assert response.status_code in [200, 401, 403]
 
-    def test_get_changes_unauthorized_peer(
-        self, client: TestClient, mock_sync_service
-    ):
+    def test_get_changes_unauthorized_peer(self, client: TestClient, mock_sync_service):
         """Get changes from unknown peer."""
         mock_sync_service.get_peer_by_public_key.return_value = None
 
@@ -725,9 +727,7 @@ class TestReceiveCapsules:
 
         assert response.status_code == 401
 
-    def test_receive_capsules_success(
-        self, client: TestClient, mock_protocol, mock_sync_service
-    ):
+    def test_receive_capsules_success(self, client: TestClient, mock_protocol, mock_sync_service):
         """Receive capsules with valid authentication."""
         response = client.post(
             "/federation/incoming/capsules",
@@ -783,7 +783,7 @@ class TestRateLimiting:
         limiter.set_peer_trust("test_peer_key", 0.9)
 
         # Check multiplier is applied
-        key = f"peer:test_peer_key"[:32 + 5]  # peer: prefix + first 32 chars
+        key = "peer:test_peer_key"[: 32 + 5]  # peer: prefix + first 32 chars
         multiplier = limiter._get_trust_multiplier(key)
         assert multiplier >= 1.0  # High trust gets higher multiplier
 
@@ -796,7 +796,7 @@ class TestRateLimiting:
         # Set low trust
         limiter.set_peer_trust("untrusted_key", 0.1)
 
-        key = f"peer:untrusted_key"[:32 + 5]
+        key = "peer:untrusted_key"[: 32 + 5]
         multiplier = limiter._get_trust_multiplier(key)
         assert multiplier < 1.0  # Low trust gets lower multiplier
 

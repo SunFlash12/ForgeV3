@@ -12,13 +12,10 @@ Comprehensive tests for TOTP-based MFA including:
 """
 
 import base64
-import hashlib
-import hmac
 import os
-import struct
 import time
 from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -27,18 +24,16 @@ from forge.security.mfa import (
     BACKUP_CODE_LENGTH,
     LOCKOUT_DURATION_SECONDS,
     MAX_VERIFICATION_ATTEMPTS,
-    MFAService,
-    MFASetupResult,
-    MFAStatus,
     TOTP_DIGITS,
     TOTP_ISSUER,
     TOTP_PERIOD,
     TOTP_WINDOW,
-    VerificationAttempt,
+    MFAService,
+    MFASetupResult,
+    MFAStatus,
     get_mfa_service,
     reset_mfa_service,
 )
-
 
 # =============================================================================
 # MFAStatus Tests
@@ -303,9 +298,7 @@ class TestTOTPVerification:
         current_code = service._generate_totp(result.secret)
 
         # Verify during setup
-        verified = await service.verify_totp(
-            "user123", current_code, skip_verified_check=True
-        )
+        verified = await service.verify_totp("user123", current_code, skip_verified_check=True)
         assert verified is True
 
     @pytest.mark.asyncio
@@ -318,9 +311,7 @@ class TestTOTPVerification:
         past_time = int(time.time()) - TOTP_PERIOD
         past_code = service._generate_totp(result.secret, past_time)
 
-        verified = await service.verify_totp(
-            "user123", past_code, skip_verified_check=True
-        )
+        verified = await service.verify_totp("user123", past_code, skip_verified_check=True)
         assert verified is True
 
     @pytest.mark.asyncio
@@ -329,9 +320,7 @@ class TestTOTPVerification:
         service = MFAService(use_memory_storage=True)
         await service.setup_mfa("user123", "user@example.com")
 
-        verified = await service.verify_totp(
-            "user123", "000000", skip_verified_check=True
-        )
+        verified = await service.verify_totp("user123", "000000", skip_verified_check=True)
         assert verified is False
 
     @pytest.mark.asyncio
@@ -345,9 +334,7 @@ class TestTOTPVerification:
         assert verified is False
 
         # Too long
-        verified = await service.verify_totp(
-            "user123", "1234567", skip_verified_check=True
-        )
+        verified = await service.verify_totp("user123", "1234567", skip_verified_check=True)
         assert verified is False
 
     @pytest.mark.asyncio
@@ -469,9 +456,7 @@ class TestRateLimiting:
 
         # Should still allow verification
         current_code = service._generate_totp(result.secret)
-        verified = await service.verify_totp(
-            "user123", current_code, skip_verified_check=True
-        )
+        verified = await service.verify_totp("user123", current_code, skip_verified_check=True)
         assert verified is True
 
     @pytest.mark.asyncio
@@ -486,9 +471,7 @@ class TestRateLimiting:
 
         # Should be locked
         current_code = service._generate_totp(result.secret)
-        verified = await service.verify_totp(
-            "user123", current_code, skip_verified_check=True
-        )
+        verified = await service.verify_totp("user123", current_code, skip_verified_check=True)
         assert verified is False
 
     @pytest.mark.asyncio
@@ -502,15 +485,13 @@ class TestRateLimiting:
             await service.verify_totp("user123", "000000", skip_verified_check=True)
 
         # Simulate lockout expiration
-        service._verification_attempts["user123"].locked_until = datetime.now(
-            UTC
-        ) - timedelta(seconds=1)
+        service._verification_attempts["user123"].locked_until = datetime.now(UTC) - timedelta(
+            seconds=1
+        )
 
         # Should work now
         current_code = service._generate_totp(result.secret)
-        verified = await service.verify_totp(
-            "user123", current_code, skip_verified_check=True
-        )
+        verified = await service.verify_totp("user123", current_code, skip_verified_check=True)
         assert verified is True
 
     @pytest.mark.asyncio
@@ -727,9 +708,7 @@ class TestEncryption:
 
     def test_encrypt_and_decrypt_with_key(self):
         """Encrypts and decrypts with key."""
-        service = MFAService(
-            use_memory_storage=True, encryption_key="test-encryption-key-32chars!"
-        )
+        service = MFAService(use_memory_storage=True, encryption_key="test-encryption-key-32chars!")
 
         original = "my-secret-value"
         encrypted = service._encrypt_secret(original)
@@ -740,9 +719,7 @@ class TestEncryption:
 
     def test_encryption_produces_different_outputs(self):
         """Same input produces different encrypted outputs."""
-        service = MFAService(
-            use_memory_storage=True, encryption_key="test-encryption-key-32chars!"
-        )
+        service = MFAService(use_memory_storage=True, encryption_key="test-encryption-key-32chars!")
 
         encrypted1 = service._encrypt_secret("test-secret")
         encrypted2 = service._encrypt_secret("test-secret")
@@ -892,9 +869,7 @@ class TestMFAIntegration:
         await service.verify_setup("user123", current_code)
 
         # User loses phone, uses backup code
-        backup_verified = await service.verify_backup_code(
-            "user123", setup_result.backup_codes[0]
-        )
+        backup_verified = await service.verify_backup_code("user123", setup_result.backup_codes[0])
 
         assert backup_verified is True
 

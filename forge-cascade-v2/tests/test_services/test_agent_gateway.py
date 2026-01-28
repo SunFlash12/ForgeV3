@@ -16,7 +16,7 @@ Tests cover:
 import hashlib
 from collections import OrderedDict
 from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -88,18 +88,30 @@ class TestAgentGatewayInit:
         service = AgentGatewayService()
 
         # UNTRUSTED only has read
-        assert AgentCapability.READ_CAPSULES in service.DEFAULT_CAPABILITIES[AgentTrustLevel.UNTRUSTED]
-        assert AgentCapability.QUERY_GRAPH not in service.DEFAULT_CAPABILITIES[AgentTrustLevel.UNTRUSTED]
+        assert (
+            AgentCapability.READ_CAPSULES in service.DEFAULT_CAPABILITIES[AgentTrustLevel.UNTRUSTED]
+        )
+        assert (
+            AgentCapability.QUERY_GRAPH
+            not in service.DEFAULT_CAPABILITIES[AgentTrustLevel.UNTRUSTED]
+        )
 
         # BASIC has query capabilities
         assert AgentCapability.QUERY_GRAPH in service.DEFAULT_CAPABILITIES[AgentTrustLevel.BASIC]
 
         # VERIFIED can create
-        assert AgentCapability.CREATE_CAPSULES in service.DEFAULT_CAPABILITIES[AgentTrustLevel.VERIFIED]
+        assert (
+            AgentCapability.CREATE_CAPSULES
+            in service.DEFAULT_CAPABILITIES[AgentTrustLevel.VERIFIED]
+        )
 
         # TRUSTED can update and execute
-        assert AgentCapability.UPDATE_CAPSULES in service.DEFAULT_CAPABILITIES[AgentTrustLevel.TRUSTED]
-        assert AgentCapability.EXECUTE_CASCADE in service.DEFAULT_CAPABILITIES[AgentTrustLevel.TRUSTED]
+        assert (
+            AgentCapability.UPDATE_CAPSULES in service.DEFAULT_CAPABILITIES[AgentTrustLevel.TRUSTED]
+        )
+        assert (
+            AgentCapability.EXECUTE_CASCADE in service.DEFAULT_CAPABILITIES[AgentTrustLevel.TRUSTED]
+        )
 
         # SYSTEM has all capabilities
         assert len(service.DEFAULT_CAPABILITIES[AgentTrustLevel.SYSTEM]) == len(AgentCapability)
@@ -1084,9 +1096,18 @@ class TestHelperMethods:
 
     def test_get_required_capability(self, service):
         """Test getting required capability for query type."""
-        assert service._get_required_capability(QueryType.NATURAL_LANGUAGE) == AgentCapability.QUERY_GRAPH
-        assert service._get_required_capability(QueryType.SEMANTIC_SEARCH) == AgentCapability.SEMANTIC_SEARCH
-        assert service._get_required_capability(QueryType.GRAPH_TRAVERSE) == AgentCapability.QUERY_GRAPH
+        assert (
+            service._get_required_capability(QueryType.NATURAL_LANGUAGE)
+            == AgentCapability.QUERY_GRAPH
+        )
+        assert (
+            service._get_required_capability(QueryType.SEMANTIC_SEARCH)
+            == AgentCapability.SEMANTIC_SEARCH
+        )
+        assert (
+            service._get_required_capability(QueryType.GRAPH_TRAVERSE)
+            == AgentCapability.QUERY_GRAPH
+        )
 
     def test_get_cache_key(self, service):
         """Test cache key generation."""
@@ -1157,6 +1178,7 @@ class TestSingletonGetter:
         """Test getting the singleton instance."""
         # Clear any existing instance
         import forge.services.agent_gateway as module
+
         module._gateway_service = None
 
         service = await get_gateway_service()

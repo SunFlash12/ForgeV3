@@ -17,18 +17,12 @@ Comprehensive tests for all API middleware components:
 
 from __future__ import annotations
 
-import asyncio
-import json
 import time
-from datetime import UTC, datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
-import pytest
 from starlette.requests import Request
-from starlette.responses import JSONResponse, Response
 from starlette.testclient import TestClient
-
 
 # =============================================================================
 # CorrelationIdMiddleware Tests
@@ -112,8 +106,9 @@ class TestSanitizeQueryParams:
 
     def test_redacts_sensitive_params(self):
         """Test sensitive query parameters are redacted."""
-        from forge.api.middleware import sanitize_query_params
         from starlette.datastructures import QueryParams
+
+        from forge.api.middleware import sanitize_query_params
 
         params = QueryParams("token=secret123&name=test")
         result = sanitize_query_params(params)
@@ -124,8 +119,9 @@ class TestSanitizeQueryParams:
 
     def test_truncates_long_values(self):
         """Test long values are truncated."""
-        from forge.api.middleware import sanitize_query_params
         from starlette.datastructures import QueryParams
+
+        from forge.api.middleware import sanitize_query_params
 
         long_value = "x" * 150
         params = QueryParams(f"data={long_value}")
@@ -653,9 +649,7 @@ class TestClientIpExtraction:
         middleware = RequestLoggingMiddleware(app=MagicMock())
 
         mock_request = MagicMock()
-        mock_request.headers.get.side_effect = lambda h: (
-            "1.2.3.4" if h == "X-Real-IP" else None
-        )
+        mock_request.headers.get.side_effect = lambda h: ("1.2.3.4" if h == "X-Real-IP" else None)
 
         ip = middleware._get_client_ip(mock_request)
         assert ip == "1.2.3.4"

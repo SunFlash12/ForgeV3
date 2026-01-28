@@ -12,20 +12,18 @@ Comprehensive tests for SessionRepository including:
 
 import json
 from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from forge.models.session import (
     Session,
     SessionCreate,
-    SessionStatus,
 )
 from forge.repositories.session_repository import (
     SessionCache,
     SessionRepository,
 )
-
 
 # =============================================================================
 # Fixtures
@@ -66,7 +64,9 @@ def sample_session_data():
         "request_count": 5,
         "ip_change_count": 0,
         "user_agent_change_count": 0,
-        "ip_history": json.dumps([{"ip": "192.168.1.100", "timestamp": now.isoformat(), "action": "created"}]),
+        "ip_history": json.dumps(
+            [{"ip": "192.168.1.100", "timestamp": now.isoformat(), "action": "created"}]
+        ),
         "expires_at": (now + timedelta(hours=1)).isoformat(),
         "status": "active",
         "revoked_at": None,
@@ -164,9 +164,7 @@ class TestSessionRepositoryCreate:
         assert ip_history[0]["action"] == "created"
 
     @pytest.mark.asyncio
-    async def test_create_session_failure_raises_error(
-        self, session_repository, mock_db_client
-    ):
+    async def test_create_session_failure_raises_error(self, session_repository, mock_db_client):
         """Session creation failure raises RuntimeError."""
         mock_db_client.execute_single.return_value = None
 
@@ -222,9 +220,7 @@ class TestSessionRepositoryRetrieval:
         assert result.token_jti == "session-jti-123"
 
     @pytest.mark.asyncio
-    async def test_get_by_jti_empty_jti_returns_none(
-        self, session_repository, mock_db_client
-    ):
+    async def test_get_by_jti_empty_jti_returns_none(self, session_repository, mock_db_client):
         """Get by empty JTI returns None."""
         result = await session_repository.get_by_jti("")
 
@@ -232,9 +228,7 @@ class TestSessionRepositoryRetrieval:
         mock_db_client.execute_single.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_get_by_jti_not_found(
-        self, session_repository, mock_db_client
-    ):
+    async def test_get_by_jti_not_found(self, session_repository, mock_db_client):
         """Get by JTI returns None for non-existent session."""
         mock_db_client.execute_single.return_value = None
 
@@ -248,9 +242,7 @@ class TestSessionRepositoryRetrieval:
     ):
         """Get by JTI marks expired sessions."""
         # Set session as expired
-        sample_session_data["expires_at"] = (
-            datetime.now(UTC) - timedelta(hours=1)
-        ).isoformat()
+        sample_session_data["expires_at"] = (datetime.now(UTC) - timedelta(hours=1)).isoformat()
         mock_db_client.execute_single.return_value = {"session": sample_session_data}
 
         result = await session_repository.get_by_jti("session-jti-123")
@@ -265,10 +257,12 @@ class TestSessionRepositoryRetrieval:
     ):
         """Get by JTI uses cache if available."""
         # Pre-populate cache
-        session = Session.model_validate({
-            **sample_session_data,
-            "ip_history": json.loads(sample_session_data["ip_history"]),
-        })
+        session = Session.model_validate(
+            {
+                **sample_session_data,
+                "ip_history": json.loads(sample_session_data["ip_history"]),
+            }
+        )
 
         with patch.object(SessionCache, "get", new_callable=AsyncMock, return_value=session):
             result = await session_repository.get_by_jti("session-jti-123")
@@ -279,9 +273,7 @@ class TestSessionRepositoryRetrieval:
             mock_db_client.execute_single.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_get_user_sessions(
-        self, session_repository, mock_db_client, sample_session_data
-    ):
+    async def test_get_user_sessions(self, session_repository, mock_db_client, sample_session_data):
         """Get all sessions for a user."""
         mock_db_client.execute.return_value = [{"session": sample_session_data}]
 
@@ -310,9 +302,7 @@ class TestSessionRepositoryRetrieval:
         assert "status IN" not in query
 
     @pytest.mark.asyncio
-    async def test_get_user_sessions_limit_clamped(
-        self, session_repository, mock_db_client
-    ):
+    async def test_get_user_sessions_limit_clamped(self, session_repository, mock_db_client):
         """Get user sessions clamps limit to valid range."""
         mock_db_client.execute.return_value = []
 
@@ -396,9 +386,7 @@ class TestSessionRepositoryActivityTracking:
         assert changes["new_user_agent"] == "Different Browser/1.0"
 
     @pytest.mark.asyncio
-    async def test_update_activity_session_not_found(
-        self, session_repository, mock_db_client
-    ):
+    async def test_update_activity_session_not_found(self, session_repository, mock_db_client):
         """Update activity returns None for non-existent session."""
         mock_db_client.execute_single.return_value = None
 
@@ -441,9 +429,7 @@ class TestSessionRepositoryRevocation:
     """Tests for session revocation."""
 
     @pytest.mark.asyncio
-    async def test_revoke_session_success(
-        self, session_repository, mock_db_client
-    ):
+    async def test_revoke_session_success(self, session_repository, mock_db_client):
         """Revoke session success."""
         mock_db_client.execute_single.return_value = {"id": "session-jti-123"}
 
@@ -458,9 +444,7 @@ class TestSessionRepositoryRevocation:
         assert params["reason"] == "User logout"
 
     @pytest.mark.asyncio
-    async def test_revoke_session_not_found(
-        self, session_repository, mock_db_client
-    ):
+    async def test_revoke_session_not_found(self, session_repository, mock_db_client):
         """Revoke session returns False for non-existent session."""
         mock_db_client.execute_single.return_value = None
 
@@ -469,9 +453,7 @@ class TestSessionRepositoryRevocation:
         assert result is False
 
     @pytest.mark.asyncio
-    async def test_revoke_session_invalidates_cache(
-        self, session_repository, mock_db_client
-    ):
+    async def test_revoke_session_invalidates_cache(self, session_repository, mock_db_client):
         """Revoke session invalidates cache."""
         mock_db_client.execute_single.return_value = {"id": "session-jti-123"}
 
@@ -480,13 +462,9 @@ class TestSessionRepositoryRevocation:
             mock_invalidate.assert_called_once_with("session-jti-123")
 
     @pytest.mark.asyncio
-    async def test_revoke_user_sessions_all(
-        self, session_repository, mock_db_client
-    ):
+    async def test_revoke_user_sessions_all(self, session_repository, mock_db_client):
         """Revoke all user sessions."""
-        mock_db_client.execute_single.return_value = {
-            "revoked_jtis": ["jti1", "jti2", "jti3"]
-        }
+        mock_db_client.execute_single.return_value = {"revoked_jtis": ["jti1", "jti2", "jti3"]}
 
         result = await session_repository.revoke_user_sessions(
             "user123",
@@ -496,13 +474,9 @@ class TestSessionRepositoryRevocation:
         assert result == 3
 
     @pytest.mark.asyncio
-    async def test_revoke_user_sessions_except_current(
-        self, session_repository, mock_db_client
-    ):
+    async def test_revoke_user_sessions_except_current(self, session_repository, mock_db_client):
         """Revoke user sessions except current."""
-        mock_db_client.execute_single.return_value = {
-            "revoked_jtis": ["jti2", "jti3"]
-        }
+        mock_db_client.execute_single.return_value = {"revoked_jtis": ["jti2", "jti3"]}
 
         result = await session_repository.revoke_user_sessions(
             "user123",
@@ -516,13 +490,9 @@ class TestSessionRepositoryRevocation:
         assert params["except_jti"] == "jti1"
 
     @pytest.mark.asyncio
-    async def test_revoke_user_sessions_invalidates_cache(
-        self, session_repository, mock_db_client
-    ):
+    async def test_revoke_user_sessions_invalidates_cache(self, session_repository, mock_db_client):
         """Revoke user sessions invalidates cache for all revoked."""
-        mock_db_client.execute_single.return_value = {
-            "revoked_jtis": ["jti1", "jti2"]
-        }
+        mock_db_client.execute_single.return_value = {"revoked_jtis": ["jti1", "jti2"]}
 
         with patch.object(SessionCache, "invalidate", new_callable=AsyncMock) as mock_invalidate:
             await session_repository.revoke_user_sessions("user123")
@@ -538,9 +508,7 @@ class TestSessionRepositorySuspicious:
     """Tests for suspicious session handling."""
 
     @pytest.mark.asyncio
-    async def test_flag_suspicious_success(
-        self, session_repository, mock_db_client
-    ):
+    async def test_flag_suspicious_success(self, session_repository, mock_db_client):
         """Flag session as suspicious."""
         mock_db_client.execute_single.return_value = {"id": "session-jti-123"}
 
@@ -555,9 +523,7 @@ class TestSessionRepositorySuspicious:
         assert "suspicious" in query
 
     @pytest.mark.asyncio
-    async def test_flag_suspicious_not_found(
-        self, session_repository, mock_db_client
-    ):
+    async def test_flag_suspicious_not_found(self, session_repository, mock_db_client):
         """Flag suspicious returns False for non-existent session."""
         mock_db_client.execute_single.return_value = None
 
@@ -569,9 +535,7 @@ class TestSessionRepositorySuspicious:
         assert result is False
 
     @pytest.mark.asyncio
-    async def test_flag_suspicious_invalidates_cache(
-        self, session_repository, mock_db_client
-    ):
+    async def test_flag_suspicious_invalidates_cache(self, session_repository, mock_db_client):
         """Flag suspicious invalidates cache to force refresh."""
         mock_db_client.execute_single.return_value = {"id": "session-jti-123"}
 
@@ -592,9 +556,7 @@ class TestSessionRepositoryCleanup:
     """Tests for session cleanup operations."""
 
     @pytest.mark.asyncio
-    async def test_cleanup_expired(
-        self, session_repository, mock_db_client
-    ):
+    async def test_cleanup_expired(self, session_repository, mock_db_client):
         """Cleanup expired sessions."""
         mock_db_client.execute_single.return_value = {"count": 5}
 
@@ -603,9 +565,7 @@ class TestSessionRepositoryCleanup:
         assert result == 5
 
     @pytest.mark.asyncio
-    async def test_cleanup_expired_none_found(
-        self, session_repository, mock_db_client
-    ):
+    async def test_cleanup_expired_none_found(self, session_repository, mock_db_client):
         """Cleanup returns 0 when no expired sessions."""
         mock_db_client.execute_single.return_value = {"count": 0}
 
@@ -614,9 +574,7 @@ class TestSessionRepositoryCleanup:
         assert result == 0
 
     @pytest.mark.asyncio
-    async def test_count_active_sessions(
-        self, session_repository, mock_db_client
-    ):
+    async def test_count_active_sessions(self, session_repository, mock_db_client):
         """Count active sessions for a user."""
         mock_db_client.execute_single.return_value = {"count": 3}
 
@@ -625,9 +583,7 @@ class TestSessionRepositoryCleanup:
         assert result == 3
 
     @pytest.mark.asyncio
-    async def test_count_active_sessions_none(
-        self, session_repository, mock_db_client
-    ):
+    async def test_count_active_sessions_none(self, session_repository, mock_db_client):
         """Count returns 0 when no active sessions."""
         mock_db_client.execute_single.return_value = None
 
@@ -645,9 +601,7 @@ class TestSessionRepositoryIndexes:
     """Tests for database index management."""
 
     @pytest.mark.asyncio
-    async def test_ensure_indexes(
-        self, session_repository, mock_db_client
-    ):
+    async def test_ensure_indexes(self, session_repository, mock_db_client):
         """Ensure indexes creates all necessary indexes."""
         mock_db_client.execute.return_value = []
 
@@ -657,9 +611,7 @@ class TestSessionRepositoryIndexes:
         assert mock_db_client.execute.call_count == 5
 
     @pytest.mark.asyncio
-    async def test_ensure_indexes_handles_errors(
-        self, session_repository, mock_db_client
-    ):
+    async def test_ensure_indexes_handles_errors(self, session_repository, mock_db_client):
         """Ensure indexes handles errors gracefully."""
         mock_db_client.execute.side_effect = RuntimeError("Index exists")
 
@@ -690,10 +642,12 @@ class TestSessionCache:
     @pytest.mark.asyncio
     async def test_cache_set_and_get(self, sample_session_data):
         """Cache set and get work correctly."""
-        session = Session.model_validate({
-            **sample_session_data,
-            "ip_history": json.loads(sample_session_data["ip_history"]),
-        })
+        session = Session.model_validate(
+            {
+                **sample_session_data,
+                "ip_history": json.loads(sample_session_data["ip_history"]),
+            }
+        )
 
         with patch.object(SessionCache, "_get_redis_client", return_value=None):
             with patch("forge.repositories.session_repository.settings") as mock_settings:
@@ -709,10 +663,12 @@ class TestSessionCache:
     @pytest.mark.asyncio
     async def test_cache_invalidate(self, sample_session_data):
         """Cache invalidate removes entry."""
-        session = Session.model_validate({
-            **sample_session_data,
-            "ip_history": json.loads(sample_session_data["ip_history"]),
-        })
+        session = Session.model_validate(
+            {
+                **sample_session_data,
+                "ip_history": json.loads(sample_session_data["ip_history"]),
+            }
+        )
 
         with patch.object(SessionCache, "_get_redis_client", return_value=None):
             with patch("forge.repositories.session_repository.settings") as mock_settings:
@@ -734,10 +690,12 @@ class TestSessionCache:
     @pytest.mark.asyncio
     async def test_cache_clear(self, sample_session_data):
         """Cache clear removes all entries."""
-        session = Session.model_validate({
-            **sample_session_data,
-            "ip_history": json.loads(sample_session_data["ip_history"]),
-        })
+        session = Session.model_validate(
+            {
+                **sample_session_data,
+                "ip_history": json.loads(sample_session_data["ip_history"]),
+            }
+        )
 
         with patch.object(SessionCache, "_get_redis_client", return_value=None):
             with patch("forge.repositories.session_repository.settings") as mock_settings:
@@ -757,10 +715,12 @@ class TestSessionCache:
     @pytest.mark.asyncio
     async def test_cache_set_disabled(self, sample_session_data):
         """Cache set does nothing when disabled."""
-        session = Session.model_validate({
-            **sample_session_data,
-            "ip_history": json.loads(sample_session_data["ip_history"]),
-        })
+        session = Session.model_validate(
+            {
+                **sample_session_data,
+                "ip_history": json.loads(sample_session_data["ip_history"]),
+            }
+        )
 
         with patch("forge.repositories.session_repository.settings") as mock_settings:
             mock_settings.session_cache_enabled = False
@@ -793,9 +753,7 @@ class TestSessionRepositoryHelpers:
         assert result.tzinfo is not None
 
     @pytest.mark.asyncio
-    async def test_mark_expired(
-        self, session_repository, mock_db_client
-    ):
+    async def test_mark_expired(self, session_repository, mock_db_client):
         """Mark expired sets session status to expired."""
         mock_db_client.execute.return_value = []
 

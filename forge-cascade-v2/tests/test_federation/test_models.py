@@ -2,24 +2,25 @@
 Tests for federation models.
 """
 
+from datetime import UTC, datetime, timedelta
+
 import pytest
-from datetime import datetime, UTC, timedelta
 from pydantic import ValidationError
 
 from forge.federation.models import (
-    PeerStatus,
-    SyncDirection,
     ConflictResolution,
-    FederatedSyncStatus,
-    SyncOperationStatus,
-    SyncPhase,
-    FederatedPeer,
     FederatedCapsule,
     FederatedEdge,
-    SyncState,
-    PeerHandshake,
-    SyncPayload,
+    FederatedPeer,
+    FederatedSyncStatus,
     FederationStats,
+    PeerHandshake,
+    PeerStatus,
+    SyncDirection,
+    SyncOperationStatus,
+    SyncPayload,
+    SyncPhase,
+    SyncState,
 )
 
 

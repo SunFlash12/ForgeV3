@@ -13,7 +13,7 @@ Tests cover:
 
 import asyncio
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -29,12 +29,10 @@ from forge.kernel.event_system import (
 )
 from forge.models.events import (
     CascadeChain,
-    CascadeEvent,
     Event,
     EventPriority,
     EventType,
 )
-
 
 # =============================================================================
 # Fixtures
@@ -314,9 +312,7 @@ class TestEventDelivery:
     """Tests for event delivery to subscribers."""
 
     @pytest.mark.asyncio
-    async def test_event_delivered_to_subscriber(
-        self, started_event_bus: EventBus
-    ) -> None:
+    async def test_event_delivered_to_subscriber(self, started_event_bus: EventBus) -> None:
         """Test that events are delivered to matching subscribers."""
         received_events: list[Event] = []
 
@@ -391,9 +387,7 @@ class TestEventDelivery:
         # (handler will timeout at 30s in production)
 
     @pytest.mark.asyncio
-    async def test_handler_error_goes_to_dead_letter(
-        self, started_event_bus: EventBus
-    ) -> None:
+    async def test_handler_error_goes_to_dead_letter(self, started_event_bus: EventBus) -> None:
         """Test that handler errors send events to dead letter queue."""
 
         async def failing_handler(event: Event) -> None:
@@ -440,9 +434,7 @@ class TestCascadePropagation:
         assert chain.total_hops == 1
 
     @pytest.mark.asyncio
-    async def test_publish_cascade_with_existing_chain(
-        self, event_bus: EventBus
-    ) -> None:
+    async def test_publish_cascade_with_existing_chain(self, event_bus: EventBus) -> None:
         """Test publishing to existing cascade chain."""
         # Create initial cascade
         chain1 = await event_bus.publish_cascade(
@@ -486,9 +478,7 @@ class TestCascadePropagation:
         assert cascade_event.impact_score == 0.8
 
     @pytest.mark.asyncio
-    async def test_propagate_cascade_prevents_cycles(
-        self, event_bus: EventBus
-    ) -> None:
+    async def test_propagate_cascade_prevents_cycles(self, event_bus: EventBus) -> None:
         """Test that cascade propagation prevents cycles."""
         # Create initial cascade
         chain = await event_bus.publish_cascade(
@@ -508,9 +498,7 @@ class TestCascadePropagation:
         assert cascade_event is None
 
     @pytest.mark.asyncio
-    async def test_propagate_cascade_respects_max_hops(
-        self, event_bus: EventBus
-    ) -> None:
+    async def test_propagate_cascade_respects_max_hops(self, event_bus: EventBus) -> None:
         """Test that cascade respects max hops limit."""
         # Create cascade with max_hops=1
         chain = await event_bus.publish_cascade(
@@ -589,9 +577,7 @@ class TestCascadePersistence:
     """Tests for cascade persistence with repository."""
 
     @pytest.mark.asyncio
-    async def test_cascade_persisted_on_create(
-        self, mock_cascade_repository: AsyncMock
-    ) -> None:
+    async def test_cascade_persisted_on_create(self, mock_cascade_repository: AsyncMock) -> None:
         """Test that cascade chain is persisted on creation."""
         bus = EventBus(cascade_repository=mock_cascade_repository)
 
@@ -604,9 +590,7 @@ class TestCascadePersistence:
         mock_cascade_repository.create_chain.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_cascade_event_persisted(
-        self, mock_cascade_repository: AsyncMock
-    ) -> None:
+    async def test_cascade_event_persisted(self, mock_cascade_repository: AsyncMock) -> None:
         """Test that cascade events are persisted."""
         bus = EventBus(cascade_repository=mock_cascade_repository)
 
@@ -628,9 +612,7 @@ class TestCascadePersistence:
         mock_cascade_repository.add_event.assert_called()
 
     @pytest.mark.asyncio
-    async def test_cascade_complete_persisted(
-        self, mock_cascade_repository: AsyncMock
-    ) -> None:
+    async def test_cascade_complete_persisted(self, mock_cascade_repository: AsyncMock) -> None:
         """Test that cascade completion is persisted."""
         bus = EventBus(cascade_repository=mock_cascade_repository)
 

@@ -22,15 +22,13 @@ from forge.models.governance import (
     GhostCouncilMember,
     GhostCouncilOpinion,
     GhostCouncilVote,
-    PerspectiveAnalysis,
-    PerspectiveType,
     Proposal,
     ProposalType,
     VoteChoice,
 )
 from forge.services.ghost_council import (
-    DEFAULT_COUNCIL_MEMBERS,
     COUNCIL_TIERS,
+    DEFAULT_COUNCIL_MEMBERS,
     GhostCouncilConfig,
     GhostCouncilService,
     IssueCategory,
@@ -153,32 +151,34 @@ class TestProposalDeliberation:
         # Mock LLM service
         mock_llm = AsyncMock()
         mock_response = MagicMock()
-        mock_response.content = json.dumps({
-            "perspectives": {
-                "optimistic": {
-                    "assessment": "Good potential benefits.",
-                    "key_points": ["benefit 1", "benefit 2"],
+        mock_response.content = json.dumps(
+            {
+                "perspectives": {
+                    "optimistic": {
+                        "assessment": "Good potential benefits.",
+                        "key_points": ["benefit 1", "benefit 2"],
+                        "confidence": 0.8,
+                    },
+                    "balanced": {
+                        "assessment": "Trade-offs exist.",
+                        "key_points": ["trade-off 1"],
+                        "confidence": 0.85,
+                    },
+                    "critical": {
+                        "assessment": "Some risks to consider.",
+                        "key_points": ["risk 1"],
+                        "confidence": 0.75,
+                    },
+                },
+                "synthesis": {
+                    "vote": "APPROVE",
+                    "reasoning": "Benefits outweigh risks.",
                     "confidence": 0.8,
+                    "primary_benefits": ["benefit 1"],
+                    "primary_concerns": ["risk 1"],
                 },
-                "balanced": {
-                    "assessment": "Trade-offs exist.",
-                    "key_points": ["trade-off 1"],
-                    "confidence": 0.85,
-                },
-                "critical": {
-                    "assessment": "Some risks to consider.",
-                    "key_points": ["risk 1"],
-                    "confidence": 0.75,
-                },
-            },
-            "synthesis": {
-                "vote": "APPROVE",
-                "reasoning": "Benefits outweigh risks.",
-                "confidence": 0.8,
-                "primary_benefits": ["benefit 1"],
-                "primary_concerns": ["risk 1"],
-            },
-        })
+            }
+        )
         mock_llm.complete = AsyncMock(return_value=mock_response)
 
         with patch("forge.services.ghost_council.get_llm_service", return_value=mock_llm):
@@ -194,20 +194,22 @@ class TestProposalDeliberation:
         """Test proposal deliberation with additional context."""
         mock_llm = AsyncMock()
         mock_response = MagicMock()
-        mock_response.content = json.dumps({
-            "perspectives": {
-                "optimistic": {"assessment": "Good", "key_points": [], "confidence": 0.7},
-                "balanced": {"assessment": "Neutral", "key_points": [], "confidence": 0.7},
-                "critical": {"assessment": "Risky", "key_points": [], "confidence": 0.7},
-            },
-            "synthesis": {
-                "vote": "APPROVE",
-                "reasoning": "Approved.",
-                "confidence": 0.7,
-                "primary_benefits": [],
-                "primary_concerns": [],
-            },
-        })
+        mock_response.content = json.dumps(
+            {
+                "perspectives": {
+                    "optimistic": {"assessment": "Good", "key_points": [], "confidence": 0.7},
+                    "balanced": {"assessment": "Neutral", "key_points": [], "confidence": 0.7},
+                    "critical": {"assessment": "Risky", "key_points": [], "confidence": 0.7},
+                },
+                "synthesis": {
+                    "vote": "APPROVE",
+                    "reasoning": "Approved.",
+                    "confidence": 0.7,
+                    "primary_benefits": [],
+                    "primary_concerns": [],
+                },
+            }
+        )
         mock_llm.complete = AsyncMock(return_value=mock_response)
 
         with patch("forge.services.ghost_council.get_llm_service", return_value=mock_llm):
@@ -353,27 +355,32 @@ class TestCaching:
         # Mock LLM for fresh deliberation
         mock_llm = AsyncMock()
         mock_response = MagicMock()
-        mock_response.content = json.dumps({
-            "perspectives": {
-                "optimistic": {"assessment": "Fresh", "key_points": [], "confidence": 0.7},
-                "balanced": {"assessment": "Fresh", "key_points": [], "confidence": 0.7},
-                "critical": {"assessment": "Fresh", "key_points": [], "confidence": 0.7},
-            },
-            "synthesis": {
-                "vote": "REJECT",
-                "reasoning": "Fresh deliberation.",
-                "confidence": 0.7,
-                "primary_benefits": [],
-                "primary_concerns": [],
-            },
-        })
+        mock_response.content = json.dumps(
+            {
+                "perspectives": {
+                    "optimistic": {"assessment": "Fresh", "key_points": [], "confidence": 0.7},
+                    "balanced": {"assessment": "Fresh", "key_points": [], "confidence": 0.7},
+                    "critical": {"assessment": "Fresh", "key_points": [], "confidence": 0.7},
+                },
+                "synthesis": {
+                    "vote": "REJECT",
+                    "reasoning": "Fresh deliberation.",
+                    "confidence": 0.7,
+                    "primary_benefits": [],
+                    "primary_concerns": [],
+                },
+            }
+        )
         mock_llm.complete = AsyncMock(return_value=mock_response)
 
         with patch("forge.services.ghost_council.get_llm_service", return_value=mock_llm):
             result = await service.deliberate_proposal(mock_proposal, skip_cache=True)
 
         # Should have fresh result, not cached
-        assert result.consensus_vote != cached_opinion.consensus_vote or result.final_recommendation != "Cached"
+        assert (
+            result.consensus_vote != cached_opinion.consensus_vote
+            or result.final_recommendation != "Cached"
+        )
 
     def test_cache_size_limit(self):
         """Test cache size limits."""
@@ -692,20 +699,30 @@ class TestIssueResponse:
         """Test responding to a serious issue."""
         mock_llm = AsyncMock()
         mock_response = MagicMock()
-        mock_response.content = json.dumps({
-            "perspectives": {
-                "optimistic": {"assessment": "Can be resolved.", "key_points": [], "confidence": 0.7},
-                "balanced": {"assessment": "Serious but manageable.", "key_points": [], "confidence": 0.8},
-                "critical": {"assessment": "Act quickly.", "key_points": [], "confidence": 0.9},
-            },
-            "synthesis": {
-                "vote": "APPROVE",
-                "reasoning": "Immediate action required.",
-                "confidence": 0.85,
-                "primary_benefits": ["security restored"],
-                "primary_concerns": ["data exposure"],
-            },
-        })
+        mock_response.content = json.dumps(
+            {
+                "perspectives": {
+                    "optimistic": {
+                        "assessment": "Can be resolved.",
+                        "key_points": [],
+                        "confidence": 0.7,
+                    },
+                    "balanced": {
+                        "assessment": "Serious but manageable.",
+                        "key_points": [],
+                        "confidence": 0.8,
+                    },
+                    "critical": {"assessment": "Act quickly.", "key_points": [], "confidence": 0.9},
+                },
+                "synthesis": {
+                    "vote": "APPROVE",
+                    "reasoning": "Immediate action required.",
+                    "confidence": 0.85,
+                    "primary_benefits": ["security restored"],
+                    "primary_concerns": ["data exposure"],
+                },
+            }
+        )
         mock_llm.complete = AsyncMock(return_value=mock_response)
 
         with patch("forge.services.ghost_council.get_llm_service", return_value=mock_llm):
@@ -731,20 +748,22 @@ class TestIssueResponse:
 
         mock_llm = AsyncMock()
         mock_response = MagicMock()
-        mock_response.content = json.dumps({
-            "perspectives": {
-                "optimistic": {"assessment": "Good", "key_points": [], "confidence": 0.7},
-                "balanced": {"assessment": "OK", "key_points": [], "confidence": 0.7},
-                "critical": {"assessment": "Risk", "key_points": [], "confidence": 0.7},
-            },
-            "synthesis": {
-                "vote": "APPROVE",
-                "reasoning": "Action.",
-                "confidence": 0.7,
-                "primary_benefits": [],
-                "primary_concerns": [],
-            },
-        })
+        mock_response.content = json.dumps(
+            {
+                "perspectives": {
+                    "optimistic": {"assessment": "Good", "key_points": [], "confidence": 0.7},
+                    "balanced": {"assessment": "OK", "key_points": [], "confidence": 0.7},
+                    "critical": {"assessment": "Risk", "key_points": [], "confidence": 0.7},
+                },
+                "synthesis": {
+                    "vote": "APPROVE",
+                    "reasoning": "Action.",
+                    "confidence": 0.7,
+                    "primary_benefits": [],
+                    "primary_concerns": [],
+                },
+            }
+        )
         mock_llm.complete = AsyncMock(return_value=mock_response)
 
         with patch("forge.services.ghost_council.get_llm_service", return_value=mock_llm):
@@ -925,32 +944,34 @@ class TestMemberVoting:
 
         mock_llm = AsyncMock()
         mock_response = MagicMock()
-        mock_response.content = json.dumps({
-            "perspectives": {
-                "optimistic": {
-                    "assessment": "Great opportunity.",
-                    "key_points": ["opportunity 1", "opportunity 2"],
-                    "confidence": 0.85,
+        mock_response.content = json.dumps(
+            {
+                "perspectives": {
+                    "optimistic": {
+                        "assessment": "Great opportunity.",
+                        "key_points": ["opportunity 1", "opportunity 2"],
+                        "confidence": 0.85,
+                    },
+                    "balanced": {
+                        "assessment": "Fair trade-offs.",
+                        "key_points": ["trade-off 1"],
+                        "confidence": 0.8,
+                    },
+                    "critical": {
+                        "assessment": "Minor risks.",
+                        "key_points": ["risk 1"],
+                        "confidence": 0.7,
+                    },
                 },
-                "balanced": {
-                    "assessment": "Fair trade-offs.",
-                    "key_points": ["trade-off 1"],
+                "synthesis": {
+                    "vote": "APPROVE",
+                    "reasoning": "Benefits outweigh concerns.",
                     "confidence": 0.8,
+                    "primary_benefits": ["benefit 1", "benefit 2"],
+                    "primary_concerns": ["concern 1"],
                 },
-                "critical": {
-                    "assessment": "Minor risks.",
-                    "key_points": ["risk 1"],
-                    "confidence": 0.7,
-                },
-            },
-            "synthesis": {
-                "vote": "APPROVE",
-                "reasoning": "Benefits outweigh concerns.",
-                "confidence": 0.8,
-                "primary_benefits": ["benefit 1", "benefit 2"],
-                "primary_concerns": ["concern 1"],
-            },
-        })
+            }
+        )
         mock_llm.complete = AsyncMock(return_value=mock_response)
 
         vote = await service._get_member_vote(
@@ -1025,6 +1046,7 @@ class TestGlobalFunctions:
 
         # Should create new instance
         import forge.services.ghost_council as module
+
         assert module._ghost_council_service is None
 
 

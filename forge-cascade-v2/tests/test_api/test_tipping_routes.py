@@ -17,7 +17,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-
 # =============================================================================
 # Fixtures
 # =============================================================================
@@ -206,9 +205,7 @@ class TestConfirmTipRoute:
         # Missing tx_signature query param
         assert response.status_code == 422
 
-    def test_confirm_tip_with_signature(
-        self, client: TestClient, mock_tipping_service
-    ):
+    def test_confirm_tip_with_signature(self, client: TestClient, mock_tipping_service):
         """Confirm tip with tx_signature succeeds."""
         with patch(
             "forge.api.routes.tipping.get_tipping_service",
@@ -308,9 +305,7 @@ class TestTipsForTargetRoute:
             response = client.get("/api/v1/tips/target/agent/agent456")
             assert response.status_code in [200, 422, 503]
 
-    def test_get_tips_for_target_with_params(
-        self, client: TestClient, mock_tipping_service
-    ):
+    def test_get_tips_for_target_with_params(self, client: TestClient, mock_tipping_service):
         """Get tips for target with filter params."""
         with patch(
             "forge.api.routes.tipping.get_tipping_service",
@@ -329,9 +324,7 @@ class TestTipsForTargetRoute:
         response = client.get("/api/v1/tips/target/invalid_type/target123")
         assert response.status_code == 422
 
-    def test_get_tips_for_target_limit_validation(
-        self, client: TestClient, mock_tipping_service
-    ):
+    def test_get_tips_for_target_limit_validation(self, client: TestClient, mock_tipping_service):
         """Get tips for target with invalid limit fails."""
         with patch(
             "forge.api.routes.tipping.get_tipping_service",
@@ -352,9 +345,7 @@ class TestTipsForTargetRoute:
 class TestTipSummaryRoute:
     """Tests for GET /tips/target/{target_type}/{target_id}/summary endpoint."""
 
-    def test_get_tip_summary(
-        self, client: TestClient, mock_tipping_service, sample_tip_summary
-    ):
+    def test_get_tip_summary(self, client: TestClient, mock_tipping_service, sample_tip_summary):
         """Get tip summary for a target."""
         with patch(
             "forge.api.routes.tipping.get_tipping_service",
@@ -390,9 +381,7 @@ class TestTipsBySenderRoute:
             response = client.get("/api/v1/tips/sender/SenderWallet123")
             assert response.status_code in [200, 503]
 
-    def test_get_tips_by_sender_with_limit(
-        self, client: TestClient, mock_tipping_service
-    ):
+    def test_get_tips_by_sender_with_limit(self, client: TestClient, mock_tipping_service):
         """Get tips by sender with limit param."""
         with patch(
             "forge.api.routes.tipping.get_tipping_service",
@@ -406,9 +395,7 @@ class TestTipsBySenderRoute:
             )
             assert response.status_code in [200, 503]
 
-    def test_get_tips_by_sender_limit_validation(
-        self, client: TestClient, mock_tipping_service
-    ):
+    def test_get_tips_by_sender_limit_validation(self, client: TestClient, mock_tipping_service):
         """Get tips by sender with invalid limit fails."""
         with patch(
             "forge.api.routes.tipping.get_tipping_service",
@@ -429,9 +416,7 @@ class TestTipsBySenderRoute:
 class TestLeaderboardRoute:
     """Tests for GET /tips/leaderboard/{target_type} endpoint."""
 
-    def test_get_leaderboard(
-        self, client: TestClient, mock_tipping_service, sample_leaderboard
-    ):
+    def test_get_leaderboard(self, client: TestClient, mock_tipping_service, sample_leaderboard):
         """Get leaderboard for a target type."""
         with patch(
             "forge.api.routes.tipping.get_tipping_service",
@@ -463,9 +448,7 @@ class TestLeaderboardRoute:
         response = client.get("/api/v1/tips/leaderboard/invalid_type")
         assert response.status_code == 422
 
-    def test_get_leaderboard_limit_validation(
-        self, client: TestClient, mock_tipping_service
-    ):
+    def test_get_leaderboard_limit_validation(self, client: TestClient, mock_tipping_service):
         """Get leaderboard with invalid limit fails."""
         with patch(
             "forge.api.routes.tipping.get_tipping_service",

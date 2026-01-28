@@ -13,7 +13,7 @@ Comprehensive tests for security dependency injection including:
 """
 
 import ipaddress
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 from fastapi import HTTPException
@@ -21,7 +21,7 @@ from fastapi import HTTPException
 from forge.models.base import TrustLevel
 from forge.models.overlay import Capability
 from forge.models.user import UserRole
-from forge.security.authorization import AuthorizationContext, create_auth_context
+from forge.security.authorization import create_auth_context
 from forge.security.dependencies import (
     TRUSTED_PROXY_RANGES,
     AuthenticatedRequest,
@@ -40,7 +40,6 @@ from forge.security.dependencies import (
     require_role_dep,
     require_trust,
 )
-
 
 # =============================================================================
 # Token Extraction Tests
@@ -106,8 +105,9 @@ class TestGetOptionalAuthContext:
     @pytest.mark.asyncio
     async def test_returns_none_with_expired_token(self):
         """Returns None with expired token."""
-        import jwt as pyjwt
         from datetime import UTC, datetime, timedelta
+
+        import jwt as pyjwt
 
         from forge.config import get_settings
 
@@ -134,8 +134,9 @@ class TestGetOptionalAuthContext:
     @pytest.mark.asyncio
     async def test_rejects_token_missing_trust_flame(self):
         """SECURITY FIX: Rejects tokens missing trust_flame claim."""
-        import jwt as pyjwt
         from datetime import UTC, datetime, timedelta
+
+        import jwt as pyjwt
 
         from forge.config import get_settings
 
@@ -162,8 +163,9 @@ class TestGetOptionalAuthContext:
     @pytest.mark.asyncio
     async def test_rejects_token_missing_role(self):
         """SECURITY FIX: Rejects tokens missing role claim."""
-        import jwt as pyjwt
         from datetime import UTC, datetime, timedelta
+
+        import jwt as pyjwt
 
         from forge.config import get_settings
 
@@ -232,8 +234,9 @@ class TestGetAuthContext:
     @pytest.mark.asyncio
     async def test_raises_401_with_expired_token(self):
         """Raises 401 with expired token."""
-        import jwt as pyjwt
         from datetime import UTC, datetime, timedelta
+
+        import jwt as pyjwt
 
         from forge.config import get_settings
 
@@ -263,8 +266,9 @@ class TestGetAuthContext:
     @pytest.mark.asyncio
     async def test_raises_401_with_missing_trust_flame(self):
         """SECURITY FIX: Raises 401 for tokens missing trust_flame claim."""
-        import jwt as pyjwt
         from datetime import UTC, datetime, timedelta
+
+        import jwt as pyjwt
 
         from forge.config import get_settings
 
@@ -565,9 +569,7 @@ class TestRequireAllCapabilities:
             trust_flame=60,  # STANDARD has CAPSULE_READ, CAPSULE_WRITE, DATABASE_READ
         )
 
-        dependency = require_all_capabilities_dep(
-            Capability.CAPSULE_READ, Capability.CAPSULE_WRITE
-        )
+        dependency = require_all_capabilities_dep(Capability.CAPSULE_READ, Capability.CAPSULE_WRITE)
         auth_context = await get_auth_context(token)
 
         result = await dependency(auth_context)
@@ -621,9 +623,7 @@ class TestResourceAccessChecker:
         resource = MagicMock()
         resource.owner_id = "user123"
 
-        checker = ResourceAccessChecker(
-            get_owner_id=lambda r: r.owner_id, require_ownership=True
-        )
+        checker = ResourceAccessChecker(get_owner_id=lambda r: r.owner_id, require_ownership=True)
 
         result = await checker(resource, auth_context)
         assert result is True
@@ -644,9 +644,7 @@ class TestResourceAccessChecker:
         resource = MagicMock()
         resource.owner_id = "other456"
 
-        checker = ResourceAccessChecker(
-            get_owner_id=lambda r: r.owner_id, require_ownership=True
-        )
+        checker = ResourceAccessChecker(get_owner_id=lambda r: r.owner_id, require_ownership=True)
 
         with pytest.raises(HTTPException) as exc_info:
             await checker(resource, auth_context)
@@ -670,9 +668,7 @@ class TestResourceAccessChecker:
         resource = MagicMock()
         resource.owner_id = "other456"
 
-        checker = ResourceAccessChecker(
-            get_owner_id=lambda r: r.owner_id, require_ownership=True
-        )
+        checker = ResourceAccessChecker(get_owner_id=lambda r: r.owner_id, require_ownership=True)
 
         result = await checker(resource, auth_context)
         assert result is True
