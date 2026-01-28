@@ -28,7 +28,6 @@ export default function Layout() {
 
   // Auto-close mobile drawer when leaving phone breakpoint
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- sync sidebar with screen size
     if (screenSize !== 'phone') setIsMobileSidebarOpen(false);
   }, [screenSize]);
 

@@ -566,7 +566,7 @@ class MarketplaceService:
     # Featured Listings
     # =========================================================================
 
-    async def get_featured_listings(self, limit: int = 6) -> list[dict[str, Any]]:
+    async def get_featured_listings(self, limit: int = 6) -> list[dict]:
         """
         Get featured marketplace listings with capsule and tokenization data.
 
@@ -609,7 +609,7 @@ class MarketplaceService:
 
             featured = []
             for rec in results:
-                listing: dict[str, Any] = {
+                listing: dict = {
                     "id": rec["listing_id"],
                     "capsule_id": rec["capsule_id"],
                     "title": rec["title"] or "",
@@ -637,9 +637,7 @@ class MarketplaceService:
                     listing["tokenization"] = {
                         "token_symbol": rec["token_symbol"],
                         "launch_type": rec["launch_type"] or "STANDARD",
-                        "genesis_tier": genesis_tier
-                        if genesis_tier and genesis_tier != -1
-                        else None,
+                        "genesis_tier": genesis_tier if genesis_tier and genesis_tier != -1 else None,
                         "graduation_progress": round(progress, 1),
                         "total_holders": rec["total_holders"] or 0,
                         "bonding_curve_virtual_accumulated": accumulated,

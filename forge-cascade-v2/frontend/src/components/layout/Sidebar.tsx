@@ -61,9 +61,7 @@ export function Sidebar({ isMobileOpen, onMobileClose, isPhone, isTablet }: Side
 
   // Auto-collapse on tablet
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- sync collapse with screen size
     if (isTablet) setCollapsed(true);
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- sync collapse with screen size
     if (!isTablet && !isPhone) setCollapsed(false);
   }, [isTablet, isPhone]);
 
