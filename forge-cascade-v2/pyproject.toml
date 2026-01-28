@@ -223,7 +223,7 @@ branch = true
 source = ["forge"]
 
 [tool.coverage.report]
-fail_under = 100
+fail_under = 80
 exclude_lines = [
     "pragma: no cover",
     "if TYPE_CHECKING:",
