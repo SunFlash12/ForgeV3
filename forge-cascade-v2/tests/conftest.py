@@ -560,3 +560,20 @@ def reset_singletons():
     from forge.security.tokens import TokenBlacklist
 
     TokenBlacklist._async_lock = None
+
+    # Reset diagnosis services singleton
+    try:
+        from forge.api.routes.diagnosis import _DiagnosisServices
+
+        _DiagnosisServices._instance = None
+    except ImportError:
+        pass
+
+    # Reset copilot agent global and lock
+    try:
+        import forge.api.routes.copilot as copilot_module
+
+        copilot_module._agent = None
+        copilot_module._agent_lock = None
+    except ImportError:
+        pass
