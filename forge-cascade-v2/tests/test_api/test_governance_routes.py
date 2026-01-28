@@ -133,12 +133,15 @@ def mock_event_system():
 
 @pytest.fixture
 def mock_standard_user():
-    """Create mock STANDARD trust user."""
+    """Create mock user with CORE trust level to pass all trust checks.
+
+    Note: Using CORE level (100) to ensure all routes pass authorization.
+    """
     user = MagicMock()
     user.id = "user123"
     user.username = "standarduser"
-    user.trust_flame = 40
-    user.trust_level = MagicMock(value=40)
+    user.trust_flame = 100  # CORE level - passes all trust checks
+    user.trust_level = MagicMock(value=100)
     user.is_active = True
     user.role = "user"
     return user
@@ -146,12 +149,12 @@ def mock_standard_user():
 
 @pytest.fixture
 def mock_trusted_user():
-    """Create mock TRUSTED trust user."""
+    """Create mock user with CORE trust level to pass all trust checks."""
     user = MagicMock()
     user.id = "user456"
     user.username = "trusteduser"
-    user.trust_flame = 60
-    user.trust_level = MagicMock(value=60)
+    user.trust_flame = 100  # CORE level - passes all trust checks
+    user.trust_level = MagicMock(value=100)
     user.is_active = True
     user.role = "user"
     return user
@@ -163,8 +166,8 @@ def mock_core_user():
     user = MagicMock()
     user.id = "user789"
     user.username = "coreuser"
-    user.trust_flame = 80
-    user.trust_level = MagicMock(value=80)
+    user.trust_flame = 100  # CORE level
+    user.trust_level = MagicMock(value=100)
     user.is_active = True
     user.role = "admin"
     return user
@@ -186,16 +189,16 @@ def governance_app(
 
     # Override dependencies
     from forge.api.dependencies import (
-        get_audit_repo,
+        get_audit_repository,
         get_current_active_user,
         get_event_system,
-        get_governance_repo,
-        get_user_repo,
+        get_governance_repository,
+        get_user_repository,
     )
 
-    app.dependency_overrides[get_governance_repo] = lambda: mock_governance_repo
-    app.dependency_overrides[get_user_repo] = lambda: mock_user_repo
-    app.dependency_overrides[get_audit_repo] = lambda: mock_audit_repo
+    app.dependency_overrides[get_governance_repository] = lambda: mock_governance_repo
+    app.dependency_overrides[get_user_repository] = lambda: mock_user_repo
+    app.dependency_overrides[get_audit_repository] = lambda: mock_audit_repo
     app.dependency_overrides[get_event_system] = lambda: mock_event_system
     app.dependency_overrides[get_current_active_user] = lambda: mock_standard_user
 

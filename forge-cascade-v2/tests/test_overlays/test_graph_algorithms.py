@@ -108,7 +108,7 @@ class MockProvider:
     """Mock graph algorithm provider."""
 
     def __init__(self):
-        self.detect_backend = AsyncMock(return_value=GraphBackend.CYPHER_ONLY)
+        self.detect_backend = AsyncMock(return_value=GraphBackend.CYPHER)
         self.compute_pagerank = AsyncMock(return_value=MockRankingResult())
         self.compute_centrality = AsyncMock(return_value=MockRankingResult())
         self.detect_communities = AsyncMock(return_value=MockCommunityResult())

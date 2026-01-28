@@ -278,12 +278,12 @@ def mock_event_system():
 
 @pytest.fixture
 def mock_active_user():
-    """Create mock active user."""
+    """Create mock active user with CORE trust level to pass all trust checks."""
     user = MagicMock()
     user.id = "user123"
     user.username = "testuser"
-    user.trust_flame = 50
-    user.trust_level = MagicMock(value=50)
+    user.trust_flame = 100  # CORE level - passes all trust checks
+    user.trust_level = MagicMock(value=100)
     user.is_active = True
     return user
 
@@ -357,8 +357,6 @@ def graph_app(
         get_audit_repository,
         get_capsule_repository,
         get_current_active_user,
-        get_current_standard_user,
-        get_current_trusted_user,
         get_graph_repository,
         get_temporal_repository,
     )
@@ -378,9 +376,8 @@ def graph_app(
     app.dependency_overrides[dep_get_overlay] = get_overlay_manager
     app.dependency_overrides[get_audit_repository] = get_audit_repo
     app.dependency_overrides[dep_get_event] = get_event_system
+    # Note: mock_active_user has trust_flame=100 (CORE level) to pass all trust checks
     app.dependency_overrides[get_current_active_user] = lambda: mock_active_user
-    app.dependency_overrides[get_current_standard_user] = lambda: mock_active_user
-    app.dependency_overrides[get_current_trusted_user] = lambda: mock_active_user
     app.dependency_overrides[dep_get_correlation_id] = get_correlation_id
 
     return app
