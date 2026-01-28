@@ -36,14 +36,15 @@ if _current_env == "production":
 os.environ["APP_ENV"] = "testing"
 
 # TEST-ONLY database credentials (not valid for production)
-os.environ["NEO4J_URI"] = "bolt://localhost:7687"
-os.environ["NEO4J_USER"] = "neo4j"
-os.environ["NEO4J_PASSWORD"] = "testpassword"  # TEST ONLY - not a real password
-os.environ["JWT_SECRET_KEY"] = (
-    "test-secret-key-at-least-32-characters-long-for-testing"  # TEST ONLY
-)
-os.environ["LLM_PROVIDER"] = "mock"
-os.environ["EMBEDDING_PROVIDER"] = "mock"
+# Use setdefault to allow CI/integration tests to override with their own values
+os.environ.setdefault("NEO4J_URI", "bolt://localhost:7687")
+os.environ.setdefault("NEO4J_USER", "neo4j")
+os.environ.setdefault("NEO4J_PASSWORD", "testpassword")  # TEST ONLY - not a real password
+os.environ.setdefault(
+    "JWT_SECRET_KEY", "test-secret-key-at-least-32-characters-long-for-testing"
+)  # TEST ONLY
+os.environ.setdefault("LLM_PROVIDER", "mock")
+os.environ.setdefault("EMBEDDING_PROVIDER", "mock")
 
 
 # =============================================================================
