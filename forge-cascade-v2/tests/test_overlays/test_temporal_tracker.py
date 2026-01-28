@@ -72,7 +72,7 @@ class MockTrustSnapshot:
         entity_id: str = "test-entity",
         entity_type: str = "User",
         trust_value: int = 60,
-        change_type: TrustChangeType = TrustChangeType.MANUAL,
+        change_type: TrustChangeType = TrustChangeType.ESSENTIAL,
         reason: str | None = None,
     ):
         self.id = str(uuid4())
