@@ -24,7 +24,6 @@ import type {
   PaginationParams,
 } from '../types';
 import type {
-  MarketplaceCapsule,
   CapsuleFilters,
   CapsuleSearchResult,
   PurchaseItem,

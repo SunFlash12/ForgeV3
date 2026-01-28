@@ -98,6 +98,7 @@ export default function MarketplaceCart() {
   }, []);
 
   // Watch for transaction confirmation and submit to backend
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (isConfirmed && txHash && purchaseStep === 'confirming') {
       setPurchaseStep('submitting');

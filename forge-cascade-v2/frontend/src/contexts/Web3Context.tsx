@@ -5,6 +5,7 @@
  * purchasing capsules with $VIRTUAL on Base.
  */
 
+/* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, ReactNode } from 'react';
 import { WagmiProvider } from 'wagmi';
 import { base, baseSepolia } from 'wagmi/chains';
