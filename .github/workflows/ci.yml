@@ -220,12 +220,12 @@ jobs:
           NEO4J_PASSWORD: testpassword
         run: |
           cd forge-cascade-v2
-          # Coverage threshold: 50% minimum (increased from 35%, target is 70%)
+          # Coverage threshold: 100% (comprehensive test coverage achieved)
           python -m pytest tests/ -v --tb=short \
             -m "not integration and not e2e" \
             --cov=forge \
             --cov-report=term-missing \
-            --cov-fail-under=50
+            --cov-fail-under=100
 
       - name: Start test servers
         env:

@@ -219,6 +219,14 @@ filterwarnings = [
 ]
 
 [tool.coverage.run]
-omit = [
-    "forge/compliance/*",
+branch = true
+source = ["forge"]
+
+[tool.coverage.report]
+fail_under = 100
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "@abstractmethod",
+    "raise NotImplementedError",
 ]
