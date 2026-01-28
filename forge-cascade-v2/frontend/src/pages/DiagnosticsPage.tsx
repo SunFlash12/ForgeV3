@@ -164,7 +164,7 @@ export default function DiagnosticsPage() {
   });
 
   // Basic connectivity check
-  const { data: basicHealth, isError: basicError } = useQuery({
+  const { isError: basicError } = useQuery({
     queryKey: ['health-basic'],
     queryFn: async () => {
       const response = await axios.get(`${HEALTH_BASE_URL}/health`, { timeout: 5000 });
