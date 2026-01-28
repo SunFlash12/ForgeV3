@@ -101,6 +101,7 @@ async def real_db_client(neo4j_uri: str, neo4j_user: str, neo4j_password: str) -
 
     # Clear cached settings to force re-read of env vars
     from forge.config import get_settings
+
     get_settings.cache_clear()
 
     # Now import the client (this will trigger fresh Settings creation)
