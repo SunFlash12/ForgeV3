@@ -1027,7 +1027,7 @@ def create_app(
             # Check if LLM service is initialized and what provider it uses
             llm_service = llm_module.get_llm_service()
             if llm_service:
-                provider_name = str(llm_service.config.provider.value)
+                provider_name = str(llm_service._config.provider.value)
                 llm_status["provider"] = provider_name
                 llm_status["is_mock"] = provider_name.lower() == "mock"
                 llm_status["operational"] = True
@@ -1046,7 +1046,7 @@ def create_app(
         try:
             emb_service = embedding_module.get_embedding_service()
             if emb_service:
-                provider_name = str(emb_service.config.provider.value)
+                provider_name = str(emb_service._config.provider.value)
                 embedding_status["provider"] = provider_name
                 embedding_status["is_mock"] = provider_name.lower() == "mock"
                 embedding_status["dimensions"] = emb_service.dimensions

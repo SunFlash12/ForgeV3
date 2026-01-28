@@ -566,7 +566,7 @@ class MarketplaceService:
     # Featured Listings
     # =========================================================================
 
-    async def get_featured_listings(self, limit: int = 6) -> list[dict]:
+    async def get_featured_listings(self, limit: int = 6) -> list[dict[str, Any]]:
         """
         Get featured marketplace listings with capsule and tokenization data.
 
@@ -609,7 +609,7 @@ class MarketplaceService:
 
             featured = []
             for rec in results:
-                listing: dict = {
+                listing: dict[str, Any] = {
                     "id": rec["listing_id"],
                     "capsule_id": rec["capsule_id"],
                     "title": rec["title"] or "",
