@@ -93,18 +93,22 @@ async def real_db_client(neo4j_uri: str, neo4j_user: str, neo4j_password: str) -
     This fixture FAILS if Neo4j is not running - no fallback, no mocks.
     That's the point: integration tests verify real connectivity.
     """
-    # IMPORTANT: Clear the Settings cache and set env vars BEFORE importing forge modules
-    # This ensures the Settings singleton is created with the correct values
+    import sys
+
+    # CRITICAL: Set env vars BEFORE any forge imports
+    # This must happen before forge.config is loaded, because it creates
+    # the Settings singleton at module level
     os.environ["NEO4J_URI"] = neo4j_uri
     os.environ["NEO4J_USER"] = neo4j_user
     os.environ["NEO4J_PASSWORD"] = neo4j_password
 
-    # Clear cached settings to force re-read of env vars
-    from forge.config import get_settings
+    # Remove any previously cached forge modules to force fresh import
+    # with the new env vars
+    for mod_name in list(sys.modules.keys()):
+        if mod_name.startswith("forge"):
+            del sys.modules[mod_name]
 
-    get_settings.cache_clear()
-
-    # Now import the client (this will trigger fresh Settings creation)
+    # Now import the client - this will create fresh Settings with correct values
     from forge.database.client import Neo4jClient
 
     # Pass credentials directly as extra safety measure
