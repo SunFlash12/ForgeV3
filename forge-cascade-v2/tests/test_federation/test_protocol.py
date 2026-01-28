@@ -161,10 +161,10 @@ class TestDNSPinStore:
         store = DNSPinStore(ttl_seconds=0)  # Immediate expiration
         store.pin_hostname("example.com", 443, ["1.2.3.4"])
 
-        # Wait for expiration
+        # Wait for expiration - need sufficient time for TTL check
         import time
 
-        time.sleep(0.01)
+        time.sleep(0.1)
 
         ips = store.get_pinned_ips("example.com", 443)
         assert ips is None

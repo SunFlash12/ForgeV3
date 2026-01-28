@@ -693,7 +693,7 @@ class CanaryManager(Generic[T]):
                 metrics.canary_latencies.append(latency_ms)
 
                 # Keep latency list bounded
-                if len(metrics.canary_latencies) > 10000:
+                if len(metrics.canary_latencies) > 5000:
                     metrics.canary_latencies = metrics.canary_latencies[-5000:]
             else:
                 metrics.control_requests += 1
@@ -701,7 +701,7 @@ class CanaryManager(Generic[T]):
                     metrics.control_errors += 1
                 metrics.control_latencies.append(latency_ms)
 
-                if len(metrics.control_latencies) > 10000:
+                if len(metrics.control_latencies) > 5000:
                     metrics.control_latencies = metrics.control_latencies[-5000:]
 
     async def manual_advance(self, deployment_id: str) -> bool:

@@ -104,7 +104,7 @@ class PeerTrustManager:
                     # Evict oldest locks using FIFO (insertion order).
                     # Note: True LRU would require tracking access times, but FIFO
                     # is acceptable for locks since active peers create new locks anyway.
-                    evict_count = self.MAX_PEER_LOCKS // 10
+                    evict_count = max(1, self.MAX_PEER_LOCKS // 10)
                     keys_to_evict = list(self._peer_locks.keys())[:evict_count]
                     for key in keys_to_evict:
                         del self._peer_locks[key]
@@ -125,7 +125,7 @@ class PeerTrustManager:
         if peer_id not in self._peer_trust_cache:
             if len(self._peer_trust_cache) >= self.MAX_PEER_CACHE:
                 # Evict oldest entries (first 10%)
-                evict_count = self.MAX_PEER_CACHE // 10
+                evict_count = max(1, self.MAX_PEER_CACHE // 10)
                 keys_to_evict = list(self._peer_trust_cache.keys())[:evict_count]
                 for key in keys_to_evict:
                     del self._peer_trust_cache[key]

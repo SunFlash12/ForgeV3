@@ -590,8 +590,11 @@ class RateAnomalyDetector(AnomalyDetector):
         self._buckets[bucket] += int(value)
 
         # Clean old buckets (keep last window_size)
+        # Preserve defaultdict type to avoid KeyError on next bucket access
         min_bucket = bucket - self.config.window_size
-        self._buckets = {k: v for k, v in self._buckets.items() if k >= min_bucket}
+        self._buckets = defaultdict(
+            int, {k: v for k, v in self._buckets.items() if k >= min_bucket}
+        )
 
         # Get recent rates
         rates = [self._buckets.get(bucket - i, 0) for i in range(self.config.window_size)]

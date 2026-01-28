@@ -578,7 +578,7 @@ class TestSchemaManagerDropAll:
     @pytest.mark.asyncio
     async def test_drop_all_blocked_in_production(self, schema_manager):
         """Drop all is blocked in production without force."""
-        with patch("forge.database.schema.get_settings") as mock_get_settings:
+        with patch("forge.config.get_settings") as mock_get_settings:
             mock_settings = MagicMock()
             mock_settings.app_env = "production"
             mock_get_settings.return_value = mock_settings
@@ -589,7 +589,7 @@ class TestSchemaManagerDropAll:
     @pytest.mark.asyncio
     async def test_drop_all_allowed_in_production_with_force(self, schema_manager, mock_db_client):
         """Drop all is allowed in production with force=True."""
-        with patch("forge.database.schema.get_settings") as mock_get_settings:
+        with patch("forge.config.get_settings") as mock_get_settings:
             mock_settings = MagicMock()
             mock_settings.app_env = "production"
             mock_get_settings.return_value = mock_settings
@@ -604,7 +604,7 @@ class TestSchemaManagerDropAll:
     @pytest.mark.asyncio
     async def test_drop_all_allowed_in_development(self, schema_manager, mock_db_client):
         """Drop all is allowed in development environment."""
-        with patch("forge.database.schema.get_settings") as mock_get_settings:
+        with patch("forge.config.get_settings") as mock_get_settings:
             mock_settings = MagicMock()
             mock_settings.app_env = "development"
             mock_get_settings.return_value = mock_settings
@@ -618,7 +618,7 @@ class TestSchemaManagerDropAll:
     @pytest.mark.asyncio
     async def test_drop_all_allowed_in_testing(self, schema_manager, mock_db_client):
         """Drop all is allowed in testing environment."""
-        with patch("forge.database.schema.get_settings") as mock_get_settings:
+        with patch("forge.config.get_settings") as mock_get_settings:
             mock_settings = MagicMock()
             mock_settings.app_env = "testing"
             mock_get_settings.return_value = mock_settings
@@ -632,7 +632,7 @@ class TestSchemaManagerDropAll:
     @pytest.mark.asyncio
     async def test_drop_all_drops_constraints(self, schema_manager, mock_db_client):
         """Drop all drops existing constraints."""
-        with patch("forge.database.schema.get_settings") as mock_get_settings:
+        with patch("forge.config.get_settings") as mock_get_settings:
             mock_settings = MagicMock()
             mock_settings.app_env = "testing"
             mock_get_settings.return_value = mock_settings
@@ -652,7 +652,7 @@ class TestSchemaManagerDropAll:
     @pytest.mark.asyncio
     async def test_drop_all_drops_indexes(self, schema_manager, mock_db_client):
         """Drop all drops existing indexes."""
-        with patch("forge.database.schema.get_settings") as mock_get_settings:
+        with patch("forge.config.get_settings") as mock_get_settings:
             mock_settings = MagicMock()
             mock_settings.app_env = "testing"
             mock_get_settings.return_value = mock_settings
@@ -671,7 +671,7 @@ class TestSchemaManagerDropAll:
     @pytest.mark.asyncio
     async def test_drop_all_validates_identifiers(self, schema_manager, mock_db_client):
         """Drop all validates identifiers before dropping."""
-        with patch("forge.database.schema.get_settings") as mock_get_settings:
+        with patch("forge.config.get_settings") as mock_get_settings:
             mock_settings = MagicMock()
             mock_settings.app_env = "testing"
             mock_get_settings.return_value = mock_settings
@@ -696,7 +696,7 @@ class TestSchemaManagerDropAll:
     @pytest.mark.asyncio
     async def test_drop_all_handles_client_error(self, schema_manager, mock_db_client):
         """Drop all handles ClientError gracefully."""
-        with patch("forge.database.schema.get_settings") as mock_get_settings:
+        with patch("forge.config.get_settings") as mock_get_settings:
             mock_settings = MagicMock()
             mock_settings.app_env = "testing"
             mock_get_settings.return_value = mock_settings
@@ -720,7 +720,7 @@ class TestSchemaManagerDropAll:
     @pytest.mark.asyncio
     async def test_drop_all_handles_database_error(self, schema_manager, mock_db_client):
         """Drop all handles DatabaseError gracefully."""
-        with patch("forge.database.schema.get_settings") as mock_get_settings:
+        with patch("forge.config.get_settings") as mock_get_settings:
             mock_settings = MagicMock()
             mock_settings.app_env = "testing"
             mock_get_settings.return_value = mock_settings
@@ -744,7 +744,7 @@ class TestSchemaManagerDropAll:
     @pytest.mark.asyncio
     async def test_drop_all_raises_on_service_unavailable(self, schema_manager, mock_db_client):
         """Drop all raises on ServiceUnavailable."""
-        with patch("forge.database.schema.get_settings") as mock_get_settings:
+        with patch("forge.config.get_settings") as mock_get_settings:
             mock_settings = MagicMock()
             mock_settings.app_env = "testing"
             mock_get_settings.return_value = mock_settings
@@ -760,7 +760,7 @@ class TestSchemaManagerDropAll:
     @pytest.mark.asyncio
     async def test_drop_all_handles_unexpected_exception(self, schema_manager, mock_db_client):
         """Drop all handles unexpected exceptions gracefully."""
-        with patch("forge.database.schema.get_settings") as mock_get_settings:
+        with patch("forge.config.get_settings") as mock_get_settings:
             mock_settings = MagicMock()
             mock_settings.app_env = "testing"
             mock_get_settings.return_value = mock_settings

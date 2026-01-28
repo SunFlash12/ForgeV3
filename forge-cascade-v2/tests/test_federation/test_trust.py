@@ -536,7 +536,7 @@ class TestPeerTrustManager:
     @pytest.mark.asyncio
     async def test_recommend_trust_adjustment_successes(self, trust_manager, sample_peer):
         """Test recommendation for peer with many successes."""
-        sample_peer.trust_score = 0.5  # STANDARD tier
+        sample_peer.trust_score = 0.45  # STANDARD tier, stays below CORE after 15 successes
 
         # Record many successes
         for _ in range(15):
