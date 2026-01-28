@@ -68,7 +68,7 @@ def mock_sync_state():
     state.direction = SyncDirection.BIDIRECTIONAL
     state.started_at = datetime.now(UTC)
     state.completed_at = None
-    state.status = SyncOperationStatus.IN_PROGRESS
+    state.status = SyncOperationStatus.RUNNING
     state.phase = SyncPhase.FETCHING
     state.capsules_fetched = 10
     state.capsules_created = 5
