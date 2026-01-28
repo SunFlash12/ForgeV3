@@ -123,10 +123,10 @@ export default function OverlaysPage() {
 
   if (overlays.length === 0) {
     return (
-      <div className="p-6 max-w-6xl mx-auto">
+      <div className="px-3 sm:px-4 lg:px-6 py-4 sm:py-6 max-w-6xl mx-auto">
         <div className="mb-8">
-          <h1 className="text-2xl font-bold text-slate-800 mb-2">Overlay Management</h1>
-          <p className="text-slate-500">Manage system overlays and intelligence modules</p>
+          <h1 className="text-2xl font-bold text-slate-100 mb-2">Overlay Management</h1>
+          <p className="text-slate-400">Manage system overlays and intelligence modules</p>
         </div>
         <EmptyState
           icon={<Layers className="w-12 h-12" />}
@@ -140,12 +140,12 @@ export default function OverlaysPage() {
   const activeCount = overlays.filter((o: Overlay) => o.enabled).length;
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="px-3 sm:px-4 lg:px-6 py-4 sm:py-6 max-w-6xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800 mb-2">Overlay Management</h1>
-          <p className="text-slate-500">
+          <h1 className="text-2xl font-bold text-slate-100 mb-2">Overlay Management</h1>
+          <p className="text-slate-400">
             {activeCount} of {overlays.length} overlays active
           </p>
         </div>
@@ -166,8 +166,8 @@ export default function OverlaysPage() {
               <Layers className="w-5 h-5 text-blue-400" />
             </div>
             <div>
-              <div className="text-2xl font-bold text-slate-800">{overlays.length}</div>
-              <div className="text-sm text-slate-500">Total Overlays</div>
+              <div className="text-2xl font-bold text-slate-100">{overlays.length}</div>
+              <div className="text-sm text-slate-400">Total Overlays</div>
             </div>
           </div>
         </Card>
@@ -177,8 +177,8 @@ export default function OverlaysPage() {
               <CheckCircle className="w-5 h-5 text-green-400" />
             </div>
             <div>
-              <div className="text-2xl font-bold text-slate-800">{activeCount}</div>
-              <div className="text-sm text-slate-500">Active</div>
+              <div className="text-2xl font-bold text-slate-100">{activeCount}</div>
+              <div className="text-sm text-slate-400">Active</div>
             </div>
           </div>
         </Card>
@@ -188,10 +188,10 @@ export default function OverlaysPage() {
               <Activity className="w-5 h-5 text-amber-400" />
             </div>
             <div>
-              <div className="text-2xl font-bold text-slate-800">
+              <div className="text-2xl font-bold text-slate-100">
                 {Object.values(canaryMap).filter(c => c !== null).length}
               </div>
-              <div className="text-sm text-slate-500">Canary Deployments</div>
+              <div className="text-sm text-slate-400">Canary Deployments</div>
             </div>
           </div>
         </Card>
@@ -201,10 +201,10 @@ export default function OverlaysPage() {
               <Zap className="w-5 h-5 text-purple-400" />
             </div>
             <div>
-              <div className="text-2xl font-bold text-slate-800">
+              <div className="text-2xl font-bold text-slate-100">
                 {Object.values(metricsMap).reduce((sum, m) => sum + (m?.total_executions || 0), 0)}
               </div>
-              <div className="text-sm text-slate-500">Total Executions</div>
+              <div className="text-sm text-slate-400">Total Executions</div>
             </div>
           </div>
         </Card>
@@ -222,17 +222,17 @@ export default function OverlaysPage() {
             <Card key={overlay.id} className="overflow-hidden">
               {/* Header Row */}
               <div
-                className="p-4 flex items-center justify-between cursor-pointer hover:bg-slate-100/30 transition-colors"
+                className="p-4 flex items-center justify-between cursor-pointer hover:bg-white/5 transition-colors"
                 onClick={() => toggleExpanded(overlay.id)}
               >
                 <div className="flex items-center gap-4">
-                  <div className={`p-2 rounded-lg ${overlay.enabled ? 'bg-green-500/20' : 'bg-slate-50'}`}>
-                    <Icon className={`w-5 h-5 ${overlay.enabled ? 'text-green-400' : 'text-slate-500'}`} />
+                  <div className={`p-2 rounded-lg ${overlay.enabled ? 'bg-green-500/20' : 'bg-white/5'}`}>
+                    <Icon className={`w-5 h-5 ${overlay.enabled ? 'text-green-400' : 'text-slate-400'}`} />
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <h3 className="font-medium text-slate-800">{overlay.name}</h3>
-                      <span className={`text-xs px-2 py-0.5 rounded ${overlay.enabled ? 'bg-green-500/20 text-green-400' : 'bg-slate-100 text-slate-500'}`}>
+                      <h3 className="font-medium text-slate-100">{overlay.name}</h3>
+                      <span className={`text-xs px-2 py-0.5 rounded ${overlay.enabled ? 'bg-green-500/20 text-green-400' : 'bg-white/5 text-slate-400'}`}>
                         {overlay.enabled ? 'Active' : 'Inactive'}
                       </span>
                       {overlay.critical && (
@@ -242,64 +242,64 @@ export default function OverlaysPage() {
                         <span className="text-xs px-2 py-0.5 rounded bg-amber-500/20 text-amber-400">Canary</span>
                       )}
                     </div>
-                    <p className="text-sm text-slate-500">{overlay.description}</p>
+                    <p className="text-sm text-slate-400">{overlay.description}</p>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-4">
                   <div className="text-right text-sm">
-                    <div className="text-slate-500">Phase {overlay.phase}</div>
-                    <div className="text-slate-500">Priority: {overlay.priority}</div>
+                    <div className="text-slate-400">Phase {overlay.phase}</div>
+                    <div className="text-slate-400">Priority: {overlay.priority}</div>
                   </div>
                   {isExpanded ? (
-                    <ChevronUp className="w-5 h-5 text-slate-500" />
+                    <ChevronUp className="w-5 h-5 text-slate-400" />
                   ) : (
-                    <ChevronDown className="w-5 h-5 text-slate-500" />
+                    <ChevronDown className="w-5 h-5 text-slate-400" />
                   )}
                 </div>
               </div>
 
               {/* Expanded Details */}
               {isExpanded && (
-                <div className="border-t border-slate-200/50 p-4">
+                <div className="border-t border-white/10 p-4">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     {/* Metrics */}
                     <div>
-                      <h4 className="text-sm font-medium text-slate-500 mb-3">Performance Metrics</h4>
+                      <h4 className="text-sm font-medium text-slate-400 mb-3">Performance Metrics</h4>
                       {metrics ? (
                         <div className="space-y-2">
                           <div className="flex justify-between">
-                            <span className="text-slate-500">Total Executions</span>
-                            <span className="text-slate-800">{metrics.total_executions}</span>
+                            <span className="text-slate-400">Total Executions</span>
+                            <span className="text-slate-100">{metrics.total_executions}</span>
                           </div>
                           <div className="flex justify-between">
-                            <span className="text-slate-500">Success Rate</span>
+                            <span className="text-slate-400">Success Rate</span>
                             <span className={metrics.error_rate < 0.05 ? 'text-green-400' : 'text-amber-400'}>
                               {((1 - metrics.error_rate) * 100).toFixed(1)}%
                             </span>
                           </div>
                           <div className="flex justify-between">
-                            <span className="text-slate-500">Avg Duration</span>
-                            <span className="text-slate-800">{metrics.average_duration_ms.toFixed(1)}ms</span>
+                            <span className="text-slate-400">Avg Duration</span>
+                            <span className="text-slate-100">{metrics.average_duration_ms.toFixed(1)}ms</span>
                           </div>
                         </div>
                       ) : (
-                        <p className="text-slate-500">No metrics available</p>
+                        <p className="text-slate-400">No metrics available</p>
                       )}
                     </div>
 
                     {/* Canary Status */}
                     <div>
-                      <h4 className="text-sm font-medium text-slate-500 mb-3">Canary Deployment</h4>
+                      <h4 className="text-sm font-medium text-slate-400 mb-3">Canary Deployment</h4>
                       {canary ? (
                         <div className="space-y-2">
                           <div className="flex justify-between">
-                            <span className="text-slate-500">Stage</span>
-                            <span className="text-slate-800">{canary.current_stage}/{canary.total_stages}</span>
+                            <span className="text-slate-400">Stage</span>
+                            <span className="text-slate-100">{canary.current_stage}/{canary.total_stages}</span>
                           </div>
                           <div className="flex justify-between">
-                            <span className="text-slate-500">Traffic</span>
-                            <span className="text-slate-800">{canary.traffic_percentage}%</span>
+                            <span className="text-slate-400">Traffic</span>
+                            <span className="text-slate-100">{canary.traffic_percentage}%</span>
                           </div>
                           <ProgressBar
                             value={(canary.current_stage / canary.total_stages) * 100}
@@ -308,13 +308,13 @@ export default function OverlaysPage() {
                           />
                         </div>
                       ) : (
-                        <p className="text-slate-500">No active canary</p>
+                        <p className="text-slate-400">No active canary</p>
                       )}
                     </div>
 
                     {/* Actions */}
                     <div>
-                      <h4 className="text-sm font-medium text-slate-500 mb-3">Actions</h4>
+                      <h4 className="text-sm font-medium text-slate-400 mb-3">Actions</h4>
                       <div className="flex flex-wrap gap-2">
                         {overlay.enabled ? (
                           <Button
@@ -369,18 +369,18 @@ export default function OverlaysPage() {
       >
         {selectedOverlayForCanary && (
           <div className="space-y-4">
-            <p className="text-slate-500">
-              Start a canary deployment for <span className="text-slate-800 font-medium">{selectedOverlayForCanary.name}</span>?
+            <p className="text-slate-400">
+              Start a canary deployment for <span className="text-slate-100 font-medium">{selectedOverlayForCanary.name}</span>?
               This will gradually roll out changes while monitoring for issues.
             </p>
 
-            <div className="p-4 bg-slate-100/30 rounded-lg">
-              <div className="text-sm text-slate-500 mb-2">Deployment Stages</div>
+            <div className="p-4 bg-white/5 rounded-lg">
+              <div className="text-sm text-slate-400 mb-2">Deployment Stages</div>
               <div className="flex gap-2">
                 {[10, 25, 50, 75, 100].map((stage) => (
                   <div key={stage} className="flex-1 text-center">
                     <div className="h-2 bg-slate-600 rounded-full mb-1" />
-                    <span className="text-xs text-slate-500">{stage}%</span>
+                    <span className="text-xs text-slate-400">{stage}%</span>
                   </div>
                 ))}
               </div>

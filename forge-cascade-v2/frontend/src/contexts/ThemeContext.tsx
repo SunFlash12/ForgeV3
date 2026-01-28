@@ -28,49 +28,18 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         return stored;
       }
     }
-    return 'light';
+    return 'dark';
   });
 
-  const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>(() => {
-    if (theme === 'system') {
-      return getSystemTheme();
-    }
-    return theme;
-  });
+  // Always resolve to dark for the futuristic dark theme
+  const resolvedTheme: 'light' | 'dark' = 'dark';
 
-  // Update resolved theme when theme or system preference changes
-  useEffect(() => {
-    const updateResolvedTheme = () => {
-      if (theme === 'system') {
-        setResolvedTheme(getSystemTheme());
-      } else {
-        setResolvedTheme(theme);
-      }
-    };
-
-    updateResolvedTheme();
-
-    // Listen for system theme changes
-    if (theme === 'system' && typeof window !== 'undefined' && window.matchMedia) {
-      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-      const handler = () => updateResolvedTheme();
-      mediaQuery.addEventListener('change', handler);
-      return () => mediaQuery.removeEventListener('change', handler);
-    }
-  }, [theme]);
-
-  // Apply theme class to document
+  // Always apply dark mode class to document
   useEffect(() => {
     const root = document.documentElement;
-
-    if (resolvedTheme === 'dark') {
-      root.classList.add('dark');
-      root.style.colorScheme = 'dark';
-    } else {
-      root.classList.remove('dark');
-      root.style.colorScheme = 'light';
-    }
-  }, [resolvedTheme]);
+    root.classList.add('dark');
+    root.style.colorScheme = 'dark';
+  }, []);
 
   const setTheme = (newTheme: Theme) => {
     setThemeState(newTheme);

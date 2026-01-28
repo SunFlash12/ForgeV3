@@ -1,0 +1,116 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  html, body, #root {
+    width: 100%;
+    height: 100vh;
+    height: 100dvh; /* dynamic viewport height — accounts for mobile browser chrome */
+    overflow: hidden;
+    background-color: #0a0a1a;
+    color: #e2e8f0;
+  }
+
+  body {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  ::selection {
+    background-color: rgba(99, 102, 241, 0.3);
+    color: #fff;
+  }
+}
+
+@layer components {
+  .slide-container {
+    @apply w-full h-full flex flex-col justify-start md:justify-center items-center px-4 pt-4 pb-24 md:px-16 md:py-10 lg:px-24 lg:py-12 relative overflow-y-auto overflow-x-hidden;
+    padding-bottom: calc(6rem + env(safe-area-inset-bottom, 0px));
+  }
+  @media (min-width: 768px) {
+    .slide-container {
+      padding-bottom: 2.5rem;
+    }
+  }
+
+  .slide-content {
+    @apply w-full max-w-6xl mx-auto relative z-10;
+  }
+
+  .slide-title {
+    @apply text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight leading-tight;
+  }
+
+  .slide-subtitle {
+    @apply text-lg md:text-xl lg:text-2xl font-light text-slate-300 mt-3;
+  }
+
+  .slide-body {
+    @apply text-base md:text-lg text-slate-300 leading-relaxed;
+  }
+
+  .metric-value {
+    @apply text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tight;
+  }
+
+  .metric-label {
+    @apply text-sm md:text-base text-slate-400 font-medium uppercase tracking-wider mt-1;
+  }
+
+  .glass-card {
+    @apply bg-white/5 backdrop-blur-md border border-white/10 rounded-xl md:rounded-2xl p-4 md:p-6;
+  }
+
+  .gradient-text {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-cyber-blue via-forge-400 to-cyber-purple;
+  }
+
+  .gradient-text-warm {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-cyber-orange via-cyber-pink to-cyber-purple;
+  }
+
+  .glow-blue {
+    box-shadow: 0 0 40px rgba(0, 212, 255, 0.15), 0 0 80px rgba(0, 212, 255, 0.05);
+  }
+
+  .glow-purple {
+    box-shadow: 0 0 40px rgba(124, 58, 237, 0.15), 0 0 80px rgba(124, 58, 237, 0.05);
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(99, 102, 241, 0.3);
+  border-radius: 4px;
+}
+
+/* Print styles for export */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  .slide-container {
+    page-break-after: always;
+    height: 100vh;
+  }
+}

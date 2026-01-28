@@ -51,10 +51,10 @@ interface VersionDiff {
 }
 
 const changeTypeColors: Record<string, string> = {
-  create: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
-  update: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
-  fork: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300',
-  merge: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300',
+  create: 'bg-green-500/15 text-green-400',
+  update: 'bg-blue-500/15 text-blue-400',
+  fork: 'bg-purple-500/15 text-purple-400',
+  merge: 'bg-orange-500/15 text-orange-400',
 };
 
 const snapshotTypeIcons: Record<string, string> = {
@@ -152,16 +152,16 @@ export default function VersionHistoryPage() {
         <div className="flex items-center gap-4">
           <Link
             to="/capsules"
-            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+            className="p-2 hover:bg-white/5 rounded-lg transition-colors"
           >
-            <ArrowLeft className="w-5 h-5 text-gray-500" />
+            <ArrowLeft className="w-5 h-5 text-slate-400" />
           </Link>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-slate-100 flex items-center gap-2">
               <History className="w-6 h-6" />
               Version History
             </h1>
-            <p className="text-gray-500 dark:text-gray-400">
+            <p className="text-slate-400">
               {capsule?.title || 'Capsule'} - {versions.length} versions
             </p>
           </div>
@@ -176,10 +176,10 @@ export default function VersionHistoryPage() {
       <Card className="p-4">
         <div className="flex items-start justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+            <h2 className="text-lg font-semibold text-slate-100">
               {capsule?.title || 'Untitled Capsule'}
             </h2>
-            <p className="text-sm text-gray-500 mt-1">
+            <p className="text-sm text-slate-400 mt-1">
               Type: {capsule?.type} | Trust: {capsule?.trust_level}
             </p>
           </div>
@@ -202,7 +202,7 @@ export default function VersionHistoryPage() {
       ) : (
         <div className="relative">
           {/* Timeline line */}
-          <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-gray-200 dark:bg-gray-700" />
+          <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-white/10" />
 
           {/* Versions */}
           <div className="space-y-4">
@@ -215,37 +215,37 @@ export default function VersionHistoryPage() {
                 <div key={version.id} className="relative pl-12">
                   {/* Timeline dot */}
                   <div
-                    className={`absolute left-4 w-4 h-4 rounded-full border-2 border-white dark:border-gray-900 ${
+                    className={`absolute left-4 w-4 h-4 rounded-full border-2 border-surface-900 ${
                       isLatest ? 'bg-green-500' : snapshotTypeIcons[version.snapshot_type]
                     }`}
                   />
 
                   <Card className="overflow-hidden">
                     <div
-                      className="p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50"
+                      className="p-4 cursor-pointer hover:bg-white/5"
                       onClick={() => setExpandedVersionId(isExpanded ? null : version.id)}
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                          <GitCommit className="w-5 h-5 text-gray-400" />
+                          <GitCommit className="w-5 h-5 text-slate-400" />
                           <div>
                             <div className="flex items-center gap-2">
-                              <span className="font-mono text-sm font-medium text-gray-900 dark:text-white">
+                              <span className="font-mono text-sm font-medium text-slate-100">
                                 v{version.version_number}
                               </span>
                               {isLatest && (
-                                <span className="px-2 py-0.5 text-xs bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 rounded">
+                                <span className="px-2 py-0.5 text-xs bg-green-500/15 text-green-400 rounded">
                                   CURRENT
                                 </span>
                               )}
-                              <span className={`px-2 py-0.5 text-xs rounded ${changeTypeColors[version.change_type] || 'bg-gray-100'}`}>
+                              <span className={`px-2 py-0.5 text-xs rounded ${changeTypeColors[version.change_type] || 'bg-white/5'}`}>
                                 {version.change_type.toUpperCase()}
                               </span>
-                              <span className={`px-2 py-0.5 text-xs rounded ${version.snapshot_type === 'full' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300' : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300'}`}>
+                              <span className={`px-2 py-0.5 text-xs rounded ${version.snapshot_type === 'full' ? 'bg-blue-500/15 text-blue-400' : 'bg-yellow-500/15 text-yellow-400'}`}>
                                 {version.snapshot_type.toUpperCase()}
                               </span>
                             </div>
-                            <div className="flex items-center gap-4 mt-1 text-sm text-gray-500">
+                            <div className="flex items-center gap-4 mt-1 text-sm text-slate-400">
                               <span className="flex items-center gap-1">
                                 <Clock className="w-3 h-3" />
                                 {formatDate(version.created_at)}
@@ -273,34 +273,34 @@ export default function VersionHistoryPage() {
                             </Button>
                           )}
                           {isExpanded ? (
-                            <ChevronUp className="w-5 h-5 text-gray-400" />
+                            <ChevronUp className="w-5 h-5 text-slate-400" />
                           ) : (
-                            <ChevronDown className="w-5 h-5 text-gray-400" />
+                            <ChevronDown className="w-5 h-5 text-slate-400" />
                           )}
                         </div>
                       </div>
                     </div>
 
                     {isExpanded && (
-                      <div className="px-4 pb-4 border-t border-gray-200 dark:border-gray-700">
+                      <div className="px-4 pb-4 border-t border-white/10">
                         <div className="mt-4 space-y-3">
                           <div className="grid grid-cols-2 gap-4 text-sm">
                             <div>
-                              <span className="text-gray-500">Version ID:</span>
-                              <code className="ml-2 text-xs bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded">
+                              <span className="text-slate-400">Version ID:</span>
+                              <code className="ml-2 text-xs bg-white/5 px-2 py-0.5 rounded">
                                 {version.id}
                               </code>
                             </div>
                             <div>
-                              <span className="text-gray-500">Content Hash:</span>
-                              <code className="ml-2 text-xs bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded">
+                              <span className="text-slate-400">Content Hash:</span>
+                              <code className="ml-2 text-xs bg-white/5 px-2 py-0.5 rounded">
                                 {version.content_hash?.substring(0, 12)}...
                               </code>
                             </div>
                             {version.parent_version_id && (
                               <div>
-                                <span className="text-gray-500">Parent Version:</span>
-                                <code className="ml-2 text-xs bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded">
+                                <span className="text-slate-400">Parent Version:</span>
+                                <code className="ml-2 text-xs bg-white/5 px-2 py-0.5 rounded">
                                   {version.parent_version_id.substring(0, 12)}...
                                 </code>
                               </div>
@@ -309,8 +309,8 @@ export default function VersionHistoryPage() {
 
                           {version.content_preview && (
                             <div>
-                              <span className="text-sm text-gray-500">Content Preview:</span>
-                              <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg text-sm font-mono whitespace-pre-wrap">
+                              <span className="text-sm text-slate-400">Content Preview:</span>
+                              <div className="mt-2 p-3 bg-white/5 rounded-lg text-sm font-mono whitespace-pre-wrap">
                                 {version.content_preview}
                               </div>
                             </div>
@@ -366,35 +366,35 @@ export default function VersionHistoryPage() {
           <div className="space-y-4">
             {/* Summary */}
             <div className="flex items-center gap-4 text-sm">
-              <span className="text-green-600">+{diffData.lines_added} added</span>
-              <span className="text-red-600">-{diffData.lines_removed} removed</span>
-              <span className="text-gray-500">{diffData.changes.length} changes</span>
+              <span className="text-green-400">+{diffData.lines_added} added</span>
+              <span className="text-red-400">-{diffData.lines_removed} removed</span>
+              <span className="text-slate-400">{diffData.changes.length} changes</span>
             </div>
 
             {/* Changes */}
             <div className="space-y-2 max-h-96 overflow-y-auto">
               {diffData.changes.length === 0 ? (
-                <p className="text-gray-500 text-center py-4">No changes between versions</p>
+                <p className="text-slate-400 text-center py-4">No changes between versions</p>
               ) : (
                 diffData.changes.map((change, i) => (
                   <div
                     key={i}
                     className={`p-3 rounded-lg ${
                       change.change_type === 'added'
-                        ? 'bg-green-50 dark:bg-green-900/20 border-l-4 border-green-500'
+                        ? 'bg-green-500/10 border-l-4 border-green-500'
                         : change.change_type === 'removed'
-                        ? 'bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500'
-                        : 'bg-yellow-50 dark:bg-yellow-900/20 border-l-4 border-yellow-500'
+                        ? 'bg-red-500/10 border-l-4 border-red-500'
+                        : 'bg-yellow-500/10 border-l-4 border-yellow-500'
                     }`}
                   >
                     <div className="flex items-center gap-2 mb-1">
                       <span className="font-medium text-sm">{change.field}</span>
                       <span className={`text-xs px-2 py-0.5 rounded ${
                         change.change_type === 'added'
-                          ? 'bg-green-200 text-green-800'
+                          ? 'bg-green-500/15 text-green-400'
                           : change.change_type === 'removed'
-                          ? 'bg-red-200 text-red-800'
-                          : 'bg-yellow-200 text-yellow-800'
+                          ? 'bg-red-500/15 text-red-400'
+                          : 'bg-yellow-500/15 text-yellow-400'
                       }`}>
                         {change.change_type}
                       </span>
@@ -402,16 +402,16 @@ export default function VersionHistoryPage() {
                     <div className="text-sm space-y-1">
                       {change.old_value && (
                         <div className="flex gap-2">
-                          <span className="text-red-600 font-mono">-</span>
-                          <span className="text-gray-600 dark:text-gray-400 font-mono text-xs">
+                          <span className="text-red-400 font-mono">-</span>
+                          <span className="text-slate-400 font-mono text-xs">
                             {change.old_value}
                           </span>
                         </div>
                       )}
                       {change.new_value && (
                         <div className="flex gap-2">
-                          <span className="text-green-600 font-mono">+</span>
-                          <span className="text-gray-600 dark:text-gray-400 font-mono text-xs">
+                          <span className="text-green-400 font-mono">+</span>
+                          <span className="text-slate-400 font-mono text-xs">
                             {change.new_value}
                           </span>
                         </div>
@@ -423,7 +423,7 @@ export default function VersionHistoryPage() {
             </div>
 
             {/* Actions */}
-            <div className="flex justify-end pt-4 border-t border-gray-200 dark:border-gray-700">
+            <div className="flex justify-end pt-4 border-t border-white/10">
               <Button
                 variant="outline"
                 onClick={() => setShowDiffModal(false)}
@@ -433,7 +433,7 @@ export default function VersionHistoryPage() {
             </div>
           </div>
         ) : (
-          <p className="text-gray-500 text-center py-4">Failed to load diff</p>
+          <p className="text-slate-400 text-center py-4">Failed to load diff</p>
         )}
       </Modal>
     </div>

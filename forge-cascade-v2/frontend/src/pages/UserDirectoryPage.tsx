@@ -24,11 +24,11 @@ import { useAuthStore } from '../stores/authStore';
 const TRUST_LEVELS = ['QUARANTINE', 'SANDBOX', 'STANDARD', 'TRUSTED', 'CORE'];
 
 const trustLevelColors: Record<string, string> = {
-  QUARANTINE: 'bg-red-100 text-red-700 border-red-200',
-  SANDBOX: 'bg-amber-100 text-amber-700 border-amber-200',
-  STANDARD: 'bg-blue-100 text-blue-700 border-blue-200',
-  TRUSTED: 'bg-emerald-100 text-emerald-700 border-emerald-200',
-  CORE: 'bg-violet-100 text-violet-700 border-violet-200',
+  QUARANTINE: 'bg-red-500/15 text-red-400 border-red-500/30',
+  SANDBOX: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
+  STANDARD: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
+  TRUSTED: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
+  CORE: 'bg-violet-500/15 text-violet-400 border-violet-500/30',
 };
 
 const trustLevelGradients: Record<string, string> = {
@@ -76,11 +76,11 @@ export default function UserDirectoryPage() {
 
   if (!canViewDirectory) {
     return (
-      <div className="p-6 max-w-7xl mx-auto">
+      <div className="px-3 sm:px-4 lg:px-6 py-4 sm:py-6 max-w-7xl mx-auto">
         <Card className="p-12 text-center">
-          <Shield className="w-16 h-16 text-slate-300 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-slate-800 mb-2">Access Restricted</h2>
-          <p className="text-slate-500 max-w-md mx-auto">
+          <Shield className="w-16 h-16 text-slate-400 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-slate-100 mb-2">Access Restricted</h2>
+          <p className="text-slate-400 max-w-md mx-auto">
             The User Directory is only available to TRUSTED and CORE level users.
             Continue contributing to the community to increase your trust level.
           </p>
@@ -90,16 +90,16 @@ export default function UserDirectoryPage() {
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="px-3 sm:px-4 lg:px-6 py-4 sm:py-6 max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800 mb-2">User Directory</h1>
-          <p className="text-slate-500">
+          <h1 className="text-2xl font-bold text-slate-100 mb-2">User Directory</h1>
+          <p className="text-slate-400">
             Browse and search community members
           </p>
         </div>
-        <div className="flex items-center gap-2 text-sm text-slate-500">
+        <div className="flex items-center gap-2 text-sm text-slate-400">
           <Users className="w-4 h-4" />
           <span>{users.length} users</span>
         </div>
@@ -207,10 +207,10 @@ function UserCard({
     <Card
       hover
       onClick={onClick}
-      className={`relative overflow-hidden ${isCurrentUser ? 'ring-2 ring-sky-500' : ''}`}
+      className={`relative overflow-hidden ${isCurrentUser ? 'ring-2 ring-forge-500' : ''}`}
     >
       {isCurrentUser && (
-        <div className="absolute top-2 right-2 px-2 py-0.5 bg-sky-100 text-sky-700 text-xs rounded-full">
+        <div className="absolute top-2 right-2 px-2 py-0.5 bg-forge-500/10 text-forge-400 text-xs rounded-full">
           You
         </div>
       )}
@@ -223,16 +223,16 @@ function UserCard({
 
         {/* Info */}
         <div className="flex-1 min-w-0">
-          <h3 className="font-semibold text-slate-800 truncate">
+          <h3 className="font-semibold text-slate-100 truncate">
             {user.display_name || user.username}
           </h3>
-          <p className="text-sm text-slate-500 truncate">@{user.username}</p>
+          <p className="text-sm text-slate-400 truncate">@{user.username}</p>
 
           <div className="flex items-center gap-2 mt-2">
             <span className={`text-xs px-2 py-0.5 rounded-full border ${trustLevelColors[user.trust_level]}`}>
               {user.trust_level}
             </span>
-            <span className="text-xs text-slate-500">
+            <span className="text-xs text-slate-400">
               Score: {user.trust_score.toFixed(0)}
             </span>
           </div>
@@ -240,7 +240,7 @@ function UserCard({
       </div>
 
       {/* Stats */}
-      <div className="flex items-center gap-4 mt-4 pt-4 border-t border-slate-100 text-xs text-slate-500">
+      <div className="flex items-center gap-4 mt-4 pt-4 border-t border-white/10 text-xs text-slate-400">
         {user.capsule_count !== undefined && (
           <span>{user.capsule_count} capsules</span>
         )}
@@ -283,16 +283,16 @@ function UserDetailModal({
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-xl font-bold text-slate-800">
+              <h2 className="text-xl font-bold text-slate-100">
                 {user.display_name || user.username}
               </h2>
               {isCurrentUser && (
-                <span className="px-2 py-0.5 bg-sky-100 text-sky-700 text-xs rounded-full">
+                <span className="px-2 py-0.5 bg-forge-500/10 text-forge-400 text-xs rounded-full">
                   You
                 </span>
               )}
             </div>
-            <p className="text-slate-500">@{user.username}</p>
+            <p className="text-slate-400">@{user.username}</p>
             <span className={`inline-block mt-2 text-sm px-3 py-1 rounded-full border ${trustLevelColors[user.trust_level]}`}>
               {user.trust_level}
             </span>
@@ -301,56 +301,56 @@ function UserDetailModal({
 
         {/* Stats Grid */}
         <div className="grid grid-cols-2 gap-4">
-          <div className="p-4 bg-slate-50 rounded-lg">
-            <div className="flex items-center gap-2 text-slate-500 mb-1">
+          <div className="p-4 bg-white/5 rounded-lg">
+            <div className="flex items-center gap-2 text-slate-400 mb-1">
               <Award className="w-4 h-4" />
               <span className="text-sm">Trust Score</span>
             </div>
-            <p className="text-2xl font-bold text-slate-800">{user.trust_score.toFixed(0)}</p>
+            <p className="text-2xl font-bold text-slate-100">{user.trust_score.toFixed(0)}</p>
           </div>
 
           {user.capsule_count !== undefined && (
-            <div className="p-4 bg-slate-50 rounded-lg">
-              <div className="flex items-center gap-2 text-slate-500 mb-1">
+            <div className="p-4 bg-white/5 rounded-lg">
+              <div className="flex items-center gap-2 text-slate-400 mb-1">
                 <Users className="w-4 h-4" />
                 <span className="text-sm">Capsules</span>
               </div>
-              <p className="text-2xl font-bold text-slate-800">{user.capsule_count}</p>
+              <p className="text-2xl font-bold text-slate-100">{user.capsule_count}</p>
             </div>
           )}
 
           {user.vote_count !== undefined && (
-            <div className="p-4 bg-slate-50 rounded-lg">
-              <div className="flex items-center gap-2 text-slate-500 mb-1">
+            <div className="p-4 bg-white/5 rounded-lg">
+              <div className="flex items-center gap-2 text-slate-400 mb-1">
                 <TrendingUp className="w-4 h-4" />
                 <span className="text-sm">Votes Cast</span>
               </div>
-              <p className="text-2xl font-bold text-slate-800">{user.vote_count}</p>
+              <p className="text-2xl font-bold text-slate-100">{user.vote_count}</p>
             </div>
           )}
 
-          <div className="p-4 bg-slate-50 rounded-lg">
-            <div className="flex items-center gap-2 text-slate-500 mb-1">
+          <div className="p-4 bg-white/5 rounded-lg">
+            <div className="flex items-center gap-2 text-slate-400 mb-1">
               <Calendar className="w-4 h-4" />
               <span className="text-sm">Joined</span>
             </div>
-            <p className="text-lg font-semibold text-slate-800">
+            <p className="text-lg font-semibold text-slate-100">
               {format(new Date(user.created_at), 'MMM d, yyyy')}
             </p>
           </div>
         </div>
 
         {/* Additional Info */}
-        <div className="space-y-3 pt-4 border-t border-slate-200">
+        <div className="space-y-3 pt-4 border-t border-white/10">
           <div className="flex items-center gap-3">
             <User className="w-4 h-4 text-slate-400" />
-            <span className="text-sm text-slate-600">User ID: {user.id}</span>
+            <span className="text-sm text-slate-300">User ID: {user.id}</span>
           </div>
 
           {user.last_active_at && (
             <div className="flex items-center gap-3">
               <Calendar className="w-4 h-4 text-slate-400" />
-              <span className="text-sm text-slate-600">
+              <span className="text-sm text-slate-300">
                 Last active: {format(new Date(user.last_active_at), 'PPpp')}
               </span>
             </div>
@@ -359,14 +359,14 @@ function UserDetailModal({
 
         {/* Trust Level Description */}
         <div className={`p-4 rounded-lg ${
-          user.trust_level === 'CORE' ? 'bg-violet-50 border border-violet-200' :
-          user.trust_level === 'TRUSTED' ? 'bg-emerald-50 border border-emerald-200' :
-          user.trust_level === 'STANDARD' ? 'bg-blue-50 border border-blue-200' :
-          user.trust_level === 'SANDBOX' ? 'bg-amber-50 border border-amber-200' :
-          'bg-red-50 border border-red-200'
+          user.trust_level === 'CORE' ? 'bg-violet-500/10 border border-violet-500/30' :
+          user.trust_level === 'TRUSTED' ? 'bg-emerald-500/10 border border-emerald-500/30' :
+          user.trust_level === 'STANDARD' ? 'bg-blue-500/10 border border-blue-500/30' :
+          user.trust_level === 'SANDBOX' ? 'bg-amber-500/10 border border-amber-500/30' :
+          'bg-red-500/10 border border-red-500/30'
         }`}>
-          <h4 className="font-medium text-slate-800 mb-1">Trust Level: {user.trust_level}</h4>
-          <p className="text-sm text-slate-600">
+          <h4 className="font-medium text-slate-100 mb-1">Trust Level: {user.trust_level}</h4>
+          <p className="text-sm text-slate-300">
             {user.trust_level === 'CORE' && 'Core member with full system access and administrative capabilities.'}
             {user.trust_level === 'TRUSTED' && 'Trusted member with access to advanced features and federation.'}
             {user.trust_level === 'STANDARD' && 'Standard member with full voting and capsule creation rights.'}

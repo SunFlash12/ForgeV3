@@ -25,7 +25,7 @@ export function Logo({ size = 'md', showText = true, className = '' }: LogoProps
         <div
           className="absolute inset-0 blur-md opacity-50"
           style={{
-            background: 'linear-gradient(135deg, #0ea5e9 0%, #8b5cf6 100%)',
+            background: 'linear-gradient(135deg, #00d4ff 0%, #8b5cf6 100%)',
             borderRadius: '30%',
           }}
         />
@@ -42,12 +42,12 @@ export function Logo({ size = 'md', showText = true, className = '' }: LogoProps
           {/* Gradient definitions with unique IDs */}
           <defs>
             <linearGradient id={`forgeGradient-${id}`} x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#0ea5e9" />
+              <stop offset="0%" stopColor="#00d4ff" />
               <stop offset="50%" stopColor="#6366f1" />
               <stop offset="100%" stopColor="#8b5cf6" />
             </linearGradient>
             <linearGradient id={`innerGlow-${id}`} x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#38bdf8" />
+              <stop offset="0%" stopColor="#00d4ff" />
               <stop offset="100%" stopColor="#a78bfa" />
             </linearGradient>
           </defs>
@@ -101,7 +101,7 @@ export function Logo({ size = 'md', showText = true, className = '' }: LogoProps
       </div>
 
       {showText && (
-        <span className={`font-bold ${text} bg-gradient-to-r from-sky-500 via-indigo-500 to-violet-500 bg-clip-text text-transparent`}>
+        <span className={`font-bold ${text} bg-gradient-to-r from-[#00d4ff] via-forge-400 to-[#7c3aed] bg-clip-text text-transparent`}>
           FORGE
         </span>
       )}
@@ -124,7 +124,7 @@ export function LogoIcon({ size = 36, className = '' }: { size?: number; classNa
     >
       <defs>
         <linearGradient id={`forgeGradientIcon-${id}`} x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#0ea5e9" />
+          <stop offset="0%" stopColor="#00d4ff" />
           <stop offset="50%" stopColor="#6366f1" />
           <stop offset="100%" stopColor="#8b5cf6" />
         </linearGradient>

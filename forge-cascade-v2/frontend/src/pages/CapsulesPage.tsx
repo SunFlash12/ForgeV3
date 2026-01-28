@@ -54,10 +54,10 @@ function ToastContainer({ toasts, onRemove }: { toasts: Toast[]; onRemove: (id: 
           key={toast.id}
           className={`flex items-start gap-3 p-4 rounded-xl shadow-lg border backdrop-blur-sm animate-slide-in-right max-w-sm ${
             toast.type === 'success'
-              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
               : toast.type === 'error'
-              ? 'bg-red-50 border-red-200 text-red-800'
-              : 'bg-sky-50 border-sky-200 text-sky-800'
+              ? 'bg-red-500/10 border-red-500/30 text-red-400'
+              : 'bg-forge-500/10 border-forge-500/30 text-cyber-blue'
           }`}
         >
           {toast.type === 'success' ? (
@@ -65,7 +65,7 @@ function ToastContainer({ toasts, onRemove }: { toasts: Toast[]; onRemove: (id: 
           ) : toast.type === 'error' ? (
             <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
           ) : (
-            <Info className="w-5 h-5 text-sky-500 flex-shrink-0" />
+            <Info className="w-5 h-5 text-forge-400 flex-shrink-0" />
           )}
           <div className="flex-1">
             {toast.title && <p className="font-semibold text-sm">{toast.title}</p>}
@@ -73,7 +73,7 @@ function ToastContainer({ toasts, onRemove }: { toasts: Toast[]; onRemove: (id: 
           </div>
           <button
             onClick={() => onRemove(toast.id)}
-            className="text-slate-400 hover:text-slate-600"
+            className="text-slate-400 hover:text-slate-200"
           >
             <X className="w-4 h-4" />
           </button>
@@ -149,7 +149,7 @@ const typeColors: Record<CapsuleType, string> = {
   LESSON: 'bg-green-500/20 text-green-400 border-green-500/30',
   WARNING: 'bg-red-500/20 text-red-400 border-red-500/30',
   PRINCIPLE: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
-  MEMORY: 'bg-slate-500/20 text-slate-500 border-slate-500/30',
+  MEMORY: 'bg-slate-500/20 text-slate-400 border-slate-500/30',
   // Backend-only types (may appear in responses)
   KNOWLEDGE: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
   CODE: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
@@ -219,10 +219,10 @@ export default function CapsulesPage() {
       <ToastContainer toasts={toasts} onRemove={removeToast} />
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800 dark:text-white">Knowledge Capsules</h1>
-          <p className="text-slate-500 dark:text-slate-400">Manage institutional knowledge and wisdom</p>
+          <h1 className="text-2xl font-bold text-slate-100">Knowledge Capsules</h1>
+          <p className="text-slate-400">Manage institutional knowledge and wisdom</p>
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -247,13 +247,13 @@ export default function CapsulesPage() {
       {/* Search & Filters */}
       <div className="flex flex-col sm:flex-row gap-4">
         <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
           <input
             type="text"
             placeholder="Search capsules..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="input pl-10"
+            className="input pl-11"
           />
         </div>
         <div className="relative">
@@ -267,19 +267,19 @@ export default function CapsulesPage() {
               <option key={type} value={type}>{type}</option>
             ))}
           </select>
-          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
+          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
         </div>
       </div>
 
       {/* Results Info */}
       {searchQuery.length > 2 && (
         <div className="flex items-center justify-between text-sm">
-          <span className="text-slate-500">
+          <span className="text-slate-400">
             {isSearching ? 'Searching...' : `${searchResults?.length || 0} results for "${searchQuery}"`}
           </span>
           <button
             onClick={() => setSearchQuery('')}
-            className="text-sky-400 hover:text-forge-300 flex items-center gap-1"
+            className="text-forge-400 hover:text-forge-300 flex items-center gap-1"
           >
             <X className="w-4 h-4" /> Clear search
           </button>
@@ -327,8 +327,8 @@ export default function CapsulesPage() {
               onClick={() => setSearchParams({ page: page.toString() })}
               className={`w-10 h-10 rounded-lg transition-colors ${
                 page === capsulesData.page
-                  ? 'bg-sky-600 text-slate-800'
-                  : 'bg-slate-100 text-slate-500 hover:bg-slate-100'
+                  ? 'bg-forge-500 text-white'
+                  : 'bg-white/5 text-slate-400 hover:bg-white/10'
               }`}
             >
               {page}
@@ -401,14 +401,14 @@ function CapsuleCard({ capsule, onClick }: { capsule: Capsule; onClick: () => vo
           <TypeIcon className="w-3 h-3" />
           {capsule.type}
         </span>
-        <span className="text-xs text-slate-500 dark:text-slate-400">v{capsule.version}</span>
+        <span className="text-xs text-slate-400">v{capsule.version}</span>
       </div>
 
-      <h3 className="text-lg font-semibold text-slate-800 dark:text-white mb-2 line-clamp-2">
+      <h3 className="text-lg font-semibold text-slate-100 mb-2 line-clamp-2">
         {capsule.title}
       </h3>
 
-      <p className="text-sm text-slate-500 dark:text-slate-400 mb-4 line-clamp-3">
+      <p className="text-sm text-slate-400 mb-4 line-clamp-3">
         {capsule.content}
       </p>
 
@@ -416,18 +416,18 @@ function CapsuleCard({ capsule, onClick }: { capsule: Capsule; onClick: () => vo
         {capsule.tags.slice(0, 3).map((tag) => (
           <span
             key={tag}
-            className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-100 dark:bg-slate-800 rounded text-xs text-slate-600 dark:text-slate-400"
+            className="inline-flex items-center gap-1 px-2 py-0.5 bg-white/5 rounded text-xs text-slate-300"
           >
             <Tag className="w-3 h-3" />
             {tag}
           </span>
         ))}
         {capsule.tags.length > 3 && (
-          <span className="text-xs text-slate-500 dark:text-slate-400">+{capsule.tags.length - 3} more</span>
+          <span className="text-xs text-slate-400">+{capsule.tags.length - 3} more</span>
         )}
       </div>
 
-      <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+      <div className="flex items-center justify-between text-xs text-slate-400">
         <div className="flex items-center gap-1">
           <Eye className="w-3 h-3" />
           {capsule.view_count}
@@ -459,8 +459,8 @@ const PIPELINE_STEPS = [
 function PipelineProgress({ step, isProcessing }: { step: number; isProcessing: boolean }) {
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
-        <Sparkles className="w-4 h-4 text-sky-500 animate-pulse" />
+      <div className="flex items-center gap-2 text-sm font-medium text-slate-200">
+        <Sparkles className="w-4 h-4 text-cyber-blue animate-pulse" />
         Processing through pipeline...
       </div>
       <div className="space-y-2">
@@ -473,10 +473,10 @@ function PipelineProgress({ step, isProcessing }: { step: number; isProcessing: 
               key={s.id}
               className={`flex items-center gap-3 p-2 rounded-lg transition-colors ${
                 isCurrent
-                  ? 'bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-800'
+                  ? 'bg-forge-500/10 border border-forge-500/30'
                   : isComplete
-                  ? 'bg-emerald-50 dark:bg-emerald-900/20'
-                  : 'bg-slate-50 dark:bg-slate-800/50'
+                  ? 'bg-emerald-500/10'
+                  : 'bg-white/5'
               }`}
             >
               <div
@@ -484,8 +484,8 @@ function PipelineProgress({ step, isProcessing }: { step: number; isProcessing: 
                   isComplete
                     ? 'bg-emerald-500 text-white'
                     : isCurrent
-                    ? 'bg-sky-500 text-white'
-                    : 'bg-slate-200 dark:bg-slate-700 text-slate-400'
+                    ? 'bg-forge-500 text-white'
+                    : 'bg-white/10 text-slate-400'
                 }`}
               >
                 {isComplete ? (
@@ -500,13 +500,13 @@ function PipelineProgress({ step, isProcessing }: { step: number; isProcessing: 
                 <p
                   className={`text-sm font-medium ${
                     isCurrent || isComplete
-                      ? 'text-slate-800 dark:text-white'
-                      : 'text-slate-400 dark:text-slate-500'
+                      ? 'text-slate-100'
+                      : 'text-slate-400'
                   }`}
                 >
                   {s.name}
                 </p>
-                <p className="text-xs text-slate-500 dark:text-slate-400">{s.description}</p>
+                <p className="text-xs text-slate-400">{s.description}</p>
               </div>
             </div>
           );
@@ -644,7 +644,7 @@ function CreateCapsuleModal({ isOpen, onClose, onSuccess, onError }: CreateCapsu
               <button
                 type="button"
                 onClick={() => setShowTypeInfo(!showTypeInfo)}
-                className="text-xs text-sky-500 hover:text-sky-600 flex items-center gap-1"
+                className="text-xs text-cyber-blue hover:text-cyan-300 flex items-center gap-1"
               >
                 <Info className="w-3 h-3" />
                 {showTypeInfo ? 'Hide info' : 'What are these?'}
@@ -652,7 +652,7 @@ function CreateCapsuleModal({ isOpen, onClose, onSuccess, onError }: CreateCapsu
             </div>
 
             {showTypeInfo && (
-              <div className="mb-3 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg text-sm text-slate-600 dark:text-slate-400">
+              <div className="mb-3 p-3 bg-white/5 rounded-lg text-sm text-slate-300">
                 <p className="mb-2">Choose the type that best describes your knowledge:</p>
                 <ul className="space-y-1 text-xs">
                   {CAPSULE_TYPES.map((type) => {
@@ -682,20 +682,20 @@ function CreateCapsuleModal({ isOpen, onClose, onSuccess, onError }: CreateCapsu
                     onClick={() => setFormData({ ...formData, type })}
                     className={`flex items-center gap-2 p-3 rounded-lg border-2 transition-all text-left ${
                       isSelected
-                        ? 'border-sky-500 bg-sky-50 dark:bg-sky-900/20'
-                        : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+                        ? 'border-forge-500 bg-forge-500/10'
+                        : 'border-white/10 hover:border-white/20'
                     }`}
                   >
                     <Icon
                       className={`w-5 h-5 ${
-                        isSelected ? 'text-sky-500' : 'text-slate-400'
+                        isSelected ? 'text-cyber-blue' : 'text-slate-400'
                       }`}
                     />
                     <span
                       className={`text-sm font-medium ${
                         isSelected
-                          ? 'text-sky-700 dark:text-sky-300'
-                          : 'text-slate-600 dark:text-slate-400'
+                          ? 'text-cyan-300'
+                          : 'text-slate-300'
                       }`}
                     >
                       {type}
@@ -707,7 +707,7 @@ function CreateCapsuleModal({ isOpen, onClose, onSuccess, onError }: CreateCapsu
 
             {/* Selected type hint */}
             {selectedTypeInfo?.example && (
-              <p className="mt-2 text-xs text-slate-500 dark:text-slate-400 italic">
+              <p className="mt-2 text-xs text-slate-400 italic">
                 {selectedTypeInfo.example}
               </p>
             )}
@@ -736,7 +736,7 @@ function CreateCapsuleModal({ isOpen, onClose, onSuccess, onError }: CreateCapsu
               placeholder="Enter the knowledge content..."
               required
             />
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+            <p className="mt-1 text-xs text-slate-400">
               Be specific and concise. Include context and examples if helpful.
             </p>
           </div>
@@ -761,14 +761,14 @@ function CreateCapsuleModal({ isOpen, onClose, onSuccess, onError }: CreateCapsu
               {formData.tags?.map((tag) => (
                 <span
                   key={tag}
-                  className="inline-flex items-center gap-1 px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded text-sm text-slate-600 dark:text-slate-400"
+                  className="inline-flex items-center gap-1 px-2 py-1 bg-white/5 rounded text-sm text-slate-300"
                 >
                   <Tag className="w-3 h-3" />
                   {tag}
                   <button
                     type="button"
                     onClick={() => handleRemoveTag(tag)}
-                    className="text-slate-500 hover:text-slate-800 dark:hover:text-slate-300"
+                    className="text-slate-400 hover:text-slate-100"
                   >
                     <X className="w-3 h-3" />
                   </button>
@@ -782,7 +782,7 @@ function CreateCapsuleModal({ isOpen, onClose, onSuccess, onError }: CreateCapsu
 
           {/* Validation Summary */}
           {!isValid && (formData.title || formData.content) && (
-            <div className="flex items-center gap-2 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg text-sm text-amber-700 dark:text-amber-400">
+            <div className="flex items-center gap-2 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg text-sm text-amber-400">
               <AlertTriangle className="w-4 h-4" />
               {!formData.title.trim()
                 ? 'Please enter a title'
@@ -990,14 +990,14 @@ function CapsuleDetailModal({ capsule, onClose, onDelete, onUpdate, onFork, canE
               {editData.tags.map((tag) => (
                 <span
                   key={tag}
-                  className="inline-flex items-center gap-1 px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded text-sm text-slate-600 dark:text-slate-400"
+                  className="inline-flex items-center gap-1 px-2 py-1 bg-white/5 rounded text-sm text-slate-300"
                 >
                   <Tag className="w-3 h-3" />
                   {tag}
                   <button
                     type="button"
                     onClick={() => handleRemoveTag(tag)}
-                    className="text-slate-500 hover:text-slate-800 dark:hover:text-slate-300"
+                    className="text-slate-400 hover:text-slate-100"
                   >
                     <X className="w-3 h-3" />
                   </button>
@@ -1010,7 +1010,7 @@ function CapsuleDetailModal({ capsule, onClose, onDelete, onUpdate, onFork, canE
           </div>
 
           {updateMutation.isError && (
-            <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-400">
+            <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-sm text-red-400">
               <AlertCircle className="w-4 h-4" />
               {updateMutation.error?.message || 'Failed to update capsule'}
             </div>
@@ -1024,18 +1024,18 @@ function CapsuleDetailModal({ capsule, onClose, onDelete, onUpdate, onFork, canE
               <TypeIcon className="w-3 h-3" />
               {capsule.type}
             </span>
-            <span className="text-sm text-slate-500 dark:text-slate-400">Version {capsule.version}</span>
+            <span className="text-sm text-slate-400">Version {capsule.version}</span>
           </div>
 
           <div className="max-w-none">
-            <p className="text-slate-600 dark:text-slate-300 whitespace-pre-wrap">{capsule.content}</p>
+            <p className="text-slate-300 whitespace-pre-wrap">{capsule.content}</p>
           </div>
 
           <div className="flex flex-wrap gap-2">
             {capsule.tags.map((tag) => (
               <span
                 key={tag}
-                className="inline-flex items-center gap-1 px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded text-sm text-slate-600 dark:text-slate-400"
+                className="inline-flex items-center gap-1 px-2 py-1 bg-white/5 rounded text-sm text-slate-300"
               >
                 <Tag className="w-3 h-3" />
                 {tag}
@@ -1043,30 +1043,30 @@ function CapsuleDetailModal({ capsule, onClose, onDelete, onUpdate, onFork, canE
             ))}
           </div>
 
-          <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+          <div className="grid grid-cols-2 gap-4 pt-4 border-t border-white/10">
             <div>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Trust Score</p>
-              <p className="text-lg font-semibold text-slate-800 dark:text-white">{capsule.trust_level}</p>
+              <p className="text-xs text-slate-400 mb-1">Trust Score</p>
+              <p className="text-lg font-semibold text-slate-100">{capsule.trust_level}</p>
             </div>
             <div>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Access Count</p>
-              <p className="text-lg font-semibold text-slate-800 dark:text-white">{capsule.view_count}</p>
+              <p className="text-xs text-slate-400 mb-1">Access Count</p>
+              <p className="text-lg font-semibold text-slate-100">{capsule.view_count}</p>
             </div>
             <div>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Created</p>
-              <p className="text-sm text-slate-800 dark:text-slate-200">{new Date(capsule.created_at).toLocaleString()}</p>
+              <p className="text-xs text-slate-400 mb-1">Created</p>
+              <p className="text-sm text-slate-200">{new Date(capsule.created_at).toLocaleString()}</p>
             </div>
             <div>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Updated</p>
-              <p className="text-sm text-slate-800 dark:text-slate-200">{new Date(capsule.updated_at).toLocaleString()}</p>
+              <p className="text-xs text-slate-400 mb-1">Updated</p>
+              <p className="text-sm text-slate-200">{new Date(capsule.updated_at).toLocaleString()}</p>
             </div>
           </div>
 
           {/* Lineage Section */}
-          <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
+          <div className="pt-4 border-t border-white/10">
             <button
               onClick={() => setShowLineage(!showLineage)}
-              className="w-full flex items-center justify-between text-sm font-medium text-slate-800 dark:text-white mb-2"
+              className="w-full flex items-center justify-between text-sm font-medium text-slate-100 mb-2"
             >
               <span className="flex items-center gap-2">
                 <GitBranch className="w-4 h-4" />
@@ -1078,7 +1078,7 @@ function CapsuleDetailModal({ capsule, onClose, onDelete, onUpdate, onFork, canE
             {showLineage && (
               <div className="mt-3 space-y-3">
                 {lineageLoading ? (
-                  <div className="flex items-center gap-2 text-slate-500">
+                  <div className="flex items-center gap-2 text-slate-400">
                     <Loader2 className="w-4 h-4 animate-spin" />
                     <span className="text-sm">Loading lineage...</span>
                   </div>
@@ -1087,18 +1087,18 @@ function CapsuleDetailModal({ capsule, onClose, onDelete, onUpdate, onFork, canE
                     {/* Ancestors */}
                     {lineageData.ancestors && lineageData.ancestors.length > 0 && (
                       <div>
-                        <p className="text-xs text-slate-500 uppercase tracking-wider mb-2">Ancestors</p>
+                        <p className="text-xs text-slate-400 uppercase tracking-wider mb-2">Ancestors</p>
                         <div className="space-y-2">
                           {lineageData.ancestors.map((ancestor: { id: string; title: string; type: string; depth: number }, idx: number) => (
                             <div
                               key={ancestor.id}
-                              className="flex items-center gap-2 p-2 bg-slate-50 dark:bg-slate-800 rounded-lg"
+                              className="flex items-center gap-2 p-2 bg-white/5 rounded-lg"
                               style={{ marginLeft: `${idx * 12}px` }}
                             >
                               <GitBranch className="w-4 h-4 text-slate-400" />
                               <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium text-slate-800 dark:text-white truncate">{ancestor.title}</p>
-                                <p className="text-xs text-slate-500">{ancestor.type} • Depth: {ancestor.depth}</p>
+                                <p className="text-sm font-medium text-slate-100 truncate">{ancestor.title}</p>
+                                <p className="text-xs text-slate-400">{ancestor.type} • Depth: {ancestor.depth}</p>
                               </div>
                             </div>
                           ))}
@@ -1107,14 +1107,14 @@ function CapsuleDetailModal({ capsule, onClose, onDelete, onUpdate, onFork, canE
                     )}
 
                     {/* Current Capsule */}
-                    <div className="p-3 bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-800 rounded-lg">
+                    <div className="p-3 bg-forge-500/10 border border-forge-500/30 rounded-lg">
                       <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 bg-sky-500 rounded-full flex items-center justify-center">
+                        <div className="w-6 h-6 bg-forge-500 rounded-full flex items-center justify-center">
                           <CheckCircle className="w-4 h-4 text-white" />
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-slate-800 dark:text-white">{capsule.title}</p>
-                          <p className="text-xs text-slate-500">Current capsule</p>
+                          <p className="text-sm font-medium text-slate-100">{capsule.title}</p>
+                          <p className="text-xs text-slate-400">Current capsule</p>
                         </div>
                       </div>
                     </div>
@@ -1122,17 +1122,17 @@ function CapsuleDetailModal({ capsule, onClose, onDelete, onUpdate, onFork, canE
                     {/* Descendants */}
                     {lineageData.descendants && lineageData.descendants.length > 0 && (
                       <div>
-                        <p className="text-xs text-slate-500 uppercase tracking-wider mb-2">Descendants (Forks)</p>
+                        <p className="text-xs text-slate-400 uppercase tracking-wider mb-2">Descendants (Forks)</p>
                         <div className="space-y-2">
                           {lineageData.descendants.map((descendant: { id: string; title: string; type: string; depth: number }) => (
                             <div
                               key={descendant.id}
-                              className="flex items-center gap-2 p-2 bg-slate-50 dark:bg-slate-800 rounded-lg"
+                              className="flex items-center gap-2 p-2 bg-white/5 rounded-lg"
                             >
                               <GitFork className="w-4 h-4 text-slate-400" />
                               <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium text-slate-800 dark:text-white truncate">{descendant.title}</p>
-                                <p className="text-xs text-slate-500">{descendant.type}</p>
+                                <p className="text-sm font-medium text-slate-100 truncate">{descendant.title}</p>
+                                <p className="text-xs text-slate-400">{descendant.type}</p>
                               </div>
                               <ExternalLink className="w-4 h-4 text-slate-400" />
                             </div>
@@ -1142,21 +1142,21 @@ function CapsuleDetailModal({ capsule, onClose, onDelete, onUpdate, onFork, canE
                     )}
 
                     {/* Stats */}
-                    <div className="flex items-center gap-4 text-xs text-slate-500">
+                    <div className="flex items-center gap-4 text-xs text-slate-400">
                       <span>Chain depth: {lineageData.depth || 0}</span>
                       <span>Forks: {capsule.fork_count || 0}</span>
                     </div>
                   </div>
                 ) : (
-                  <p className="text-sm text-slate-500">No lineage data available</p>
+                  <p className="text-sm text-slate-400">No lineage data available</p>
                 )}
 
                 {/* Integrity Check Button */}
-                <div className="pt-3 border-t border-slate-100 dark:border-slate-700">
+                <div className="pt-3 border-t border-white/10">
                   <button
                     onClick={() => refetchIntegrity()}
                     disabled={integrityLoading}
-                    className="flex items-center gap-2 text-sm text-sky-600 hover:text-sky-700"
+                    className="flex items-center gap-2 text-sm text-cyber-blue hover:text-cyan-300"
                   >
                     {integrityLoading ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
@@ -1169,32 +1169,32 @@ function CapsuleDetailModal({ capsule, onClose, onDelete, onUpdate, onFork, canE
                   {integrityData && (
                     <div className={`mt-2 p-3 rounded-lg ${
                       integrityData.is_valid
-                        ? 'bg-emerald-50 border border-emerald-200'
-                        : 'bg-red-50 border border-red-200'
+                        ? 'bg-emerald-500/10 border border-emerald-500/30'
+                        : 'bg-red-500/10 border border-red-500/30'
                     }`}>
                       <div className="flex items-center gap-2 mb-2">
                         {integrityData.is_valid ? (
-                          <CheckCircle className="w-5 h-5 text-emerald-600" />
+                          <CheckCircle className="w-5 h-5 text-emerald-400" />
                         ) : (
-                          <AlertCircle className="w-5 h-5 text-red-600" />
+                          <AlertCircle className="w-5 h-5 text-red-400" />
                         )}
                         <span className={`font-medium ${
-                          integrityData.is_valid ? 'text-emerald-800' : 'text-red-800'
+                          integrityData.is_valid ? 'text-emerald-400' : 'text-red-400'
                         }`}>
                           {integrityData.is_valid ? 'Integrity Verified' : 'Integrity Issues Found'}
                         </span>
                       </div>
                       <div className="text-xs space-y-1">
-                        <p className={integrityData.content_hash_valid ? 'text-emerald-600' : 'text-red-600'}>
+                        <p className={integrityData.content_hash_valid ? 'text-emerald-400' : 'text-red-400'}>
                           Content Hash: {integrityData.content_hash_valid ? 'Valid' : 'Invalid'}
                         </p>
                         {integrityData.signature_valid !== null && (
-                          <p className={integrityData.signature_valid ? 'text-emerald-600' : 'text-red-600'}>
+                          <p className={integrityData.signature_valid ? 'text-emerald-400' : 'text-red-400'}>
                             Signature: {integrityData.signature_valid ? 'Valid' : 'Invalid'}
                           </p>
                         )}
                         {integrityData.issues && integrityData.issues.length > 0 && (
-                          <div className="mt-2 text-red-600">
+                          <div className="mt-2 text-red-400">
                             <p className="font-medium">Issues:</p>
                             <ul className="list-disc list-inside">
                               {integrityData.issues.map((issue: string, idx: number) => (
@@ -1286,13 +1286,13 @@ function ForkCapsuleModal({ capsule, onClose, onSuccess }: ForkCapsuleModalProps
       }
     >
       <div className="space-y-4">
-        <div className="p-4 bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-800 rounded-lg">
+        <div className="p-4 bg-forge-500/10 border border-forge-500/30 rounded-lg">
           <div className="flex items-start gap-3">
-            <GitBranch className="w-5 h-5 text-sky-600 flex-shrink-0 mt-0.5" />
+            <GitBranch className="w-5 h-5 text-cyber-blue flex-shrink-0 mt-0.5" />
             <div>
-              <h4 className="font-medium text-sky-800 dark:text-sky-300">Forking from:</h4>
-              <p className="text-sm text-sky-700 dark:text-sky-400">{capsule.title}</p>
-              <p className="text-xs text-sky-600 dark:text-sky-500 mt-1">
+              <h4 className="font-medium text-cyan-300">Forking from:</h4>
+              <p className="text-sm text-cyan-300">{capsule.title}</p>
+              <p className="text-xs text-cyan-400 mt-1">
                 The new capsule will be linked to this parent in the lineage chain.
               </p>
             </div>
@@ -1329,13 +1329,13 @@ function ForkCapsuleModal({ capsule, onClose, onSuccess }: ForkCapsuleModalProps
             placeholder="Why are you creating this fork? What's different?"
             required
           />
-          <p className="text-xs text-slate-500 mt-1">
+          <p className="text-xs text-slate-400 mt-1">
             Explain why this fork is needed and what changes were made.
           </p>
         </div>
 
         {forkMutation.isError && (
-          <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-400">
+          <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-sm text-red-400">
             <AlertCircle className="w-4 h-4" />
             {forkMutation.error?.message || 'Failed to fork capsule'}
           </div>

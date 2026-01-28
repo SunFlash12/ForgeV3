@@ -48,9 +48,9 @@ interface ContradictionStats {
 type ResolutionType = 'keep_both' | 'supersede' | 'merge' | 'dismiss';
 
 const severityColors: Record<string, string> = {
-  high: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
-  medium: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300',
-  low: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
+  high: 'bg-red-500/15 text-red-400',
+  medium: 'bg-yellow-500/15 text-yellow-400',
+  low: 'bg-blue-500/15 text-blue-400',
 };
 
 export default function ContradictionsPage() {
@@ -128,12 +128,12 @@ export default function ContradictionsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+          <h1 className="text-2xl font-bold text-slate-100">
             Contradiction Resolution
           </h1>
-          <p className="text-gray-500 dark:text-gray-400">
+          <p className="text-slate-400">
             Review and resolve conflicting knowledge in the system
           </p>
         </div>
@@ -150,15 +150,15 @@ export default function ContradictionsPage() {
       </div>
 
       {/* Statistics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
         <Card className="p-4">
           <div className="flex items-center">
-            <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
-              <AlertTriangle className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+            <div className="p-2 bg-purple-500/15 rounded-lg">
+              <AlertTriangle className="w-5 h-5 text-purple-400" />
             </div>
             <div className="ml-4">
-              <p className="text-sm text-gray-500 dark:text-gray-400">Total</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">
+              <p className="text-sm text-slate-400">Total</p>
+              <p className="text-2xl font-bold text-slate-100">
                 {stats?.total || 0}
               </p>
             </div>
@@ -167,12 +167,12 @@ export default function ContradictionsPage() {
 
         <Card className="p-4">
           <div className="flex items-center">
-            <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-lg">
-              <XCircle className="w-5 h-5 text-red-600 dark:text-red-400" />
+            <div className="p-2 bg-red-500/15 rounded-lg">
+              <XCircle className="w-5 h-5 text-red-400" />
             </div>
             <div className="ml-4">
-              <p className="text-sm text-gray-500 dark:text-gray-400">Unresolved</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">
+              <p className="text-sm text-slate-400">Unresolved</p>
+              <p className="text-2xl font-bold text-slate-100">
                 {stats?.unresolved || 0}
               </p>
             </div>
@@ -181,12 +181,12 @@ export default function ContradictionsPage() {
 
         <Card className="p-4">
           <div className="flex items-center">
-            <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
-              <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
+            <div className="p-2 bg-green-500/15 rounded-lg">
+              <CheckCircle className="w-5 h-5 text-green-400" />
             </div>
             <div className="ml-4">
-              <p className="text-sm text-gray-500 dark:text-gray-400">Resolved</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">
+              <p className="text-sm text-slate-400">Resolved</p>
+              <p className="text-2xl font-bold text-slate-100">
                 {stats?.resolved || 0}
               </p>
             </div>
@@ -195,12 +195,12 @@ export default function ContradictionsPage() {
 
         <Card className="p-4">
           <div className="flex items-center">
-            <div className="p-2 bg-orange-100 dark:bg-orange-900/30 rounded-lg">
-              <AlertTriangle className="w-5 h-5 text-orange-600 dark:text-orange-400" />
+            <div className="p-2 bg-orange-500/15 rounded-lg">
+              <AlertTriangle className="w-5 h-5 text-orange-400" />
             </div>
             <div className="ml-4">
-              <p className="text-sm text-gray-500 dark:text-gray-400">High Severity</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">
+              <p className="text-sm text-slate-400">High Severity</p>
+              <p className="text-2xl font-bold text-slate-100">
                 {stats?.by_severity?.high || 0}
               </p>
             </div>
@@ -210,18 +210,18 @@ export default function ContradictionsPage() {
 
       {/* Filter */}
       <div className="flex items-center gap-4">
-        <Filter className="w-5 h-5 text-gray-400" />
+        <Filter className="w-5 h-5 text-slate-400" />
         <select
           value={severityFilter}
           onChange={(e) => setSeverityFilter(e.target.value)}
-          className="px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-sm"
+          className="px-3 py-2 bg-white/5 border border-white/15 rounded-lg text-sm"
         >
           <option value="all">All Severities</option>
           <option value="high">High</option>
           <option value="medium">Medium</option>
           <option value="low">Low</option>
         </select>
-        <span className="text-sm text-gray-500">
+        <span className="text-sm text-slate-400">
           {filteredContradictions.length} contradictions
         </span>
       </div>
@@ -238,7 +238,7 @@ export default function ContradictionsPage() {
           {filteredContradictions.map((contradiction) => (
             <Card key={contradiction.edge_id} className="overflow-hidden">
               <div
-                className="p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50"
+                className="p-4 cursor-pointer hover:bg-white/5"
                 onClick={() => setExpandedId(
                   expandedId === contradiction.edge_id ? null : contradiction.edge_id
                 )}
@@ -249,13 +249,13 @@ export default function ContradictionsPage() {
                       {contradiction.severity.toUpperCase()}
                     </span>
                     <div className="flex items-center gap-2">
-                      <span className="font-medium text-gray-900 dark:text-white">
+                      <span className="font-medium text-slate-100">
                         {contradiction.capsule_a.title || 'Untitled'}
                       </span>
                       <ArrowRight className="w-4 h-4 text-red-500" />
                       <XCircle className="w-4 h-4 text-red-500" />
                       <ArrowRight className="w-4 h-4 text-red-500" />
-                      <span className="font-medium text-gray-900 dark:text-white">
+                      <span className="font-medium text-slate-100">
                         {contradiction.capsule_b.title || 'Untitled'}
                       </span>
                     </div>
@@ -272,30 +272,30 @@ export default function ContradictionsPage() {
                       Resolve
                     </Button>
                     {expandedId === contradiction.edge_id ? (
-                      <ChevronUp className="w-5 h-5 text-gray-400" />
+                      <ChevronUp className="w-5 h-5 text-slate-400" />
                     ) : (
-                      <ChevronDown className="w-5 h-5 text-gray-400" />
+                      <ChevronDown className="w-5 h-5 text-slate-400" />
                     )}
                   </div>
                 </div>
               </div>
 
               {expandedId === contradiction.edge_id && (
-                <div className="px-4 pb-4 border-t border-gray-200 dark:border-gray-700">
+                <div className="px-4 pb-4 border-t border-white/10">
                   <div className="grid grid-cols-2 gap-4 mt-4">
                     {/* Capsule A */}
-                    <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                      <h4 className="font-medium text-gray-900 dark:text-white mb-2">
+                    <div className="p-4 bg-white/5 rounded-lg">
+                      <h4 className="font-medium text-slate-100 mb-2">
                         {contradiction.capsule_a.title || 'Untitled'}
                       </h4>
                       <div className="space-y-1 text-sm">
-                        <p className="text-gray-500">
-                          Type: <span className="text-gray-700 dark:text-gray-300">{contradiction.capsule_a.type}</span>
+                        <p className="text-slate-400">
+                          Type: <span className="text-slate-200">{contradiction.capsule_a.type}</span>
                         </p>
-                        <p className="text-gray-500">
-                          Trust: <span className="text-gray-700 dark:text-gray-300">{contradiction.capsule_a.trust_level}</span>
+                        <p className="text-slate-400">
+                          Trust: <span className="text-slate-200">{contradiction.capsule_a.trust_level}</span>
                         </p>
-                        <p className="text-gray-500">
+                        <p className="text-slate-400">
                           ID: <code className="text-xs">{contradiction.capsule_a.id}</code>
                         </p>
                       </div>
@@ -311,18 +311,18 @@ export default function ContradictionsPage() {
                     </div>
 
                     {/* Capsule B */}
-                    <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                      <h4 className="font-medium text-gray-900 dark:text-white mb-2">
+                    <div className="p-4 bg-white/5 rounded-lg">
+                      <h4 className="font-medium text-slate-100 mb-2">
                         {contradiction.capsule_b.title || 'Untitled'}
                       </h4>
                       <div className="space-y-1 text-sm">
-                        <p className="text-gray-500">
-                          Type: <span className="text-gray-700 dark:text-gray-300">{contradiction.capsule_b.type}</span>
+                        <p className="text-slate-400">
+                          Type: <span className="text-slate-200">{contradiction.capsule_b.type}</span>
                         </p>
-                        <p className="text-gray-500">
-                          Trust: <span className="text-gray-700 dark:text-gray-300">{contradiction.capsule_b.trust_level}</span>
+                        <p className="text-slate-400">
+                          Trust: <span className="text-slate-200">{contradiction.capsule_b.trust_level}</span>
                         </p>
-                        <p className="text-gray-500">
+                        <p className="text-slate-400">
                           ID: <code className="text-xs">{contradiction.capsule_b.id}</code>
                         </p>
                       </div>
@@ -341,12 +341,12 @@ export default function ContradictionsPage() {
                   {/* Tags */}
                   {contradiction.tags.length > 0 && (
                     <div className="mt-4">
-                      <p className="text-sm text-gray-500 mb-2">Related Tags:</p>
+                      <p className="text-sm text-slate-400 mb-2">Related Tags:</p>
                       <div className="flex flex-wrap gap-2">
                         {contradiction.tags.map((tag, i) => (
                           <span
                             key={i}
-                            className="px-2 py-1 text-xs bg-gray-200 dark:bg-gray-700 rounded"
+                            className="px-2 py-1 text-xs bg-white/10 rounded"
                           >
                             {tag}
                           </span>
@@ -369,10 +369,10 @@ export default function ContradictionsPage() {
       >
         {selectedContradiction && (
           <div className="space-y-4">
-            <p className="text-gray-600 dark:text-gray-300">
+            <p className="text-slate-300">
               Choose how to resolve the contradiction between:
             </p>
-            <div className="p-3 bg-gray-100 dark:bg-gray-800 rounded-lg text-sm">
+            <div className="p-3 bg-white/5 rounded-lg text-sm">
               <strong>{selectedContradiction.capsule_a.title}</strong>
               <span className="mx-2 text-red-500">contradicts</span>
               <strong>{selectedContradiction.capsule_b.title}</strong>
@@ -380,7 +380,7 @@ export default function ContradictionsPage() {
 
             {/* Resolution Type Selection */}
             <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              <label className="block text-sm font-medium text-slate-200">
                 Resolution Type
               </label>
               <div className="space-y-2">
@@ -391,7 +391,7 @@ export default function ContradictionsPage() {
                     value="keep_both"
                     checked={resolutionType === 'keep_both'}
                     onChange={() => setResolutionType('keep_both')}
-                    className="text-blue-600"
+                    className="text-blue-400"
                   />
                   <span>Keep Both - Acknowledge the contradiction but keep both capsules</span>
                 </label>
@@ -402,7 +402,7 @@ export default function ContradictionsPage() {
                     value="supersede"
                     checked={resolutionType === 'supersede'}
                     onChange={() => setResolutionType('supersede')}
-                    className="text-blue-600"
+                    className="text-blue-400"
                   />
                   <span>Supersede - One capsule replaces the other</span>
                 </label>
@@ -413,7 +413,7 @@ export default function ContradictionsPage() {
                     value="dismiss"
                     checked={resolutionType === 'dismiss'}
                     onChange={() => setResolutionType('dismiss')}
-                    className="text-blue-600"
+                    className="text-blue-400"
                   />
                   <span>Dismiss - Not a real contradiction</span>
                 </label>
@@ -423,7 +423,7 @@ export default function ContradictionsPage() {
             {/* Winner Selection (for supersede) */}
             {resolutionType === 'supersede' && (
               <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                <label className="block text-sm font-medium text-slate-200">
                   Which capsule should be kept?
                 </label>
                 <div className="space-y-2">
@@ -434,7 +434,7 @@ export default function ContradictionsPage() {
                       value={selectedContradiction.capsule_a.id}
                       checked={winningCapsuleId === selectedContradiction.capsule_a.id}
                       onChange={() => setWinningCapsuleId(selectedContradiction.capsule_a.id)}
-                      className="text-blue-600"
+                      className="text-blue-400"
                     />
                     <span>{selectedContradiction.capsule_a.title} (Trust: {selectedContradiction.capsule_a.trust_level})</span>
                   </label>
@@ -445,7 +445,7 @@ export default function ContradictionsPage() {
                       value={selectedContradiction.capsule_b.id}
                       checked={winningCapsuleId === selectedContradiction.capsule_b.id}
                       onChange={() => setWinningCapsuleId(selectedContradiction.capsule_b.id)}
-                      className="text-blue-600"
+                      className="text-blue-400"
                     />
                     <span>{selectedContradiction.capsule_b.title} (Trust: {selectedContradiction.capsule_b.trust_level})</span>
                   </label>
@@ -455,20 +455,20 @@ export default function ContradictionsPage() {
 
             {/* Notes */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label className="block text-sm font-medium text-slate-200 mb-1">
                 Notes (optional)
               </label>
               <textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 rows={3}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800"
+                className="w-full px-3 py-2 border border-white/15 rounded-lg bg-white/5"
                 placeholder="Explain the resolution decision..."
               />
             </div>
 
             {/* Actions */}
-            <div className="flex justify-end gap-2 pt-4 border-t border-gray-200 dark:border-gray-700">
+            <div className="flex justify-end gap-2 pt-4 border-t border-white/10">
               <Button
                 variant="outline"
                 onClick={() => setResolveModalOpen(false)}

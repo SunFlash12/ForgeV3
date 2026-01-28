@@ -73,6 +73,9 @@ logs/
 *.pyc
 *.pyo
 
+# Node
+node_modules/
+
 # Distribution / packaging
 dist/
 build/

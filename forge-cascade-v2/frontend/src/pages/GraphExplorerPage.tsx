@@ -280,9 +280,9 @@ export default function GraphExplorerPage() {
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+      <div className="flex items-center justify-between p-4 border-b border-white/10 bg-white/5">
         <div className="flex items-center gap-4">
-          <h1 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+          <h1 className="text-xl font-bold text-slate-100 flex items-center gap-2">
             <GitBranch className="w-6 h-6" />
             Knowledge Graph Explorer
           </h1>
@@ -295,9 +295,9 @@ export default function GraphExplorerPage() {
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
               placeholder="Search nodes..."
-              className="pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white w-64 focus:ring-2 focus:ring-blue-500"
+              className="pl-10 pr-4 py-2 border border-white/15 rounded-lg bg-white/5 text-slate-100 w-64 focus:ring-2 focus:ring-blue-500"
             />
-            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
           </div>
         </div>
 
@@ -320,11 +320,11 @@ export default function GraphExplorerPage() {
 
       {/* NLP Query Panel */}
       {showNlpQuery && (
-        <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-violet-50 to-indigo-50 dark:from-violet-900/20 dark:to-indigo-900/20">
+        <div className="p-4 border-b border-white/10 bg-gradient-to-r from-violet-900/20 to-indigo-900/20">
           <div className="flex items-center gap-2 mb-3">
-            <Sparkles className="w-5 h-5 text-violet-600 dark:text-violet-400" />
-            <h3 className="font-semibold text-slate-800 dark:text-white">Natural Language Query</h3>
-            <span className="text-xs text-slate-500 dark:text-slate-400">Ask questions about the knowledge graph</span>
+            <Sparkles className="w-5 h-5 text-violet-400" />
+            <h3 className="font-semibold text-slate-100">Natural Language Query</h3>
+            <span className="text-xs text-slate-400">Ask questions about the knowledge graph</span>
           </div>
           <div className="flex gap-3">
             <div className="flex-1 relative">
@@ -334,7 +334,7 @@ export default function GraphExplorerPage() {
                 onChange={(e) => setNlpQuery(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && executeNlpQuery()}
                 placeholder="e.g., What capsules mention authentication? Find connections between security and governance..."
-                className="w-full pl-10 pr-4 py-2.5 border border-violet-200 dark:border-violet-800 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-violet-500 focus:border-violet-500"
+                className="w-full pl-10 pr-4 py-2.5 border border-violet-500/30 rounded-lg bg-white/5 text-slate-100 focus:ring-2 focus:ring-violet-500 focus:border-violet-500"
               />
               <MessageSquare className="w-5 h-5 text-violet-400 absolute left-3 top-1/2 -translate-y-1/2" />
             </div>
@@ -346,7 +346,7 @@ export default function GraphExplorerPage() {
 
           {/* Query Results */}
           {nlpError && (
-            <div className="mt-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-600 dark:text-red-400 text-sm">
+            <div className="mt-3 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm">
               {nlpError}
             </div>
           )}
@@ -354,23 +354,23 @@ export default function GraphExplorerPage() {
           {nlpResults !== null && (
             <div className="mt-3">
               {nlpMetadata && (
-                <div className="flex items-center gap-4 mb-2 text-xs text-slate-500 dark:text-slate-400">
+                <div className="flex items-center gap-4 mb-2 text-xs text-slate-400">
                   <span>Type: <strong>{nlpMetadata.query_type}</strong></span>
                   <span>Time: <strong>{nlpMetadata.execution_time_ms}ms</strong></span>
                   {nlpMetadata.cached && <Badge variant="secondary">Cached</Badge>}
                 </div>
               )}
               {nlpResults.length === 0 ? (
-                <div className="p-4 bg-white dark:bg-gray-800 rounded-lg border border-slate-200 dark:border-slate-700 text-center text-slate-500">
+                <div className="p-4 bg-white/5 rounded-lg border border-white/10 text-center text-slate-400">
                   No results found for your query
                 </div>
               ) : (
-                <div className="max-h-48 overflow-y-auto bg-white dark:bg-gray-800 rounded-lg border border-slate-200 dark:border-slate-700">
+                <div className="max-h-48 overflow-y-auto bg-white/5 rounded-lg border border-white/10">
                   <table className="w-full text-sm">
-                    <thead className="bg-slate-50 dark:bg-slate-700/50 sticky top-0">
+                    <thead className="bg-white/5 sticky top-0">
                       <tr>
                         {Object.keys(nlpResults[0] || {}).slice(0, 5).map((key) => (
-                          <th key={key} className="px-3 py-2 text-left font-medium text-slate-600 dark:text-slate-300">
+                          <th key={key} className="px-3 py-2 text-left font-medium text-slate-300">
                             {key}
                           </th>
                         ))}
@@ -378,9 +378,9 @@ export default function GraphExplorerPage() {
                     </thead>
                     <tbody>
                       {nlpResults.slice(0, 10).map((row, i) => (
-                        <tr key={i} className="border-t border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/30">
+                        <tr key={i} className="border-t border-white/5 hover:bg-white/5">
                           {Object.entries(row).slice(0, 5).map(([key, value]) => (
-                            <td key={key} className="px-3 py-2 text-slate-700 dark:text-slate-300 truncate max-w-xs">
+                            <td key={key} className="px-3 py-2 text-slate-300 truncate max-w-xs">
                               {typeof value === 'object' ? JSON.stringify(value) : String(value ?? '')}
                             </td>
                           ))}
@@ -389,7 +389,7 @@ export default function GraphExplorerPage() {
                     </tbody>
                   </table>
                   {nlpResults.length > 10 && (
-                    <div className="px-3 py-2 bg-slate-50 dark:bg-slate-700/50 text-xs text-slate-500 border-t">
+                    <div className="px-3 py-2 bg-white/5 text-xs text-slate-400 border-t">
                       Showing 10 of {nlpResults.length} results
                     </div>
                   )}
@@ -400,7 +400,7 @@ export default function GraphExplorerPage() {
 
           {/* Example Queries */}
           <div className="mt-3 flex flex-wrap gap-2">
-            <span className="text-xs text-slate-500 dark:text-slate-400">Try:</span>
+            <span className="text-xs text-slate-400">Try:</span>
             {[
               'Find all capsules about security',
               'What decisions were made recently?',
@@ -409,7 +409,7 @@ export default function GraphExplorerPage() {
               <button
                 key={example}
                 onClick={() => setNlpQuery(example)}
-                className="text-xs px-2 py-1 bg-white dark:bg-gray-800 border border-violet-200 dark:border-violet-800 rounded-full text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-colors"
+                className="text-xs px-2 py-1 bg-white/5 border border-violet-500/30 rounded-full text-violet-400 hover:bg-violet-500/10 transition-colors"
               >
                 {example}
               </button>
@@ -420,17 +420,17 @@ export default function GraphExplorerPage() {
 
       {/* Filters Panel */}
       {showFilters && (
-        <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+        <div className="p-4 border-b border-white/10 bg-white/5">
           <div className="flex flex-wrap gap-6">
             {/* Type Filter */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label className="block text-sm font-medium text-slate-200 mb-1">
                 Capsule Type
               </label>
               <select
                 value={filterType || ''}
                 onChange={(e) => setFilterType(e.target.value || null)}
-                className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm"
+                className="px-3 py-1.5 border border-white/15 rounded-lg bg-white/5 text-sm"
               >
                 <option value="">All Types</option>
                 <option value="KNOWLEDGE">Knowledge</option>
@@ -444,13 +444,13 @@ export default function GraphExplorerPage() {
 
             {/* Community Filter */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label className="block text-sm font-medium text-slate-200 mb-1">
                 Community
               </label>
               <select
                 value={filterCommunity ?? ''}
                 onChange={(e) => setFilterCommunity(e.target.value ? parseInt(e.target.value) : null)}
-                className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm"
+                className="px-3 py-1.5 border border-white/15 rounded-lg bg-white/5 text-sm"
               >
                 <option value="">All Communities</option>
                 {graphData?.communities.map(c => (
@@ -463,7 +463,7 @@ export default function GraphExplorerPage() {
 
             {/* Min Trust */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label className="block text-sm font-medium text-slate-200 mb-1">
                 Min Trust: {minTrust}
               </label>
               <input
@@ -478,13 +478,13 @@ export default function GraphExplorerPage() {
 
             {/* Color By */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label className="block text-sm font-medium text-slate-200 mb-1">
                 Color By
               </label>
               <select
                 value={colorBy}
                 onChange={(e) => setColorBy(e.target.value as typeof colorBy)}
-                className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm"
+                className="px-3 py-1.5 border border-white/15 rounded-lg bg-white/5 text-sm"
               >
                 <option value="type">Type</option>
                 <option value="community">Community</option>
@@ -494,13 +494,13 @@ export default function GraphExplorerPage() {
 
             {/* Size By */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label className="block text-sm font-medium text-slate-200 mb-1">
                 Size By
               </label>
               <select
                 value={sizeBy}
                 onChange={(e) => setSizeBy(e.target.value as typeof sizeBy)}
-                className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm"
+                className="px-3 py-1.5 border border-white/15 rounded-lg bg-white/5 text-sm"
               >
                 <option value="pagerank">PageRank</option>
                 <option value="connections">Connections</option>
@@ -568,42 +568,42 @@ export default function GraphExplorerPage() {
 
           {/* Zoom Controls */}
           <div className="absolute bottom-4 right-4 flex flex-col gap-2">
-            <Button size="sm" variant="outline" onClick={zoomIn} className="bg-white dark:bg-gray-800">
+            <Button size="sm" variant="outline" onClick={zoomIn} className="bg-white/5">
               <ZoomIn className="w-4 h-4" />
             </Button>
-            <Button size="sm" variant="outline" onClick={zoomOut} className="bg-white dark:bg-gray-800">
+            <Button size="sm" variant="outline" onClick={zoomOut} className="bg-white/5">
               <ZoomOut className="w-4 h-4" />
             </Button>
-            <Button size="sm" variant="outline" onClick={resetView} className="bg-white dark:bg-gray-800">
+            <Button size="sm" variant="outline" onClick={resetView} className="bg-white/5">
               <Maximize2 className="w-4 h-4" />
             </Button>
           </div>
 
           {/* Hover Tooltip */}
           {hoveredNode && (
-            <div className="absolute top-4 left-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-3 pointer-events-none">
-              <p className="font-medium text-gray-900 dark:text-white">{hoveredNode.label}</p>
-              <p className="text-sm text-gray-500">Type: {hoveredNode.type}</p>
-              <p className="text-sm text-gray-500">Trust: {hoveredNode.trust_level}</p>
-              <p className="text-sm text-gray-500">PageRank: {hoveredNode.pagerank_score.toFixed(4)}</p>
+            <div className="absolute top-4 left-4 bg-white/5 rounded-lg shadow-lg p-3 pointer-events-none">
+              <p className="font-medium text-slate-100">{hoveredNode.label}</p>
+              <p className="text-sm text-slate-400">Type: {hoveredNode.type}</p>
+              <p className="text-sm text-slate-400">Trust: {hoveredNode.trust_level}</p>
+              <p className="text-sm text-slate-400">PageRank: {hoveredNode.pagerank_score.toFixed(4)}</p>
             </div>
           )}
 
           {/* Stats Badge */}
           {graphData && (
-            <div className="absolute top-4 right-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-3 text-sm">
+            <div className="absolute top-4 right-4 bg-white/5 rounded-lg shadow-lg p-3 text-sm">
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-1">
                   <Database className="w-4 h-4 text-blue-500" />
-                  <span className="text-gray-900 dark:text-white">{graphData.metrics.total_nodes} nodes</span>
+                  <span className="text-slate-100">{graphData.metrics.total_nodes} nodes</span>
                 </div>
                 <div className="flex items-center gap-1">
                   <Link2 className="w-4 h-4 text-purple-500" />
-                  <span className="text-gray-900 dark:text-white">{graphData.metrics.total_edges} edges</span>
+                  <span className="text-slate-100">{graphData.metrics.total_edges} edges</span>
                 </div>
                 <div className="flex items-center gap-1">
                   <Users className="w-4 h-4 text-green-500" />
-                  <span className="text-gray-900 dark:text-white">{graphData.communities.length} communities</span>
+                  <span className="text-slate-100">{graphData.communities.length} communities</span>
                 </div>
               </div>
             </div>
@@ -612,12 +612,12 @@ export default function GraphExplorerPage() {
 
         {/* Details Panel */}
         {showDetails && selectedNode && (
-          <div className="w-96 border-l border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-y-auto">
-            <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-              <h3 className="font-semibold text-gray-900 dark:text-white">Node Details</h3>
+          <div className="w-96 border-l border-white/10 bg-white/5 overflow-y-auto">
+            <div className="p-4 border-b border-white/10 flex items-center justify-between">
+              <h3 className="font-semibold text-slate-100">Node Details</h3>
               <button
                 onClick={() => setShowDetails(false)}
-                className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+                className="p-1 hover:bg-white/5 rounded"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -626,17 +626,17 @@ export default function GraphExplorerPage() {
             <div className="p-4 space-y-4">
               {/* Basic Info */}
               <div>
-                <h4 className="text-lg font-medium text-gray-900 dark:text-white">
+                <h4 className="text-lg font-medium text-slate-100">
                   {selectedNode.label}
                 </h4>
                 <div className="flex flex-wrap gap-2 mt-2">
                   <Badge className={`bg-opacity-20`} style={{ backgroundColor: typeColors[selectedNode.type] }}>
                     {selectedNode.type}
                   </Badge>
-                  <Badge className="bg-gray-100 dark:bg-gray-700">
+                  <Badge className="bg-white/5">
                     Trust: {selectedNode.trust_level}
                   </Badge>
-                  <Badge className="bg-gray-100 dark:bg-gray-700">
+                  <Badge className="bg-white/5">
                     Community: {selectedNode.community_id}
                   </Badge>
                 </div>
@@ -644,17 +644,17 @@ export default function GraphExplorerPage() {
 
               {/* Metrics */}
               <Card className="p-3">
-                <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Metrics</h5>
+                <h5 className="text-sm font-medium text-slate-200 mb-2">Metrics</h5>
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   <div>
-                    <span className="text-gray-500">PageRank</span>
-                    <p className="font-medium text-gray-900 dark:text-white">
+                    <span className="text-slate-400">PageRank</span>
+                    <p className="font-medium text-slate-100">
                       {selectedNode.pagerank_score.toFixed(6)}
                     </p>
                   </div>
                   <div>
-                    <span className="text-gray-500">Created</span>
-                    <p className="font-medium text-gray-900 dark:text-white">
+                    <span className="text-slate-400">Created</span>
+                    <p className="font-medium text-slate-100">
                       {new Date(selectedNode.created_at).toLocaleDateString()}
                     </p>
                   </div>
@@ -664,8 +664,8 @@ export default function GraphExplorerPage() {
               {/* Content Preview */}
               {selectedNode.content_preview && (
                 <Card className="p-3">
-                  <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Preview</h5>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                  <h5 className="text-sm font-medium text-slate-200 mb-2">Preview</h5>
+                  <p className="text-sm text-slate-400">
                     {selectedNode.content_preview}
                   </p>
                 </Card>
@@ -674,14 +674,14 @@ export default function GraphExplorerPage() {
               {/* Neighbors */}
               {nodeDetails && nodeDetails.neighbors.length > 0 && (
                 <Card className="p-3">
-                  <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  <h5 className="text-sm font-medium text-slate-200 mb-2">
                     Connections ({nodeDetails.neighbors.length})
                   </h5>
                   <div className="space-y-2 max-h-48 overflow-y-auto">
                     {nodeDetails.neighbors.map((neighbor, idx) => (
                       <div
                         key={idx}
-                        className="flex items-center justify-between p-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded cursor-pointer"
+                        className="flex items-center justify-between p-2 hover:bg-white/5 rounded cursor-pointer"
                         onClick={() => {
                           const node = graphData?.nodes.find(n => n.id === neighbor.node.id);
                           if (node) handleNodeClick(node);
@@ -692,7 +692,7 @@ export default function GraphExplorerPage() {
                             className="w-3 h-3 rounded-full"
                             style={{ backgroundColor: typeColors[neighbor.node.type] || typeColors.DEFAULT }}
                           />
-                          <span className="text-sm text-gray-900 dark:text-white truncate max-w-[150px]">
+                          <span className="text-sm text-slate-100 truncate max-w-[150px]">
                             {neighbor.node.label}
                           </span>
                         </div>
@@ -725,28 +725,28 @@ export default function GraphExplorerPage() {
       </div>
 
       {/* Legend */}
-      <div className="p-3 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+      <div className="p-3 border-t border-white/10 bg-white/5">
         <div className="flex items-center gap-6 text-sm">
-          <span className="text-gray-500 dark:text-gray-400">Legend:</span>
+          <span className="text-slate-400">Legend:</span>
           {colorBy === 'type' && Object.entries(typeColors).filter(([k]) => k !== 'DEFAULT').map(([type, color]) => (
             <div key={type} className="flex items-center gap-1">
               <div className="w-3 h-3 rounded-full" style={{ backgroundColor: color }} />
-              <span className="text-gray-600 dark:text-gray-300">{type}</span>
+              <span className="text-slate-300">{type}</span>
             </div>
           ))}
           {colorBy === 'trust' && (
             <>
               <div className="flex items-center gap-1">
                 <div className="w-3 h-3 rounded-full bg-red-500" />
-                <span className="text-gray-600 dark:text-gray-300">Low Trust</span>
+                <span className="text-slate-300">Low Trust</span>
               </div>
               <div className="flex items-center gap-1">
                 <div className="w-3 h-3 rounded-full bg-amber-500" />
-                <span className="text-gray-600 dark:text-gray-300">Medium</span>
+                <span className="text-slate-300">Medium</span>
               </div>
               <div className="flex items-center gap-1">
                 <div className="w-3 h-3 rounded-full bg-green-500" />
-                <span className="text-gray-600 dark:text-gray-300">High Trust</span>
+                <span className="text-slate-300">High Trust</span>
               </div>
             </>
           )}
@@ -754,7 +754,7 @@ export default function GraphExplorerPage() {
             {Object.entries(relationshipColors).slice(0, 4).map(([rel, color]) => (
               <div key={rel} className="flex items-center gap-1">
                 <div className="w-4 h-0.5" style={{ backgroundColor: color }} />
-                <span className="text-gray-500 dark:text-gray-400 text-xs">{rel}</span>
+                <span className="text-slate-400 text-xs">{rel}</span>
               </div>
             ))}
           </div>

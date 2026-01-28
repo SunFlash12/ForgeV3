@@ -90,19 +90,19 @@ interface FederationStats {
 
 // Status badge colors
 const statusColors: Record<string, string> = {
-  active: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
-  pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300',
-  degraded: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300',
-  suspended: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
-  offline: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300',
-  revoked: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
+  active: 'bg-green-500/15 text-green-400',
+  pending: 'bg-yellow-500/15 text-yellow-400',
+  degraded: 'bg-orange-500/15 text-orange-400',
+  suspended: 'bg-red-500/15 text-red-400',
+  offline: 'bg-white/5 text-slate-300',
+  revoked: 'bg-red-500/15 text-red-400',
 };
 
 // Trust tier icons
 const trustTierIcons: Record<string, React.ReactNode> = {
   CORE: <ShieldCheck className="w-5 h-5 text-green-500" />,
   TRUSTED: <Shield className="w-5 h-5 text-blue-500" />,
-  STANDARD: <Shield className="w-5 h-5 text-gray-500" />,
+  STANDARD: <Shield className="w-5 h-5 text-slate-400" />,
   LIMITED: <ShieldAlert className="w-5 h-5 text-orange-500" />,
   QUARANTINE: <ShieldX className="w-5 h-5 text-red-500" />,
 };
@@ -193,13 +193,13 @@ export default function FederationPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+          <h1 className="text-2xl font-bold text-slate-100 flex items-center gap-2">
             <Globe className="w-7 h-7" />
             Federation
           </h1>
-          <p className="text-gray-500 dark:text-gray-400 mt-1">
+          <p className="text-slate-400 mt-1">
             Manage federated peers and knowledge sharing
           </p>
         </div>
@@ -217,63 +217,63 @@ export default function FederationPage() {
 
       {/* Stats Overview */}
       {stats && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
           <Card className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Total Peers</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.total_peers}</p>
+                <p className="text-sm text-slate-400">Total Peers</p>
+                <p className="text-2xl font-bold text-slate-100">{stats.total_peers}</p>
               </div>
               <Globe className="w-8 h-8 text-blue-500 opacity-50" />
             </div>
             <div className="mt-2 flex gap-2 text-sm">
-              <span className="text-green-600">{stats.active_peers} active</span>
-              <span className="text-gray-400">|</span>
-              <span className="text-yellow-600">{stats.pending_peers} pending</span>
+              <span className="text-green-400">{stats.active_peers} active</span>
+              <span className="text-slate-400">|</span>
+              <span className="text-yellow-400">{stats.pending_peers} pending</span>
             </div>
           </Card>
 
           <Card className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Network Trust</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                <p className="text-sm text-slate-400">Network Trust</p>
+                <p className="text-2xl font-bold text-slate-100">
                   {(stats.network_health.average_trust * 100).toFixed(0)}%
                 </p>
               </div>
               <Shield className="w-8 h-8 text-green-500 opacity-50" />
             </div>
             <div className="mt-2 flex gap-2 text-sm">
-              <span className="text-green-600">{stats.network_health.healthy_peers} healthy</span>
-              <span className="text-gray-400">|</span>
-              <span className="text-orange-600">{stats.network_health.at_risk_peers} at risk</span>
+              <span className="text-green-400">{stats.network_health.healthy_peers} healthy</span>
+              <span className="text-slate-400">|</span>
+              <span className="text-orange-400">{stats.network_health.at_risk_peers} at risk</span>
             </div>
           </Card>
 
           <Card className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Federated Capsules</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.total_federated_capsules}</p>
+                <p className="text-sm text-slate-400">Federated Capsules</p>
+                <p className="text-2xl font-bold text-slate-100">{stats.total_federated_capsules}</p>
               </div>
               <Link2 className="w-8 h-8 text-purple-500 opacity-50" />
             </div>
             <div className="mt-2 flex gap-2 text-sm">
-              <span className="text-green-600">{stats.synced_capsules} synced</span>
-              <span className="text-gray-400">|</span>
-              <span className="text-red-600">{stats.conflicted_capsules} conflicts</span>
+              <span className="text-green-400">{stats.synced_capsules} synced</span>
+              <span className="text-slate-400">|</span>
+              <span className="text-red-400">{stats.conflicted_capsules} conflicts</span>
             </div>
           </Card>
 
           <Card className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Trust Distribution</p>
+                <p className="text-sm text-slate-400">Trust Distribution</p>
                 <div className="flex gap-1 mt-1">
                   {Object.entries(stats.network_health.tier_distribution).map(([tier, count]) => (
                     <span
                       key={tier}
-                      className="px-2 py-0.5 text-xs rounded bg-gray-100 dark:bg-gray-700"
+                      className="px-2 py-0.5 text-xs rounded bg-white/5"
                       title={tier}
                     >
                       {count}
@@ -289,8 +289,8 @@ export default function FederationPage() {
 
       {/* Peers List */}
       <Card>
-        <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Federated Peers</h2>
+        <div className="p-4 border-b border-white/10">
+          <h2 className="text-lg font-semibold text-slate-100">Federated Peers</h2>
         </div>
 
         {peers.length === 0 ? (
@@ -306,7 +306,7 @@ export default function FederationPage() {
             }
           />
         ) : (
-          <div className="divide-y divide-gray-200 dark:divide-gray-700">
+          <div className="divide-y divide-white/10">
             {peers.map((peer) => {
               const isExpanded = expandedPeerId === peer.id;
 
@@ -321,17 +321,17 @@ export default function FederationPage() {
                       {trustTierIcons[peer.trust_tier] || trustTierIcons.STANDARD}
                       <div>
                         <div className="flex items-center gap-2">
-                          <span className="font-medium text-gray-900 dark:text-white">
+                          <span className="font-medium text-slate-100">
                             {peer.name}
                           </span>
                           <Badge className={statusColors[peer.status]}>
                             {peer.status.toUpperCase()}
                           </Badge>
-                          <Badge className="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+                          <Badge className="bg-white/5 text-slate-300">
                             {peer.trust_tier}
                           </Badge>
                         </div>
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                        <p className="text-sm text-slate-400 mt-0.5">
                           {peer.url}
                         </p>
                       </div>
@@ -339,10 +339,10 @@ export default function FederationPage() {
 
                     <div className="flex items-center gap-4">
                       <div className="text-right text-sm">
-                        <div className="text-gray-900 dark:text-white font-medium">
+                        <div className="text-slate-100 font-medium">
                           {(peer.trust_score * 100).toFixed(0)}% trust
                         </div>
-                        <div className="text-gray-500 dark:text-gray-400">
+                        <div className="text-slate-400">
                           Last sync: {formatDate(peer.last_sync_at)}
                         </div>
                       </div>
@@ -360,9 +360,9 @@ export default function FederationPage() {
                           <RefreshCw className={`w-4 h-4 ${syncMutation.isPending ? 'animate-spin' : ''}`} />
                         </Button>
                         {isExpanded ? (
-                          <ChevronUp className="w-5 h-5 text-gray-400" />
+                          <ChevronUp className="w-5 h-5 text-slate-400" />
                         ) : (
-                          <ChevronDown className="w-5 h-5 text-gray-400" />
+                          <ChevronDown className="w-5 h-5 text-slate-400" />
                         )}
                       </div>
                     </div>
@@ -370,67 +370,67 @@ export default function FederationPage() {
 
                   {/* Expanded Details */}
                   {isExpanded && (
-                    <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
+                    <div className="mt-4 pt-4 border-t border-white/10">
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         {/* Sync Stats */}
                         <div>
-                          <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-3">
+                          <h4 className="text-sm font-medium text-slate-100 mb-3">
                             Sync Statistics
                           </h4>
                           <div className="space-y-2 text-sm">
                             <div className="flex justify-between">
-                              <span className="text-gray-500">Total Syncs</span>
-                              <span className="text-gray-900 dark:text-white">{peer.total_syncs}</span>
+                              <span className="text-slate-400">Total Syncs</span>
+                              <span className="text-slate-100">{peer.total_syncs}</span>
                             </div>
                             <div className="flex justify-between">
-                              <span className="text-gray-500">Success Rate</span>
-                              <span className="text-green-600">{formatSyncRate(peer)}</span>
+                              <span className="text-slate-400">Success Rate</span>
+                              <span className="text-green-400">{formatSyncRate(peer)}</span>
                             </div>
                             <div className="flex justify-between">
-                              <span className="text-gray-500">Capsules Received</span>
-                              <span className="text-gray-900 dark:text-white">{peer.capsules_received}</span>
+                              <span className="text-slate-400">Capsules Received</span>
+                              <span className="text-slate-100">{peer.capsules_received}</span>
                             </div>
                             <div className="flex justify-between">
-                              <span className="text-gray-500">Capsules Sent</span>
-                              <span className="text-gray-900 dark:text-white">{peer.capsules_sent}</span>
+                              <span className="text-slate-400">Capsules Sent</span>
+                              <span className="text-slate-100">{peer.capsules_sent}</span>
                             </div>
                           </div>
                         </div>
 
                         {/* Configuration */}
                         <div>
-                          <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-3">
+                          <h4 className="text-sm font-medium text-slate-100 mb-3">
                             Configuration
                           </h4>
                           <div className="space-y-2 text-sm">
                             <div className="flex justify-between">
-                              <span className="text-gray-500">Sync Direction</span>
-                              <span className="text-gray-900 dark:text-white capitalize">
+                              <span className="text-slate-400">Sync Direction</span>
+                              <span className="text-slate-100 capitalize">
                                 {peer.sync_direction}
                               </span>
                             </div>
                             <div className="flex justify-between">
-                              <span className="text-gray-500">Interval</span>
-                              <span className="text-gray-900 dark:text-white">
+                              <span className="text-slate-400">Interval</span>
+                              <span className="text-slate-100">
                                 {peer.sync_interval_minutes} min
                               </span>
                             </div>
                             <div className="flex justify-between">
-                              <span className="text-gray-500">Conflict Resolution</span>
-                              <span className="text-gray-900 dark:text-white capitalize">
+                              <span className="text-slate-400">Conflict Resolution</span>
+                              <span className="text-slate-100 capitalize">
                                 {peer.conflict_resolution.replace('_', ' ')}
                               </span>
                             </div>
                             <div className="flex justify-between">
-                              <span className="text-gray-500">Min Trust to Sync</span>
-                              <span className="text-gray-900 dark:text-white">{peer.min_trust_to_sync}</span>
+                              <span className="text-slate-400">Min Trust to Sync</span>
+                              <span className="text-slate-100">{peer.min_trust_to_sync}</span>
                             </div>
                           </div>
                         </div>
 
                         {/* Actions */}
                         <div>
-                          <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-3">
+                          <h4 className="text-sm font-medium text-slate-100 mb-3">
                             Actions
                           </h4>
                           <div className="space-y-2">
@@ -463,7 +463,7 @@ export default function FederationPage() {
                             <Button
                               size="sm"
                               variant="outline"
-                              className="w-full justify-start text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                              className="w-full justify-start text-red-400 hover:bg-red-500/10"
                               onClick={() => {
                                 if (confirm(`Remove peer "${peer.name}"?`)) {
                                   removeMutation.mutate(peer.id);
@@ -479,12 +479,12 @@ export default function FederationPage() {
 
                       {/* Description & Contact */}
                       {(peer.description || peer.admin_contact) && (
-                        <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700 text-sm">
+                        <div className="mt-4 pt-4 border-t border-white/10 text-sm">
                           {peer.description && (
-                            <p className="text-gray-600 dark:text-gray-400">{peer.description}</p>
+                            <p className="text-slate-300">{peer.description}</p>
                           )}
                           {peer.admin_contact && (
-                            <p className="text-gray-500 dark:text-gray-500 mt-1">
+                            <p className="text-slate-400 mt-1">
                               Contact: {peer.admin_contact}
                             </p>
                           )}
@@ -502,10 +502,10 @@ export default function FederationPage() {
       {/* Recent Sync Activity */}
       {syncHistory && syncHistory.syncs.length > 0 && (
         <Card>
-          <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Recent Sync Activity</h2>
+          <div className="p-4 border-b border-white/10">
+            <h2 className="text-lg font-semibold text-slate-100">Recent Sync Activity</h2>
           </div>
-          <div className="divide-y divide-gray-200 dark:divide-gray-700">
+          <div className="divide-y divide-white/10">
             {syncHistory.syncs.slice(0, 5).map((sync) => (
               <div key={sync.id} className="p-4 flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -519,23 +519,23 @@ export default function FederationPage() {
                     <AlertTriangle className="w-5 h-5 text-yellow-500" />
                   )}
                   <div>
-                    <p className="font-medium text-gray-900 dark:text-white">
+                    <p className="font-medium text-slate-100">
                       {sync.peer_name}
                     </p>
-                    <p className="text-sm text-gray-500">
+                    <p className="text-sm text-slate-400">
                       {sync.direction} | {sync.capsules_created + sync.capsules_updated} capsules
                     </p>
                   </div>
                 </div>
                 <div className="text-right text-sm">
                   <p className={`font-medium ${
-                    sync.status === 'completed' ? 'text-green-600' :
-                    sync.status === 'failed' ? 'text-red-600' :
-                    'text-gray-600'
+                    sync.status === 'completed' ? 'text-green-400' :
+                    sync.status === 'failed' ? 'text-red-400' :
+                    'text-slate-300'
                   }`}>
                     {sync.status.toUpperCase()}
                   </p>
-                  <p className="text-gray-500">{formatDate(sync.started_at)}</p>
+                  <p className="text-slate-400">{formatDate(sync.started_at)}</p>
                 </div>
               </div>
             ))}
@@ -598,7 +598,7 @@ function AddPeerModal({
     <Modal isOpen={isOpen} onClose={onClose} title="Add Federated Peer" size="md">
       <div className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+          <label className="block text-sm font-medium text-slate-200 mb-1">
             Peer Name *
           </label>
           <input
@@ -606,12 +606,12 @@ function AddPeerModal({
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="e.g., Research Lab Instance"
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 border border-white/15 rounded-lg bg-white/5 text-slate-100 focus:ring-2 focus:ring-forge-500"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+          <label className="block text-sm font-medium text-slate-200 mb-1">
             Peer URL *
           </label>
           <input
@@ -619,12 +619,12 @@ function AddPeerModal({
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             placeholder="https://other-forge.example.com"
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 border border-white/15 rounded-lg bg-white/5 text-slate-100 focus:ring-2 focus:ring-forge-500"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+          <label className="block text-sm font-medium text-slate-200 mb-1">
             Description
           </label>
           <textarea
@@ -632,12 +632,12 @@ function AddPeerModal({
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Optional description of this peer"
             rows={2}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 border border-white/15 rounded-lg bg-white/5 text-slate-100 focus:ring-2 focus:ring-forge-500"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+          <label className="block text-sm font-medium text-slate-200 mb-1">
             Admin Contact
           </label>
           <input
@@ -645,19 +645,19 @@ function AddPeerModal({
             value={adminContact}
             onChange={(e) => setAdminContact(e.target.value)}
             placeholder="admin@example.com"
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 border border-white/15 rounded-lg bg-white/5 text-slate-100 focus:ring-2 focus:ring-forge-500"
           />
         </div>
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label className="block text-sm font-medium text-slate-200 mb-1">
               Sync Direction
             </label>
             <select
               value={syncDirection}
               onChange={(e) => setSyncDirection(e.target.value as 'push' | 'pull' | 'bidirectional')}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-white/15 rounded-lg bg-white/5 text-slate-100 focus:ring-2 focus:ring-forge-500"
             >
               <option value="bidirectional">Bidirectional</option>
               <option value="push">Push Only</option>
@@ -666,7 +666,7 @@ function AddPeerModal({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label className="block text-sm font-medium text-slate-200 mb-1">
               Sync Interval (min)
             </label>
             <input
@@ -677,18 +677,18 @@ function AddPeerModal({
                 setSyncInterval(isNaN(val) ? 60 : Math.max(5, val));
               }}
               min={5}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-white/15 rounded-lg bg-white/5 text-slate-100 focus:ring-2 focus:ring-forge-500"
             />
           </div>
         </div>
 
         {registerMutation.isError && (
-          <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-300 text-sm">
+          <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm">
             Failed to register peer. Please check the URL and try again.
           </div>
         )}
 
-        <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+        <div className="flex justify-end gap-3 pt-4 border-t border-white/10">
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>

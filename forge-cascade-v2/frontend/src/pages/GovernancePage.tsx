@@ -39,9 +39,9 @@ import type {
 const PROPOSAL_TYPES: ProposalType[] = ['POLICY', 'SYSTEM', 'OVERLAY', 'CAPSULE', 'TRUST', 'CONSTITUTIONAL'];
 
 const statusColors: Record<ProposalStatus, string> = {
-  DRAFT: 'bg-slate-500/20 text-slate-500 border-slate-500/30',
+  DRAFT: 'bg-slate-500/20 text-slate-400 border-slate-500/30',
   ACTIVE: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-  VOTING: 'bg-sky-500/20 text-sky-400 border-sky-500/30',
+  VOTING: 'bg-forge-500/20 text-forge-400 border-forge-500/30',
   PASSED: 'bg-green-500/20 text-green-400 border-green-500/30',
   REJECTED: 'bg-red-500/20 text-red-400 border-red-500/30',
   EXECUTED: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
@@ -101,10 +101,10 @@ export default function GovernancePage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Governance</h1>
-          <p className="text-slate-500">Participate in community decision-making</p>
+          <h1 className="text-2xl font-bold text-slate-100">Governance</h1>
+          <p className="text-slate-400">Participate in community decision-making</p>
         </div>
         <Button
           variant="primary"
@@ -117,15 +117,15 @@ export default function GovernancePage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
         <Card>
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-blue-500/20 text-blue-400">
               <Vote className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-sm text-slate-500">Active Proposals</p>
-              <p className="text-2xl font-bold text-slate-800">{activeProposals?.length || 0}</p>
+              <p className="text-sm text-slate-400">Active Proposals</p>
+              <p className="text-2xl font-bold text-slate-100">{activeProposals?.length || 0}</p>
             </div>
           </div>
         </Card>
@@ -135,8 +135,8 @@ export default function GovernancePage() {
               <CheckCircle className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-sm text-slate-500">Passed</p>
-              <p className="text-2xl font-bold text-slate-800">
+              <p className="text-sm text-slate-400">Passed</p>
+              <p className="text-2xl font-bold text-slate-100">
                 {proposalsData?.items?.filter(p => p.status === 'PASSED').length || 0}
               </p>
             </div>
@@ -148,8 +148,8 @@ export default function GovernancePage() {
               <XCircle className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-sm text-slate-500">Rejected</p>
-              <p className="text-2xl font-bold text-slate-800">
+              <p className="text-sm text-slate-400">Rejected</p>
+              <p className="text-2xl font-bold text-slate-100">
                 {proposalsData?.items?.filter(p => p.status === 'REJECTED').length || 0}
               </p>
             </div>
@@ -161,8 +161,8 @@ export default function GovernancePage() {
               <Users className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-sm text-slate-500">Your Trust Weight</p>
-              <p className="text-2xl font-bold text-slate-800">
+              <p className="text-sm text-slate-400">Your Trust Weight</p>
+              <p className="text-2xl font-bold text-slate-100">
                 {user ? ((user.trust_score / 100) ** 1.5).toFixed(2) : '0.00'}
               </p>
             </div>
@@ -174,15 +174,15 @@ export default function GovernancePage() {
       <Card className="overflow-hidden">
         <button
           onClick={() => setShowDelegationPanel(!showDelegationPanel)}
-          className="w-full p-4 flex items-center justify-between hover:bg-slate-50 transition-colors"
+          className="w-full p-4 flex items-center justify-between hover:bg-white/5 transition-colors"
         >
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-violet-500/20 text-violet-400">
               <ArrowRightLeft className="w-5 h-5" />
             </div>
             <div className="text-left">
-              <h3 className="font-semibold text-slate-800">Vote Delegation</h3>
-              <p className="text-sm text-slate-500">
+              <h3 className="font-semibold text-slate-100">Vote Delegation</h3>
+              <p className="text-sm text-slate-400">
                 {activeDelegations.length} sent{activeReceivedDelegations.length > 0 && `, ${activeReceivedDelegations.length} received`}
                 {totalDelegatedWeight > 0 && ` • ${totalDelegatedWeight.toFixed(2)} weight delegated`}
               </p>
@@ -192,9 +192,9 @@ export default function GovernancePage() {
         </button>
 
         {showDelegationPanel && (
-          <div className="border-t border-slate-100 p-4">
+          <div className="border-t border-white/10 p-4">
             <div className="flex items-center justify-between mb-4">
-              <p className="text-sm text-slate-600">
+              <p className="text-sm text-slate-300">
                 Delegate your voting power to trusted community members who can vote on your behalf.
               </p>
               <Button
@@ -225,17 +225,17 @@ export default function GovernancePage() {
                 }) => (
                   <div
                     key={delegation.id}
-                    className="flex items-center justify-between p-3 bg-slate-50 rounded-lg"
+                    className="flex items-center justify-between p-3 bg-white/5 rounded-lg"
                   >
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-full bg-gradient-to-br from-violet-500 to-indigo-500 flex items-center justify-center text-white font-semibold">
                         {(delegation.delegate_username || delegation.delegate_id)[0].toUpperCase()}
                       </div>
                       <div>
-                        <p className="font-medium text-slate-800">
+                        <p className="font-medium text-slate-100">
                           {delegation.delegate_username || delegation.delegate_id}
                         </p>
-                        <div className="flex items-center gap-2 text-xs text-slate-500">
+                        <div className="flex items-center gap-2 text-xs text-slate-400">
                           <span>Weight: {delegation.weight?.toFixed(2) || '1.00'}</span>
                           {delegation.proposal_types && delegation.proposal_types.length > 0 && (
                             <>
@@ -248,13 +248,13 @@ export default function GovernancePage() {
                     </div>
                     <div className="flex items-center gap-2">
                       {delegation.expires_at && (
-                        <span className="text-xs text-slate-500">
+                        <span className="text-xs text-slate-400">
                           Expires {formatDistanceToNow(new Date(delegation.expires_at), { addSuffix: true })}
                         </span>
                       )}
                       <button
                         onClick={() => revokeDelegationMutation.mutate(delegation.id)}
-                        className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                        className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
                         title="Revoke delegation"
                         disabled={revokeDelegationMutation.isPending}
                       >
@@ -270,8 +270,8 @@ export default function GovernancePage() {
               </div>
             ) : (
               <div className="text-center py-8">
-                <UserCheck className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-                <p className="text-slate-500 text-sm">No active delegations</p>
+                <UserCheck className="w-10 h-10 text-slate-400 mx-auto mb-2" />
+                <p className="text-slate-400 text-sm">No active delegations</p>
                 <p className="text-xs text-slate-400 mt-1">
                   Delegate your voting power to participate even when you're away
                 </p>
@@ -280,8 +280,8 @@ export default function GovernancePage() {
 
             {/* Received Delegations */}
             {activeReceivedDelegations.length > 0 && (
-              <div className="mt-6 pt-4 border-t border-slate-100">
-                <h4 className="text-sm font-medium text-slate-600 mb-3 flex items-center gap-2">
+              <div className="mt-6 pt-4 border-t border-white/10">
+                <h4 className="text-sm font-medium text-slate-300 mb-3 flex items-center gap-2">
                   <UserCheck className="w-4 h-4" />
                   Received Delegations ({activeReceivedDelegations.length})
                 </h4>
@@ -289,17 +289,17 @@ export default function GovernancePage() {
                   {activeReceivedDelegations.map((delegation) => (
                     <div
                       key={delegation.id}
-                      className="flex items-center justify-between p-3 bg-emerald-50 rounded-lg"
+                      className="flex items-center justify-between p-3 bg-emerald-500/10 rounded-lg"
                     >
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center text-white font-semibold">
                           {(delegation.delegator_id)[0].toUpperCase()}
                         </div>
                         <div>
-                          <p className="font-medium text-slate-800">
+                          <p className="font-medium text-slate-100">
                             {delegation.delegator_id}
                           </p>
-                          <div className="flex items-center gap-2 text-xs text-slate-500">
+                          <div className="flex items-center gap-2 text-xs text-slate-400">
                             <span>Delegated to you</span>
                             {delegation.proposal_types && delegation.proposal_types.length > 0 && (
                               <>
@@ -311,7 +311,7 @@ export default function GovernancePage() {
                         </div>
                       </div>
                       {delegation.expires_at && (
-                        <span className="text-xs text-slate-500">
+                        <span className="text-xs text-slate-400">
                           Expires {formatDistanceToNow(new Date(delegation.expires_at), { addSuffix: true })}
                         </span>
                       )}
@@ -338,7 +338,7 @@ export default function GovernancePage() {
             <option value="REJECTED">Rejected</option>
             <option value="EXPIRED">Expired</option>
           </select>
-          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
+          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
         </div>
         <div className="relative">
           <select
@@ -351,7 +351,7 @@ export default function GovernancePage() {
               <option key={type} value={type}>{type}</option>
             ))}
           </select>
-          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
+          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
         </div>
       </div>
 
@@ -426,15 +426,15 @@ function ProposalCard({ proposal, onClick }: { proposal: Proposal; onClick: () =
             <span className={`badge border ${statusColors[proposal.status]}`}>
               {proposal.status}
             </span>
-            <span className="text-xs text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
+            <span className="text-xs text-slate-400 bg-white/5 px-2 py-0.5 rounded">
               {proposal.proposal_type}
             </span>
           </div>
           
-          <h3 className="text-lg font-semibold text-slate-800 mb-1">{proposal.title}</h3>
-          <p className="text-sm text-slate-500 line-clamp-2">{proposal.description}</p>
+          <h3 className="text-lg font-semibold text-slate-100 mb-1">{proposal.title}</h3>
+          <p className="text-sm text-slate-400 line-clamp-2">{proposal.description}</p>
           
-          <div className="flex items-center gap-4 mt-3 text-xs text-slate-500">
+          <div className="flex items-center gap-4 mt-3 text-xs text-slate-400">
             <span className="flex items-center gap-1">
               <Users className="w-3 h-3" />
               {proposal.votes_for + proposal.votes_against + proposal.votes_abstain} voters
@@ -455,7 +455,7 @@ function ProposalCard({ proposal, onClick }: { proposal: Proposal; onClick: () =
             value={approvalPercent}
             color={approvalPercent >= 65 ? 'emerald' : approvalPercent >= 50 ? 'amber' : 'red'}
           />
-          <p className="text-xs text-slate-500 text-center mt-1">
+          <p className="text-xs text-slate-400 text-center mt-1">
             {approvalPercent.toFixed(1)}% approval
           </p>
         </div>
@@ -643,17 +643,17 @@ function ProposalDetailModal({ proposal, onClose }: { proposal: Proposal; onClos
           <span className={`badge border ${statusColors[proposal.status]}`}>
             {proposal.status}
           </span>
-          <span className="text-sm text-slate-500">{proposal.proposal_type}</span>
+          <span className="text-sm text-slate-400">{proposal.proposal_type}</span>
         </div>
 
         {/* Description */}
         <div>
-          <h4 className="text-sm font-medium text-slate-500 mb-2">Description</h4>
-          <p className="text-slate-800 whitespace-pre-wrap">{proposal.description}</p>
+          <h4 className="text-sm font-medium text-slate-400 mb-2">Description</h4>
+          <p className="text-slate-100 whitespace-pre-wrap">{proposal.description}</p>
         </div>
 
         {/* Voting Progress */}
-        <div className="p-4 bg-white rounded-lg">
+        <div className="p-4 bg-white/5 rounded-lg">
           <div className="flex justify-between text-sm mb-2">
             <span className="text-green-400 flex items-center gap-1">
               <CheckCircle className="w-4 h-4" />
@@ -668,7 +668,7 @@ function ProposalDetailModal({ proposal, onClose }: { proposal: Proposal; onClos
             value={approvalPercent}
             color={approvalPercent >= 65 ? 'emerald' : approvalPercent >= 50 ? 'amber' : 'red'}
           />
-          <div className="flex justify-between mt-2 text-xs text-slate-500">
+          <div className="flex justify-between mt-2 text-xs text-slate-400">
             <span>{proposal.votes_for + proposal.votes_against + proposal.votes_abstain} total voters</span>
             <span>{approvalPercent.toFixed(1)}% approval</span>
           </div>
@@ -676,10 +676,10 @@ function ProposalDetailModal({ proposal, onClose }: { proposal: Proposal; onClos
 
         {/* Ghost Council */}
         {ghostRecommendation && (
-          <div className="ghost-glow p-4 bg-white rounded-lg border border-violet-500/30">
+          <div className="ghost-glow p-4 bg-white/5 rounded-lg border border-violet-500/30">
             <div className="flex items-center gap-2 mb-3">
               <Ghost className="w-5 h-5 text-violet-400" />
-              <h4 className="font-medium text-slate-800">Ghost Council Recommendation</h4>
+              <h4 className="font-medium text-slate-100">Ghost Council Recommendation</h4>
             </div>
             <div className="flex items-center gap-3 mb-2">
               <span className={`badge ${
@@ -687,35 +687,35 @@ function ProposalDetailModal({ proposal, onClose }: { proposal: Proposal; onClos
                   ? 'bg-green-500/20 text-green-400'
                   : ghostRecommendation.recommendation === 'REJECT'
                   ? 'bg-red-500/20 text-red-400'
-                  : 'bg-slate-500/20 text-slate-500'
+                  : 'bg-slate-500/20 text-slate-400'
               }`}>
                 {ghostRecommendation.recommendation}
               </span>
-              <span className="text-sm text-slate-500">
+              <span className="text-sm text-slate-400">
                 {(ghostRecommendation.confidence * 100).toFixed(0)}% confidence
               </span>
             </div>
-            <p className="text-sm text-slate-600">{ghostRecommendation.reasoning}</p>
+            <p className="text-sm text-slate-300">{ghostRecommendation.reasoning}</p>
           </div>
         )}
 
         {/* Constitutional Analysis */}
         {(proposal.proposal_type === 'CONSTITUTIONAL' || constitutionalAnalysis) && (
           <div className={`p-4 rounded-lg border ${
-            analysisLoading ? 'bg-slate-50 border-slate-200' :
+            analysisLoading ? 'bg-white/5 border-white/10' :
             constitutionalAnalysis?.is_constitutional
-              ? 'bg-emerald-50 border-emerald-200'
-              : 'bg-red-50 border-red-200'
+              ? 'bg-emerald-500/10 border-emerald-500/30'
+              : 'bg-red-500/10 border-red-500/30'
           }`}>
             <div className="flex items-center gap-2 mb-3">
               <Scale className={`w-5 h-5 ${
                 analysisLoading ? 'text-slate-400' :
-                constitutionalAnalysis?.is_constitutional ? 'text-emerald-600' : 'text-red-600'
+                constitutionalAnalysis?.is_constitutional ? 'text-emerald-400' : 'text-red-400'
               }`} />
-              <h4 className="font-medium text-slate-800">Constitutional Analysis</h4>
+              <h4 className="font-medium text-slate-100">Constitutional Analysis</h4>
               {constitutionalAnalysis && (
                 <span className={`ml-auto text-sm font-medium ${
-                  constitutionalAnalysis.is_constitutional ? 'text-emerald-600' : 'text-red-600'
+                  constitutionalAnalysis.is_constitutional ? 'text-emerald-400' : 'text-red-400'
                 }`}>
                   {constitutionalAnalysis.is_constitutional ? 'COMPLIANT' : 'NON-COMPLIANT'}
                 </span>
@@ -723,22 +723,22 @@ function ProposalDetailModal({ proposal, onClose }: { proposal: Proposal; onClos
             </div>
 
             {analysisLoading ? (
-              <div className="flex items-center gap-2 text-slate-500">
+              <div className="flex items-center gap-2 text-slate-400">
                 <Loader2 className="w-4 h-4 animate-spin" />
                 <span className="text-sm">Analyzing constitutional compliance...</span>
               </div>
             ) : constitutionalAnalysis ? (
               <div className="space-y-3">
-                <p className="text-sm text-slate-700">{constitutionalAnalysis.summary}</p>
+                <p className="text-sm text-slate-300">{constitutionalAnalysis.summary}</p>
 
                 {/* Principles Checked */}
                 <div className="space-y-2">
-                  <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Principles Checked</p>
+                  <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Principles Checked</p>
                   {constitutionalAnalysis.principles_checked.map((principle, idx) => (
                     <div
                       key={idx}
                       className={`flex items-start gap-2 p-2 rounded ${
-                        principle.compliant ? 'bg-white/50' : 'bg-red-100/50'
+                        principle.compliant ? 'bg-white/5' : 'bg-red-500/10'
                       }`}
                     >
                       {principle.compliant ? (
@@ -747,40 +747,40 @@ function ProposalDetailModal({ proposal, onClose }: { proposal: Proposal; onClos
                         <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
                       )}
                       <div>
-                        <p className="text-sm font-medium text-slate-800">{principle.principle}</p>
-                        <p className="text-xs text-slate-600">{principle.notes}</p>
+                        <p className="text-sm font-medium text-slate-100">{principle.principle}</p>
+                        <p className="text-xs text-slate-300">{principle.notes}</p>
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
             ) : (
-              <p className="text-sm text-slate-500">Constitutional analysis not available.</p>
+              <p className="text-sm text-slate-400">Constitutional analysis not available.</p>
             )}
           </div>
         )}
 
         {/* Already Voted */}
         {myVote && (
-          <div className="p-4 bg-white rounded-lg border border-sky-500/30">
-            <p className="text-sm text-slate-500 mb-1">You voted:</p>
+          <div className="p-4 bg-white/5 rounded-lg border border-forge-500/30">
+            <p className="text-sm text-slate-400 mb-1">You voted:</p>
             <span className={`badge ${
               myVote.choice === 'APPROVE'
                 ? 'bg-green-500/20 text-green-400'
                 : myVote.choice === 'REJECT'
                 ? 'bg-red-500/20 text-red-400'
-                : 'bg-slate-500/20 text-slate-500'
+                : 'bg-slate-500/20 text-slate-400'
             }`}>
               {myVote.choice}
             </span>
-            <p className="text-xs text-slate-500 mt-2">Weight: {myVote.weight.toFixed(2)}</p>
+            <p className="text-xs text-slate-400 mt-2">Weight: {myVote.weight.toFixed(2)}</p>
           </div>
         )}
 
         {/* Vote Form */}
         {canVote && (
           <div>
-            <h4 className="text-sm font-medium text-slate-800 mb-3">Cast Your Vote</h4>
+            <h4 className="text-sm font-medium text-slate-100 mb-3">Cast Your Vote</h4>
             <div className="flex gap-2 mb-4">
               {(['APPROVE', 'REJECT', 'ABSTAIN'] as VoteChoice[]).map((choice) => (
                 <button
@@ -792,8 +792,8 @@ function ProposalDetailModal({ proposal, onClose }: { proposal: Proposal; onClos
                         ? 'bg-green-500/20 border-green-500 text-green-400'
                         : choice === 'REJECT'
                         ? 'bg-red-500/20 border-red-500 text-red-400'
-                        : 'bg-slate-500/20 border-slate-500 text-slate-500'
-                      : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
+                        : 'bg-slate-500/20 border-slate-500 text-slate-400'
+                      : 'bg-white/5 border-white/10 text-slate-400 hover:border-white/20'
                   }`}
                 >
                   {choice}
@@ -810,14 +810,14 @@ function ProposalDetailModal({ proposal, onClose }: { proposal: Proposal; onClos
         )}
 
         {/* Metadata */}
-        <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-200 text-sm">
+        <div className="grid grid-cols-2 gap-4 pt-4 border-t border-white/10 text-sm">
           <div>
-            <p className="text-slate-500">Proposer</p>
-            <p className="text-slate-800">{proposal.proposer_id}</p>
+            <p className="text-slate-400">Proposer</p>
+            <p className="text-slate-100">{proposal.proposer_id}</p>
           </div>
           <div>
-            <p className="text-slate-500">Voting Ends</p>
-            <p className="text-slate-800">
+            <p className="text-slate-400">Voting Ends</p>
+            <p className="text-slate-100">
               {proposal.voting_ends_at ? formatDistanceToNow(new Date(proposal.voting_ends_at), { addSuffix: true }) : 'Not set'}
             </p>
           </div>
@@ -905,16 +905,16 @@ function CreateDelegationModal({ isOpen, onClose }: { isOpen: boolean; onClose: 
         <div>
           <label className="label">Delegate To</label>
           {selectedDelegate ? (
-            <div className="flex items-center justify-between p-3 bg-violet-50 border border-violet-200 rounded-lg">
+            <div className="flex items-center justify-between p-3 bg-violet-500/10 border border-violet-500/30 rounded-lg">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-gradient-to-br from-violet-500 to-indigo-500 flex items-center justify-center text-white font-semibold">
                   {selectedDelegate.username[0].toUpperCase()}
                 </div>
-                <span className="font-medium text-slate-800">{selectedDelegate.username}</span>
+                <span className="font-medium text-slate-100">{selectedDelegate.username}</span>
               </div>
               <button
                 onClick={() => setSelectedDelegate(null)}
-                className="text-slate-400 hover:text-slate-600"
+                className="text-slate-400 hover:text-slate-300"
               >
                 <XCircle className="w-5 h-5" />
               </button>
@@ -930,7 +930,7 @@ function CreateDelegationModal({ isOpen, onClose }: { isOpen: boolean; onClose: 
                 className="input pl-10"
               />
               {delegateSearch.length >= 2 && (
-                <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                <div className="absolute z-10 w-full mt-1 bg-surface-800 border border-white/10 rounded-lg shadow-lg max-h-48 overflow-y-auto">
                   {searchLoading ? (
                     <div className="p-4 text-center">
                       <Loader2 className="w-5 h-5 text-slate-400 animate-spin mx-auto" />
@@ -943,19 +943,19 @@ function CreateDelegationModal({ isOpen, onClose }: { isOpen: boolean; onClose: 
                           setSelectedDelegate({ id: user.id, username: user.username });
                           setDelegateSearch('');
                         }}
-                        className="w-full flex items-center gap-3 p-3 hover:bg-slate-50 transition-colors text-left"
+                        className="w-full flex items-center gap-3 p-3 hover:bg-white/5 transition-colors text-left"
                       >
                         <div className="w-8 h-8 rounded-full bg-gradient-to-br from-sky-500 to-violet-500 flex items-center justify-center text-white text-sm font-semibold">
                           {user.username[0].toUpperCase()}
                         </div>
                         <div>
-                          <p className="font-medium text-slate-800">{user.display_name || user.username}</p>
-                          <p className="text-xs text-slate-500">{user.trust_level}</p>
+                          <p className="font-medium text-slate-100">{user.display_name || user.username}</p>
+                          <p className="text-xs text-slate-400">{user.trust_level}</p>
                         </div>
                       </button>
                     ))
                   ) : (
-                    <div className="p-4 text-center text-slate-500 text-sm">
+                    <div className="p-4 text-center text-slate-400 text-sm">
                       No users found
                     </div>
                   )}
@@ -963,7 +963,7 @@ function CreateDelegationModal({ isOpen, onClose }: { isOpen: boolean; onClose: 
               )}
             </div>
           )}
-          <p className="text-xs text-slate-500 mt-1">
+          <p className="text-xs text-slate-400 mt-1">
             Choose a trusted community member to vote on your behalf
           </p>
         </div>
@@ -971,7 +971,7 @@ function CreateDelegationModal({ isOpen, onClose }: { isOpen: boolean; onClose: 
         {/* Proposal Types */}
         <div>
           <label className="label">Proposal Types (Optional)</label>
-          <p className="text-xs text-slate-500 mb-2">
+          <p className="text-xs text-slate-400 mb-2">
             Leave empty to delegate for all proposal types, or select specific types
           </p>
           <div className="flex flex-wrap gap-2">
@@ -981,8 +981,8 @@ function CreateDelegationModal({ isOpen, onClose }: { isOpen: boolean; onClose: 
                 onClick={() => toggleType(type)}
                 className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${
                   selectedTypes.includes(type)
-                    ? 'bg-violet-100 border-violet-300 text-violet-700'
-                    : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                    ? 'bg-violet-500/15 border-violet-500/30 text-violet-300'
+                    : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
                 }`}
               >
                 {type}
@@ -1001,8 +1001,8 @@ function CreateDelegationModal({ isOpen, onClose }: { isOpen: boolean; onClose: 
                 onClick={() => setExpirationDays(days)}
                 className={`flex-1 py-2 text-sm rounded-lg border transition-colors ${
                   expirationDays === days
-                    ? 'bg-violet-100 border-violet-300 text-violet-700'
-                    : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                    ? 'bg-violet-500/15 border-violet-500/30 text-violet-300'
+                    : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
                 }`}
               >
                 {days < 30 ? `${days} days` : days < 365 ? `${days / 30} month${days > 30 ? 's' : ''}` : '1 year'}
@@ -1012,15 +1012,15 @@ function CreateDelegationModal({ isOpen, onClose }: { isOpen: boolean; onClose: 
         </div>
 
         {/* Warning */}
-        <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
-          <p className="text-sm text-amber-800">
+        <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+          <p className="text-sm text-amber-300">
             <strong>Note:</strong> The delegate will be able to vote on your behalf using your voting weight.
             You can revoke this delegation at any time.
           </p>
         </div>
 
         {createDelegationMutation.isError && (
-          <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+          <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm">
             Failed to create delegation. Please try again.
           </div>
         )}

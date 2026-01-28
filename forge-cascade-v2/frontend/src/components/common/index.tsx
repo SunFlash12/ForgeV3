@@ -54,21 +54,21 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       return (
         <div className="min-h-[400px] flex items-center justify-center p-8">
           <div className="max-w-md w-full text-center">
-            <div className="w-16 h-16 rounded-2xl bg-red-100 flex items-center justify-center mx-auto mb-4">
-              <AlertTriangle className="w-8 h-8 text-red-600" />
+            <div className="w-16 h-16 rounded-2xl bg-red-500/15 flex items-center justify-center mx-auto mb-4">
+              <AlertTriangle className="w-8 h-8 text-red-400" />
             </div>
-            <h2 className="text-xl font-semibold text-slate-800 mb-2">
+            <h2 className="text-xl font-semibold text-slate-100 mb-2">
               Something went wrong
             </h2>
-            <p className="text-slate-500 mb-6">
+            <p className="text-slate-400 mb-6">
               An unexpected error occurred. Please try again or refresh the page.
             </p>
             {this.state.error && (
-              <details className="mb-6 text-left p-4 bg-slate-100 rounded-lg">
-                <summary className="cursor-pointer text-sm font-medium text-slate-600 mb-2">
+              <details className="mb-6 text-left p-4 bg-white/5 rounded-lg">
+                <summary className="cursor-pointer text-sm font-medium text-slate-300 mb-2">
                   Error details
                 </summary>
-                <pre className="text-xs text-red-600 overflow-auto whitespace-pre-wrap">
+                <pre className="text-xs text-red-400 overflow-auto whitespace-pre-wrap">
                   {this.state.error.message}
                 </pre>
               </details>
@@ -179,12 +179,12 @@ interface BadgeProps {
 
 export function Badge({ children, variant = 'default', className = '', style }: BadgeProps) {
   const variantClasses = {
-    default: 'bg-slate-100 text-slate-700 border-slate-200',
-    success: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    warning: 'bg-amber-50 text-amber-700 border-amber-200',
-    danger: 'bg-red-50 text-red-700 border-red-200',
-    info: 'bg-sky-50 text-sky-700 border-sky-200',
-    secondary: 'bg-violet-50 text-violet-700 border-violet-200',
+    default: 'bg-white/5 text-slate-300 border border-white/10',
+    success: 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30',
+    warning: 'bg-amber-500/15 text-amber-400 border border-amber-500/30',
+    danger: 'bg-red-500/15 text-red-400 border border-red-500/30',
+    info: 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/30',
+    secondary: 'bg-violet-500/15 text-violet-400 border border-violet-500/30',
   };
 
   return (
@@ -279,7 +279,7 @@ export function SeverityBadge({ severity }: SeverityBadgeProps) {
   const severityConfig = {
     LOW: 'badge-info',
     MEDIUM: 'badge-warning',
-    HIGH: 'bg-orange-50 text-orange-600 border border-orange-200',
+    HIGH: 'bg-orange-500/15 text-orange-400 border border-orange-500/30',
     CRITICAL: 'badge-danger',
   };
 
@@ -312,7 +312,7 @@ export function ProgressBar({
   const percentage = Math.min(100, Math.max(0, (value / max) * 100));
 
   const colorClasses = {
-    sky: 'bg-sky-500',
+    sky: 'bg-forge-500',
     violet: 'bg-violet-500',
     emerald: 'bg-emerald-500',
     amber: 'bg-amber-500',
@@ -327,14 +327,14 @@ export function ProgressBar({
 
   return (
     <div className="w-full">
-      <div className={`w-full bg-slate-100 rounded-full overflow-hidden ${sizeClasses[size]}`}>
+      <div className={`w-full bg-white/10 rounded-full overflow-hidden ${sizeClasses[size]}`}>
         <div
           className={`${colorClasses[color]} ${sizeClasses[size]} rounded-full transition-all duration-500 ease-out`}
           style={{ width: `${percentage}%` }}
         />
       </div>
       {showLabel && (
-        <div className="mt-1.5 text-xs text-slate-500 text-right font-medium">
+        <div className="mt-1.5 text-xs text-slate-400 text-right font-medium">
           {value} / {max} ({percentage.toFixed(1)}%)
         </div>
       )}
@@ -357,13 +357,13 @@ export function EmptyState({ icon, title, description, action }: EmptyStateProps
   return (
     <div className="empty-state">
       {icon && (
-        <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-4 text-slate-400">
+        <div className="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center mb-4 text-slate-400">
           {icon}
         </div>
       )}
-      <h3 className="text-lg font-semibold text-slate-800 mb-2">{title}</h3>
+      <h3 className="text-lg font-semibold text-slate-100 mb-2">{title}</h3>
       {description && (
-        <p className="text-slate-500 max-w-md mb-6">{description}</p>
+        <p className="text-slate-400 max-w-md mb-6">{description}</p>
       )}
       {action}
     </div>
@@ -388,8 +388,8 @@ export function LoadingSpinner({ size = 'md', label }: LoadingSpinnerProps) {
 
   return (
     <div className="flex flex-col items-center justify-center gap-4">
-      <div className={`${sizeClasses[size]} border-sky-500 border-t-transparent rounded-full animate-spin`} />
-      {label && <p className="text-slate-500 text-sm font-medium">{label}</p>}
+      <div className={`${sizeClasses[size]} border-forge-500 border-t-transparent rounded-full animate-spin`} />
+      {label && <p className="text-slate-400 text-sm font-medium">{label}</p>}
     </div>
   );
 }
@@ -409,24 +409,24 @@ interface StatCardProps {
 export function StatCard({ label, value, icon, trend, color = 'default' }: StatCardProps) {
   const colorClasses = {
     default: '',
-    success: 'border-emerald-200 bg-emerald-50/50',
-    warning: 'border-amber-200 bg-amber-50/50',
-    danger: 'border-red-200 bg-red-50/50',
+    success: 'border-emerald-500/30 bg-emerald-500/10',
+    warning: 'border-amber-500/30 bg-amber-500/10',
+    danger: 'border-red-500/30 bg-red-500/10',
   };
 
   const iconBgClasses = {
-    default: 'bg-slate-100 text-slate-500',
-    success: 'bg-emerald-100 text-emerald-600',
-    warning: 'bg-amber-100 text-amber-600',
-    danger: 'bg-red-100 text-red-600',
+    default: 'bg-white/5 text-slate-400',
+    success: 'bg-emerald-500/10 text-emerald-400',
+    warning: 'bg-amber-500/10 text-amber-400',
+    danger: 'bg-red-500/10 text-red-400',
   };
 
   return (
     <div className={`card ${colorClasses[color]}`}>
       <div className="flex items-start justify-between">
         <div>
-          <p className="text-sm font-medium text-slate-500 mb-1">{label}</p>
-          <p className="text-2xl font-bold text-slate-800">{value}</p>
+          <p className="text-sm font-medium text-slate-400 mb-1">{label}</p>
+          <p className="text-2xl font-bold text-slate-100">{value}</p>
           {trend && (
             <div className={`flex items-center gap-1 mt-2 text-sm font-medium ${trend.isPositive ? 'text-emerald-600' : 'text-red-600'}`}>
               {trend.isPositive ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
@@ -490,22 +490,22 @@ export function Modal({ isOpen, onClose, title, children, footer, size = 'md' }:
   if (!isOpen) return null;
 
   const sizeClasses = {
-    sm: 'max-w-sm',
-    md: 'max-w-md',
-    lg: 'max-w-lg',
-    xl: 'max-w-2xl',
+    sm: 'max-w-[calc(100vw-1rem)] sm:max-w-sm',
+    md: 'max-w-[calc(100vw-1rem)] sm:max-w-md',
+    lg: 'max-w-[calc(100vw-1rem)] sm:max-w-lg',
+    xl: 'max-w-[calc(100vw-1rem)] sm:max-w-2xl',
   };
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="modal-title"
     >
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
         onClick={onClose}
         aria-hidden="true"
       />
@@ -513,16 +513,16 @@ export function Modal({ isOpen, onClose, title, children, footer, size = 'md' }:
       {/* Modal */}
       <div
         ref={modalRef}
-        className={`relative ${sizeClasses[size]} w-full bg-white rounded-2xl shadow-2xl animate-scale-in max-h-[90vh] overflow-y-auto`}
+        className={`relative ${sizeClasses[size]} w-full bg-surface-800 rounded-2xl shadow-2xl border border-white/10 animate-scale-in max-h-[95vh] sm:max-h-[90vh] overflow-y-auto`}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 sticky top-0 bg-white rounded-t-2xl">
-          <h2 id="modal-title" className="text-lg font-semibold text-slate-800">{title}</h2>
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-white/10 sticky top-0 bg-surface-800 rounded-t-2xl">
+          <h2 id="modal-title" className="text-base sm:text-lg font-semibold text-slate-100">{title}</h2>
           <button
             ref={closeButtonRef}
             type="button"
             onClick={onClose}
-            className="p-2 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors focus:outline-none focus:ring-2 focus:ring-sky-500"
+            className="p-2 rounded-xl hover:bg-white/5 text-slate-400 hover:text-slate-200 transition-colors focus:outline-none focus:ring-2 focus:ring-forge-500"
             aria-label="Close dialog"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
@@ -532,13 +532,13 @@ export function Modal({ isOpen, onClose, title, children, footer, size = 'md' }:
         </div>
 
         {/* Content */}
-        <div className="px-6 py-5">
+        <div className="px-4 sm:px-6 py-4 sm:py-5">
           {children}
         </div>
 
         {/* Footer */}
         {footer && (
-          <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-100 bg-slate-50 rounded-b-2xl sticky bottom-0">
+          <div className="flex items-center justify-end gap-3 px-4 sm:px-6 py-3 sm:py-4 border-t border-white/10 bg-surface-700 rounded-b-2xl sticky bottom-0">
             {footer}
           </div>
         )}
@@ -664,3 +664,4 @@ export function Skeleton({ className = '', variant = 'text', width, height }: Sk
 
 // Re-export Logo component
 export { Logo, LogoIcon } from './Logo';
+export { NetworkBackground } from './NetworkBackground';

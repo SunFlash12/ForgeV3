@@ -24,6 +24,7 @@ services:
       - cascade-api
       - frontend
       - marketplace
+      - pitch-deck
     networks:
       - forge-network
     restart: unless-stopped
@@ -209,6 +210,26 @@ services:
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  pitch-deck:
+    image: ghcr.io/${GITHUB_REPO:-forgecascade/forge}/pitch-deck:${VERSION:-latest}
+    build:
+      context: ./pitch-deck
+      dockerfile: Dockerfile
+    container_name: forge-pitch-deck
+    expose:
+      - "80"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - forge-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:80/health"]
       interval: 30s
       timeout: 10s
       retries: 3

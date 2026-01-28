@@ -55,7 +55,7 @@ const getStatusColor = (status: string) => {
     case 'healthy': return 'text-green-400';
     case 'degraded': return 'text-amber-400';
     case 'unhealthy': return 'text-red-400';
-    default: return 'text-slate-500';
+    default: return 'text-slate-400';
   }
 };
 
@@ -182,12 +182,12 @@ export default function SystemPage() {
   const healthData = health as SystemHealth | undefined;
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="px-3 sm:px-4 lg:px-6 py-4 sm:py-6 max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800 mb-2">System Monitor</h1>
-          <p className="text-slate-500">
+          <h1 className="text-2xl font-bold text-slate-100 mb-2">System Monitor</h1>
+          <p className="text-slate-400">
             Real-time system health and performance monitoring
           </p>
         </div>
@@ -216,7 +216,7 @@ export default function SystemPage() {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-xl font-semibold text-slate-800">System Status</h2>
+                <h2 className="text-xl font-semibold text-slate-100">System Status</h2>
                 <span className={`px-2 py-1 rounded text-sm font-medium capitalize ${
                   healthData?.status === 'healthy' ? 'bg-green-500/20 text-green-400' :
                   healthData?.status === 'degraded' ? 'bg-amber-500/20 text-amber-400' : 'bg-red-500/20 text-red-400'
@@ -224,15 +224,15 @@ export default function SystemPage() {
                   {healthData?.status || 'Unknown'}
                 </span>
               </div>
-              <p className="text-slate-500">
+              <p className="text-slate-400">
                 Uptime: {healthData?.uptime_seconds ? `${Math.floor(healthData.uptime_seconds / 3600)}h ${Math.floor((healthData.uptime_seconds % 3600) / 60)}m` : 'N/A'}
                 {healthData?.timestamp && ` • Last check: ${format(new Date(healthData.timestamp), 'HH:mm:ss')}`}
               </p>
             </div>
           </div>
           <div className="text-right">
-            <div className="text-sm text-slate-500">Version</div>
-            <div className="text-slate-800 font-mono">{healthData?.version || 'N/A'}</div>
+            <div className="text-sm text-slate-400">Version</div>
+            <div className="text-slate-100 font-mono">{healthData?.version || 'N/A'}</div>
           </div>
         </div>
       </Card>
@@ -242,7 +242,7 @@ export default function SystemPage() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className={`p-3 rounded-xl ${
-              maintenanceStatus?.enabled ? 'bg-amber-500/20' : 'bg-slate-100'
+              maintenanceStatus?.enabled ? 'bg-amber-500/20' : 'bg-white/5'
             }`}>
               <Power className={`w-8 h-8 ${
                 maintenanceStatus?.enabled ? 'text-amber-500' : 'text-slate-400'
@@ -250,26 +250,26 @@ export default function SystemPage() {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-xl font-semibold text-slate-800">Maintenance Mode</h2>
+                <h2 className="text-xl font-semibold text-slate-100">Maintenance Mode</h2>
                 {maintenanceLoading ? (
                   <Loader2 className="w-4 h-4 text-slate-400 animate-spin" />
                 ) : (
                   <span className={`px-2 py-1 rounded text-sm font-medium ${
                     maintenanceStatus?.enabled
-                      ? 'bg-amber-500/20 text-amber-600'
-                      : 'bg-green-500/20 text-green-600'
+                      ? 'bg-amber-500/20 text-amber-400'
+                      : 'bg-green-500/20 text-green-400'
                   }`}>
                     {maintenanceStatus?.enabled ? 'ACTIVE' : 'INACTIVE'}
                   </span>
                 )}
               </div>
-              <p className="text-slate-500 mt-1">
+              <p className="text-slate-400 mt-1">
                 {maintenanceStatus?.enabled
                   ? maintenanceStatus.message || 'System is under maintenance'
                   : 'System is operating normally'}
               </p>
               {maintenanceStatus?.enabled && maintenanceStatus.ends_at && (
-                <p className="text-sm text-amber-600 mt-1">
+                <p className="text-sm text-amber-400 mt-1">
                   Ends: {format(new Date(maintenanceStatus.ends_at), 'PPpp')}
                 </p>
               )}
@@ -278,7 +278,7 @@ export default function SystemPage() {
 
           <div className="flex items-center gap-3">
             {!isCore ? (
-              <div className="flex items-center gap-2 text-slate-500">
+              <div className="flex items-center gap-2 text-slate-400">
                 <Lock className="w-4 h-4" />
                 <span className="text-sm">CORE access required</span>
               </div>
@@ -305,17 +305,17 @@ export default function SystemPage() {
 
         {/* Active Maintenance Details */}
         {maintenanceStatus?.enabled && (
-          <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+          <div className="mt-4 p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg">
             <div className="flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+              <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
               <div className="flex-1">
-                <h4 className="font-medium text-amber-800">Maintenance Active</h4>
-                <p className="text-sm text-amber-700 mt-1">
+                <h4 className="font-medium text-amber-400">Maintenance Active</h4>
+                <p className="text-sm text-amber-300 mt-1">
                   External users and non-essential services are restricted during maintenance.
                   Only CORE and TRUSTED users have access to critical functions.
                 </p>
                 {maintenanceStatus.started_at && (
-                  <p className="text-xs text-amber-600 mt-2">
+                  <p className="text-xs text-amber-400 mt-2">
                     Started: {formatDistanceToNow(new Date(maintenanceStatus.started_at))} ago
                   </p>
                 )}
@@ -333,8 +333,8 @@ export default function SystemPage() {
               <Activity className="w-5 h-5 text-blue-400" />
             </div>
             <div>
-              <div className="text-2xl font-bold text-slate-800">{metrics?.events_processed_total || 0}</div>
-              <div className="text-xs text-slate-500">Events Processed</div>
+              <div className="text-2xl font-bold text-slate-100">{metrics?.events_processed_total || 0}</div>
+              <div className="text-xs text-slate-400">Events Processed</div>
             </div>
           </div>
         </Card>
@@ -344,8 +344,8 @@ export default function SystemPage() {
               <Zap className="w-5 h-5 text-green-400" />
             </div>
             <div>
-              <div className="text-2xl font-bold text-slate-800">{metrics?.active_overlays || 0}</div>
-              <div className="text-xs text-slate-500">Active Overlays</div>
+              <div className="text-2xl font-bold text-slate-100">{metrics?.active_overlays || 0}</div>
+              <div className="text-xs text-slate-400">Active Overlays</div>
             </div>
           </div>
         </Card>
@@ -355,8 +355,8 @@ export default function SystemPage() {
               <Clock className="w-5 h-5 text-purple-400" />
             </div>
             <div>
-              <div className="text-2xl font-bold text-slate-800">{metrics?.average_pipeline_duration_ms?.toFixed(0) || 0}ms</div>
-              <div className="text-xs text-slate-500">Avg Pipeline Time</div>
+              <div className="text-2xl font-bold text-slate-100">{metrics?.average_pipeline_duration_ms?.toFixed(0) || 0}ms</div>
+              <div className="text-xs text-slate-400">Avg Pipeline Time</div>
             </div>
           </div>
         </Card>
@@ -366,8 +366,8 @@ export default function SystemPage() {
               <AlertTriangle className="w-5 h-5 text-amber-400" />
             </div>
             <div>
-              <div className="text-2xl font-bold text-slate-800">{metrics?.active_anomalies || 0}</div>
-              <div className="text-xs text-slate-500">Active Anomalies</div>
+              <div className="text-2xl font-bold text-slate-100">{metrics?.active_anomalies || 0}</div>
+              <div className="text-xs text-slate-400">Active Anomalies</div>
             </div>
           </div>
         </Card>
@@ -377,8 +377,8 @@ export default function SystemPage() {
               <Shield className="w-5 h-5 text-red-400" />
             </div>
             <div>
-              <div className="text-2xl font-bold text-slate-800">{metrics?.open_circuit_breakers || 0}</div>
-              <div className="text-xs text-slate-500">Open Breakers</div>
+              <div className="text-2xl font-bold text-slate-100">{metrics?.open_circuit_breakers || 0}</div>
+              <div className="text-xs text-slate-400">Open Breakers</div>
             </div>
           </div>
         </Card>
@@ -387,7 +387,7 @@ export default function SystemPage() {
       <div className="grid grid-cols-2 gap-6 mb-8">
         {/* Component Health */}
         <Card className="p-6">
-          <h3 className="text-lg font-semibold text-slate-800 mb-4">Component Health</h3>
+          <h3 className="text-lg font-semibold text-slate-100 mb-4">Component Health</h3>
           <div className="space-y-3">
             {healthData?.components && Object.entries(healthData.components).map(([name, component]) => {
               const Icon = componentIcons[name] || Activity;
@@ -395,10 +395,10 @@ export default function SystemPage() {
               const componentStatus = component.status || 'unknown';
               const StatusIcon = getStatusIcon(componentStatus);
               return (
-                <div key={name} className="flex items-center justify-between p-3 bg-slate-100/30 rounded-lg">
+                <div key={name} className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
                   <div className="flex items-center gap-3">
-                    <Icon className="w-5 h-5 text-slate-500" />
-                    <span className="text-slate-800 capitalize">{name.replace(/_/g, ' ')}</span>
+                    <Icon className="w-5 h-5 text-slate-400" />
+                    <span className="text-slate-100 capitalize">{name.replace(/_/g, ' ')}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <StatusIcon className={`w-5 h-5 ${getStatusColor(componentStatus)}`} />
@@ -410,25 +410,25 @@ export default function SystemPage() {
               );
             })}
             {(!healthData?.components || Object.keys(healthData.components).length === 0) && (
-              <p className="text-slate-500 text-center py-4">No component data available</p>
+              <p className="text-slate-400 text-center py-4">No component data available</p>
             )}
           </div>
         </Card>
 
         {/* Circuit Breakers */}
         <Card className="p-6">
-          <h3 className="text-lg font-semibold text-slate-800 mb-4">Circuit Breakers</h3>
+          <h3 className="text-lg font-semibold text-slate-100 mb-4">Circuit Breakers</h3>
           <div className="space-y-3">
             {circuitBreakers.map((breaker: CircuitBreaker) => (
-              <div key={breaker.name} className="flex items-center justify-between p-3 bg-slate-100/30 rounded-lg">
+              <div key={breaker.name} className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
                 <div className="flex items-center gap-3">
                   <Shield className={`w-5 h-5 ${
                     breaker.state === 'CLOSED' ? 'text-green-400' :
                     breaker.state === 'HALF_OPEN' ? 'text-amber-400' : 'text-red-400'
                   }`} />
                   <div>
-                    <span className="text-slate-800">{breaker.name}</span>
-                    <div className="text-xs text-slate-500">
+                    <span className="text-slate-100">{breaker.name}</span>
+                    <div className="text-xs text-slate-400">
                       {breaker.failure_count} failures / {breaker.success_count} successes
                     </div>
                   </div>
@@ -454,7 +454,7 @@ export default function SystemPage() {
               </div>
             ))}
             {circuitBreakers.length === 0 && (
-              <p className="text-slate-500 text-center py-4">No circuit breakers configured</p>
+              <p className="text-slate-400 text-center py-4">No circuit breakers configured</p>
             )}
           </div>
         </Card>
@@ -463,14 +463,14 @@ export default function SystemPage() {
       {/* Charts */}
       <div className="grid grid-cols-2 gap-6 mb-8">
         <Card className="p-6">
-          <h3 className="text-lg font-semibold text-slate-800 mb-4">Event Processing (24h)</h3>
+          <h3 className="text-lg font-semibold text-slate-100 mb-4">Event Processing (24h)</h3>
           <ResponsiveContainer width="100%" height={200}>
             <AreaChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-              <XAxis dataKey="time" stroke="#94a3b8" fontSize={12} />
-              <YAxis stroke="#94a3b8" fontSize={12} />
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+              <XAxis dataKey="time" stroke="#64748b" fontSize={12} />
+              <YAxis stroke="#64748b" fontSize={12} />
               <Tooltip
-                contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155' }}
+                contentStyle={{ backgroundColor: '#0f0f2e', border: '1px solid rgba(255,255,255,0.1)' }}
                 labelStyle={{ color: '#f8fafc' }}
               />
               <Area type="monotone" dataKey="events" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.2} />
@@ -479,14 +479,14 @@ export default function SystemPage() {
         </Card>
 
         <Card className="p-6">
-          <h3 className="text-lg font-semibold text-slate-800 mb-4">Response Latency (24h)</h3>
+          <h3 className="text-lg font-semibold text-slate-100 mb-4">Response Latency (24h)</h3>
           <ResponsiveContainer width="100%" height={200}>
             <LineChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-              <XAxis dataKey="time" stroke="#94a3b8" fontSize={12} />
-              <YAxis stroke="#94a3b8" fontSize={12} />
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+              <XAxis dataKey="time" stroke="#64748b" fontSize={12} />
+              <YAxis stroke="#64748b" fontSize={12} />
               <Tooltip
-                contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155' }}
+                contentStyle={{ backgroundColor: '#0f0f2e', border: '1px solid rgba(255,255,255,0.1)' }}
                 labelStyle={{ color: '#f8fafc' }}
               />
               <Line type="monotone" dataKey="latency" stroke="#10b981" strokeWidth={2} dot={false} />
@@ -498,8 +498,8 @@ export default function SystemPage() {
       {/* Active Anomalies */}
       <Card className="p-6">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-slate-800">Active Anomalies</h3>
-          <span className="text-sm text-slate-500">{anomalies.length} unresolved</span>
+          <h3 className="text-lg font-semibold text-slate-100">Active Anomalies</h3>
+          <span className="text-sm text-slate-400">{anomalies.length} unresolved</span>
         </div>
 
         {anomalies.length > 0 ? (
@@ -507,28 +507,28 @@ export default function SystemPage() {
             {anomalies.map((anomaly: Anomaly) => (
               <div
                 key={anomaly.id}
-                className="flex items-center justify-between p-4 bg-slate-100/30 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer"
+                className="flex items-center justify-between p-4 bg-white/5 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
                 onClick={() => setSelectedAnomaly(anomaly)}
               >
                 <div className="flex items-center gap-4">
                   <SeverityBadge severity={anomaly.severity} />
                   <div>
-                    <div className="text-slate-800 font-medium">{anomaly.metric_name}</div>
-                    <div className="text-sm text-slate-500">
+                    <div className="text-slate-100 font-medium">{anomaly.metric_name}</div>
+                    <div className="text-sm text-slate-400">
                       {anomaly.anomaly_type} • Score: {anomaly.anomaly_score.toFixed(2)}
                     </div>
                   </div>
                 </div>
                 <div className="flex items-center gap-4">
                   <div className="text-right text-sm">
-                    <div className="text-slate-500">
+                    <div className="text-slate-400">
                       {formatDistanceToNow(new Date(anomaly.detected_at))} ago
                     </div>
                     {anomaly.acknowledged && (
                       <div className="text-amber-400">Acknowledged</div>
                     )}
                   </div>
-                  <ChevronRight className="w-5 h-5 text-slate-500" />
+                  <ChevronRight className="w-5 h-5 text-slate-400" />
                 </div>
               </div>
             ))}
@@ -554,29 +554,29 @@ export default function SystemPage() {
             <div className="flex items-center gap-4">
               <SeverityBadge severity={selectedAnomaly.severity} />
               <div>
-                <h3 className="text-lg font-medium text-slate-800">{selectedAnomaly.metric_name}</h3>
-                <p className="text-sm text-slate-500">{selectedAnomaly.anomaly_type}</p>
+                <h3 className="text-lg font-medium text-slate-100">{selectedAnomaly.metric_name}</h3>
+                <p className="text-sm text-slate-400">{selectedAnomaly.anomaly_type}</p>
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <div className="p-4 bg-slate-100/30 rounded-lg">
-                <div className="text-sm text-slate-500 mb-1">Actual Value</div>
-                <div className="text-xl font-bold text-slate-800">{selectedAnomaly.value.toFixed(2)}</div>
+              <div className="p-4 bg-white/5 rounded-lg">
+                <div className="text-sm text-slate-400 mb-1">Actual Value</div>
+                <div className="text-xl font-bold text-slate-100">{selectedAnomaly.value.toFixed(2)}</div>
               </div>
-              <div className="p-4 bg-slate-100/30 rounded-lg">
-                <div className="text-sm text-slate-500 mb-1">Expected Value</div>
-                <div className="text-xl font-bold text-slate-800">
+              <div className="p-4 bg-white/5 rounded-lg">
+                <div className="text-sm text-slate-400 mb-1">Expected Value</div>
+                <div className="text-xl font-bold text-slate-100">
                   {selectedAnomaly.expected_value?.toFixed(2) || 'N/A'}
                 </div>
               </div>
-              <div className="p-4 bg-slate-100/30 rounded-lg">
-                <div className="text-sm text-slate-500 mb-1">Anomaly Score</div>
-                <div className="text-xl font-bold text-slate-800">{selectedAnomaly.anomaly_score.toFixed(3)}</div>
+              <div className="p-4 bg-white/5 rounded-lg">
+                <div className="text-sm text-slate-400 mb-1">Anomaly Score</div>
+                <div className="text-xl font-bold text-slate-100">{selectedAnomaly.anomaly_score.toFixed(3)}</div>
               </div>
-              <div className="p-4 bg-slate-100/30 rounded-lg">
-                <div className="text-sm text-slate-500 mb-1">Detected</div>
-                <div className="text-slate-800">{format(new Date(selectedAnomaly.detected_at), 'PPpp')}</div>
+              <div className="p-4 bg-white/5 rounded-lg">
+                <div className="text-sm text-slate-400 mb-1">Detected</div>
+                <div className="text-slate-100">{format(new Date(selectedAnomaly.detected_at), 'PPpp')}</div>
               </div>
             </div>
 
@@ -639,12 +639,12 @@ export default function SystemPage() {
         size="md"
       >
         <div className="space-y-6">
-          <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+          <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg">
             <div className="flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+              <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
               <div>
-                <h4 className="font-medium text-amber-800">Warning</h4>
-                <p className="text-sm text-amber-700 mt-1">
+                <h4 className="font-medium text-amber-400">Warning</h4>
+                <p className="text-sm text-amber-300 mt-1">
                   Enabling maintenance mode will restrict access for most users. Only CORE and
                   TRUSTED users will have limited access to critical functions.
                 </p>
@@ -660,7 +660,7 @@ export default function SystemPage() {
               onChange={(e) => setMaintenanceMessage(e.target.value)}
               placeholder="Message to display to users..."
             />
-            <p className="text-xs text-slate-500 mt-1">
+            <p className="text-xs text-slate-400 mt-1">
               This message will be shown to users attempting to access the system.
             </p>
           </div>
@@ -684,8 +684,8 @@ export default function SystemPage() {
                     onClick={() => setMaintenanceDuration(mins)}
                     className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${
                       maintenanceDuration === mins
-                        ? 'bg-sky-100 border-sky-300 text-sky-700'
-                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                        ? 'bg-forge-500/15 border-forge-500/30 text-forge-400'
+                        : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
                     }`}
                   >
                     {mins < 60 ? `${mins}m` : `${mins / 60}h`}
@@ -693,12 +693,12 @@ export default function SystemPage() {
                 ))}
               </div>
             </div>
-            <p className="text-xs text-slate-500 mt-1">
+            <p className="text-xs text-slate-400 mt-1">
               Maintenance will automatically end after this duration.
             </p>
           </div>
 
-          <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
+          <div className="flex justify-end gap-3 pt-4 border-t border-white/10">
             <Button variant="ghost" onClick={() => setShowMaintenanceModal(false)}>
               Cancel
             </Button>

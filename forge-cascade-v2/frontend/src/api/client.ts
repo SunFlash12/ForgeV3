@@ -23,6 +23,14 @@ import type {
   PaginatedResponse,
   PaginationParams,
 } from '../types';
+import type {
+  MarketplaceCapsule,
+  CapsuleFilters,
+  CapsuleSearchResult,
+  PurchaseItem,
+  PurchaseResponse,
+  TransactionStatus,
+} from '../types/marketplace';
 
 // ============================================================================
 // API Client Setup
@@ -928,6 +936,82 @@ class ForgeApiClient {
   }> {
     const response = await this.client.get(`/users/${userId}`);
     return response.data;
+  }
+
+  // ============================================================================
+  // Marketplace Endpoints
+  // ============================================================================
+
+  async getMarketplaceCapsules(filters?: CapsuleFilters): Promise<CapsuleSearchResult> {
+    const params = new URLSearchParams();
+    if (filters) {
+      if (filters.page) params.append('page', String(filters.page));
+      if (filters.per_page) params.append('per_page', String(filters.per_page));
+      if (filters.category) params.append('category', filters.category);
+      if (filters.search) params.append('search', filters.search);
+      if (filters.min_trust) params.append('min_trust', String(filters.min_trust));
+      if (filters.is_public !== undefined) params.append('is_public', String(filters.is_public));
+      if (filters.author_id) params.append('author_id', filters.author_id);
+      if (filters.tags?.length) {
+        filters.tags.forEach(tag => params.append('tags', tag));
+      }
+    }
+    const { data } = await this.client.get<CapsuleSearchResult>(`/capsules?${params.toString()}`);
+    return data;
+  }
+
+  async searchMarketplaceCapsules(query: string, filters?: CapsuleFilters): Promise<CapsuleSearchResult> {
+    const { data } = await this.client.post<CapsuleSearchResult>('/capsules/search', {
+      query,
+      ...filters,
+    });
+    return data;
+  }
+
+  async getFeaturedCapsules(limit: number = 4): Promise<MarketplaceCapsule[]> {
+    const { data } = await this.client.get<CapsuleSearchResult>('/capsules', {
+      params: { per_page: limit, is_public: true },
+    });
+    return data.capsules;
+  }
+
+  async submitPurchase(
+    items: PurchaseItem[],
+    walletAddress: string,
+    transactionHash: string
+  ): Promise<PurchaseResponse> {
+    const { data } = await this.client.post<PurchaseResponse>('/marketplace/purchase', {
+      items,
+      wallet_address: walletAddress,
+      transaction_hash: transactionHash,
+    });
+    return data;
+  }
+
+  async getTransactionStatus(transactionHash: string): Promise<TransactionStatus> {
+    const { data } = await this.client.get<TransactionStatus>(
+      `/marketplace/transaction/${transactionHash}`
+    );
+    return data;
+  }
+
+  async getVirtualPrice(): Promise<{ price_usd: number; updated_at: string }> {
+    const { data } = await this.client.get<{ price_usd: number; updated_at: string }>(
+      '/marketplace/virtual-price'
+    );
+    return data;
+  }
+
+  async purchaseCapsule(capsuleId: string): Promise<{ success: boolean; transaction_id: string }> {
+    const { data } = await this.client.post(`/marketplace/listings/${capsuleId}/purchase`, {
+      capsule_id: capsuleId,
+    });
+    return data;
+  }
+
+  async getMyPurchases(): Promise<Capsule[]> {
+    const { data } = await this.client.get<{ capsules: Capsule[] }>('/marketplace/purchases');
+    return data.capsules;
   }
 
   // ============================================================================

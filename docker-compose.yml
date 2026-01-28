@@ -136,6 +136,10 @@ services:
         - VITE_API_URL=https://forgecascade.org/api/v1
         - VITE_GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
         - VITE_SENTRY_DSN=${SENTRY_DSN:-}
+        - VITE_WALLETCONNECT_PROJECT_ID=${WALLETCONNECT_PROJECT_ID:-}
+        - VITE_USE_TESTNET=${USE_TESTNET:-false}
+        - VITE_MARKETPLACE_CONTRACT_MAINNET=${MARKETPLACE_CONTRACT_MAINNET:-}
+        - VITE_MARKETPLACE_CONTRACT_TESTNET=${MARKETPLACE_CONTRACT_TESTNET:-}
     container_name: forge-frontend
     # SECURITY FIX: Bind to localhost in development; in production use nginx reverse proxy
     ports:
@@ -164,29 +168,15 @@ services:
           cpus: '0.1'
           memory: 64M
 
-  marketplace:
+  pitch-deck:
     build:
-      context: ./marketplace
+      context: ./pitch-deck
       dockerfile: Dockerfile
-      args:
-        - VITE_CASCADE_API_URL=https://forgecascade.org/api/v1
-        - VITE_WS_URL=wss://forgeshop.org/ws
-        - VITE_APP_NAME=Forge Shop
-        - VITE_GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
-        - VITE_WALLETCONNECT_PROJECT_ID=${WALLETCONNECT_PROJECT_ID:-}
-        - VITE_USE_TESTNET=${USE_TESTNET:-false}
-        - VITE_MARKETPLACE_CONTRACT_MAINNET=${MARKETPLACE_CONTRACT_MAINNET:-}
-        - VITE_MARKETPLACE_CONTRACT_TESTNET=${MARKETPLACE_CONTRACT_TESTNET:-}
-        - VITE_SENTRY_DSN=${SENTRY_DSN:-}
-    container_name: forge-marketplace
+    container_name: forge-pitch-deck
     ports:
-      - "3001:80"
-    # SECURITY FIX: Add security options
+      - "127.0.0.1:3003:80"
     security_opt:
       - no-new-privileges:true
-    depends_on:
-      cascade-api:
-        condition: service_healthy
     networks:
       - forge-network
     restart: unless-stopped

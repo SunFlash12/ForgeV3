@@ -9,6 +9,7 @@ import './index.css';
 import App from './App';
 import { ErrorBoundary } from './components/common';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { Web3Provider } from './contexts/Web3Context';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
@@ -68,11 +69,13 @@ const AppWithProviders = () => {
     <StrictMode>
       <ErrorBoundary onError={handleGlobalError}>
         <ThemeProvider>
-          <QueryClientProvider client={queryClient}>
-            <BrowserRouter>
-              <App />
-            </BrowserRouter>
-          </QueryClientProvider>
+          <Web3Provider>
+            <QueryClientProvider client={queryClient}>
+              <BrowserRouter>
+                <App />
+              </BrowserRouter>
+            </QueryClientProvider>
+          </Web3Provider>
         </ThemeProvider>
       </ErrorBoundary>
     </StrictMode>

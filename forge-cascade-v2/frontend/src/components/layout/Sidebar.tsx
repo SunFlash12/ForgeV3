@@ -14,9 +14,12 @@ import {
   GitBranch,
   Stethoscope,
   Users,
+  Store,
+  X,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuthStore } from '../../stores/authStore';
+import { useCartStore } from '../../stores/cartStore';
 import { Logo, LogoIcon } from '../common';
 
 interface NavItem {
@@ -26,9 +29,17 @@ interface NavItem {
   requiredTrust?: string[];
 }
 
+interface SidebarProps {
+  isMobileOpen: boolean;
+  onMobileClose: () => void;
+  isPhone: boolean;
+  isTablet: boolean;
+}
+
 const navItems: NavItem[] = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
   { icon: Database, label: 'Capsules', path: '/capsules' },
+  { icon: Store, label: 'Marketplace', path: '/marketplace' },
   { icon: GitBranch, label: 'Graph Explorer', path: '/graph' },
   { icon: Stethoscope, label: 'Diagnosis', path: '/diagnosis' },
   { icon: Vote, label: 'Governance', path: '/governance' },
@@ -43,9 +54,16 @@ const bottomNavItems: NavItem[] = [
   { icon: Settings, label: 'Settings', path: '/settings' },
 ];
 
-export function Sidebar() {
+export function Sidebar({ isMobileOpen, onMobileClose, isPhone, isTablet }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
   const { user, logout } = useAuthStore();
+  const cartItemCount = useCartStore((s) => s.itemCount);
+
+  // Auto-collapse on tablet
+  useEffect(() => {
+    if (isTablet) setCollapsed(true);
+    if (!isTablet && !isPhone) setCollapsed(false);
+  }, [isTablet, isPhone]);
 
   const canAccess = (item: NavItem) => {
     if (!item.requiredTrust) return true;
@@ -64,41 +82,62 @@ export function Sidebar() {
     }
   };
 
-  return (
+  // On phone, nav clicks close the drawer
+  const handleNavClick = () => {
+    if (isPhone) onMobileClose();
+  };
+
+  // Determine if sidebar content should show labels (not collapsed)
+  const showLabels = isPhone || !collapsed;
+
+  const sidebarContent = (
     <aside
-      className={`flex flex-col bg-white border-r border-slate-200 transition-all duration-300 ${
-        collapsed ? 'w-[72px]' : 'w-64'
+      className={`flex flex-col bg-surface-800/80 backdrop-blur-md border-r border-white/10 h-full ${
+        isPhone
+          ? 'w-64'
+          : `transition-all duration-300 ${collapsed ? 'w-[72px]' : 'w-64'}`
       }`}
     >
       {/* Logo */}
-      <div className="flex items-center justify-between p-4 border-b border-slate-100">
-        {!collapsed ? (
+      <div className="flex items-center justify-between p-4 border-b border-white/10">
+        {showLabels ? (
           <Logo size="sm" showText={true} />
         ) : (
           <div className="mx-auto">
             <LogoIcon size={36} />
           </div>
         )}
-        <button
-          type="button"
-          onClick={() => setCollapsed(!collapsed)}
-          className={`p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors focus:outline-none focus:ring-2 focus:ring-sky-500 ${collapsed ? 'hidden' : ''}`}
-          aria-label="Collapse sidebar"
-          aria-expanded={!collapsed}
-        >
-          <ChevronLeft size={18} aria-hidden="true" />
-        </button>
+        {isPhone ? (
+          <button
+            type="button"
+            onClick={onMobileClose}
+            className="p-2.5 rounded-lg hover:bg-white/5 text-slate-500 hover:text-slate-300 transition-colors focus:outline-none focus:ring-2 focus:ring-forge-500"
+            aria-label="Close navigation menu"
+          >
+            <X size={20} aria-hidden="true" />
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setCollapsed(!collapsed)}
+            className={`p-2.5 rounded-lg hover:bg-white/5 text-slate-500 hover:text-slate-300 transition-colors focus:outline-none focus:ring-2 focus:ring-forge-500 ${collapsed ? 'hidden' : ''}`}
+            aria-label="Collapse sidebar"
+            aria-expanded={!collapsed}
+          >
+            <ChevronLeft size={18} aria-hidden="true" />
+          </button>
+        )}
       </div>
 
       {/* User Info */}
       {user && (
-        <div className={`p-4 border-b border-slate-100 ${collapsed ? 'hidden' : ''}`}>
+        <div className={`p-4 border-b border-white/10 ${!showLabels ? 'hidden' : ''}`}>
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-sky-500 to-violet-500 flex items-center justify-center text-white font-semibold shadow-md">
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-forge-500 to-cyber-purple flex items-center justify-center text-white font-semibold shadow-md">
               {user.display_name?.[0] || user.username[0].toUpperCase()}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-slate-800 truncate">
+              <p className="text-sm font-semibold text-slate-100 truncate">
                 {user.display_name || user.username}
               </p>
               <span className={`${getTrustBadgeClass()} badge-sm mt-1`}>
@@ -109,13 +148,13 @@ export function Sidebar() {
         </div>
       )}
 
-      {/* Expand button when collapsed */}
-      {collapsed && (
-        <div className="p-3 border-b border-slate-100">
+      {/* Expand button when collapsed (tablet/desktop only) */}
+      {!isPhone && collapsed && (
+        <div className="p-3 border-b border-white/10">
           <button
             type="button"
             onClick={() => setCollapsed(false)}
-            className="w-full p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors flex justify-center focus:outline-none focus:ring-2 focus:ring-sky-500"
+            className="w-full p-2.5 rounded-lg hover:bg-white/5 text-slate-500 hover:text-slate-300 transition-colors flex justify-center focus:outline-none focus:ring-2 focus:ring-forge-500"
             aria-label="Expand sidebar"
             aria-expanded={false}
           >
@@ -130,53 +169,89 @@ export function Sidebar() {
           <NavLink
             key={item.path}
             to={item.path}
+            onClick={handleNavClick}
             className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-sky-500 ${
+              `flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-forge-500 ${
                 isActive
-                  ? 'bg-sky-50 text-sky-600 font-semibold shadow-sm border-l-4 border-sky-500'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-              } ${collapsed ? 'justify-center px-2' : ''}`
+                  ? 'bg-forge-500/15 text-cyber-blue font-semibold shadow-sm border-l-4 border-cyber-blue'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
+              } ${!showLabels ? 'justify-center px-2' : ''}`
             }
-            aria-label={collapsed ? item.label : undefined}
+            aria-label={!showLabels ? item.label : undefined}
           >
-            <item.icon size={20} aria-hidden="true" />
-            {!collapsed && <span className="text-sm">{item.label}</span>}
+            <div className="relative">
+              <item.icon size={20} aria-hidden="true" />
+              {item.path === '/marketplace' && cartItemCount > 0 && (
+                <span className="absolute -top-2 -right-2 w-4 h-4 bg-cyber-blue rounded-full text-[10px] text-surface-900 flex items-center justify-center font-bold">
+                  {cartItemCount > 9 ? '9+' : cartItemCount}
+                </span>
+              )}
+            </div>
+            {showLabels && <span className="text-sm">{item.label}</span>}
           </NavLink>
         ))}
       </nav>
 
       {/* Bottom Navigation */}
-      <div className="p-3 border-t border-slate-100 space-y-1">
+      <div className="p-3 border-t border-white/10 space-y-1">
         {bottomNavItems.map((item) => (
           <NavLink
             key={item.path}
             to={item.path}
+            onClick={handleNavClick}
             className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-sky-500 ${
+              `flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-forge-500 ${
                 isActive
-                  ? 'bg-sky-50 text-sky-600 font-semibold'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-              } ${collapsed ? 'justify-center px-2' : ''}`
+                  ? 'bg-forge-500/15 text-cyber-blue font-semibold'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
+              } ${!showLabels ? 'justify-center px-2' : ''}`
             }
-            aria-label={collapsed ? item.label : undefined}
+            aria-label={!showLabels ? item.label : undefined}
           >
             <item.icon size={20} aria-hidden="true" />
-            {!collapsed && <span className="text-sm">{item.label}</span>}
+            {showLabels && <span className="text-sm">{item.label}</span>}
           </NavLink>
         ))}
 
         <button
           type="button"
-          onClick={() => logout()}
-          className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-500 hover:text-red-600 hover:bg-red-50 transition-all duration-200 w-full focus:outline-none focus:ring-2 focus:ring-red-500 ${
-            collapsed ? 'justify-center px-2' : ''
+          onClick={() => { logout(); if (isPhone) onMobileClose(); }}
+          className={`flex items-center gap-3 px-3 py-3 rounded-xl text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-all duration-200 w-full focus:outline-none focus:ring-2 focus:ring-red-500 ${
+            !showLabels ? 'justify-center px-2' : ''
           }`}
           aria-label="Logout from account"
         >
           <LogOut size={20} aria-hidden="true" />
-          {!collapsed && <span className="text-sm">Logout</span>}
+          {showLabels && <span className="text-sm">Logout</span>}
         </button>
       </div>
     </aside>
   );
+
+  // Phone: overlay drawer with backdrop
+  if (isPhone) {
+    return (
+      <>
+        {/* Backdrop */}
+        {isMobileOpen && (
+          <div
+            className="fixed inset-0 z-30 bg-black/50 backdrop-blur-sm transition-opacity"
+            onClick={onMobileClose}
+            aria-hidden="true"
+          />
+        )}
+        {/* Drawer */}
+        <div
+          className={`fixed inset-y-0 left-0 z-40 transition-transform duration-300 ease-in-out ${
+            isMobileOpen ? 'translate-x-0' : '-translate-x-full'
+          }`}
+        >
+          {sidebarContent}
+        </div>
+      </>
+    );
+  }
+
+  // Tablet & Desktop: inline sidebar
+  return sidebarContent;
 }

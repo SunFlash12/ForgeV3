@@ -20,6 +20,7 @@ services:
       - cascade-api
       - frontend
       - marketplace
+      - pitch-deck
     networks:
       - forge-network
     restart: unless-stopped
@@ -148,6 +149,23 @@ services:
         - VITE_WS_URL=wss://forgeshop.org/ws
         - VITE_APP_NAME=Forge Shop
     container_name: forge-marketplace
+    expose:
+      - "80"
+    networks:
+      - forge-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  pitch-deck:
+    build:
+      context: ./pitch-deck
+      dockerfile: Dockerfile
+    container_name: forge-pitch-deck
     expose:
       - "80"
     networks:

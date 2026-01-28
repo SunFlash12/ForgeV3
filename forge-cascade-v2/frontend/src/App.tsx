@@ -17,6 +17,13 @@ import GraphExplorerPage from './pages/GraphExplorerPage';
 import DiagnosisPage from './pages/DiagnosisPage';
 import UserDirectoryPage from './pages/UserDirectoryPage';
 import NotFoundPage from './pages/NotFoundPage';
+import MarketplaceHome from './pages/marketplace/MarketplaceHome';
+import MarketplaceBrowse from './pages/marketplace/MarketplaceBrowse';
+import MarketplaceCapsuleDetail from './pages/marketplace/MarketplaceCapsuleDetail';
+import MarketplaceCart from './pages/marketplace/MarketplaceCart';
+import MarketplacePurchases from './pages/marketplace/MarketplacePurchases';
+import CheckoutSuccess from './pages/marketplace/CheckoutSuccess';
+import CheckoutCancel from './pages/marketplace/CheckoutCancel';
 
 function App() {
   const { isAuthenticated, fetchCurrentUser, isLoading } = useAuthStore();
@@ -29,7 +36,7 @@ function App() {
 
   if (isLoading && isAuthenticated) {
     return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+      <div className="min-h-screen bg-surface-900 flex items-center justify-center">
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-forge-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
           <p className="text-slate-400">Loading Forge...</p>
@@ -55,6 +62,13 @@ function App() {
         <Route path="users" element={<UserDirectoryPage />} />
         <Route path="system" element={<SystemPage />} />
         <Route path="settings" element={<SettingsPage />} />
+        <Route path="marketplace" element={<MarketplaceHome />} />
+        <Route path="marketplace/browse" element={<MarketplaceBrowse />} />
+        <Route path="marketplace/capsule/:id" element={<MarketplaceCapsuleDetail />} />
+        <Route path="marketplace/cart" element={<MarketplaceCart />} />
+        <Route path="marketplace/purchases" element={<MarketplacePurchases />} />
+        <Route path="marketplace/checkout/success" element={<CheckoutSuccess />} />
+        <Route path="marketplace/checkout/cancel" element={<CheckoutCancel />} />
       </Route>
       <Route path="*" element={<NotFoundPage />} />
     </Routes>

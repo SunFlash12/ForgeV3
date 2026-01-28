@@ -13,9 +13,6 @@ import {
   EyeOff,
   Save,
   RefreshCw,
-  Sun,
-  Moon,
-  Monitor,
   Smartphone,
   Key,
   Copy,
@@ -25,7 +22,7 @@ import {
 import { useAuthStore } from '../stores/authStore';
 import { Card, Button, TrustBadge, Modal } from '../components/common';
 import { api } from '../api/client';
-import { useTheme } from '../contexts/ThemeContext';
+// Theme is always dark - no toggle needed
 
 /**
  * Type-safe error message extraction from unknown errors.
@@ -56,7 +53,6 @@ const APPEARANCE_STORAGE_KEY = 'forge-appearance';
 
 export default function SettingsPage() {
   const { user, fetchCurrentUser, fetchTrustInfo } = useAuthStore();
-  const { theme, setTheme, resolvedTheme } = useTheme();
   const [activeTab, setActiveTab] = useState<SettingsTab>('profile');
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
@@ -395,11 +391,11 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="px-3 sm:px-4 lg:px-6 py-4 sm:py-6 max-w-6xl mx-auto">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-slate-800 mb-2">Settings</h1>
-        <p className="text-slate-500">Manage your account preferences and security</p>
+        <h1 className="text-2xl font-bold text-slate-100 mb-2">Settings</h1>
+        <p className="text-slate-400">Manage your account preferences and security</p>
       </div>
 
       {/* Status Messages */}
@@ -416,24 +412,26 @@ export default function SettingsPage() {
         </div>
       )}
 
-      <div className="flex gap-6">
+      <div className="flex flex-col sm:flex-row gap-4 sm:gap-6">
         {/* Sidebar Tabs */}
-        <div className="w-56 shrink-0">
+        <div className="w-full sm:w-56 shrink-0">
           <Card className="p-2">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors ${
-                  activeTab === tab.id
-                    ? 'bg-sky-500/20 text-sky-400'
-                    : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
-                }`}
-              >
-                <tab.icon className="w-5 h-5" />
-                <span>{tab.label}</span>
-              </button>
-            ))}
+            <div className="flex sm:flex-col gap-1 overflow-x-auto">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`shrink-0 whitespace-nowrap w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors ${
+                    activeTab === tab.id
+                      ? 'bg-forge-500/20 text-cyber-blue'
+                      : 'text-slate-400 hover:text-slate-100 hover:bg-white/5'
+                  }`}
+                >
+                  <tab.icon className="w-5 h-5" />
+                  <span>{tab.label}</span>
+                </button>
+              ))}
+            </div>
           </Card>
         </div>
 
@@ -442,20 +440,20 @@ export default function SettingsPage() {
           {/* Profile Tab */}
           {activeTab === 'profile' && (
             <Card className="p-6">
-              <h2 className="text-lg font-semibold text-slate-800 mb-6 flex items-center gap-2">
-                <User className="w-5 h-5 text-sky-400" />
+              <h2 className="text-lg font-semibold text-slate-100 mb-6 flex items-center gap-2">
+                <User className="w-5 h-5 text-cyber-blue" />
                 Profile Information
               </h2>
 
               <div className="space-y-6">
                 {/* User Info Summary */}
-                <div className="p-4 bg-slate-100/30 rounded-lg flex items-center gap-4">
-                  <div className="w-16 h-16 bg-sky-500/20 rounded-full flex items-center justify-center">
-                    <User className="w-8 h-8 text-sky-400" />
+                <div className="p-4 bg-white/5 rounded-lg flex items-center gap-4">
+                  <div className="w-16 h-16 bg-forge-500/20 rounded-full flex items-center justify-center">
+                    <User className="w-8 h-8 text-cyber-blue" />
                   </div>
                   <div className="flex-1">
-                    <div className="text-lg font-medium text-slate-800">{user?.username}</div>
-                    <div className="text-sm text-slate-500">{user?.email}</div>
+                    <div className="text-lg font-medium text-slate-100">{user?.username}</div>
+                    <div className="text-sm text-slate-400">{user?.email}</div>
                   </div>
                   <TrustBadge level={user?.trust_level || 'SANDBOX'} />
                 </div>
@@ -492,7 +490,7 @@ export default function SettingsPage() {
                       disabled
                       className="input opacity-50 cursor-not-allowed"
                     />
-                    <p className="text-xs text-slate-500 mt-1">Username cannot be changed</p>
+                    <p className="text-xs text-slate-400 mt-1">Username cannot be changed</p>
                   </div>
 
                   <div>
@@ -520,8 +518,8 @@ export default function SettingsPage() {
             <div className="space-y-6">
               {/* Change Password */}
               <Card className="p-6">
-                <h2 className="text-lg font-semibold text-slate-800 mb-6 flex items-center gap-2">
-                  <Lock className="w-5 h-5 text-sky-400" />
+                <h2 className="text-lg font-semibold text-slate-100 mb-6 flex items-center gap-2">
+                  <Lock className="w-5 h-5 text-cyber-blue" />
                   Change Password
                 </h2>
 
@@ -562,7 +560,7 @@ export default function SettingsPage() {
                   <button
                     type="button"
                     onClick={() => setShowPasswords(!showPasswords)}
-                    className="text-sm text-slate-500 hover:text-slate-800 flex items-center gap-2"
+                    className="text-sm text-slate-400 hover:text-slate-100 flex items-center gap-2"
                   >
                     {showPasswords ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     {showPasswords ? 'Hide passwords' : 'Show passwords'}
@@ -578,15 +576,15 @@ export default function SettingsPage() {
 
               {/* Trust Level */}
               <Card className="p-6">
-                <h2 className="text-lg font-semibold text-slate-800 mb-6 flex items-center gap-2">
-                  <Shield className="w-5 h-5 text-sky-400" />
+                <h2 className="text-lg font-semibold text-slate-100 mb-6 flex items-center gap-2">
+                  <Shield className="w-5 h-5 text-cyber-blue" />
                   Trust Level
                 </h2>
 
-                <div className="p-4 bg-slate-100/30 rounded-lg">
+                <div className="p-4 bg-white/5 rounded-lg">
                   <div className="flex items-center justify-between mb-4">
                     <div>
-                      <div className="text-sm text-slate-500 mb-1">Current Trust Level</div>
+                      <div className="text-sm text-slate-400 mb-1">Current Trust Level</div>
                       <TrustBadge level={user?.trust_level || 'SANDBOX'} />
                     </div>
                     <Button variant="ghost" size="sm" onClick={handleRefreshTrust} icon={<RefreshCw className="w-4 h-4" />}>
@@ -594,7 +592,7 @@ export default function SettingsPage() {
                     </Button>
                   </div>
 
-                  <div className="text-sm text-slate-500">
+                  <div className="text-sm text-slate-400">
                     <p className="mb-2">Trust levels determine your capabilities within Forge:</p>
                     <ul className="space-y-1 ml-4">
                       <li><span className="text-red-400">UNTRUSTED</span> - Read-only access</li>
@@ -609,21 +607,21 @@ export default function SettingsPage() {
 
               {/* Two-Factor Authentication */}
               <Card className="p-6">
-                <h2 className="text-lg font-semibold text-slate-800 mb-6 flex items-center gap-2">
-                  <Smartphone className="w-5 h-5 text-sky-400" />
+                <h2 className="text-lg font-semibold text-slate-100 mb-6 flex items-center gap-2">
+                  <Smartphone className="w-5 h-5 text-cyber-blue" />
                   Two-Factor Authentication
                 </h2>
 
-                <div className="p-4 bg-slate-100/30 rounded-lg">
+                <div className="p-4 bg-white/5 rounded-lg">
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-3">
                       <div className={`w-3 h-3 rounded-full ${mfaStatus?.enabled ? 'bg-green-500' : 'bg-slate-400'}`} />
                       <div>
-                        <div className="text-slate-800 font-medium">
+                        <div className="text-slate-100 font-medium">
                           {mfaStatus?.enabled ? 'Enabled' : 'Disabled'}
                         </div>
                         {mfaStatus?.enabled && mfaStatus.backup_codes_remaining !== undefined && (
-                          <div className="text-xs text-slate-500">
+                          <div className="text-xs text-slate-400">
                             {mfaStatus.backup_codes_remaining} backup codes remaining
                           </div>
                         )}
@@ -650,7 +648,7 @@ export default function SettingsPage() {
                     )}
                   </div>
 
-                  <p className="text-sm text-slate-500">
+                  <p className="text-sm text-slate-400">
                     Two-factor authentication adds an extra layer of security to your account by requiring a code from your authenticator app in addition to your password.
                   </p>
                 </div>
@@ -661,8 +659,8 @@ export default function SettingsPage() {
           {/* Notifications Tab */}
           {activeTab === 'notifications' && (
             <Card className="p-6">
-              <h2 className="text-lg font-semibold text-slate-800 mb-6 flex items-center gap-2">
-                <Bell className="w-5 h-5 text-sky-400" />
+              <h2 className="text-lg font-semibold text-slate-100 mb-6 flex items-center gap-2">
+                <Bell className="w-5 h-5 text-cyber-blue" />
                 Notification Preferences
               </h2>
 
@@ -675,10 +673,10 @@ export default function SettingsPage() {
                   trustChanges: { label: 'Trust Changes', desc: 'Notifications when your trust level changes' },
                   ghostWisdom: { label: 'Ghost Council Wisdom', desc: 'Daily wisdom from the Ghost Council' },
                 }).map(([key, { label, desc }]) => (
-                  <div key={key} className="flex items-center justify-between p-4 bg-slate-100/30 rounded-lg">
+                  <div key={key} className="flex items-center justify-between p-4 bg-white/5 rounded-lg">
                     <div>
-                      <div className="text-slate-800 font-medium">{label}</div>
-                      <div className="text-sm text-slate-500">{desc}</div>
+                      <div className="text-slate-100 font-medium">{label}</div>
+                      <div className="text-sm text-slate-400">{desc}</div>
                     </div>
                     <label className="relative inline-flex items-center cursor-pointer">
                       <input
@@ -687,7 +685,7 @@ export default function SettingsPage() {
                         onChange={(e) => setNotifications({ ...notifications, [key]: e.target.checked })}
                         className="sr-only peer"
                       />
-                      <div className="w-11 h-6 bg-slate-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-sky-500/50 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-sky-500" />
+                      <div className="w-11 h-6 bg-slate-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-forge-500/50 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-forge-500" />
                     </label>
                   </div>
                 ))}
@@ -710,41 +708,12 @@ export default function SettingsPage() {
           {/* Appearance Tab */}
           {activeTab === 'appearance' && (
             <Card className="p-6">
-              <h2 className="text-lg font-semibold text-slate-800 mb-6 flex items-center gap-2">
-                <Palette className="w-5 h-5 text-sky-400" />
+              <h2 className="text-lg font-semibold text-slate-100 mb-6 flex items-center gap-2">
+                <Palette className="w-5 h-5 text-cyber-blue" />
                 Appearance Settings
               </h2>
 
               <div className="space-y-6">
-                {/* Theme Selection */}
-                <div>
-                  <label className="label">Theme</label>
-                  <div className="flex gap-3">
-                    {([
-                      { value: 'light' as const, label: 'Light', icon: Sun },
-                      { value: 'dark' as const, label: 'Dark', icon: Moon },
-                      { value: 'system' as const, label: 'System', icon: Monitor },
-                    ]).map(({ value, label, icon: Icon }) => (
-                      <button
-                        key={value}
-                        onClick={() => setTheme(value)}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg border transition-colors ${
-                          theme === value
-                            ? 'border-sky-500 bg-sky-500/20 text-sky-400'
-                            : 'border-slate-300 text-slate-500 hover:border-slate-500'
-                        }`}
-                      >
-                        <Icon className="w-4 h-4" />
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                  <p className="text-xs text-slate-500 mt-2">
-                    Current: {resolvedTheme === 'dark' ? 'Dark' : 'Light'} mode
-                    {theme === 'system' && ' (following system preference)'}
-                  </p>
-                </div>
-
                 {/* Toggle Options */}
                 <div className="space-y-4">
                   {[
@@ -752,10 +721,10 @@ export default function SettingsPage() {
                     { key: 'animationsEnabled', label: 'Animations', desc: 'Enable UI animations and transitions' },
                     { key: 'highContrast', label: 'High Contrast', desc: 'Increase color contrast for accessibility' },
                   ].map(({ key, label, desc }) => (
-                    <div key={key} className="flex items-center justify-between p-4 bg-slate-100/30 rounded-lg">
+                    <div key={key} className="flex items-center justify-between p-4 bg-white/5 rounded-lg">
                       <div>
-                        <div className="text-slate-800 font-medium">{label}</div>
-                        <div className="text-sm text-slate-500">{desc}</div>
+                        <div className="text-slate-100 font-medium">{label}</div>
+                        <div className="text-sm text-slate-400">{desc}</div>
                       </div>
                       <label className="relative inline-flex items-center cursor-pointer">
                         <input
@@ -768,14 +737,14 @@ export default function SettingsPage() {
                           }}
                           className="sr-only peer"
                         />
-                        <div className="w-11 h-6 bg-slate-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-sky-500/50 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-sky-500" />
+                        <div className="w-11 h-6 bg-slate-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-forge-500/50 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-forge-500" />
                       </label>
                     </div>
                   ))}
                 </div>
               </div>
 
-              <p className="mt-4 text-xs text-slate-500">
+              <p className="mt-4 text-xs text-slate-400">
                 Theme and appearance settings are saved automatically to your browser.
               </p>
             </Card>
@@ -785,30 +754,30 @@ export default function SettingsPage() {
           {activeTab === 'data' && (
             <div className="space-y-6">
               <Card className="p-6">
-                <h2 className="text-lg font-semibold text-slate-800 mb-6 flex items-center gap-2">
-                  <Database className="w-5 h-5 text-sky-400" />
+                <h2 className="text-lg font-semibold text-slate-100 mb-6 flex items-center gap-2">
+                  <Database className="w-5 h-5 text-cyber-blue" />
                   Your Data
                 </h2>
 
                 <div className="space-y-4">
-                  <div className="p-4 bg-slate-100/30 rounded-lg">
-                    <h3 className="text-slate-800 font-medium mb-2">Data Statistics</h3>
+                  <div className="p-4 bg-white/5 rounded-lg">
+                    <h3 className="text-slate-100 font-medium mb-2">Data Statistics</h3>
                     <div className="grid grid-cols-2 gap-4 text-sm">
                       <div>
-                        <span className="text-slate-500">Capsules Created:</span>
-                        <span className="text-slate-800 ml-2">--</span>
+                        <span className="text-slate-400">Capsules Created:</span>
+                        <span className="text-slate-100 ml-2">--</span>
                       </div>
                       <div>
-                        <span className="text-slate-500">Votes Cast:</span>
-                        <span className="text-slate-800 ml-2">--</span>
+                        <span className="text-slate-400">Votes Cast:</span>
+                        <span className="text-slate-100 ml-2">--</span>
                       </div>
                       <div>
-                        <span className="text-slate-500">Proposals Made:</span>
-                        <span className="text-slate-800 ml-2">--</span>
+                        <span className="text-slate-400">Proposals Made:</span>
+                        <span className="text-slate-100 ml-2">--</span>
                       </div>
                       <div>
-                        <span className="text-slate-500">Ghost Queries:</span>
-                        <span className="text-slate-800 ml-2">--</span>
+                        <span className="text-slate-400">Ghost Queries:</span>
+                        <span className="text-slate-100 ml-2">--</span>
                       </div>
                     </div>
                   </div>
@@ -823,7 +792,7 @@ export default function SettingsPage() {
 
               <Card className="p-6 border-red-500/30">
                 <h2 className="text-lg font-semibold text-red-400 mb-4">Danger Zone</h2>
-                <p className="text-slate-500 text-sm mb-4">
+                <p className="text-slate-400 text-sm mb-4">
                   Once you delete your account, there is no going back. Your profile and personal data will be removed. Note: Capsules you created will remain in the system as they are permanent records, but your authorship will be anonymized.
                 </p>
                 <Button variant="danger">
@@ -843,7 +812,7 @@ export default function SettingsPage() {
         size="sm"
       >
         <div className="space-y-4">
-          <p className="text-slate-500">
+          <p className="text-slate-400">
             Choose a format to export your data. This includes your profile, capsules, and activity history.
           </p>
 
@@ -854,8 +823,8 @@ export default function SettingsPage() {
                 onClick={() => setExportFormat(format)}
                 className={`flex-1 px-4 py-3 rounded-lg border transition-colors uppercase ${
                   exportFormat === format
-                    ? 'border-sky-500 bg-sky-500/20 text-sky-400'
-                    : 'border-slate-300 text-slate-500 hover:border-slate-500'
+                    ? 'border-forge-500 bg-forge-500/20 text-cyber-blue'
+                    : 'border-white/15 text-slate-400 hover:border-white/30'
                 }`}
               >
                 {format}
@@ -887,11 +856,11 @@ export default function SettingsPage() {
       >
         <div className="space-y-6">
           <div className="text-center">
-            <p className="text-slate-500 mb-4">
+            <p className="text-slate-400 mb-4">
               Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.)
             </p>
             {mfaSetupData?.qr_code && (
-              <div className="inline-block p-4 bg-white rounded-lg shadow-sm">
+              <div className="inline-block p-4 bg-white/5 rounded-lg shadow-sm">
                 <img
                   src={mfaSetupData.qr_code}
                   alt="MFA QR Code"
@@ -901,15 +870,15 @@ export default function SettingsPage() {
             )}
           </div>
 
-          <div className="p-4 bg-slate-100/50 rounded-lg">
-            <p className="text-sm text-slate-500 mb-2">Or enter this code manually:</p>
+          <div className="p-4 bg-white/5 rounded-lg">
+            <p className="text-sm text-slate-400 mb-2">Or enter this code manually:</p>
             <div className="flex items-center gap-2">
-              <code className="flex-1 px-3 py-2 bg-slate-200/50 rounded font-mono text-sm text-slate-800 break-all">
+              <code className="flex-1 px-3 py-2 bg-white/10 rounded font-mono text-sm text-slate-100 break-all">
                 {mfaSetupData?.secret}
               </code>
               <button
                 onClick={() => mfaSetupData?.secret && copyToClipboard(mfaSetupData.secret)}
-                className="p-2 hover:bg-slate-200 rounded transition-colors"
+                className="p-2 hover:bg-white/10 rounded transition-colors"
                 title="Copy to clipboard"
               >
                 {copiedCode === mfaSetupData?.secret ? (
@@ -962,21 +931,21 @@ export default function SettingsPage() {
       >
         <div className="space-y-4">
           <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg">
-            <p className="text-amber-600 text-sm">
+            <p className="text-amber-400 text-sm">
               Save these backup codes in a safe place. You can use them to sign in if you lose access to your authenticator app. Each code can only be used once.
             </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-2 p-4 bg-slate-100/50 rounded-lg">
+          <div className="grid grid-cols-2 gap-2 p-4 bg-white/5 rounded-lg">
             {mfaSetupData?.backup_codes.map((code, index) => (
               <div
                 key={index}
-                className="flex items-center justify-between px-3 py-2 bg-white rounded font-mono text-sm"
+                className="flex items-center justify-between px-3 py-2 bg-white/5 rounded font-mono text-sm"
               >
                 <span>{code}</span>
                 <button
                   onClick={() => copyToClipboard(code)}
-                  className="p-1 hover:bg-slate-100 rounded transition-colors"
+                  className="p-1 hover:bg-white/5 rounded transition-colors"
                 >
                   {copiedCode === code ? (
                     <Check className="w-3 h-3 text-green-500" />
