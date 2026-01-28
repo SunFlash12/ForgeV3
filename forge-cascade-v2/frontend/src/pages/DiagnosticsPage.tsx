@@ -74,12 +74,12 @@ const getStatusBgColor = (status: string) => {
   }
 };
 
-const getStatusIcon = (status: string) => {
+const getStatusIcon = (status: string, className: string) => {
   switch (status) {
-    case 'healthy': return CheckCircle;
-    case 'degraded': return AlertTriangle;
-    case 'unhealthy': return XCircle;
-    default: return Activity;
+    case 'healthy': return <CheckCircle className={className} />;
+    case 'degraded': return <AlertTriangle className={className} />;
+    case 'unhealthy': return <XCircle className={className} />;
+    default: return <Activity className={className} />;
   }
 };
 
@@ -189,9 +189,6 @@ export default function DiagnosticsPage() {
 
   const isBackendReachable = !basicError;
   const overallStatus = health?.status ?? (isBackendReachable ? 'unknown' : 'unhealthy');
-  // Dynamic component selection based on status - intentional pattern
-  // eslint-disable-next-line react-hooks/static-components
-  const StatusIcon = getStatusIcon(overallStatus);
 
   return (
     <div className="space-y-6">
@@ -220,7 +217,7 @@ export default function DiagnosticsPage() {
           <div className="flex items-center gap-4">
             <div className={`p-3 rounded-full ${getStatusBgColor(overallStatus)}`}>
               {isBackendReachable ? (
-                <StatusIcon className={`w-8 h-8 ${getStatusColor(overallStatus)}`} />
+                getStatusIcon(overallStatus, `w-8 h-8 ${getStatusColor(overallStatus)}`)
               ) : (
                 <WifiOff className="w-8 h-8 text-red-400" />
               )}
