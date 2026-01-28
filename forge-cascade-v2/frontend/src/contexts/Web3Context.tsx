@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 /**
  * Web3 Context - Wallet Connection for Forge Cascade Marketplace
  *

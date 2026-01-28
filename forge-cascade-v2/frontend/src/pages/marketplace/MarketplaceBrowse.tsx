@@ -57,6 +57,7 @@ export default function MarketplaceBrowse() {
     const category = searchParams.get('category');
     const page = searchParams.get('page');
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- sync filters with URL params
     setFilters(prev => ({
       ...prev,
       search: search || undefined,

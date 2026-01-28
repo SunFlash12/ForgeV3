@@ -39,6 +39,7 @@ export default function CheckoutSuccess() {
 
       checkTransaction();
     } else {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- initial state when no txHash
       setLoading(false);
     }
   }, [txHash, clearCart]);
