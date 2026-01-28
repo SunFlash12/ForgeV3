@@ -100,6 +100,7 @@ export default function MarketplaceCart() {
   // Watch for transaction confirmation and submit to backend
   useEffect(() => {
     if (isConfirmed && txHash && purchaseStep === 'confirming') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- respond to on-chain confirmation
       setPurchaseStep('submitting');
 
       const purchaseItems = items.map(item => ({
