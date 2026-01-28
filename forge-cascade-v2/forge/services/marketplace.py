@@ -563,6 +563,101 @@ class MarketplaceService:
         return 1.0 + pagerank_score * 5
 
     # =========================================================================
+    # Featured Listings
+    # =========================================================================
+
+    async def get_featured_listings(self, limit: int = 6) -> list[dict]:
+        """
+        Get featured marketplace listings with capsule and tokenization data.
+
+        Queries Neo4j for CapsuleListings with featured=true, joining
+        Capsule metadata and optional TokenizedEntity bonding curve info.
+        """
+        if not self.neo4j:
+            logger.warning("No Neo4j client, cannot fetch featured listings")
+            return []
+
+        try:
+            query = """
+            MATCH (l:CapsuleListing {featured: true, status: 'active'})
+            MATCH (l)-[:LISTS]->(c:Capsule)
+            OPTIONAL MATCH (t:TokenizedEntity)-[:TOKENIZES]->(c)
+            OPTIONAL MATCH (u:User {id: c.owner_id})
+            RETURN l.id AS listing_id,
+                   l.capsule_id AS capsule_id,
+                   l.title AS title,
+                   l.description AS description,
+                   l.price AS price,
+                   l.currency AS currency,
+                   l.tags AS tags,
+                   l.preview_content AS preview_content,
+                   l.purchase_count AS purchase_count,
+                   l.view_count AS view_count,
+                   c.type AS category,
+                   u.display_name AS author_name,
+                   t.token_symbol AS token_symbol,
+                   t.launch_type AS launch_type,
+                   t.genesis_tier AS genesis_tier,
+                   t.graduation_threshold AS graduation_threshold,
+                   t.bonding_curve_virtual_accumulated AS bonding_curve_virtual_accumulated,
+                   t.total_holders AS total_holders,
+                   t.status AS token_status
+            ORDER BY l.purchase_count DESC
+            LIMIT $limit
+            """
+            results = await self.neo4j.execute(query, parameters={"limit": limit})
+
+            featured = []
+            for rec in results:
+                listing: dict = {
+                    "id": rec["listing_id"],
+                    "capsule_id": rec["capsule_id"],
+                    "title": rec["title"] or "",
+                    "description": rec["description"] or "",
+                    "category": rec["category"] or "",
+                    "price": float(rec["price"]) if rec["price"] else 0.0,
+                    "currency": rec["currency"] or "VIRTUAL",
+                    "tags": rec["tags"] if isinstance(rec["tags"], list) else [],
+                    "preview_content": rec["preview_content"] or "",
+                    "author_name": rec["author_name"] or "Unknown",
+                    "purchase_count": rec["purchase_count"] or 0,
+                    "view_count": rec["view_count"] or 0,
+                }
+
+                # Attach tokenization info if available
+                if rec.get("token_symbol"):
+                    threshold = rec["graduation_threshold"] or 42000
+                    accumulated = rec["bonding_curve_virtual_accumulated"] or 0
+                    progress = (accumulated / threshold * 100) if threshold > 0 else 0
+
+                    genesis_tier = rec.get("genesis_tier")
+                    if genesis_tier and genesis_tier == -1:
+                        genesis_tier = None
+
+                    listing["tokenization"] = {
+                        "token_symbol": rec["token_symbol"],
+                        "launch_type": rec["launch_type"] or "STANDARD",
+                        "genesis_tier": genesis_tier if genesis_tier and genesis_tier != -1 else None,
+                        "graduation_progress": round(progress, 1),
+                        "total_holders": rec["total_holders"] or 0,
+                        "bonding_curve_virtual_accumulated": accumulated,
+                        "graduation_threshold": threshold,
+                        "status": rec["token_status"] or "BONDING_CURVE",
+                    }
+
+                featured.append(listing)
+
+            logger.info(f"Fetched {len(featured)} featured listings")
+            return featured
+
+        except (ValueError, KeyError) as e:
+            logger.error(f"Failed to parse featured listings: {e}")
+            return []
+        except (RuntimeError, OSError, ConnectionError) as e:
+            logger.error(f"Failed to fetch featured listings from database: {e}")
+            raise
+
+    # =========================================================================
     # Statistics
     # =========================================================================
 

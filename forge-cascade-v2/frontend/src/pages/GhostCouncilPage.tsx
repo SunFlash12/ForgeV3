@@ -28,7 +28,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { api } from '../api/client';
-import { Card, LoadingSpinner, EmptyState } from '../components/common';
+import { Card, LoadingSpinner, EmptyState, ApiErrorState } from '../components/common';
 import { Link } from 'react-router-dom';
 import type { Proposal } from '../types';
 
@@ -96,7 +96,7 @@ export default function GhostCouncilPage() {
   const [showPerspectiveInfo, setShowPerspectiveInfo] = useState(false);
 
   // Fetch council members
-  const { data: members = [], isLoading: membersLoading } = useQuery<CouncilMember[]>({
+  const { data: members = [], isLoading: membersLoading, isError: membersError, error: membersErrorObj, refetch: refetchMembers } = useQuery<CouncilMember[]>({
     queryKey: ['ghost-council-members'],
     queryFn: () => api.getGhostCouncilMembers(),
   });
@@ -133,6 +133,25 @@ export default function GhostCouncilPage() {
     return (
       <div className="flex items-center justify-center h-64">
         <LoadingSpinner size="lg" label="Loading Ghost Council..." />
+      </div>
+    );
+  }
+
+  if (membersError) {
+    return (
+      <div className="px-3 sm:px-4 lg:px-6 py-4 sm:py-6 max-w-7xl mx-auto space-y-8">
+        <div className="flex items-center gap-4">
+          <div className="p-4 rounded-2xl bg-gradient-to-br from-violet-500/20 to-sky-500/20 border border-violet-500/30">
+            <Ghost className="w-10 h-10 text-violet-400" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-100">Ghost Council</h1>
+            <p className="text-slate-400">
+              AI Advisory Board with Tri-Perspective Analysis
+            </p>
+          </div>
+        </div>
+        <ApiErrorState error={membersErrorObj} onRetry={() => refetchMembers()} title="Unable to Load Ghost Council" />
       </div>
     );
   }

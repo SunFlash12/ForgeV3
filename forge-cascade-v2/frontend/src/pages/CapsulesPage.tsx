@@ -31,7 +31,7 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { api } from '../api/client';
-import { Card, Button, LoadingSpinner, EmptyState, Modal } from '../components/common';
+import { Card, Button, LoadingSpinner, EmptyState, Modal, ApiErrorState } from '../components/common';
 import { useAuthStore } from '../stores/authStore';
 import type { Capsule, CapsuleType, CreateCapsuleRequest } from '../types';
 
@@ -170,7 +170,7 @@ export default function CapsulesPage() {
   const queryClient = useQueryClient();
   const { toasts, addToast, removeToast } = useToast();
 
-  const { data: capsulesData, isLoading } = useQuery({
+  const { data: capsulesData, isLoading, isError, error: capsulesError, refetch } = useQuery({
     queryKey: ['capsules', filterType, searchParams.get('page')],
     queryFn: () => api.listCapsules({
       page: parseInt(searchParams.get('page') || '1'),
@@ -291,6 +291,8 @@ export default function CapsulesPage() {
         <div className="flex items-center justify-center h-64">
           <LoadingSpinner size="lg" label="Loading capsules..." />
         </div>
+      ) : isError ? (
+        <ApiErrorState error={capsulesError} onRetry={() => refetch()} title="Unable to Load Capsules" />
       ) : displayCapsules && displayCapsules.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {displayCapsules.map((capsule) => (
@@ -569,10 +571,24 @@ function CreateCapsuleModal({ isOpen, onClose, onSuccess, onError }: CreateCapsu
         onSuccess?.();
       }, PIPELINE_STEPS.length * 600 + 200);
     },
-    onError: (error: Error) => {
+    onError: (error: Error & { response?: { status?: number; data?: { detail?: string } } }) => {
       setIsProcessing(false);
       setPipelineStep(0);
-      onError?.(error.message || 'Failed to create capsule. Please try again.');
+      const status = error.response?.status;
+      const detail = error.response?.data?.detail;
+      let message: string;
+      if (status === 401) {
+        message = 'You must be logged in to create capsules. Please sign in and try again.';
+      } else if (status === 403) {
+        message = 'Your account does not have permission to create capsules.';
+      } else if (detail) {
+        message = detail;
+      } else if (error.message?.includes('Network Error')) {
+        message = 'Cannot reach the server. Please check that the backend is running.';
+      } else {
+        message = error.message || 'Failed to create capsule. Please try again.';
+      }
+      onError?.(message);
     },
   });
 

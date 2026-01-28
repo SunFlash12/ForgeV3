@@ -30,6 +30,7 @@ import type {
   PurchaseItem,
   PurchaseResponse,
   TransactionStatus,
+  FeaturedListing,
 } from '../types/marketplace';
 
 // ============================================================================
@@ -968,11 +969,11 @@ class ForgeApiClient {
     return data;
   }
 
-  async getFeaturedCapsules(limit: number = 4): Promise<MarketplaceCapsule[]> {
-    const { data } = await this.client.get<CapsuleSearchResult>('/capsules', {
-      params: { per_page: limit, is_public: true },
+  async getFeaturedCapsules(limit: number = 6): Promise<FeaturedListing[]> {
+    const { data } = await this.client.get<FeaturedListing[]>('/marketplace/featured', {
+      params: { limit },
     });
-    return data.capsules;
+    return data;
   }
 
   async submitPurchase(

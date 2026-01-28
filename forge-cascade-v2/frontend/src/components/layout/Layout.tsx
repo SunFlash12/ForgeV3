@@ -4,6 +4,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { NetworkBackground } from '../common/NetworkBackground';
+import { ConnectionBanner } from '../common/ConnectionBanner';
 
 type ScreenSize = 'phone' | 'tablet' | 'desktop';
 
@@ -62,6 +63,7 @@ export default function Layout() {
           isTablet={isTablet}
         />
         <div className="flex-1 flex flex-col overflow-hidden">
+          <ConnectionBanner />
           <Header
             onOpenMobileSidebar={openMobileSidebar}
             isPhone={isPhone}

@@ -39,6 +39,7 @@ import {
   LoadingSpinner,
   EmptyState,
   Modal,
+  ApiErrorState,
 } from '../components/common';
 
 // Component icon mapping
@@ -81,7 +82,7 @@ export default function SystemPage() {
   const isCore = user?.trust_level === 'CORE';
 
   // Queries
-  const { data: health, isLoading: healthLoading } = useQuery({
+  const { data: health, isLoading: healthLoading, isError: healthError, error: healthErrorObj, refetch: refetchHealth } = useQuery({
     queryKey: ['system-health'],
     queryFn: () => api.getSystemHealth(),
     refetchInterval: 30000,
@@ -175,6 +176,22 @@ export default function SystemPage() {
     return (
       <div className="flex items-center justify-center h-64">
         <LoadingSpinner size="lg" label="Loading system status..." />
+      </div>
+    );
+  }
+
+  if (healthError) {
+    return (
+      <div className="px-3 sm:px-4 lg:px-6 py-4 sm:py-6 max-w-7xl mx-auto">
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-100 mb-2">System Monitor</h1>
+            <p className="text-slate-400">
+              Real-time system health and performance monitoring
+            </p>
+          </div>
+        </div>
+        <ApiErrorState error={healthErrorObj} onRetry={() => refetchHealth()} title="Unable to Load System Monitor" />
       </div>
     );
   }

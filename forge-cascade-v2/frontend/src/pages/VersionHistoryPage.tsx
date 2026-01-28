@@ -21,6 +21,7 @@ import {
   LoadingSpinner,
   EmptyState,
   Modal,
+  ApiErrorState,
 } from '../components/common';
 
 interface CapsuleVersion {
@@ -78,7 +79,7 @@ export default function VersionHistoryPage() {
   }
 
   // Fetch capsule details
-  const { data: capsule, isLoading: capsuleLoading } = useQuery<CapsuleDetails>({
+  const { data: capsule, isLoading: capsuleLoading, isError: capsuleError, error: capsuleErrorObj, refetch: refetchCapsule } = useQuery<CapsuleDetails>({
     queryKey: ['capsule', capsuleId],
     queryFn: () => api.get(`/capsules/${capsuleId}`),
     enabled: !!capsuleId,
@@ -141,6 +142,35 @@ export default function VersionHistoryPage() {
     return (
       <div className="flex items-center justify-center h-64">
         <LoadingSpinner size="lg" />
+      </div>
+    );
+  }
+
+  if (capsuleError) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-4">
+          <Link
+            to="/capsules"
+            className="p-2 hover:bg-white/5 rounded-lg transition-colors"
+          >
+            <ArrowLeft className="w-5 h-5 text-slate-400" />
+          </Link>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-100 flex items-center gap-2">
+              <History className="w-6 h-6" />
+              Version History
+            </h1>
+            <p className="text-slate-400">
+              Unable to load capsule details
+            </p>
+          </div>
+        </div>
+        <ApiErrorState
+          error={capsuleErrorObj}
+          onRetry={() => refetchCapsule()}
+          title="Unable to Load Version History"
+        />
       </div>
     );
   }

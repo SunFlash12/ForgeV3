@@ -24,6 +24,7 @@ import {
   EmptyState,
   Modal,
   ProgressBar,
+  ApiErrorState,
 } from '../components/common';
 
 // Overlay icon mapping
@@ -41,7 +42,7 @@ export default function OverlaysPage() {
   const [selectedOverlayForCanary, setSelectedOverlayForCanary] = useState<Overlay | null>(null);
 
   // Fetch all overlays
-  const { data: overlays = [], isLoading } = useQuery({
+  const { data: overlays = [], isLoading, isError, error: overlaysError, refetch } = useQuery({
     queryKey: ['overlays'],
     queryFn: () => api.listOverlays(),
   });
@@ -117,6 +118,18 @@ export default function OverlaysPage() {
     return (
       <div className="flex items-center justify-center h-64">
         <LoadingSpinner size="lg" label="Loading overlays..." />
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="px-3 sm:px-4 lg:px-6 py-4 sm:py-6 max-w-6xl mx-auto">
+        <div className="mb-8">
+          <h1 className="text-2xl font-bold text-slate-100 mb-2">Overlay Management</h1>
+          <p className="text-slate-400">Manage system overlays and intelligence modules</p>
+        </div>
+        <ApiErrorState error={overlaysError} onRetry={() => refetch()} title="Unable to Load Overlays" />
       </div>
     );
   }

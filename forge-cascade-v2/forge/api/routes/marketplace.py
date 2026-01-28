@@ -162,6 +162,37 @@ class StatsResponse(BaseModel):
     top_capsules: list[dict[str, Any]]
 
 
+class TokenizationInfoResponse(BaseModel):
+    """Tokenization / Virtuals Protocol info for a featured listing."""
+
+    token_symbol: str
+    launch_type: str
+    genesis_tier: str | None = None
+    graduation_progress: float
+    total_holders: int
+    bonding_curve_virtual_accumulated: float
+    graduation_threshold: float
+    status: str
+
+
+class FeaturedListingResponse(BaseModel):
+    """Featured listing with capsule and optional tokenization data."""
+
+    id: str
+    capsule_id: str
+    title: str
+    description: str
+    category: str
+    price: float
+    currency: str
+    tags: list[str]
+    preview_content: str
+    author_name: str
+    purchase_count: int
+    view_count: int
+    tokenization: TokenizationInfoResponse | None = None
+
+
 # ============================================================================
 # Dependencies
 # ============================================================================
@@ -395,6 +426,68 @@ async def cancel_listing(
         raise HTTPException(status_code=400, detail=_sanitize_validation_error(e, "cancel_listing"))
 
     return {"cancelled": True}
+
+
+# ============================================================================
+# Featured Listings Endpoint
+# ============================================================================
+
+
+@router.get("/featured", response_model=list[FeaturedListingResponse])
+async def get_featured_listings(
+    limit: int = Query(default=6, ge=1, le=20),
+    svc: MarketplaceService = MarketplaceDep,
+) -> list[FeaturedListingResponse]:
+    """
+    Get featured marketplace listings with Virtuals Protocol tokenization data.
+
+    Returns capsules marked as featured, along with their bonding curve
+    progress, token symbols, and holder counts.
+    """
+    try:
+        featured_data = await svc.get_featured_listings(limit)
+    except (RuntimeError, OSError, ConnectionError) as e:
+        logger.error(f"Featured listings endpoint failed: {e}")
+        raise HTTPException(
+            status_code=503,
+            detail="Marketplace data is temporarily unavailable. Please try again shortly.",
+        ) from e
+
+    results = []
+    for item in featured_data:
+        tokenization = None
+        if item.get("tokenization"):
+            tok = item["tokenization"]
+            tokenization = TokenizationInfoResponse(
+                token_symbol=tok["token_symbol"],
+                launch_type=tok["launch_type"],
+                genesis_tier=tok.get("genesis_tier"),
+                graduation_progress=tok["graduation_progress"],
+                total_holders=tok["total_holders"],
+                bonding_curve_virtual_accumulated=tok["bonding_curve_virtual_accumulated"],
+                graduation_threshold=tok["graduation_threshold"],
+                status=tok["status"],
+            )
+
+        results.append(
+            FeaturedListingResponse(
+                id=item["id"],
+                capsule_id=item["capsule_id"],
+                title=item["title"],
+                description=item["description"],
+                category=item["category"],
+                price=item["price"],
+                currency=item["currency"],
+                tags=item["tags"],
+                preview_content=item["preview_content"],
+                author_name=item["author_name"],
+                purchase_count=item["purchase_count"],
+                view_count=item["view_count"],
+                tokenization=tokenization,
+            )
+        )
+
+    return results
 
 
 # ============================================================================

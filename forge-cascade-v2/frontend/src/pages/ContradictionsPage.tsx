@@ -20,6 +20,7 @@ import {
   LoadingSpinner,
   EmptyState,
   Modal,
+  ApiErrorState,
 } from '../components/common';
 
 interface Capsule {
@@ -70,7 +71,7 @@ export default function ContradictionsPage() {
   });
 
   // Fetch unresolved contradictions
-  const { data: contradictionsData, isLoading } = useQuery<{ contradictions: Contradiction[] }>({
+  const { data: contradictionsData, isLoading, isError: contradictionsError, error: contradictionsErrorObj, refetch: refetchContradictions } = useQuery<{ contradictions: Contradiction[] }>({
     queryKey: ['contradictions', severityFilter],
     queryFn: () => api.get('/graph/contradictions/unresolved?limit=100'),
   });
@@ -121,6 +122,26 @@ export default function ContradictionsPage() {
     return (
       <div className="flex items-center justify-center h-64">
         <LoadingSpinner size="lg" />
+      </div>
+    );
+  }
+
+  if (contradictionsError) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-100">
+            Contradiction Resolution
+          </h1>
+          <p className="text-slate-400">
+            Review and resolve conflicting knowledge in the system
+          </p>
+        </div>
+        <ApiErrorState
+          error={contradictionsErrorObj}
+          onRetry={() => refetchContradictions()}
+          title="Unable to Load Contradictions"
+        />
       </div>
     );
   }

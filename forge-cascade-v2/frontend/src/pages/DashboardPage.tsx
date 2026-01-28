@@ -24,7 +24,7 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import { api } from '../api/client';
-import { Card, StatCard, StatusBadge, LoadingSpinner, SeverityBadge } from '../components/common';
+import { Card, StatCard, StatusBadge, LoadingSpinner, SeverityBadge, ApiErrorState } from '../components/common';
 import type { HealthStatus } from '../types';
 
 // Fallback data for when API returns empty results (initial state)
@@ -56,7 +56,7 @@ const fallbackPipelinePhases = [
 ];
 
 export default function DashboardPage() {
-  const { data: metrics, isLoading: metricsLoading } = useQuery({
+  const { data: metrics, isLoading: metricsLoading, isError: metricsError, error: metricsErrorObj, refetch: refetchMetrics } = useQuery({
     queryKey: ['system-metrics'],
     queryFn: () => api.getSystemMetrics(),
     refetchInterval: 10000,
@@ -111,6 +111,22 @@ export default function DashboardPage() {
     return (
       <div className="flex items-center justify-center h-96">
         <LoadingSpinner size="lg" label="Loading dashboard..." />
+      </div>
+    );
+  }
+
+  if (metricsError) {
+    return (
+      <div className="space-y-4 sm:space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-100">Welcome to Forge</h1>
+          <p className="text-slate-400 mt-1">Your institutional knowledge at a glance</p>
+        </div>
+        <ApiErrorState
+          error={metricsErrorObj}
+          onRetry={() => refetchMetrics()}
+          title="Unable to Load Dashboard"
+        />
       </div>
     );
   }

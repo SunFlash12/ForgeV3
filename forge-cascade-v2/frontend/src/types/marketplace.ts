@@ -83,3 +83,32 @@ export interface TransactionStatus {
   capsule_ids: string[];
   total_virtual: string;
 }
+
+// Virtuals Protocol Tokenization Types
+
+export interface TokenizationInfo {
+  token_symbol: string;
+  launch_type: 'STANDARD' | 'GENESIS';
+  genesis_tier?: 'TIER_1' | 'TIER_2' | 'TIER_3' | null;
+  graduation_progress: number;
+  total_holders: number;
+  bonding_curve_virtual_accumulated: number;
+  graduation_threshold: number;
+  status: 'BONDING_CURVE' | 'GRADUATED' | 'LIQUIDITY_POOL';
+}
+
+export interface FeaturedListing {
+  id: string;
+  capsule_id: string;
+  title: string;
+  description: string;
+  category: string;
+  price: number;
+  currency: string;
+  tags: string[];
+  preview_content: string;
+  author_name: string;
+  purchase_count: number;
+  view_count: number;
+  tokenization?: TokenizationInfo;
+}

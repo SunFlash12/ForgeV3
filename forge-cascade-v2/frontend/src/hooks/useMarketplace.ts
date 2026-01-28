@@ -1,7 +1,7 @@
 // Forge Cascade - Marketplace Hooks
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
-import type { CapsuleFilters } from '../types/marketplace';
+import type { CapsuleFilters, FeaturedListing } from '../types/marketplace';
 
 export function useMarketplaceCapsules(filters?: CapsuleFilters) {
   return useQuery({
@@ -18,8 +18,8 @@ export function useMarketplaceCapsule(id: string) {
   });
 }
 
-export function useFeaturedCapsules(limit: number = 4) {
-  return useQuery({
+export function useFeaturedCapsules(limit: number = 6) {
+  return useQuery<FeaturedListing[]>({
     queryKey: ['marketplace-capsules', 'featured', limit],
     queryFn: () => api.getFeaturedCapsules(limit),
   });

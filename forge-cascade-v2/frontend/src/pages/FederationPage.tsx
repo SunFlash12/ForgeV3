@@ -27,6 +27,7 @@ import {
   Badge,
   Modal,
   EmptyState,
+  ApiErrorState,
 } from '../components/common';
 
 // Types
@@ -113,7 +114,7 @@ export default function FederationPage() {
   const [expandedPeerId, setExpandedPeerId] = useState<string | null>(null);
 
   // Fetch peers
-  const { data: peers = [], isLoading: peersLoading } = useQuery<FederatedPeer[]>({
+  const { data: peers = [], isLoading: peersLoading, isError: peersError, error: peersErrorObj, refetch: refetchPeers } = useQuery<FederatedPeer[]>({
     queryKey: ['federation-peers'],
     queryFn: () => api.get('/federation/peers'),
   });
@@ -186,6 +187,27 @@ export default function FederationPage() {
     return (
       <div className="flex items-center justify-center h-64">
         <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+      </div>
+    );
+  }
+
+  if (peersError) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-100 flex items-center gap-2">
+            <Globe className="w-7 h-7" />
+            Federation
+          </h1>
+          <p className="text-slate-400 mt-1">
+            Manage federated peers and knowledge sharing
+          </p>
+        </div>
+        <ApiErrorState
+          error={peersErrorObj}
+          onRetry={() => refetchPeers()}
+          title="Unable to Load Federation"
+        />
       </div>
     );
   }

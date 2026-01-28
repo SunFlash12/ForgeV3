@@ -26,6 +26,7 @@ import {
   EmptyState,
   Modal,
   ProgressBar,
+  ApiErrorState,
 } from '../components/common';
 import { useAuthStore } from '../stores/authStore';
 import type {
@@ -59,7 +60,7 @@ export default function GovernancePage() {
   const { user } = useAuthStore();
   const queryClient = useQueryClient();
 
-  const { data: proposalsData, isLoading } = useQuery({
+  const { data: proposalsData, isLoading, isError: proposalsError, error: proposalsErrorObj, refetch: refetchProposals } = useQuery({
     queryKey: ['proposals', filterStatus, filterType],
     queryFn: () => api.listProposals({
       page: 1,
@@ -360,6 +361,8 @@ export default function GovernancePage() {
         <div className="flex items-center justify-center h-64">
           <LoadingSpinner size="lg" label="Loading proposals..." />
         </div>
+      ) : proposalsError ? (
+        <ApiErrorState error={proposalsErrorObj} onRetry={() => refetchProposals()} title="Unable to Load Governance" />
       ) : proposalsData?.items && proposalsData.items.length > 0 ? (
         <div className="space-y-4">
           {proposalsData.items.map((proposal) => (

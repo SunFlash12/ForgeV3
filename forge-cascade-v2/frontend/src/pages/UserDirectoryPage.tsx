@@ -18,6 +18,7 @@ import {
   LoadingSpinner,
   EmptyState,
   Modal,
+  ApiErrorState,
 } from '../components/common';
 import { useAuthStore } from '../stores/authStore';
 
@@ -61,7 +62,7 @@ export default function UserDirectoryPage() {
 
   const canViewDirectory = currentUser && ['TRUSTED', 'CORE'].includes(currentUser.trust_level);
 
-  const { data: usersData, isLoading } = useQuery({
+  const { data: usersData, isLoading, isError, error: usersError, refetch } = useQuery({
     queryKey: ['user-directory', searchQuery, filterTrustLevel, sortBy],
     queryFn: () => api.searchUsers({
       query: searchQuery || undefined,
@@ -159,6 +160,12 @@ export default function UserDirectoryPage() {
         <div className="flex items-center justify-center h-64">
           <LoadingSpinner size="lg" label="Loading users..." />
         </div>
+      ) : isError ? (
+        <ApiErrorState
+          error={usersError}
+          onRetry={() => refetch()}
+          title="Unable to Load User Directory"
+        />
       ) : users.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {users.map((user: UserResult) => (

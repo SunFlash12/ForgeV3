@@ -665,3 +665,5 @@ export function Skeleton({ className = '', variant = 'text', width, height }: Sk
 // Re-export Logo component
 export { Logo, LogoIcon } from './Logo';
 export { NetworkBackground } from './NetworkBackground';
+export { ConnectionBanner } from './ConnectionBanner';
+export { ApiErrorState } from './ApiErrorState';
