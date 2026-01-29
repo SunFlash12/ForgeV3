@@ -460,6 +460,147 @@ def app() -> FastAPI:
     application.dependency_overrides[get_canary_manager] = _test_get_canary_manager
     application.dependency_overrides[get_embedding_svc] = _test_get_embedding_svc
 
+    # ══════════════════════════════════════════════════════════════════════
+    # Route-specific dependency overrides
+    # ══════════════════════════════════════════════════════════════════════
+
+    # 1. Chat Service Override
+    try:
+        from forge.api.routes.chat import get_chat_service_dep
+
+        _mock_chat_service = AsyncMock()
+        _mock_chat_service.create_room = AsyncMock(
+            return_value=MagicMock(id="room-123", name="Test Room", created_by="user-123")
+        )
+        _mock_chat_service.get_user_accessible_rooms = AsyncMock(return_value=([], 0))
+        _mock_chat_service.get_room = AsyncMock(
+            return_value=MagicMock(id="room-123", name="Test Room")
+        )
+        _mock_chat_service.get_room_members = AsyncMock(return_value=[])
+        _mock_chat_service.add_member = AsyncMock(return_value=True)
+        _mock_chat_service.remove_member = AsyncMock(return_value=True)
+        _mock_chat_service.update_member_role = AsyncMock(return_value=True)
+        _mock_chat_service.send_message = AsyncMock(
+            return_value=MagicMock(id="msg-123", content="Test message")
+        )
+        _mock_chat_service.get_messages = AsyncMock(return_value=([], 0))
+        _mock_chat_service.create_invite = AsyncMock(return_value=MagicMock(code="invite-123"))
+        _mock_chat_service.join_via_invite = AsyncMock(return_value=True)
+
+        application.dependency_overrides[get_chat_service_dep] = lambda: _mock_chat_service
+    except ImportError:
+        pass
+
+    # 2. Audit Repository Override
+    try:
+        from forge.api.dependencies import AuditRepoDep
+
+        _mock_audit_repo = AsyncMock()
+        _mock_audit_repo.log_action = AsyncMock(return_value=None)
+        _mock_audit_repo.get_audit_trail = AsyncMock(return_value=[])
+        _mock_audit_repo.get_user_actions = AsyncMock(return_value=[])
+
+        application.dependency_overrides[AuditRepoDep] = lambda: _mock_audit_repo
+    except ImportError:
+        pass
+
+    # 3. Game Client Override
+    try:
+        from forge.virtuals.game.sdk_client import get_game_client
+
+        _mock_game_client = AsyncMock()
+        _mock_game_client.create_agent = AsyncMock(
+            return_value=MagicMock(id="agent-123", name="Test Agent")
+        )
+        _mock_game_client.get_agent = AsyncMock(
+            return_value=MagicMock(id="agent-123", name="Test Agent")
+        )
+        _mock_game_client.delete_agent = AsyncMock(return_value=True)
+        _mock_game_client.run_agent_loop = AsyncMock(
+            return_value={"action": "test", "result": "success"}
+        )
+        _mock_game_client.get_next_action = AsyncMock(
+            return_value={"action": "idle", "context": {}}
+        )
+        _mock_game_client.store_memory = AsyncMock(return_value="memory-123")
+        _mock_game_client.search_memories = AsyncMock(return_value=[])
+
+        async def _test_get_game_client():
+            return _mock_game_client
+
+        application.dependency_overrides[get_game_client] = _test_get_game_client
+    except ImportError:
+        pass
+
+    # 4. Governance Dependencies Override
+    try:
+        from forge.api.dependencies import GovernanceRepoDep, UserRepoDep
+
+        _mock_governance_repo = AsyncMock()
+        _mock_governance_repo.create_proposal = AsyncMock(
+            return_value=MagicMock(id="prop-123", title="Test Proposal")
+        )
+        _mock_governance_repo.get_proposal = AsyncMock(return_value=None)
+        _mock_governance_repo.list_proposals = AsyncMock(return_value=([], 0))
+        _mock_governance_repo.cast_vote = AsyncMock(return_value=True)
+        _mock_governance_repo.get_votes = AsyncMock(return_value=[])
+        _mock_governance_repo.update_proposal_status = AsyncMock(return_value=True)
+
+        _mock_user_repo = AsyncMock()
+        _mock_user_repo.get_by_id = AsyncMock(
+            return_value=MagicMock(id="user-123", trust_flame=60, username="testuser")
+        )
+        _mock_user_repo.get_by_username = AsyncMock(return_value=None)
+        _mock_user_repo.create = AsyncMock(
+            return_value=MagicMock(id="user-123", username="testuser")
+        )
+        _mock_user_repo.update = AsyncMock(return_value=True)
+
+        application.dependency_overrides[GovernanceRepoDep] = lambda: _mock_governance_repo
+        application.dependency_overrides[UserRepoDep] = lambda: _mock_user_repo
+    except ImportError:
+        pass
+
+    # 5. Copilot Agent Override
+    try:
+        from forge.api.routes.copilot import get_agent
+
+        _mock_copilot_agent = AsyncMock()
+        _mock_copilot_agent.chat = AsyncMock(return_value="Test response from copilot")
+        _mock_copilot_agent.stream_chat = AsyncMock(
+            return_value=iter(["chunk1", "chunk2", "chunk3"])
+        )
+        _mock_copilot_agent.start = AsyncMock()
+        _mock_copilot_agent.stop = AsyncMock()
+
+        async def _test_get_agent():
+            return _mock_copilot_agent
+
+        application.dependency_overrides[get_agent] = _test_get_agent
+    except ImportError:
+        pass
+
+    # 6. Ghost Council Service Override
+    try:
+        from forge.api.routes.governance import get_ghost_council_service
+
+        _mock_ghost_council = AsyncMock()
+        _mock_ghost_council.deliberate_proposal = AsyncMock(
+            return_value=MagicMock(
+                consensus_vote="APPROVE",
+                member_votes=[],
+                recommendation="Approved by council",
+            )
+        )
+        _mock_ghost_council.respond_to_issue = AsyncMock(return_value=MagicMock())
+
+        async def _test_get_ghost_council():
+            return _mock_ghost_council
+
+        application.dependency_overrides[get_ghost_council_service] = _test_get_ghost_council
+    except ImportError:
+        pass
+
     return application
 
 
