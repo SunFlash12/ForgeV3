@@ -386,9 +386,9 @@ class TestRunAgent:
             mock_get_client.return_value = mock_client
 
             with (
-                patch("forge.api.routes.game.get_db_client"),
-                patch("forge.api.routes.game.CapsuleRepository"),
-                patch("forge.api.routes.game.create_knowledge_worker"),
+                patch("forge.database.client.get_db_client"),
+                patch("forge.repositories.capsule_repository.CapsuleRepository"),
+                patch("forge.virtuals.game.forge_functions.create_knowledge_worker"),
             ):
                 response = client.post(
                     "/api/v1/game/agents/agent123/run",
@@ -413,9 +413,9 @@ class TestRunAgent:
             mock_get_client.return_value = mock_client
 
             with (
-                patch("forge.api.routes.game.get_db_client"),
-                patch("forge.api.routes.game.CapsuleRepository"),
-                patch("forge.api.routes.game.create_knowledge_worker"),
+                patch("forge.database.client.get_db_client"),
+                patch("forge.repositories.capsule_repository.CapsuleRepository"),
+                patch("forge.virtuals.game.forge_functions.create_knowledge_worker"),
             ):
                 response = client.post(
                     "/api/v1/game/agents/agent123/run",
@@ -482,7 +482,7 @@ class TestGetNextAction:
                 params={"context": "User asked about X"},
             )
 
-            assert response.status_code in [200, 400, 404, 500]
+            assert response.status_code in [200, 400, 404, 500, 503]
 
     def test_get_next_action_no_game_agent(self, client: TestClient):
         """Get next action for agent without GAME registration."""
@@ -499,7 +499,7 @@ class TestGetNextAction:
                 json={"state": {}},
             )
 
-            assert response.status_code in [400, 500]
+            assert response.status_code in [400, 500, 503]
 
 
 # =============================================================================

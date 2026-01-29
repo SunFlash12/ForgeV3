@@ -545,7 +545,7 @@ class TestGhostCouncil:
 
     def test_get_ghost_council_recommendation(self, client: TestClient):
         """Get Ghost Council recommendation."""
-        with patch("forge.api.routes.governance.get_ghost_council_service") as mock_gc:
+        with patch("forge.services.ghost_council.get_ghost_council_service") as mock_gc:
             mock_service = MagicMock()
             mock_opinion = MagicMock()
             mock_opinion.consensus_vote = MagicMock(value="APPROVE")
@@ -577,7 +577,7 @@ class TestGhostCouncil:
     def test_get_ghost_council_members(self, client: TestClient):
         """Get Ghost Council members."""
         with patch(
-            "forge.api.routes.governance.DEFAULT_COUNCIL_MEMBERS",
+            "forge.services.ghost_council.DEFAULT_COUNCIL_MEMBERS",
             [
                 MagicMock(
                     id="member1",
@@ -598,7 +598,7 @@ class TestGhostCouncil:
 
     def test_get_ghost_council_stats(self, client: TestClient):
         """Get Ghost Council statistics."""
-        with patch("forge.api.routes.governance.get_ghost_council_service") as mock_gc:
+        with patch("forge.services.ghost_council.get_ghost_council_service") as mock_gc:
             mock_service = MagicMock()
             mock_service.get_stats.return_value = {
                 "proposals_reviewed": 10,
@@ -793,7 +793,7 @@ class TestSeriousIssues:
 
         governance_app.dependency_overrides[get_current_active_user] = lambda: mock_trusted_user
 
-        with patch("forge.api.routes.governance.get_ghost_council_service") as mock_gc:
+        with patch("forge.services.ghost_council.get_ghost_council_service") as mock_gc:
             mock_service = MagicMock()
             mock_service.get_active_issues.return_value = []
             mock_gc.return_value = mock_service
@@ -810,7 +810,7 @@ class TestSeriousIssues:
         governance_app.dependency_overrides[get_current_active_user] = lambda: mock_trusted_user
 
         with (
-            patch("forge.api.routes.governance.get_ghost_council_service") as mock_gc,
+            patch("forge.services.ghost_council.get_ghost_council_service") as mock_gc,
             patch("forge.api.routes.governance.validate_capsule_content") as mock_validate,
         ):
             mock_service = MagicMock()
@@ -838,7 +838,7 @@ class TestSeriousIssues:
 
         governance_app.dependency_overrides[get_current_active_user] = lambda: mock_core_user
 
-        with patch("forge.api.routes.governance.get_ghost_council_service") as mock_gc:
+        with patch("forge.services.ghost_council.get_ghost_council_service") as mock_gc:
             mock_service = MagicMock()
             mock_service.resolve_issue.return_value = True
             mock_gc.return_value = mock_service
