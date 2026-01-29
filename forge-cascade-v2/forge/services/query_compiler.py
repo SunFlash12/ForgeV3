@@ -646,7 +646,8 @@ class QueryCompiler:
             elif constraint.operator == QueryOperator.IN:
                 where_clauses.append(f"{constraint.field} IN ${param_name}")
             else:
-                op_str = constraint.operator.value
+                # Handle both enum and string values
+                op_str = getattr(constraint.operator, "value", constraint.operator)
                 where_clauses.append(f"{constraint.field} {op_str} ${param_name}")
 
         # Build RETURN clause
@@ -661,17 +662,21 @@ class QueryCompiler:
                 elif agg.function == AggregationType.COLLECT:
                     agg_parts.append(f"collect({agg.field}) AS {agg.alias}")
                 else:
-                    agg_parts.append(f"{agg.function.value}({agg.field}) AS {agg.alias}")
+                    # Handle both enum and string values
+                    func_str = getattr(agg.function, "value", agg.function)
+                    agg_parts.append(f"{func_str}({agg.field}) AS {agg.alias}")
             return_clause = ", ".join(agg_parts)
         elif intent.return_fields:
             return_clause = ", ".join(intent.return_fields)
         else:
             return_clause = "c {.*} AS capsule"
 
-        # Build ORDER BY
+        # Build ORDER BY (handle both enum and string values)
         order_clause = ""
         if intent.order_by and not intent.is_count_query:
-            order_parts = [f"{o.field} {o.direction.value}" for o in intent.order_by]
+            order_parts = [
+                f"{o.field} {getattr(o.direction, 'value', o.direction)}" for o in intent.order_by
+            ]
             order_clause = f"\nORDER BY {', '.join(order_parts)}"
 
         # Build LIMIT
@@ -729,7 +734,9 @@ class QueryCompiler:
         if intent.constraints:
             conditions = []
             for c in intent.constraints:
-                conditions.append(f"{c.field} {c.operator.value} {c.value}")
+                # Handle both enum and string values
+                op_str = getattr(c.operator, "value", c.operator)
+                conditions.append(f"{c.field} {op_str} {c.value}")
             parts.append(f"where {', '.join(conditions)}")
 
         if intent.limit:
@@ -780,10 +787,14 @@ class KnowledgeQueryService:
         # Compile question to Cypher
         compiled = await self.compiler.compile(question, user_trust)
 
+        # Handle both enum and string values
+        complexity_str = getattr(
+            compiled.estimated_complexity, "value", compiled.estimated_complexity
+        )
         self.logger.info(
             "Compiled query",
             question=question[:50],
-            complexity=compiled.estimated_complexity.value,
+            complexity=complexity_str,
         )
 
         # SECURITY: Validate compiled query before execution

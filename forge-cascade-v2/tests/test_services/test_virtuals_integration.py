@@ -280,7 +280,7 @@ class TestVirtualsIntegrationServiceInit:
             db_client=mock_db_client,
         )
 
-        with patch("forge.services.virtuals_integration.VirtualsConfig"):
+        with patch("forge.virtuals.config.VirtualsConfig"):
             with patch(
                 "forge.services.virtuals_integration.GAMESDKClient", return_value=mock_game_client
             ):
@@ -330,7 +330,7 @@ class TestShutdown:
     async def test_shutdown(self, virtuals_service, mock_acp_service, mock_game_client):
         """Test service shutdown."""
         with patch("forge.services.virtuals_integration.ACPService", return_value=mock_acp_service):
-            with patch("forge.services.virtuals_integration.VirtualsConfig"):
+            with patch("forge.virtuals.config.VirtualsConfig"):
                 with patch(
                     "forge.services.virtuals_integration.GAMESDKClient",
                     return_value=mock_game_client,
@@ -685,7 +685,7 @@ class TestGAMEAgentManagement:
         mock_agent.created_at = datetime.now(UTC)
         mock_game_client.create_agent.return_value = mock_agent
 
-        with patch("forge.services.virtuals_integration.VirtualsConfig"):
+        with patch("forge.virtuals.config.VirtualsConfig"):
             with patch(
                 "forge.services.virtuals_integration.GAMESDKClient", return_value=mock_game_client
             ):
@@ -723,7 +723,7 @@ class TestGAMEAgentManagement:
             # No repositories provided
         )
 
-        with patch("forge.services.virtuals_integration.VirtualsConfig"):
+        with patch("forge.virtuals.config.VirtualsConfig"):
             with patch(
                 "forge.services.virtuals_integration.GAMESDKClient", return_value=mock_game_client
             ):
@@ -759,7 +759,7 @@ class TestGAMEAgentManagement:
         service._agents["agent-123"] = mock_agent
         service._agent_workers["agent-123"] = {"worker1": MagicMock()}
 
-        with patch("forge.services.virtuals_integration.VirtualsConfig"):
+        with patch("forge.virtuals.config.VirtualsConfig"):
             with patch(
                 "forge.services.virtuals_integration.GAMESDKClient", return_value=mock_game_client
             ):
@@ -789,7 +789,7 @@ class TestGAMEAgentManagement:
         service._agents["agent-123"] = MagicMock()
         service._agent_workers["agent-123"] = {}
 
-        with patch("forge.services.virtuals_integration.VirtualsConfig"):
+        with patch("forge.virtuals.config.VirtualsConfig"):
             with patch(
                 "forge.services.virtuals_integration.GAMESDKClient", return_value=mock_game_client
             ):
@@ -829,7 +829,7 @@ class TestGAMEAgentManagement:
         service._agents = {"agent-1": mock_agent1, "agent-2": mock_agent2}
         service._agent_workers = {"agent-1": {}, "agent-2": {}}
 
-        with patch("forge.services.virtuals_integration.VirtualsConfig"):
+        with patch("forge.virtuals.config.VirtualsConfig"):
             with patch(
                 "forge.services.virtuals_integration.GAMESDKClient", return_value=mock_game_client
             ):
@@ -872,7 +872,7 @@ class TestGAMEAgentExecution:
             {"action": "create", "result": "created"},
         ]
 
-        with patch("forge.services.virtuals_integration.VirtualsConfig"):
+        with patch("forge.virtuals.config.VirtualsConfig"):
             with patch(
                 "forge.services.virtuals_integration.GAMESDKClient", return_value=mock_game_client
             ):
@@ -900,7 +900,7 @@ class TestGAMEAgentExecution:
             db_client=mock_db_client,
         )
 
-        with patch("forge.services.virtuals_integration.VirtualsConfig"):
+        with patch("forge.virtuals.config.VirtualsConfig"):
             with patch(
                 "forge.services.virtuals_integration.GAMESDKClient", return_value=mock_game_client
             ):
@@ -935,7 +935,7 @@ class TestGAMEAgentExecution:
             "params": {"query": "test"},
         }
 
-        with patch("forge.services.virtuals_integration.VirtualsConfig"):
+        with patch("forge.virtuals.config.VirtualsConfig"):
             with patch(
                 "forge.services.virtuals_integration.GAMESDKClient", return_value=mock_game_client
             ):
@@ -973,7 +973,7 @@ class TestGAMEMemoryOperations:
 
         mock_game_client.store_memory.return_value = "memory-456"
 
-        with patch("forge.services.virtuals_integration.VirtualsConfig"):
+        with patch("forge.virtuals.config.VirtualsConfig"):
             with patch(
                 "forge.services.virtuals_integration.GAMESDKClient", return_value=mock_game_client
             ):
@@ -1010,7 +1010,7 @@ class TestGAMEMemoryOperations:
             {"id": "mem-2", "content": "memory 2"},
         ]
 
-        with patch("forge.services.virtuals_integration.VirtualsConfig"):
+        with patch("forge.virtuals.config.VirtualsConfig"):
             with patch(
                 "forge.services.virtuals_integration.GAMESDKClient", return_value=mock_game_client
             ):

@@ -97,12 +97,12 @@ def validate_webhook_url(url: str) -> str:
             except ValueError:
                 raise SSRFError(f"Invalid IP address resolved: {ip_str}")
 
-            if ip.is_private:
-                raise SSRFError(f"Private IP address blocked: {ip_str}")
             if ip.is_loopback:
                 raise SSRFError(f"Loopback address blocked: {ip_str}")
             if ip.is_link_local:
                 raise SSRFError(f"Link-local address blocked: {ip_str}")
+            if ip.is_private:
+                raise SSRFError(f"Private IP address blocked: {ip_str}")
             if ip.is_reserved:
                 raise SSRFError(f"Reserved address blocked: {ip_str}")
             if isinstance(ip_str, str) and ip_str.startswith("169.254."):
@@ -244,14 +244,15 @@ class NotificationService:
             logger.debug(f"User {user_id} has notifications muted")
             return notification
 
-        # Get channels for this event type
-        channels = prefs.channel_preferences.get(event_type.value, prefs.default_channels)
+        # Get channels for this event type (handle both enum and string values)
+        event_type_str = getattr(event_type, "value", event_type)
+        channels = prefs.channel_preferences.get(event_type_str, prefs.default_channels)
 
         # Deliver to webhooks if enabled
         if DeliveryChannel.WEBHOOK in channels:
             await self._queue_webhooks(user_id, notification)
 
-        logger.info(f"Notification sent to {user_id}: {event_type.value}")
+        logger.info(f"Notification sent to {user_id}: {event_type_str}")
         return notification
 
     async def notify_many(
@@ -311,11 +312,12 @@ class NotificationService:
             )
             raise PermissionError("Broadcast notifications require admin-level permissions")
 
-        # Log the broadcast for audit
+        # Log the broadcast for audit (handle both enum and string values)
+        event_type_str = getattr(event_type, "value", event_type)
         self._logger.info(
             "broadcast_initiated: caller_id=%s, event_type=%s, title=%s",
             caller_id,
-            event_type.value,
+            event_type_str,
             title,
         )
 
@@ -546,8 +548,12 @@ class NotificationService:
         """Deliver a notification to a webhook endpoint."""
         delivery_id = generate_id()
 
+        # Handle both enum and string values for event_type and priority
+        event_type_str = getattr(notification.event_type, "value", notification.event_type)
+        priority_str = getattr(notification.priority, "value", notification.priority)
+
         payload = WebhookPayload(
-            event=notification.event_type.value,
+            event=event_type_str,
             timestamp=datetime.now(UTC),
             webhook_id=webhook.id,
             delivery_id=delivery_id,
@@ -555,7 +561,7 @@ class NotificationService:
                 "notification_id": notification.id,
                 "title": notification.title,
                 "message": notification.message,
-                "priority": notification.priority.value,
+                "priority": priority_str,
                 "data": notification.data,
                 "related_entity_id": notification.related_entity_id,
                 "related_entity_type": notification.related_entity_type,
@@ -589,7 +595,7 @@ class NotificationService:
                 headers={
                     "Content-Type": "application/json",
                     "X-Forge-Signature": signature,
-                    "X-Forge-Event": notification.event_type.value,
+                    "X-Forge-Event": event_type_str,
                     "X-Forge-Delivery": delivery_id,
                 },
             )
@@ -689,6 +695,9 @@ class NotificationService:
             # SECURITY FIX (Audit 3): Validate webhook URL to prevent SSRF
             validated_url = validate_webhook_url(webhook.url)
 
+            # Handle both enum and string values for event_type
+            event_type_str = getattr(delivery.event_type, "value", delivery.event_type)
+
             start = datetime.now(UTC)
             response = await self._http_client.post(
                 validated_url,
@@ -696,7 +705,7 @@ class NotificationService:
                 headers={
                     "Content-Type": "application/json",
                     "X-Forge-Signature": delivery.signature,
-                    "X-Forge-Event": delivery.event_type.value,
+                    "X-Forge-Event": event_type_str,
                     "X-Forge-Delivery": delivery.id,
                     "X-Forge-Retry": str(delivery.retry_count),
                 },
@@ -782,15 +791,19 @@ class NotificationService:
                 n.read_at = $read_at
             RETURN n.id as id
             """
+            # Handle both enum and string values
+            event_type_str = getattr(notification.event_type, "value", notification.event_type)
+            priority_str = getattr(notification.priority, "value", notification.priority)
+
             await self.neo4j.execute_write(
                 query,
                 parameters={
                     "id": notification.id,
                     "user_id": notification.user_id,
-                    "event_type": notification.event_type.value,
+                    "event_type": event_type_str,
                     "title": notification.title,
                     "message": notification.message,
-                    "priority": notification.priority.value,
+                    "priority": priority_str,
                     "is_read": notification.read,
                     "created_at": notification.created_at.isoformat()
                     if notification.created_at
@@ -850,6 +863,9 @@ class NotificationService:
                 w.created_at = $created_at
             RETURN w.id as id
             """
+            # Handle both enum and string values for events
+            events_list = [getattr(e, "value", e) for e in webhook.events] if webhook.events else []
+
             await self.neo4j.execute_write(
                 query,
                 parameters={
@@ -858,7 +874,7 @@ class NotificationService:
                     "url": webhook.url,
                     "secret_hash": hashed_secret,  # SECURITY FIX: Store hash, not plaintext
                     "active": webhook.active,
-                    "events": [e.value for e in webhook.events] if webhook.events else [],
+                    "events": events_list,
                     "created_at": webhook.created_at.isoformat() if webhook.created_at else None,
                 },
             )

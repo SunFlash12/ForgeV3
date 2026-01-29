@@ -181,7 +181,7 @@ class TestProposalDeliberation:
         )
         mock_llm.complete = AsyncMock(return_value=mock_response)
 
-        with patch("forge.services.ghost_council.get_llm_service", return_value=mock_llm):
+        with patch("forge.services.llm.get_llm_service", return_value=mock_llm):
             opinion = await service.deliberate_proposal(mock_proposal)
 
         assert isinstance(opinion, GhostCouncilOpinion)
@@ -212,7 +212,7 @@ class TestProposalDeliberation:
         )
         mock_llm.complete = AsyncMock(return_value=mock_response)
 
-        with patch("forge.services.ghost_council.get_llm_service", return_value=mock_llm):
+        with patch("forge.services.llm.get_llm_service", return_value=mock_llm):
             context = {"related_proposals": ["prop-001"], "previous_votes": 10}
             opinion = await service.deliberate_proposal(mock_proposal, context=context)
 
@@ -224,7 +224,7 @@ class TestProposalDeliberation:
         mock_llm = AsyncMock()
         mock_llm.complete = AsyncMock(side_effect=RuntimeError("LLM error"))
 
-        with patch("forge.services.ghost_council.get_llm_service", return_value=mock_llm):
+        with patch("forge.services.llm.get_llm_service", return_value=mock_llm):
             opinion = await service.deliberate_proposal(mock_proposal)
 
         # Should still return an opinion with abstain votes
@@ -373,7 +373,7 @@ class TestCaching:
         )
         mock_llm.complete = AsyncMock(return_value=mock_response)
 
-        with patch("forge.services.ghost_council.get_llm_service", return_value=mock_llm):
+        with patch("forge.services.llm.get_llm_service", return_value=mock_llm):
             result = await service.deliberate_proposal(mock_proposal, skip_cache=True)
 
         # Should have fresh result, not cached
@@ -725,7 +725,7 @@ class TestIssueResponse:
         )
         mock_llm.complete = AsyncMock(return_value=mock_response)
 
-        with patch("forge.services.ghost_council.get_llm_service", return_value=mock_llm):
+        with patch("forge.services.llm.get_llm_service", return_value=mock_llm):
             opinion = await service.respond_to_issue(mock_issue)
 
         assert opinion is not None
@@ -766,7 +766,7 @@ class TestIssueResponse:
         )
         mock_llm.complete = AsyncMock(return_value=mock_response)
 
-        with patch("forge.services.ghost_council.get_llm_service", return_value=mock_llm):
+        with patch("forge.services.llm.get_llm_service", return_value=mock_llm):
             await service.respond_to_issue(mock_issue)
 
         assert handler_called is True

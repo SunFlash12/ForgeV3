@@ -706,12 +706,13 @@ class TestScheduledTaskFunctions:
         with patch(
             "forge.services.scheduler.ForgeCircuits.neo4j", AsyncMock(return_value=mock_circuit)
         ):
-            with patch("forge.services.scheduler.Neo4jClient", return_value=mock_client):
+            with patch("forge.database.client.Neo4jClient", return_value=mock_client):
                 with patch(
-                    "forge.services.scheduler.GraphRepository", return_value=mock_graph_repo
+                    "forge.repositories.graph_repository.GraphRepository",
+                    return_value=mock_graph_repo,
                 ):
                     with patch(
-                        "forge.services.scheduler.TemporalRepository",
+                        "forge.repositories.temporal_repository.TemporalRepository",
                         return_value=mock_temporal_repo,
                     ):
                         await task_func()
@@ -740,9 +741,10 @@ class TestScheduledTaskFunctions:
         with patch(
             "forge.services.scheduler.ForgeCircuits.neo4j", AsyncMock(return_value=mock_circuit)
         ):
-            with patch("forge.services.scheduler.Neo4jClient", return_value=mock_client):
+            with patch("forge.database.client.Neo4jClient", return_value=mock_client):
                 with patch(
-                    "forge.services.scheduler.TemporalRepository", return_value=mock_temporal_repo
+                    "forge.repositories.temporal_repository.TemporalRepository",
+                    return_value=mock_temporal_repo,
                 ):
                     await task_func()
 
@@ -759,7 +761,7 @@ class TestScheduledTaskFunctions:
         mock_cache = AsyncMock()
         mock_cache.cleanup_expired = AsyncMock(return_value={"removed": 5})
 
-        with patch("forge.services.scheduler.get_query_cache", return_value=mock_cache):
+        with patch("forge.services.query_cache.get_query_cache", return_value=mock_cache):
             await task_func()
 
         mock_cache.cleanup_expired.assert_called_once()
@@ -771,7 +773,7 @@ class TestScheduledTaskFunctions:
 
         task_func = _create_cache_cleanup_task()
 
-        with patch("forge.services.scheduler.get_query_cache", return_value=None):
+        with patch("forge.services.query_cache.get_query_cache", return_value=None):
             # Should not raise
             await task_func()
 

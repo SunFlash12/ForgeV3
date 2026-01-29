@@ -338,7 +338,7 @@ class TestAnalyzeCapsule:
         semantic_edge_detector._llm = mock_llm_service
 
         with patch(
-            "forge.services.semantic_edge_detector.sanitize_for_prompt",
+            "forge.security.prompt_sanitization.sanitize_for_prompt",
             side_effect=lambda x, **kwargs: x,
         ):
             result = await semantic_edge_detector.analyze_capsule(
@@ -419,7 +419,7 @@ class TestAnalyzeCapsule:
         semantic_edge_detector._llm = mock_llm_service
 
         with patch(
-            "forge.services.semantic_edge_detector.sanitize_for_prompt",
+            "forge.security.prompt_sanitization.sanitize_for_prompt",
             side_effect=lambda x, **kwargs: x,
         ):
             result = await semantic_edge_detector.analyze_capsule(
@@ -497,7 +497,7 @@ class TestClassifyRelationship:
         semantic_edge_detector._llm = mock_llm_service
 
         with patch(
-            "forge.services.semantic_edge_detector.sanitize_for_prompt",
+            "forge.security.prompt_sanitization.sanitize_for_prompt",
             side_effect=lambda x, **kwargs: x,
         ):
             classification = await semantic_edge_detector._classify_relationship(
@@ -528,7 +528,7 @@ class TestClassifyRelationship:
         semantic_edge_detector._llm = mock_llm_service
 
         with patch(
-            "forge.services.semantic_edge_detector.sanitize_for_prompt",
+            "forge.security.prompt_sanitization.sanitize_for_prompt",
             side_effect=lambda x, **kwargs: x,
         ):
             classification = await semantic_edge_detector._classify_relationship(
@@ -558,7 +558,7 @@ class TestClassifyRelationship:
         semantic_edge_detector._llm = mock_llm_service
 
         with patch(
-            "forge.services.semantic_edge_detector.sanitize_for_prompt",
+            "forge.security.prompt_sanitization.sanitize_for_prompt",
             side_effect=lambda x, **kwargs: x,
         ):
             classification = await semantic_edge_detector._classify_relationship(
@@ -580,7 +580,7 @@ class TestClassifyRelationship:
         semantic_edge_detector._llm = mock_llm_service
 
         with patch(
-            "forge.services.semantic_edge_detector.sanitize_for_prompt",
+            "forge.security.prompt_sanitization.sanitize_for_prompt",
             side_effect=lambda x, **kwargs: x,
         ):
             classification = await semantic_edge_detector._classify_relationship(
@@ -793,7 +793,7 @@ class TestConfidenceThreshold:
         semantic_edge_detector._llm = mock_llm_service
 
         with patch(
-            "forge.services.semantic_edge_detector.sanitize_for_prompt",
+            "forge.security.prompt_sanitization.sanitize_for_prompt",
             side_effect=lambda x, **kwargs: x,
         ):
             result = await semantic_edge_detector.analyze_capsule(
@@ -853,7 +853,7 @@ class TestRelationshipTypeFiltering:
         mock_llm_service.complete.return_value = response
 
         with patch(
-            "forge.services.semantic_edge_detector.sanitize_for_prompt",
+            "forge.security.prompt_sanitization.sanitize_for_prompt",
             side_effect=lambda x, **kwargs: x,
         ):
             result = await detector.analyze_capsule(
