@@ -36,6 +36,18 @@ from forge.models.base import CapsuleType, TrustLevel
 from forge.services.agent_gateway import AgentGatewayService, get_gateway_service
 
 
+# Module-level fixture to reset global gateway service before any test
+@pytest.fixture(autouse=True, scope="function")
+def reset_gateway_service_singleton():
+    """Reset global gateway service singleton before and after each test."""
+    import forge.services.agent_gateway as gw_module
+
+    original = gw_module._gateway_service
+    gw_module._gateway_service = None
+    yield
+    gw_module._gateway_service = None
+
+
 class TestAgentGatewayInit:
     """Tests for AgentGatewayService initialization."""
 

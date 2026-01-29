@@ -21,6 +21,32 @@ from forge.services.virtuals_integration import (
     shutdown_virtuals_service,
 )
 
+
+# Module-level fixture to reset global virtuals service before any test
+@pytest.fixture(autouse=True, scope="function")
+def reset_virtuals_service_singleton():
+    """Reset global virtuals service singleton before and after each test."""
+    import forge.services.virtuals_integration as vi_module
+
+    original = vi_module._virtuals_service
+    vi_module._virtuals_service = None
+    yield
+    # Cleanup: shutdown service if initialized and reset
+    if vi_module._virtuals_service is not None:
+        try:
+            import asyncio
+
+            loop = asyncio.get_event_loop()
+            if not loop.is_closed():
+                if loop.is_running():
+                    loop.create_task(shutdown_virtuals_service())
+                else:
+                    loop.run_until_complete(shutdown_virtuals_service())
+        except Exception:
+            pass
+    vi_module._virtuals_service = None
+
+
 # =============================================================================
 # Fixtures
 # =============================================================================

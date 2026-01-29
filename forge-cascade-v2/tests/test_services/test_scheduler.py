@@ -29,6 +29,32 @@ from forge.services.scheduler import (
 )
 
 
+# Module-level fixture to reset global scheduler before any test in this module
+@pytest.fixture(autouse=True, scope="function")
+def reset_scheduler_singleton():
+    """Reset global scheduler singleton before and after each test."""
+    import forge.services.scheduler as scheduler_module
+
+    # Store original and reset
+    original = scheduler_module._scheduler
+    scheduler_module._scheduler = None
+    yield
+    # Cleanup: stop scheduler if running and reset
+    if scheduler_module._scheduler is not None:
+        try:
+            if scheduler_module._scheduler._stats.is_running:
+                import asyncio
+
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    loop.create_task(scheduler_module._scheduler.stop())
+                else:
+                    loop.run_until_complete(scheduler_module._scheduler.stop())
+        except Exception:
+            pass
+    scheduler_module._scheduler = None
+
+
 class TestScheduledTask:
     """Tests for ScheduledTask dataclass."""
 
@@ -563,14 +589,7 @@ class TestBackgroundScheduler:
 class TestGlobalSchedulerFunctions:
     """Tests for global scheduler functions."""
 
-    @pytest.fixture(autouse=True)
-    def reset_global_scheduler(self):
-        """Reset global scheduler before each test."""
-        import forge.services.scheduler as scheduler_module
-
-        scheduler_module._scheduler = None
-        yield
-        scheduler_module._scheduler = None
+    # Note: Module-level reset_scheduler_singleton fixture handles singleton reset
 
     def test_get_scheduler_creates_instance(self):
         """Test get_scheduler creates a new instance."""

@@ -29,6 +29,31 @@ from forge.services.query_cache import (
 )
 
 
+# Module-level fixture to reset global cache before any test in this module
+@pytest.fixture(autouse=True, scope="function")
+def reset_query_cache_singleton():
+    """Reset global query cache singleton before and after each test."""
+    import forge.services.query_cache as cache_module
+
+    original = cache_module._query_cache
+    cache_module._query_cache = None
+    yield
+    # Cleanup: close cache if open and reset
+    if cache_module._query_cache is not None:
+        try:
+            import asyncio
+
+            loop = asyncio.get_event_loop()
+            if not loop.is_closed():
+                if loop.is_running():
+                    loop.create_task(close_query_cache())
+                else:
+                    loop.run_until_complete(close_query_cache())
+        except Exception:
+            pass
+    cache_module._query_cache = None
+
+
 class TestCachedQueryResult:
     """Tests for CachedQueryResult dataclass."""
 
@@ -735,14 +760,7 @@ class TestInMemoryQueryCache:
 class TestGlobalCacheFunctions:
     """Tests for global cache initialization functions."""
 
-    @pytest.fixture(autouse=True)
-    def reset_global_cache(self):
-        """Reset global cache before each test."""
-        import forge.services.query_cache as cache_module
-
-        cache_module._query_cache = None
-        yield
-        cache_module._query_cache = None
+    # Note: Module-level reset_query_cache_singleton fixture handles singleton reset
 
     @pytest.mark.asyncio
     async def test_init_query_cache_disabled(self):
