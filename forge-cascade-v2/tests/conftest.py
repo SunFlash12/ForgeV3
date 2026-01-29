@@ -392,6 +392,74 @@ def app() -> FastAPI:
     application.dependency_overrides[get_current_user] = _test_get_current_user
     application.dependency_overrides[get_current_active_user] = _test_get_current_active_user
 
+    # ── Override kernel/service dependencies that check ForgeApp ──
+    from forge.api.dependencies import (
+        get_anomaly_system,
+        get_canary_manager,
+        get_circuit_registry,
+        get_embedding_svc,
+        get_event_system,
+        get_forge_app,
+        get_health_checker,
+        get_overlay_manager,
+        get_pipeline,
+    )
+
+    # Create a mock ForgeApp with all services
+    _mock_forge_app = MagicMock()
+    _mock_forge_app.is_ready = True
+    _mock_forge_app.db_client = _mock_db
+    _mock_forge_app.event_system = AsyncMock()
+    _mock_forge_app.event_system.publish = AsyncMock()
+    _mock_forge_app.overlay_manager = AsyncMock()
+    _mock_forge_app.pipeline = AsyncMock()
+    _mock_forge_app.circuit_registry = MagicMock()
+    _mock_forge_app.health_checker = AsyncMock()
+    _mock_forge_app.anomaly_system = AsyncMock()
+    _mock_forge_app.canary_manager = AsyncMock()
+
+    def _test_get_forge_app(request: Request) -> object:
+        return _mock_forge_app
+
+    application.dependency_overrides[get_forge_app] = _test_get_forge_app
+
+    # Individual service overrides (for routes that use them directly)
+    async def _test_get_event_system() -> object:
+        return _mock_forge_app.event_system
+
+    async def _test_get_overlay_manager() -> object:
+        return _mock_forge_app.overlay_manager
+
+    async def _test_get_pipeline() -> object:
+        return _mock_forge_app.pipeline
+
+    async def _test_get_circuit_registry() -> object:
+        return _mock_forge_app.circuit_registry
+
+    async def _test_get_health_checker() -> object:
+        return _mock_forge_app.health_checker
+
+    async def _test_get_anomaly_system() -> object:
+        return _mock_forge_app.anomaly_system
+
+    async def _test_get_canary_manager() -> object:
+        return _mock_forge_app.canary_manager
+
+    def _test_get_embedding_svc() -> object:
+        mock_embedding = MagicMock()
+        mock_embedding.embed = AsyncMock(return_value=[0.1] * 384)
+        mock_embedding.embed_batch = AsyncMock(return_value=[[0.1] * 384])
+        return mock_embedding
+
+    application.dependency_overrides[get_event_system] = _test_get_event_system
+    application.dependency_overrides[get_overlay_manager] = _test_get_overlay_manager
+    application.dependency_overrides[get_pipeline] = _test_get_pipeline
+    application.dependency_overrides[get_circuit_registry] = _test_get_circuit_registry
+    application.dependency_overrides[get_health_checker] = _test_get_health_checker
+    application.dependency_overrides[get_anomaly_system] = _test_get_anomaly_system
+    application.dependency_overrides[get_canary_manager] = _test_get_canary_manager
+    application.dependency_overrides[get_embedding_svc] = _test_get_embedding_svc
+
     return application
 
 
