@@ -696,14 +696,10 @@ def app() -> FastAPI:
         from forge.api.dependencies import get_temporal_repository
 
         _mock_temporal_repo = AsyncMock()
-        _mock_temporal_repo.get_version_history = AsyncMock(
-            return_value=MagicMock(versions=[])
-        )
+        _mock_temporal_repo.get_version_history = AsyncMock(return_value=MagicMock(versions=[]))
         _mock_temporal_repo.get_capsule_at_time = AsyncMock(return_value=None)
         _mock_temporal_repo.diff_versions = AsyncMock(return_value=None)
-        _mock_temporal_repo.get_trust_timeline = AsyncMock(
-            return_value=MagicMock(snapshots=[])
-        )
+        _mock_temporal_repo.get_trust_timeline = AsyncMock(return_value=MagicMock(snapshots=[]))
         _mock_temporal_repo.create_graph_snapshot = AsyncMock(
             return_value=MagicMock(id="snapshot-123")
         )
@@ -728,9 +724,7 @@ def app() -> FastAPI:
         _mock_capsule_repo.update = AsyncMock(return_value=True)
         _mock_capsule_repo.delete = AsyncMock(return_value=True)
         _mock_capsule_repo.list_capsules = AsyncMock(return_value=([], 0))
-        _mock_capsule_repo.create_semantic_edge = AsyncMock(
-            return_value=MagicMock(id="edge-123")
-        )
+        _mock_capsule_repo.create_semantic_edge = AsyncMock(return_value=MagicMock(id="edge-123"))
         _mock_capsule_repo.get_semantic_edge = AsyncMock(return_value=None)
         _mock_capsule_repo.get_semantic_edges = AsyncMock(return_value=[])
         _mock_capsule_repo.delete_semantic_edge = AsyncMock()
