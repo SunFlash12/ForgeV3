@@ -186,12 +186,17 @@ def mock_marketplace_service(
 
 @pytest.fixture
 def mock_active_user():
-    """Create mock authenticated user."""
-    user = MagicMock()
+    """Create mock authenticated user.
+
+    Uses spec=[] to ensure getattr() returns proper default values.
+    """
+    user = MagicMock(spec=["id", "username", "trust_flame", "trust_level", "is_active", "role"])
     user.id = "user123"
     user.username = "testuser"
     user.trust_flame = 60
+    user.trust_level = 60
     user.is_active = True
+    user.role = "user"
     return user
 
 
@@ -709,7 +714,7 @@ class TestPricing:
 
     def test_analyze_pricing(self, client: TestClient):
         """Analyze detailed pricing."""
-        with patch("forge.api.routes.marketplace.get_pricing_engine") as mock_engine:
+        with patch("forge.services.pricing_engine.get_pricing_engine") as mock_engine:
             engine = AsyncMock()
             result = MagicMock()
             result.capsule_id = "capsule123"
@@ -745,7 +750,7 @@ class TestPricing:
 
     def test_get_lineage_distribution(self, client: TestClient):
         """Get lineage revenue distribution."""
-        with patch("forge.api.routes.marketplace.get_pricing_engine") as mock_engine:
+        with patch("forge.services.pricing_engine.get_pricing_engine") as mock_engine:
             engine = AsyncMock()
             engine.calculate_lineage_distribution = AsyncMock(
                 return_value=[
@@ -844,7 +849,7 @@ class TestWeb3Purchase:
 
     def test_submit_web3_purchase(self, client: TestClient):
         """Submit Web3 purchase."""
-        with patch("forge.api.routes.marketplace.verify_purchase_transaction") as mock_verify:
+        with patch("forge.services.web3_service.verify_purchase_transaction") as mock_verify:
             verification = MagicMock()
             verification.is_valid = True
             verification.block_number = 12345678
@@ -918,7 +923,7 @@ class TestWeb3Purchase:
 
     def test_get_transaction_status(self, client: TestClient):
         """Get transaction status."""
-        with patch("forge.api.routes.marketplace.get_transaction_info") as mock_info:
+        with patch("forge.services.web3_service.get_transaction_info") as mock_info:
             tx_info = MagicMock()
             tx_info.block_number = 12345678
             tx_info.confirmations = 15
