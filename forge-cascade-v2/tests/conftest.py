@@ -601,6 +601,150 @@ def app() -> FastAPI:
     except ImportError:
         pass
 
+    # 7. Notification Service Override
+    try:
+        from forge.api.routes.notifications import get_notification_svc
+
+        _mock_notification_service = AsyncMock()
+        _mock_notification_service.get_notifications = AsyncMock(return_value=[])
+        _mock_notification_service.get_unread_count = AsyncMock(return_value=0)
+        _mock_notification_service.mark_as_read = AsyncMock(return_value=True)
+        _mock_notification_service.mark_all_read = AsyncMock(return_value=True)
+        _mock_notification_service.delete_notification = AsyncMock(return_value=True)
+        _mock_notification_service.create_webhook = AsyncMock(
+            return_value=MagicMock(id="webhook-123", url="https://test.webhook.com")
+        )
+        _mock_notification_service.get_webhooks = AsyncMock(return_value=[])
+        _mock_notification_service.delete_webhook = AsyncMock(return_value=True)
+        _mock_notification_service.get_user_preferences = AsyncMock(
+            return_value=MagicMock(
+                user_id="user-123",
+                email_enabled=True,
+                push_enabled=True,
+                webhook_enabled=False,
+            )
+        )
+        _mock_notification_service.update_user_preferences = AsyncMock(
+            return_value=MagicMock(user_id="user-123")
+        )
+
+        async def _test_get_notification_svc():
+            return _mock_notification_service
+
+        application.dependency_overrides[get_notification_svc] = _test_get_notification_svc
+    except ImportError:
+        pass
+
+    # 8. Fix OverlayManager - use MagicMock for sync methods, AsyncMock for async
+    _mock_forge_app.overlay_manager = MagicMock()
+    _mock_forge_app.overlay_manager.list_all = MagicMock(return_value=[])
+    _mock_forge_app.overlay_manager.list_active = MagicMock(return_value=[])
+    _mock_forge_app.overlay_manager.get_by_id = MagicMock(return_value=None)
+    _mock_forge_app.overlay_manager.get_by_name = MagicMock(return_value=None)
+    _mock_forge_app.overlay_manager.get_overlays_for_phase = MagicMock(return_value=[])
+    _mock_forge_app.overlay_manager.activate = AsyncMock()
+    _mock_forge_app.overlay_manager.deactivate = AsyncMock()
+    _mock_forge_app.overlay_manager.register = MagicMock()
+
+    # 9. Fix CanaryManager with all required methods
+    _mock_forge_app.canary_manager = AsyncMock()
+    _mock_forge_app.canary_manager.get_deployment = AsyncMock(return_value=None)
+    _mock_forge_app.canary_manager.get_all_deployments = AsyncMock(return_value=[])
+    _mock_forge_app.canary_manager.create_deployment = AsyncMock(
+        return_value=MagicMock(
+            id="deployment-123",
+            overlay_id="overlay-123",
+            status="pending",
+            current_phase=0,
+            phases=[],
+        )
+    )
+    _mock_forge_app.canary_manager.start = AsyncMock()
+    _mock_forge_app.canary_manager.manual_advance = AsyncMock()
+    _mock_forge_app.canary_manager.rollback = AsyncMock()
+    _mock_forge_app.canary_manager.complete = AsyncMock()
+
+    # 10. Graph Repository Override
+    try:
+        from forge.api.dependencies import get_graph_repository
+
+        _mock_graph_repo = AsyncMock()
+        _mock_graph_repo.client = AsyncMock()
+        _mock_graph_repo.client.execute = AsyncMock(return_value=[])
+        _mock_graph_repo.client.execute_single = AsyncMock(return_value=None)
+        _mock_graph_repo.get_graph_metrics = AsyncMock(
+            return_value=MagicMock(
+                total_nodes=100,
+                total_edges=200,
+                density=0.02,
+                avg_clustering=0.3,
+                connected_components=5,
+                diameter=10,
+            )
+        )
+        _mock_graph_repo.compute_pagerank = AsyncMock(return_value=[])
+
+        async def _test_get_graph_repo():
+            return _mock_graph_repo
+
+        application.dependency_overrides[get_graph_repository] = _test_get_graph_repo
+    except ImportError:
+        pass
+
+    # 11. Temporal Repository Override
+    try:
+        from forge.api.dependencies import get_temporal_repository
+
+        _mock_temporal_repo = AsyncMock()
+        _mock_temporal_repo.get_version_history = AsyncMock(
+            return_value=MagicMock(versions=[])
+        )
+        _mock_temporal_repo.get_capsule_at_time = AsyncMock(return_value=None)
+        _mock_temporal_repo.diff_versions = AsyncMock(return_value=None)
+        _mock_temporal_repo.get_trust_timeline = AsyncMock(
+            return_value=MagicMock(snapshots=[])
+        )
+        _mock_temporal_repo.create_graph_snapshot = AsyncMock(
+            return_value=MagicMock(id="snapshot-123")
+        )
+        _mock_temporal_repo.get_latest_graph_snapshot = AsyncMock(return_value=None)
+
+        async def _test_get_temporal_repo():
+            return _mock_temporal_repo
+
+        application.dependency_overrides[get_temporal_repository] = _test_get_temporal_repo
+    except ImportError:
+        pass
+
+    # 12. Capsule Repository Override
+    try:
+        from forge.api.dependencies import get_capsule_repository
+
+        _mock_capsule_repo = AsyncMock()
+        _mock_capsule_repo.get_by_id = AsyncMock(return_value=None)
+        _mock_capsule_repo.create = AsyncMock(
+            return_value=MagicMock(id="capsule-123", title="Test Capsule")
+        )
+        _mock_capsule_repo.update = AsyncMock(return_value=True)
+        _mock_capsule_repo.delete = AsyncMock(return_value=True)
+        _mock_capsule_repo.list_capsules = AsyncMock(return_value=([], 0))
+        _mock_capsule_repo.create_semantic_edge = AsyncMock(
+            return_value=MagicMock(id="edge-123")
+        )
+        _mock_capsule_repo.get_semantic_edge = AsyncMock(return_value=None)
+        _mock_capsule_repo.get_semantic_edges = AsyncMock(return_value=[])
+        _mock_capsule_repo.delete_semantic_edge = AsyncMock()
+        _mock_capsule_repo.get_semantic_neighbors = AsyncMock(return_value=[])
+        _mock_capsule_repo.find_contradictions = AsyncMock(return_value=[])
+        _mock_capsule_repo.find_contradiction_clusters = AsyncMock(return_value=[])
+
+        async def _test_get_capsule_repo():
+            return _mock_capsule_repo
+
+        application.dependency_overrides[get_capsule_repository] = _test_get_capsule_repo
+    except ImportError:
+        pass
+
     return application
 
 

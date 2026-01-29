@@ -136,12 +136,13 @@ def mock_standard_user():
     """Create mock user with CORE trust level to pass all trust checks.
 
     Note: Using CORE level (100) to ensure all routes pass authorization.
+    Uses spec=[] to ensure getattr() returns proper default values.
     """
-    user = MagicMock()
+    user = MagicMock(spec=["id", "username", "trust_flame", "trust_level", "is_active", "role"])
     user.id = "user123"
     user.username = "standarduser"
     user.trust_flame = 100  # CORE level - passes all trust checks
-    user.trust_level = MagicMock(value=100)
+    user.trust_level = 100
     user.is_active = True
     user.role = "user"
     return user
@@ -149,12 +150,15 @@ def mock_standard_user():
 
 @pytest.fixture
 def mock_trusted_user():
-    """Create mock user with CORE trust level to pass all trust checks."""
-    user = MagicMock()
+    """Create mock user with CORE trust level to pass all trust checks.
+
+    Uses spec=[] to ensure getattr() returns proper default values.
+    """
+    user = MagicMock(spec=["id", "username", "trust_flame", "trust_level", "is_active", "role"])
     user.id = "user456"
     user.username = "trusteduser"
     user.trust_flame = 100  # CORE level - passes all trust checks
-    user.trust_level = MagicMock(value=100)
+    user.trust_level = 100
     user.is_active = True
     user.role = "user"
     return user
@@ -162,12 +166,15 @@ def mock_trusted_user():
 
 @pytest.fixture
 def mock_core_user():
-    """Create mock CORE trust user."""
-    user = MagicMock()
+    """Create mock CORE trust user.
+
+    Uses spec=[] to ensure getattr() returns proper default values.
+    """
+    user = MagicMock(spec=["id", "username", "trust_flame", "trust_level", "is_active", "role"])
     user.id = "user789"
     user.username = "coreuser"
     user.trust_flame = 100  # CORE level
-    user.trust_level = MagicMock(value=100)
+    user.trust_level = 100
     user.is_active = True
     user.role = "admin"
     return user
