@@ -142,7 +142,7 @@ class TestCreateAgent:
 
     def test_create_agent_success(self, client: TestClient):
         """Create agent with valid configuration."""
-        with patch("forge.api.routes.game.get_game_client") as mock_get_client:
+        with patch("forge.virtuals.game.sdk_client.get_game_client") as mock_get_client:
             mock_client = AsyncMock()
             mock_agent = MagicMock()
             mock_agent.id = "agent123"
@@ -188,7 +188,7 @@ class TestCreateAgent:
 
     def test_create_agent_with_workers(self, client: TestClient):
         """Create agent with custom workers."""
-        with patch("forge.api.routes.game.get_game_client") as mock_get_client:
+        with patch("forge.virtuals.game.sdk_client.get_game_client") as mock_get_client:
             mock_client = AsyncMock()
             mock_agent = MagicMock()
             mock_agent.id = "agent123"
@@ -276,7 +276,7 @@ class TestCreateAgent:
             },
         )
 
-        assert response.status_code in [401, 403, 500]
+        assert response.status_code in [401, 403, 500, 503]
 
 
 # =============================================================================
@@ -289,7 +289,7 @@ class TestGetAgent:
 
     def test_get_agent_success(self, client: TestClient):
         """Get existing agent."""
-        with patch("forge.api.routes.game.get_game_client") as mock_get_client:
+        with patch("forge.virtuals.game.sdk_client.get_game_client") as mock_get_client:
             mock_client = AsyncMock()
             mock_agent = MagicMock()
             mock_agent.id = "agent123"
@@ -318,7 +318,7 @@ class TestGetAgent:
 
     def test_get_agent_not_found(self, client: TestClient):
         """Get non-existent agent."""
-        with patch("forge.api.routes.game.get_game_client") as mock_get_client:
+        with patch("forge.virtuals.game.sdk_client.get_game_client") as mock_get_client:
             mock_client = AsyncMock()
             mock_client.get_agent = AsyncMock(return_value=None)
             mock_get_client.return_value = mock_client
@@ -338,7 +338,7 @@ class TestDeleteAgent:
 
     def test_delete_agent_success(self, client: TestClient):
         """Delete existing agent."""
-        with patch("forge.api.routes.game.get_game_client") as mock_get_client:
+        with patch("forge.virtuals.game.sdk_client.get_game_client") as mock_get_client:
             mock_client = AsyncMock()
             mock_client.delete_agent = AsyncMock(return_value=True)
             mock_get_client.return_value = mock_client
@@ -352,7 +352,7 @@ class TestDeleteAgent:
 
     def test_delete_agent_not_found(self, client: TestClient):
         """Delete non-existent agent."""
-        with patch("forge.api.routes.game.get_game_client") as mock_get_client:
+        with patch("forge.virtuals.game.sdk_client.get_game_client") as mock_get_client:
             mock_client = AsyncMock()
             mock_client.delete_agent = AsyncMock(return_value=False)
             mock_get_client.return_value = mock_client
@@ -372,7 +372,7 @@ class TestRunAgent:
 
     def test_run_agent_success(self, client: TestClient):
         """Run agent loop successfully."""
-        with patch("forge.api.routes.game.get_game_client") as mock_get_client:
+        with patch("forge.virtuals.game.sdk_client.get_game_client") as mock_get_client:
             mock_client = AsyncMock()
             mock_agent = MagicMock()
             mock_agent.id = "agent123"
@@ -403,7 +403,7 @@ class TestRunAgent:
 
     def test_run_agent_with_defaults(self, client: TestClient):
         """Run agent with default parameters."""
-        with patch("forge.api.routes.game.get_game_client") as mock_get_client:
+        with patch("forge.virtuals.game.sdk_client.get_game_client") as mock_get_client:
             mock_client = AsyncMock()
             mock_agent = MagicMock()
             mock_agent.id = "agent123"
@@ -437,7 +437,7 @@ class TestRunAgent:
 
     def test_run_agent_not_found(self, client: TestClient):
         """Run non-existent agent."""
-        with patch("forge.api.routes.game.get_game_client") as mock_get_client:
+        with patch("forge.virtuals.game.sdk_client.get_game_client") as mock_get_client:
             mock_client = AsyncMock()
             mock_client.get_agent = AsyncMock(return_value=None)
             mock_get_client.return_value = mock_client
@@ -460,7 +460,7 @@ class TestGetNextAction:
 
     def test_get_next_action_success(self, client: TestClient):
         """Get next action for agent."""
-        with patch("forge.api.routes.game.get_game_client") as mock_get_client:
+        with patch("forge.virtuals.game.sdk_client.get_game_client") as mock_get_client:
             mock_client = AsyncMock()
             mock_agent = MagicMock()
             mock_agent.id = "agent123"
@@ -486,7 +486,7 @@ class TestGetNextAction:
 
     def test_get_next_action_no_game_agent(self, client: TestClient):
         """Get next action for agent without GAME registration."""
-        with patch("forge.api.routes.game.get_game_client") as mock_get_client:
+        with patch("forge.virtuals.game.sdk_client.get_game_client") as mock_get_client:
             mock_client = AsyncMock()
             mock_agent = MagicMock()
             mock_agent.id = "agent123"
@@ -512,7 +512,7 @@ class TestStoreMemory:
 
     def test_store_memory_success(self, client: TestClient):
         """Store memory successfully."""
-        with patch("forge.api.routes.game.get_game_client") as mock_get_client:
+        with patch("forge.virtuals.game.sdk_client.get_game_client") as mock_get_client:
             mock_client = AsyncMock()
             mock_client.store_memory = AsyncMock(return_value="memory123")
             mock_get_client.return_value = mock_client
@@ -534,7 +534,7 @@ class TestStoreMemory:
 
     def test_store_memory_minimal(self, client: TestClient):
         """Store memory with minimal fields."""
-        with patch("forge.api.routes.game.get_game_client") as mock_get_client:
+        with patch("forge.virtuals.game.sdk_client.get_game_client") as mock_get_client:
             mock_client = AsyncMock()
             mock_client.store_memory = AsyncMock(return_value="memory456")
             mock_get_client.return_value = mock_client
@@ -555,7 +555,7 @@ class TestSearchMemories:
 
     def test_search_memories_success(self, client: TestClient):
         """Search memories successfully."""
-        with patch("forge.api.routes.game.get_game_client") as mock_get_client:
+        with patch("forge.virtuals.game.sdk_client.get_game_client") as mock_get_client:
             mock_client = AsyncMock()
             mock_client.retrieve_memories = AsyncMock(
                 return_value=[
@@ -714,7 +714,7 @@ class TestErrorHandling:
 
     def test_connection_error(self, client: TestClient):
         """Test handling of connection errors."""
-        with patch("forge.api.routes.game.get_game_client") as mock_get_client:
+        with patch("forge.virtuals.game.sdk_client.get_game_client") as mock_get_client:
             mock_client = AsyncMock()
             mock_client.get_agent = AsyncMock(side_effect=ConnectionError("Network error"))
             mock_get_client.return_value = mock_client

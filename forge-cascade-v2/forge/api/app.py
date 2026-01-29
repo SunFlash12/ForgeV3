@@ -767,6 +767,9 @@ def create_app(
         auth_requests_per_hour=999999
         if settings.app_env == "testing"
         else (200 if is_dev_or_test else 50),
+        # LLM/Copilot rate limits - also relaxed for testing
+        llm_requests_per_minute=999999 if settings.app_env == "testing" else 10,
+        llm_requests_per_hour=999999 if settings.app_env == "testing" else 100,
     )
 
     # Exception handlers
